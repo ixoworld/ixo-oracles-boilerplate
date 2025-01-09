@@ -1,120 +1,159 @@
-# Turborepo starter
+# **ixo Oracles Base Repository**
 
-This is an official starter Turborepo.
+Welcome to the **ixo Oracles Base Repository**—a comprehensive, modular framework for building and deploying AI-driven oracles. This repo consolidates essential modules (data storage, vector search, knowledge management, authentication, client SDK, etc.) into a single, well-structured codebase. Whether you’re creating a new oracle from scratch or extending existing solutions, this repository provides the tooling and best practices to streamline development.
 
-## Using this example
+---
 
-Run the following command:
+## **Key Features**
 
-```bash
-npx create-turbo@latest -e with-nestjs
+1. **Modular Architecture**  
+   Each major function (e.g., Data Store, Vector DB, Knowledge Module, Auth) is in its own package for easy maintenance and reuse.
+
+2. **High Test Coverage**  
+   Emphasis on automated testing to ensure reliability and maintainability. Certain core modules aim for **100% coverage**, while others target **75%+**.
+
+3. **Flexible Integrations**  
+   - **Data-Store** integrates seamlessly with structured data sources (e.g., Airtable).  
+   - **Vector DB** modules (Chroma, Pinecone) support embedding-based search and retrieval.  
+   - **Knowledge Module** centralizes domain-specific data, easily syncable with external sources.
+
+4. **Client SDK**  
+   Formerly `@ixo/oracles-ui`, now refactored as a **generic** SDK for interactive oracle sessions, dynamic UI rendering, and real-time communication.
+
+5. **Security & Auth**  
+   An **Auth module** ensures that oracles only perform actions when properly authorized, keeping user data secure.
+
+---
+
+## **Repository Structure**
+
+```plaintext
+.
+├── packages/
+│   ├── auth/               # Auth module for permission checks
+│   ├── data-store/         # CRUD interface for structured data (e.g., Airtable)
+│   ├── knowledge/          # Knowledge Module for domain data management
+│   ├── vector-db/          # Interfaces & implementations for embedding-based DBs
+│   ├── oracles-client-sdk/ # React hooks & utilities for oracle UIs
+│   └── ...other packages
+├── docs/                   # Documentation (to be expanded)
+├── tests/                  # Centralized tests & integration checks
+├── .eslintrc               # Lint rules
+├── jest.config.js          # Testing config
+├── tsconfig.json           # TypeScript configuration
+├── package.json
+└── README.md               # This file
 ```
 
-## What's inside?
+- Each **package** contains its own `README` (where applicable), configuration, and tests.
+- The **docs** directory is ideal for usage guides, architecture overviews, and advanced tutorials.
 
-This Turborepo includes the following packages/apps:
+---
 
-### Apps and Packages
+## **Getting Started**
 
-    .
-    ├── apps
-    │   ├── api                       # NestJS app (https://nestjs.com).
-    │   └── web                       # Next.js app (https://nextjs.org).
-    └── packages
-        ├── @repo/api                 # Shared `NestJS` resources.
-        ├── @repo/eslint-config       # `eslint` configurations (includes `prettier`)
-        ├── @repo/jest-config         # `jest` configurations
-        ├── @repo/typescript-config   # `tsconfig.json`s used throughout the monorepo
-        └── @repo/ui                  # Shareable stub React component library.
+1. **Clone or Fork the Repo**  
+   ```bash
+   git clone https://github.com/ixoworld/ixo-oracles-boilerplate
+   cd ixo-oracles-boilerplate
+   ```
 
-Each package and application are 100% [TypeScript](https://www.typescriptlang.org/) safe.
+2. **Install Dependencies**  
+   ```bash
+   pnpm install
+   ```
+   (Alternatively, use `npm install` or `yarn install` if preferred.)
 
-### Utilities
+3. **Build the Project**  
+   ```bash
+   pnpm build
+   ```
+   This compiles the TypeScript packages into distributable artifacts.
 
-This `Turborepo` has some additional tools already set for you:
+4. **Run Tests**  
+   ```bash
+   pnpm test
+   ```
+   - Includes both unit and (where implemented) integration tests.  
+   - Coverage reports can be generated to maintain quality standards.
 
-- [TypeScript](https://www.typescriptlang.org/) for static type-safety
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-- [Jest](https://prettier.io) & [Playwright](https://playwright.dev/) for testing
+---
 
-### Commands
+## **Usage & Modules**
 
-This `Turborepo` already configured useful commands for all your apps and packages.
+Below is a quick overview of each major module. More detailed instructions are in each package’s local `README`.
 
-#### Build
+1. **Auth Module**  
+   - **Purpose:** Validates whether an oracle is authorized to perform actions for a user.  
+   - **Usage:** Integrate permission checks (e.g., `checkPermission(user, action)`) in your service layer.
 
-```bash
-# Will build all the app & packages with the supported `build` script.
-pnpm run build
+2. **Data-Store Module**  
+   - **Purpose:** Provides a straightforward CRUD interface, often used with Airtable or other structured data sources.  
+   - **Usage:** Import the `IDataStore<T>` interface and implement your logic (create, read, update, delete).
 
-# ℹ️ If you plan to only build apps individually,
-# Please make sure you've built the packages first.
-```
+3. **Knowledge Module**  
+   - **Purpose:** Manages domain-specific knowledge, syncing data between structured sources (Airtable) and vector stores if needed.  
+   - **Usage:** Call the module’s CRUD functions to update or retrieve knowledge items.
 
-#### Develop
+4. **Vector DB Module**  
+   - **Purpose:** Abstracts embedding-based search and retrieval with vector databases (e.g., Pinecone, Chroma).  
+   - **Usage:** Implement the `IVectorDB<T>` interface in your chosen DB package. Store or query embeddings seamlessly.
 
-```bash
-# Will run the development server for all the app & packages with the supported `dev` script.
-pnpm run dev
-```
+5. **Oracles Client SDK**  
+   - **Purpose:** Provides hooks and components for real-time AI interactions (sessions, dynamic UI, message streaming).  
+   - **Usage:** Wrap your React app in `UseOraclesProvider` for centralized config, then use hooks like `useAskOracle`.
 
-#### test
+---
 
-```bash
-# Will launch a test suites for all the app & packages with the supported `test` script.
-pnpm run test
+## **Configuration**
 
-# You can launch e2e testes with `test:e2e`
-pnpm run test:e2e
+- **Environment Variables & Secrets**:  
+  Each package may rely on environment variables (e.g., Airtable API keys, vector DB credentials). Provide them in a `.env` file or through a secure vault service.
+  
+- **Provider-Based Approach** (e.g., `UseOraclesProvider` for the client SDK):  
+  - Pass all relevant configuration (API URLs, auth tokens) in one place, reducing duplication and simplifying maintenance.
 
-# See `@repo/jest-config` to customize the behavior.
-```
+---
 
-#### Lint
+## **Testing & Coverage**
 
-```bash
-# Will lint all the app & packages with the supported `lint` script.
-# See `@repo/eslint-config` to customize the behavior.
-pnpm run lint
-```
+- **Unit Tests**: Each package includes or will include basic unit tests.  
+- **Integration Tests**: Certain workflows (e.g., Knowledge Module syncing Airtable + Vector DB) may have additional tests in the `tests/` folder.  
+- **Coverage Goals**:  
+  - **Core Modules**: 100% if possible (session management, core oracles logic).  
+  - **Others**: ~75% coverage to ensure stability.  
 
-#### Format
+Use `pnpm test:coverage` (or a similar script) to generate coverage reports.
 
-```bash
-# Will format all the supported `.ts,.js,json,.tsx,.jsx` files.
-# See `@repo/eslint-config/prettier-base.js` to customize the behavior.
-pnpm format
-```
+---
 
-### Remote Caching
+## **Contributing**
 
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
+1. **Open an Issue**: Start a discussion or propose a feature/bugfix.  
+2. **Create a Feature Branch**: For new features or significant refactors.  
+3. **Submit a Pull Request**: Include clear commit messages and reference any related issues.  
+4. **Code Review**: Team members will review and provide feedback. Ensure passing tests and updated documentation.
 
-Turborepo can use a technique known as [Remote Caching](https://turbo.build/repo/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
+We adhere to **ESLint** and **Prettier** standards to maintain a clean, consistent codebase.  
 
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
+---
 
-```bash
-npx turbo login
-```
+## **Roadmap & Next Steps**
 
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
+- **Finalize Module Test Coverage**: Reach 75%+ coverage on new modules, 100% on critical ones.  
+- **Expand Vector DB Integrations**: Provide more out-of-the-box support for popular embeddings.  
+- **Improve Documentation**: Deeper guides, advanced usage scenarios, best practices.  
+- **Refine Auth**: Clarify roles, permissions, and token-based flows.  
 
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
+Keep an eye on the `docs/` directory and upcoming issues or tickets for further developments.
 
-```bash
-npx turbo link
-```
 
-## Useful Links
 
-Learn more about the power of Turborepo:
+## **Contact & Support**
 
-- [Tasks](https://turbo.build/repo/docs/core-concepts/monorepos/running-tasks)
-- [Caching](https://turbo.build/repo/docs/core-concepts/caching)
-- [Remote Caching](https://turbo.build/repo/docs/core-concepts/remote-caching)
-- [Filtering](https://turbo.build/repo/docs/core-concepts/monorepos/filtering)
-- [Configuration Options](https://turbo.build/repo/docs/reference/configuration)
-- [CLI Usage](https://turbo.build/repo/docs/reference/command-line-reference)
+- **Issues & Bugs**: [GitHub Issues](https://github.com/ixoworld/ixo-oracles-boilerplate/issues)  
+- **Questions & Discussion**: [GitHub Discussions](https://github.com/ixoworld/ixo-oracles-boilerplate/discussions) or Slack/Discord (if applicable)  
+
+---
+
+**We hope this base repository accelerates your AI oracle development.** If you have any questions, suggestions, or run into problems, don’t hesitate to open an issue. Happy building!
