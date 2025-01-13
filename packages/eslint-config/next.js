@@ -21,5 +21,24 @@ module.exports = {
       },
     },
   },
-  overrides: [{ files: ['*.js?(x)', '*.ts?(x)'] }],
+  overrides: [
+    {
+      files: ['*.js?(x)', '*.ts?(x)'],
+      rules: {
+        '@typescript-eslint/restrict-template-expressions': [
+          'error',
+          {
+            allowAny: false,
+            allowNullish: false,
+            allowNever: false,
+            allowBoolean: true,
+            allowNumber: true,
+            allowRegExp: true,
+          },
+        ],
+        'unicorn/prefer-node-protocol': 'off',
+        '@typescript-eslint/explicit-function-return-type': 'off',
+      },
+    },
+  ],
 };

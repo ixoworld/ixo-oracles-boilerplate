@@ -1,3 +1,3 @@
-import { config } from '@repo/jest-config/nest';
+import { config } from '@ixo/jest-config/nest';
 
 export default config;

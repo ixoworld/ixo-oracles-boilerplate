@@ -14,10 +14,11 @@
     "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
-    "@repo/eslint-config": "workspace:*",
-    "@repo/typescript-config": "workspace:*",
+    "@ixo/eslint-config": "workspace:*",
+    "@ixo/typescript-config": "workspace:*",
     "prettier": "^3.2.5",
-    "turbo": "^2.3.3"
+    "turbo": "^2.3.3",
+    "typescript": "5.5.4"
   },
   "packageManager": "pnpm@8.15.5",
   "engines": {
