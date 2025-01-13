@@ -1,13 +1,17 @@
+Below is an updated **README** that provides an overall introduction to the **ixo Oracles Base Repository** and includes a brief section for the **Events** package (`@ixo/oracles-events`). Please adjust and refine to match your team’s style and any additional requirements.
+
+---
+
 # **ixo Oracles Base Repository**
 
-Welcome to the **ixo Oracles Base Repository**—a comprehensive, modular framework for building and deploying AI-driven oracles. This repo consolidates essential modules (data storage, vector search, knowledge management, authentication, client SDK, etc.) into a single, well-structured codebase. Whether you’re creating a new oracle from scratch or extending existing solutions, this repository provides the tooling and best practices to streamline development.
+Welcome to the **ixo Oracles Base Repository**—a comprehensive, modular framework for building and deploying AI-driven oracles. This repo consolidates essential modules (data storage, vector search, knowledge management, authentication, client SDK, real-time events, etc.) into a single, well-structured codebase. Whether you’re creating a new oracle from scratch or extending existing solutions, this repository provides the tooling and best practices to streamline development.
 
 ---
 
 ## **Key Features**
 
 1. **Modular Architecture**  
-   Each major function (e.g., Data Store, Vector DB, Knowledge Module, Auth) is in its own package for easy maintenance and reuse.
+   Each major function (e.g., Data Store, Vector DB, Knowledge Module, Auth, Events) is in its own package for easy maintenance and reuse.
 
 2. **High Test Coverage**  
    Emphasis on automated testing to ensure reliability and maintainability. Certain core modules aim for **100% coverage**, while others target **75%+**.
@@ -23,6 +27,9 @@ Welcome to the **ixo Oracles Base Repository**—a comprehensive, modular framew
 5. **Security & Auth**  
    An **Auth module** ensures that oracles only perform actions when properly authorized, keeping user data secure.
 
+6. **Real-Time Events**  
+   The **Events module (`@ixo/oracles-events`)** facilitates event-driven communication between different parts of the system (and between backend and frontend) over WebSockets, making it easy to build reactive, real-time features.
+
 ---
 
 ## **Repository Structure**
@@ -30,22 +37,23 @@ Welcome to the **ixo Oracles Base Repository**—a comprehensive, modular framew
 ```plaintext
 .
 ├── packages/
-│   ├── auth/               # Auth module for permission checks
-│   ├── data-store/         # CRUD interface for structured data (e.g., Airtable)
-│   ├── knowledge/          # Knowledge Module for domain data management
-│   ├── vector-db/          # Interfaces & implementations for embedding-based DBs
-│   ├── oracles-client-sdk/ # React hooks & utilities for oracle UIs
+│   ├── auth/                # Auth module for permission checks
+│   ├── data-store/          # CRUD interface for structured data (e.g., Airtable)
+│   ├── knowledge/           # Knowledge Module for domain data management
+│   ├── vector-db/           # Interfaces & implementations for embedding-based DBs
+│   ├── oracles-client-sdk/  # React hooks & utilities for oracle UIs
+│   ├── oracles-events/      # Event management system for real-time comms
 │   └── ...other packages
-├── docs/                   # Documentation (to be expanded)
-├── tests/                  # Centralized tests & integration checks
-├── .eslintrc               # Lint rules
-├── jest.config.js          # Testing config
-├── tsconfig.json           # TypeScript configuration
+├── docs/                    # Documentation (to be expanded)
+├── tests/                   # Centralized tests & integration checks
+├── .eslintrc                # Lint rules
+├── jest.config.js           # Testing config
+├── tsconfig.json            # TypeScript configuration
 ├── package.json
-└── README.md               # This file
+└── README.md                # This file
 ```
 
-- Each **package** contains its own `README` (where applicable), configuration, and tests.
+- Each **package** contains its own `README` (where applicable), configuration, and tests.  
 - The **docs** directory is ideal for usage guides, architecture overviews, and advanced tutorials.
 
 ---
@@ -103,6 +111,17 @@ Below is a quick overview of each major module. More detailed instructions are i
    - **Purpose:** Provides hooks and components for real-time AI interactions (sessions, dynamic UI, message streaming).  
    - **Usage:** Wrap your React app in `UseOraclesProvider` for centralized config, then use hooks like `useAskOracle`.
 
+6. **Events Module (`@ixo/oracles-events`)**  
+    - **Purpose:** Offers a robust event management system, powered by `eventemitter2` and `socket.io`, to enable real-time, event-driven communication across services and between backend and frontend.  
+      - **Usage:**  
+        - **Create custom events** that extend a base class for consistent validation and structure.  
+        - **Register events** in a central `GraphEventEmitter` to allow them to be emitted and listened for over WebSockets.  
+        - **Emit events** when critical actions occur (e.g., new data stored, tool invocation, or UI updates).  
+      - **Benefits:**  
+        - Decouples modules and microservices through asynchronous notifications.  
+        - Simplifies real-time features, providing a central point to register and manage events.  
+      - For a detailed walkthrough (creating events, registering them, emitting, and listening), see the package’s **README** in [`packages/oracles-events`](https://github.com/ixoworld/ixo-oracles-boilerplate/tree/main/packages/events).
+
 ---
 
 ## **Configuration**
@@ -134,7 +153,7 @@ Use `pnpm test:coverage` (or a similar script) to generate coverage reports.
 3. **Submit a Pull Request**: Include clear commit messages and reference any related issues.  
 4. **Code Review**: Team members will review and provide feedback. Ensure passing tests and updated documentation.
 
-We adhere to **ESLint** and **Prettier** standards to maintain a clean, consistent codebase.  
+We adhere to **ESLint** and **Prettier** standards to maintain a clean, consistent codebase.
 
 ---
 
@@ -144,10 +163,11 @@ We adhere to **ESLint** and **Prettier** standards to maintain a clean, consiste
 - **Expand Vector DB Integrations**: Provide more out-of-the-box support for popular embeddings.  
 - **Improve Documentation**: Deeper guides, advanced usage scenarios, best practices.  
 - **Refine Auth**: Clarify roles, permissions, and token-based flows.  
+- **Evolve Events Module**: Enhance tooling for advanced event-driven architectures and multi-service orchestration.
 
 Keep an eye on the `docs/` directory and upcoming issues or tickets for further developments.
 
-
+---
 
 ## **Contact & Support**
 
