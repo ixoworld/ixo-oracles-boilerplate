@@ -37,6 +37,9 @@
     "MATRIX_ORACLE_ADMIN_PASSWORD",
     "MATRIX_RECOVERY_PHRASE"
   ],
+  "globalEnv": [
+    "OPENAI_API_KEY"
+  ],
   "tasks": {
     "dev": {
       "cache": false,
