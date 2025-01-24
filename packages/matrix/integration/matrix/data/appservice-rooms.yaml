@@ -1,0 +1,45 @@
+# A general purpose identifier for the appservice. Typically, this is just a lowercase version of the application
+# name. It should be unique among all other appservices installed on the homeserver.
+id: ixoroomappservice
+
+# These are the authentication secrets used to communicate between the homeserver and appservice. They should
+# be secret, sufficiently complex, and different from each other and all other appservices installed on the
+# homeserver.
+as_token: change_me
+hs_token: change_me
+
+# These are the namespaces that the appservice would like to reserve or use. Typically, bridges will want to
+# reserve an alias and user namespace.
+namespaces:
+  aliases:
+    - exclusive: true
+      # It's good practice to limit the regex to just bridge users on the current homeserver to avoid confusing
+      # your bridge with other people who might be using it.
+      # covering did-ixo-<random> to cover both did-ixo-entity- and did-ixo-wasm- dids
+      regex: "#did-ixo-.*"
+  users:
+    - exclusive: true
+      regex: "@test:localhost:8408"
+  rooms: [] # not commonly used, but required to be set
+
+rate_limited: false # typical bridges don't want to be rate limited
+
+# This is the localpart of the primary user for the appservice. For bridges, this is typically known as the
+# "bridge bot" user.
+sender_localpart: "ixo-room-bot"
+
+# This is where the homeserver can reach your appservice at. The bot-sdk will automatically expose a webserver
+# at the configured port to handle this traffic and turn it into useful events.
+url: "http://localhost:9000"
+
+# If you need ephemeral events (for crypto or other reasons), set this to true. Defaults to false to avoid flooding
+# the appservice wtih traffic.
+de.sorunome.msc2409.push_ephemeral: true
+
+# Check synapse code for this option
+# Opt-in flag for the MSC3202-specific transactional behaviour.
+# When enabled, appservice transactions contain the following information:
+#  - device One-Time Key counts
+#  - device unused fallback key usage states
+#  - device list changes
+org.matrix.msc3202: true
