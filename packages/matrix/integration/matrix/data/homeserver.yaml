@@ -1,0 +1,79 @@
+# Configuration file for Synapse.
+#
+# This is a YAML file: see [1] for a quick introduction. Note in particular
+# that *indentation is important*: all the elements of a list or dictionary
+# should have the same indentation.
+#
+# [1] https://docs.ansible.com/ansible/latest/reference_appendices/YAMLSyntax.html
+#
+# For more information on how to configure Synapse, including a complete accounting of
+# each option, go to docs/usage/configuration/config_documentation.md or
+# https://matrix-org.github.io/synapse/latest/usage/configuration/config_documentation.html
+server_name: "localhost:8408"
+public_baseurl: http://localhost:8008/
+pid_file: /data/homeserver.pid
+
+listeners:
+  - port: 8408
+    type: http
+    tls: true
+    resources:
+      - names: [client, federation]
+  - port: 8008
+    tls: false
+    type: http
+    x_forwarded: true
+    # bind_addresses: ["::1", "127.0.0.1"]
+    resources:
+      - names: [client, federation]
+        compress: false
+
+database:
+  name: psycopg2
+  args:
+    user: postgres
+    password: password
+    database: synapse
+    host: matrix-db
+    cp_min: 5
+    cp_max: 10
+
+dynamic_thumbnails: true
+media_store_path: /data/media_store
+registration_shared_secret: ""
+registration_requires_token: false
+rc_messages_per_second: 50
+rc_message_burst_count: 100
+rc_registration:
+  per_second: 10  # Allow 10 registrations per second
+  burst_count: 20 # Allow bursts of up to 20 registrations
+
+enable_registration: true
+enable_registration_without_verification: true
+report_stats: false
+macaroon_secret_key: "Hvw_^U+4fqAkT5_L2M*9-@CRFc+M8Xw+U0Iq;yZ~.Y^W=zOf5#"
+form_secret: ",X+mvcyzMR.1W9AMU1RcvyZhqZ--tTAx#5p94i#op:_Pn.S8_p"
+signing_key_path: "/data/michael.test.signing.key"
+# trusted_key_servers:
+#   - server_name: "matrix.org"
+
+# Disable TLS for the servers.# DO NOT USE IN PRODUCTION
+use_insecure_ssl_client_just_for_testing_do_not_use: true
+federation_verify_certificates: false
+tls_certificate_path: "/data/localhost:8008.tls.crt"
+tls_private_key_path: "/data/localhost:8008.tls.key"
+trusted_key_servers: []
+# Allow the servers to communicate over localhost.
+ip_range_whitelist:
+  - "127.0.0.1/8"
+  - "::1/128"
+
+modules:
+  - module: ixo.Module
+    config:
+      # Ixo event types to block for testing
+      block_events:
+        - "ixo.test"
+
+app_service_config_files:
+  - /data/appservice-rooms.yaml

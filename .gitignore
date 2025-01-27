@@ -60,3 +60,7 @@ pnpm-debug.log*
 # Misc
 .DS_Store
 *.pem
+
+
+# Matrix
+matrix-local-storage/
