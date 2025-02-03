@@ -1,5 +1,5 @@
 import { MatrixManager, type Room } from '@ixo/matrix';
-import { type CreateRoomDto } from './dto';
+import { type CreateRoomDto, type GetRoomDto } from './dto';
 
 export class RoomManagerService {
   constructor(protected readonly matrixManger = MatrixManager.getInstance()) {}
@@ -9,7 +9,7 @@ export class RoomManagerService {
     return roomId;
   }
 
-  public getRoomId(dto: CreateRoomDto): Promise<string | undefined> {
+  public getRoomId(dto: GetRoomDto): Promise<string | undefined> {
     return this.matrixManger.getRoomId(dto);
   }
 
@@ -21,7 +21,7 @@ export class RoomManagerService {
     return this.createRoom(dto);
   }
 
-  public async getRoom(dto: CreateRoomDto): Promise<Room | undefined> {
+  public async getRoom(dto: GetRoomDto): Promise<Room | undefined> {
     const roomId = await this.getRoomId(dto);
     if (roomId) {
       return this.matrixManger.getRoom(roomId) ?? undefined;

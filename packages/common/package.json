@@ -48,8 +48,6 @@
     "@langchain/langgraph-checkpoint": "0.0.10",
     "@langchain/langgraph-checkpoint-sqlite": "^0.1.2",
     "@langchain/openai": "^0.3.2",
-    "@langchain/pinecone": "^0.1.0",
-    "@pinecone-database/pinecone": "^3.0.3",
     "@tavily/core": "0.0.2",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",

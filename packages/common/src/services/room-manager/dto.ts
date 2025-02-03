@@ -12,3 +12,13 @@ export class CreateRoomDto {
   @IsString()
   userAccessToken: string;
 }
+
+export class GetRoomDto {
+  @IsString()
+  @IsNotEmpty()
+  did: string;
+
+  @IsString()
+  @IsNotEmpty()
+  oracleName: string;
+}

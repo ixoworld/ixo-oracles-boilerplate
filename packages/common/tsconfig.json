@@ -5,12 +5,6 @@
     "outDir": "dist",
     "rootDir": "src"
   },
-  "include": ["src/**/*"],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "integration",
-    "**/*.test.ts",
-    "**/*.spec.ts"
-  ]
+  "include": ["src/**/*", "src/**/*.test.ts"],
+  "exclude": ["node_modules", "dist", "integration", "**/*.spec.ts"]
 }
