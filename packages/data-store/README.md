@@ -49,6 +49,20 @@ yarn add @ixo/data-store
 OPENAI_API_KEY=your_openai_api_key    # Required for embeddings
 ```
 
+#### Running Chroma Backend
+
+The ChromaDB implementation requires a running Chroma backend. You can easily run it using Docker:
+
+```bash
+# Pull the Chroma image
+docker pull chromadb/chroma
+
+# Run the Chroma container
+docker run -p 8000:8000 chromadb/chroma
+```
+
+This will start the Chroma backend server on `http://localhost:8000`.
+
 #### For Airtable Structured Storage
 
 ```bash

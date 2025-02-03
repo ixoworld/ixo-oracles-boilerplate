@@ -12,7 +12,6 @@ import { InMemoryJsonStorage } from '../test-utils/in-memory-storage';
 import { logger } from 'matrix-js-sdk/lib/logger';
 import { formatMsg } from 'src/utils/format-msg';
 
-
 const getMessageEvents = (room: sdk.Room): RoomMessageEventContent[] => {
   const evs = room.getLiveTimeline().getEvents();
 

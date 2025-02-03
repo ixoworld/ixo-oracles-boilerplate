@@ -26,7 +26,7 @@ global.Olm = olm;
 
 export class MatrixManager {
   private adminClient: sdk.MatrixClient | undefined;
-  public stateManager: MatrixStateManager | undefined;
+  public stateManager: MatrixStateManager;
   private static instance: MatrixManager | undefined;
   private isInitialized = false;
 
@@ -130,11 +130,6 @@ export class MatrixManager {
 
       // Reset initialization state
       this.isInitialized = false;
-
-      // Clear state manager
-      if (this.stateManager) {
-        this.stateManager = undefined;
-      }
     } catch (error) {
       Logger.error('Error during stop:', error);
       throw error;

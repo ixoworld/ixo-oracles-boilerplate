@@ -1,7 +1,0 @@
-{
-  "extends": "@ixo/typescript-config/nestjs.json",
-  "compilerOptions": {
-    "baseUrl": "./",
-    "outDir": "./dist"
-  }
-}

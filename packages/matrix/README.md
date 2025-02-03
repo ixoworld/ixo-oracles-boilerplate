@@ -314,6 +314,28 @@ await manager.stateManager.updateState<ProjectState>({
 });
 ```
 
+### LangChain Graph Checkpointing
+
+The package provides a Matrix-based checkpointer implementation for LangChain graphs, allowing you to persist graph state in Matrix rooms:
+
+```typescript
+import { MatrixCheckpointSaver } from '@ixo/matrix';
+import { StateGraph } from '@langchain/langgraph';
+
+// Create your graph
+const workflow = new StateGraph(graphState)
+  .addNode('myNode', (state) => {
+    // Your node logic
+  })
+  .addEdge(START, 'myNode')
+  .addEdge('myNode', END);
+
+// Compile the graph with Matrix checkpointing
+const graph = workflow.compile({
+  checkpointer: new MatrixCheckpointSaver('your-graph-name'),
+});
+```
+
 ## API Reference
 
 ### MatrixManager
