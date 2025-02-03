@@ -35,11 +35,14 @@
     "NETWORK",
     "MATRIX_RECOVERY_PHRASE",
     "MATRIX_ORACLE_ADMIN_PASSWORD",
-    "MATRIX_RECOVERY_PHRASE"
+    "MATRIX_RECOVERY_PHRASE",
+    "OPENAI_API_KEY",
+    "IXO_GURU_QUERY_ENDPOINT",
+    "GURU_ASSISTANCE_API_TOKEN",
+    "ORACLE_DID",
+    "SKIP_LOGGING_CHAT_HISTORY_TO_MATRIX"
   ],
-  "globalEnv": [
-    "OPENAI_API_KEY"
-  ],
+
   "tasks": {
     "dev": {
       "cache": false,

@@ -1,4 +1,4 @@
-import { Logger } from '@ixo-oracles/logger';
+import { Logger } from '@ixo/logger';
 
 /**
  * should report using the logger and throw the error if the promise is rejected

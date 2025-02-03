@@ -1,0 +1,200 @@
+import { MatrixManager } from '@ixo/matrix';
+import { getChatOpenAiModel } from 'src/ai';
+import { RoomManagerService } from '../room-manager/room-manager';
+import {
+  type ChatSession,
+  type CreateChatSessionDto,
+  type CreateChatSessionResponseDto,
+  type DeleteChatSessionDto,
+  type ListChatSessionsDto,
+  type ListChatSessionsResponseDto,
+} from './dto';
+import {
+  NoUserRoomsFoundError,
+  RoomNotFoundError,
+  UserNotInRoomError,
+} from './errors';
+
+export class SessionManagerService {
+  constructor(
+    protected readonly matrixManger = MatrixManager.getInstance(),
+    protected readonly roomManager = new RoomManagerService(),
+  ) {}
+
+  private async createMessageTitle({
+    messages,
+  }: {
+    messages: string[];
+  }): Promise<string> {
+    const llm = getChatOpenAiModel();
+    const response = await llm.invoke(
+      `Based on this messages messages, Add a title for this convo and only based on the messages? MAKE SURE TO ONLY RESPOND WITH THE TITLE. <messages>\n\n${messages.join('\n\n')}</messages>`,
+    );
+
+    const title = response.content.toString();
+    return title;
+  }
+
+  protected async syncSessionSet({
+    sessionId,
+    roomId,
+    oracleName,
+    userAccessToken,
+    did,
+    messages,
+  }: {
+    sessionId: string;
+    roomId: string;
+    oracleName: string;
+    userAccessToken: string;
+    did: string;
+    messages: string[];
+  }): Promise<ChatSession> {
+    const matrixManager = MatrixManager.getInstance();
+    await matrixManager.init();
+
+    const { sessions } = await this.listSessions({
+      did,
+      matrixAccessToken: userAccessToken,
+    });
+
+    const selectedSession = sessions.find((s) => s.sessionId === sessionId);
+
+    if (!selectedSession) {
+      const session: ChatSession = {
+        sessionId,
+        oracleName,
+        title: await this.createMessageTitle({
+          messages,
+        }),
+        lastUpdatedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      };
+      await matrixManager.stateManager.setState<ChatSession[]>({
+        roomId,
+        stateKey: 'oracleSessions_sessions',
+        data: [session, ...sessions],
+      });
+      return session;
+    }
+    // update the session
+    const title =
+      messages.length > 4
+        ? selectedSession.title
+        : await this.createMessageTitle({
+            messages,
+          });
+    await matrixManager.stateManager.setState<ChatSession[]>({
+      roomId,
+      stateKey: 'oracleSessions_sessions',
+      data: sessions.map((session) =>
+        session.sessionId === sessionId
+          ? {
+              ...session,
+              title,
+              lastUpdateAt: new Date().toISOString(),
+            }
+          : session,
+      ),
+    });
+    return {
+      ...selectedSession,
+      title,
+      lastUpdatedAt: new Date().toISOString(),
+    };
+  }
+
+  public async listSessions(
+    listSessionsDto: ListChatSessionsDto,
+  ): Promise<ListChatSessionsResponseDto> {
+    await this.matrixManger.init();
+    const roomId = await this.roomManager.getOrCreateRoom({
+      did: listSessionsDto.did,
+      oracleName: 'oracleSessions',
+      userAccessToken: listSessionsDto.matrixAccessToken,
+    });
+
+    const room = this.matrixManger.getRoom(roomId);
+
+    if (!room) {
+      throw new RoomNotFoundError(roomId);
+    }
+
+    const isUserInRoom = await this.matrixManger.checkIsUserInRoom({
+      roomId,
+      userAccessToken: listSessionsDto.matrixAccessToken,
+    });
+
+    if (!isUserInRoom) {
+      throw new UserNotInRoomError(listSessionsDto.did, roomId);
+    }
+
+    try {
+      const sessionsState = await this.matrixManger.stateManager.getState<
+        ChatSession[]
+      >(roomId, 'oracleSessions_sessions');
+      return { sessions: sessionsState };
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        'errcode' in error &&
+        error.errcode === 'M_NOT_FOUND'
+      ) {
+        return { sessions: [] };
+      }
+      throw error;
+    }
+  }
+
+  public async createSession(
+    createSessionDto: CreateChatSessionDto,
+  ): Promise<CreateChatSessionResponseDto> {
+    const sessionId = crypto.randomUUID();
+
+    const roomId = await this.roomManager.getOrCreateRoom({
+      did: createSessionDto.did,
+      oracleName: 'oracleSessions',
+
+      userAccessToken: createSessionDto.matrixAccessToken,
+    });
+
+    const session = await this.syncSessionSet({
+      sessionId,
+      roomId,
+      oracleName: createSessionDto.oracleName,
+      userAccessToken: createSessionDto.matrixAccessToken,
+      did: createSessionDto.did,
+      messages: [],
+    });
+
+    return session;
+  }
+
+  public async deleteSession(
+    deleteSessionDto: DeleteChatSessionDto,
+  ): Promise<void> {
+    const oldSessions = await this.listSessions({
+      did: deleteSessionDto.did,
+      matrixAccessToken: deleteSessionDto.matrixAccessToken,
+    });
+
+    const roomId = await this.matrixManger.getRoomId({
+      did: deleteSessionDto.did,
+      oracleName: 'oracleSessions',
+    });
+
+    if (!roomId) {
+      throw new NoUserRoomsFoundError(deleteSessionDto.did);
+    }
+
+    const newSessions = oldSessions.sessions.filter(
+      (session) => session.sessionId !== deleteSessionDto.sessionId,
+    );
+
+    await this.matrixManger.stateManager.setState<ChatSession[]>({
+      roomId,
+      stateKey: 'oracleSessions_sessions',
+      data: newSessions,
+    });
+  }
+}
