@@ -1,0 +1,31 @@
+{
+  "name": "@ixo/slack",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "test": "jest"
+  },
+  "exports": {
+    ".": {
+      "default": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "devDependencies": {
+    "@ixo/eslint-config": "workspace:*",
+    "@ixo/jest-config": "workspace:*",
+    "@ixo/typescript-config": "workspace:*",
+    "@slack/web-api": "^7.8.0",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.10.5",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.5.4"
+  },
+  "dependencies": {
+    "@ixo/logger": "workspace:*",
+    "@slack/bolt": "^4.2.0",
+    "slackify-markdown": "^4.4.0"
+  }
+}
