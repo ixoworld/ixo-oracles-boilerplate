@@ -139,10 +139,98 @@ Core services for Matrix integration and state management:
   - Access control and validation
 
 - **Session Manager**
+
   - Chat session management
   - AI-powered session titling
   - Matrix state persistence
   - Session lifecycle handling
+
+- **Environment Service**
+  - Type-safe environment variable management
+  - Zod schema validation
+  - Singleton pattern implementation
+  - Runtime environment validation
+
+### Using the Environment Service
+
+The Environment Service provides a type-safe way to manage and access environment variables in your application. Here's the recommended way to structure and use it:
+
+#### 1. Define Your Schema (schema.ts)
+
+```typescript
+// src/services/env/schema.ts
+import { z } from 'zod';
+
+export const envSchema = z.object({
+  NODE_ENV: z.enum(['development', 'production', 'test']),
+  PORT: z.string().transform(Number),
+  API_KEY: z.string().min(1),
+  // Add more environment variables as needed
+});
+
+// Export the schema type for type-safety
+export type Schema = typeof envSchema;
+```
+
+#### 2. Create Singleton Instance (env.ts)
+
+```typescript
+// src/services/env/env.ts
+import { type Schema } from 'zod';
+import { EnvService } from './env.service';
+
+const envService = EnvService.getInstance<Schema>();
+
+export default envService;
+```
+
+#### 3. Initialize in Application Entry Point
+
+```typescript
+// src/main.ts or src/app.ts
+import { EnvService } from '@ixo/common/services/env';
+import { envSchema } from './services/env/schema';
+
+async function bootstrap() {
+  // Initialize environment service first
+  EnvService.initialize(envSchema);
+
+  // Now you can start your application
+  const app = express();
+  // ... rest of your application setup
+}
+
+bootstrap();
+```
+
+#### 4. Use Throughout Your Application
+
+```typescript
+// Any file where you need env variables - use the singleton instance you created in your app
+import env from './services/env/env';
+
+// Type-safe environment usage
+const port = env.get('PORT'); // TypeScript knows this is a number
+const apiKey = env.get('API_KEY'); // TypeScript knows this is a string
+
+// Example usage in a service
+export class DatabaseService {
+  constructor() {
+    this.connect({
+      port: env.get('PORT'),
+      apiKey: env.get('API_KEY'),
+    });
+  }
+}
+```
+
+This pattern provides several benefits:
+
+- **Single Source of Truth**: Environment schema is defined in one place
+- **Type Safety**: TypeScript knows the types of all environment variables
+- **Early Validation**: Environment is validated when the application starts
+- **Clean Imports**: Simple import of the pre-configured service
+- **Separation of Concerns**: Schema definition, initialization, and usage are separated
 
 ## Documentation
 
