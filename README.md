@@ -1,7 +1,3 @@
-Below is an updated **README** that provides an overall introduction to the **ixo Oracles Base Repository** and includes a brief section for the **Events** package (`@ixo/oracles-events`). Please adjust and refine to match your team’s style and any additional requirements.
-
----
-
 # **ixo Oracles Base Repository**
 
 Welcome to the **ixo Oracles Base Repository**—a comprehensive, modular framework for building and deploying AI-driven oracles. This repo consolidates essential modules (data storage, vector search, knowledge management, authentication, client SDK, real-time events, etc.) into a single, well-structured codebase. Whether you’re creating a new oracle from scratch or extending existing solutions, this repository provides the tooling and best practices to streamline development.
