@@ -57,11 +57,6 @@ export class ApiKeyManager {
       -- Composite index for validity checks (used in checkKey)
       CREATE INDEX IF NOT EXISTS idx_api_keys_validity ON api_keys(id, revokedAt, expiresAt);
 
-      -- Index for expiration date (useful for cleanup jobs)
-      CREATE INDEX IF NOT EXISTS idx_api_keys_expires_at ON api_keys(expiresAt);
-
-      -- Index for revocation status (useful for filtering active keys)
-      CREATE INDEX IF NOT EXISTS idx_api_keys_revoked_at ON api_keys(revokedAt);
     `;
     this.db.exec(createTableSQL);
   }
