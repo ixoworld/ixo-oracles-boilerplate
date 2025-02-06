@@ -48,7 +48,7 @@ describe('ApiKeyManager', () => {
       const { keyId } = apiKeyManager.createKey();
 
       const storedKey = db
-        .prepare<any, IApiKeyRecord>('SELECT * FROM api_keys WHERE id = ?')
+        .prepare<[string], IApiKeyRecord>('SELECT * FROM api_keys WHERE id = ?')
         .get(keyId);
 
       expect(storedKey).toBeTruthy();
@@ -101,7 +101,7 @@ describe('ApiKeyManager', () => {
 
       const storedKey = db
         .prepare<
-          any,
+          [string],
           IApiKeyRecord
         >('SELECT revokedAt FROM api_keys WHERE id = ?')
         .get(keyId);
@@ -186,7 +186,7 @@ describe('ApiKeyManager', () => {
       const keyHash =
         db
           .prepare<
-            any,
+            [string],
             IApiKeyRecord
           >('SELECT keyHash FROM api_keys WHERE id = ?')
           .get(keyId)?.keyHash ?? '';
