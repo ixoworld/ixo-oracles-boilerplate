@@ -1,72 +1,147 @@
-# **ixo Oracles Base Repository**
+# ixo Oracles Base Repository
 
-Welcome to the **ixo Oracles Base Repository**—a comprehensive, modular framework for building and deploying AI-driven oracles. This repo consolidates essential modules (data storage, vector search, knowledge management, authentication, client SDK, real-time events, etc.) into a single, well-structured codebase. Whether you’re creating a new oracle from scratch or extending existing solutions, this repository provides the tooling and best practices to streamline development.
-
----
-
-## **Key Features**
-
-1. **Modular Architecture**  
-   Each major function (e.g., Data Store, Vector DB, Knowledge Module, Auth, Events) is in its own package for easy maintenance and reuse.
-
-2. **High Test Coverage**  
-   Emphasis on automated testing to ensure reliability and maintainability. Certain core modules aim for **100% coverage**, while others target **75%+**.
-
-3. **Flexible Integrations**
-
-   - **Data-Store** integrates seamlessly with structured data sources (e.g., Airtable).
-   - **Vector DB** modules (Chroma, Pinecone) support embedding-based search and retrieval.
-   - **Knowledge Module** centralizes domain-specific data, easily syncable with external sources.
-
-4. **Client SDK**  
-   Formerly `@ixo/oracles-ui`, now refactored as a **generic** SDK for interactive oracle sessions, dynamic UI rendering, and real-time communication.
-
-5. **Security & Auth**  
-   An **Auth module** ensures that oracles only perform actions when properly authorized, keeping user data secure.
-
-6. **Real-Time Events**  
-   The **Events module (`@ixo/oracles-events`)** facilitates event-driven communication between different parts of the system (and between backend and frontend) over WebSockets, making it easy to build reactive, real-time features.
+Welcome to the **ixo Oracles Base Repository**—a comprehensive, modular framework for building and deploying AI-driven oracles. This repo consolidates essential modules (data storage, vector search, knowledge management, authentication, client SDK, real-time events, etc.) into a single, well-structured codebase. Whether you're creating a new oracle from scratch or extending existing solutions, this repository provides the tooling and best practices to streamline development.
 
 ---
 
-## **Repository Structure**
+## Key Features
 
-```plaintext
-.
-├── packages/
-│   ├── auth/                # Auth module for permission checks
-│   ├── data-store/          # CRUD interface for structured data (e.g., Airtable)
-│   ├── knowledge/           # Knowledge Module for domain data management
-│   ├── vector-db/           # Interfaces & implementations for embedding-based DBs
-│   ├── oracles-client-sdk/  # React hooks & utilities for oracle UIs
-│   ├── oracles-events/      # Event management system for real-time comms
-│   └── ...other packages
-├── docs/                    # Documentation (to be expanded)
-├── tests/                   # Centralized tests & integration checks
-├── .eslintrc                # Lint rules
-├── jest.config.js           # Testing config
-├── tsconfig.json            # TypeScript configuration
-├── package.json
-└── README.md                # This file
-```
+1. **🔒 Secure Communication**
 
-- Each **package** contains its own `README` (where applicable), configuration, and tests.
-- The **docs** directory is ideal for usage guides, architecture overviews, and advanced tutorials.
+   - End-to-end encrypted Matrix rooms
+   - Secure WebSocket events
+   - API key management
+
+2. **📊 Data Management**
+
+   - Vector database support (ChromaDB)
+   - Structured data storage (Airtable)
+   - Type-safe interfaces
+
+3. **🤖 AI Integration**
+
+   - OpenAI integration
+   - Semantic search capabilities
+   - Document processing tools
+
+4. **🔄 Real-time Features**
+   - Event-driven architecture
+   - WebSocket communication
+   - Matrix & Slack integration
+
+## Package Overview
+
+Here's a detailed overview of the key packages in this repository:
+
+### Core Packages
+
+1. **@ixo/common** - [`packages/common`](./packages/common)
+
+   - Core utilities, AI capabilities, and shared services
+   - Matrix integration and state management
+   - OpenAI integration and document processing
+   - Environment variables:
+
+     ```env
+     OPENAI_API_KEY=your_openai_key
+     MATRIX_ORACLE_ADMIN_ACCESS_TOKEN=your_matrix_token
+     TAVILY_API_KEY=your_tavily_key  # Optional for web search
+     ```
+
+2. **@ixo/data-store** - [`packages/data-store`](./packages/data-store)
+
+   - Vector and structured data storage abstractions
+   - ChromaDB and Airtable implementations
+   - Environment variables:
+
+     ```env
+     OPENAI_API_KEY=your_openai_api_key    # For embeddings
+     AIRTABLE_API_KEY=your_airtable_key    # For Airtable operations
+     AIRTABLE_BASE_ID=your_base_id         # For Airtable operations
+     AITABLE_BASE_TABLE_LINK=your_link     # Optional for record links
+     ```
+
+3. **@ixo/matrix** - [`packages/matrix`](./packages/matrix)
+
+   - Secure Matrix.org client SDK wrapper
+   - End-to-end encrypted room management
+   - Required environment variables:
+
+     ```env
+     MATRIX_BASE_URL=https://your-matrix-server.com
+     MATRIX_ORACLE_ADMIN_ACCESS_TOKEN=your_token
+     MATRIX_ORACLE_ADMIN_USER_ID=@admin:your.server
+     MATRIX_ORACLE_ADMIN_PASSWORD=your_password
+     MATRIX_RECOVERY_PHRASE=your_recovery_phrase
+     ```
+
+   - Optional storage paths (created in `matrix-local-storage` folder):
+     ```env
+     MATRIX_CRYPTO_STORE_PATH=./matrix-crypto-store        # Crypto storage
+     MATRIX_STORE_PATH=./matrix-store                      # General storage
+     MATRIX_SECRET_STORAGE_KEYS_PATH=./matrix-secret-storage  # Secret keys
+     ```
+
+4. **@ixo/oracles-events** - [`packages/events`](./packages/events)
+
+   - Real-time event system for oracle communications
+   - WebSocket-based client communication
+
+5. **@ixo/slack** - [`packages/slack`](./packages/slack)
+
+   - Slack integration using Bolt SDK
+   - Rich messaging capabilities
+   - Environment variables:
+
+     ```env
+     SLACK_BOT_TOKEN=xoxb-your-bot-token
+     SLACK_APP_TOKEN=xapp-your-app-token
+     ```
+
+### Supporting Packages
+
+6. **@ixo/oracles-chain-client** - [`packages/oracles-chain-client`](./packages/oracles-chain-client)
+
+   - Blockchain interaction client
+   - Credentials management
+
+7. **@ixo/api-keys-manager** - [`packages/api-keys-manager`](./packages/api-keys-manager)
+
+   - API key management and validation
+
+8. **@ixo/logger** - [`packages/logger`](./packages/logger)
+
+   - Centralized logging functionality
+
+9. **Configuration Packages**
+   - `@ixo/jest-config`: Jest testing configuration
+   - `@ixo/eslint-config`: ESLint rules
+   - `@ixo/typescript-config`: TypeScript configuration
 
 ---
 
-## **Getting Started**
+## Prerequisites
+
+Before you begin, ensure you have:
+
+- Node.js 16+ installed
+- Docker (for running ChromaDB)
+- Access to a Matrix server (for secure communication)
+- Required API keys (OpenAI, Airtable, etc.)
+- pnpm installed (`npm install -g pnpm`)
+
+## Getting Started
 
 1. **Clone or Fork the Repo**
 
-   ```bash
+   ```sh
    git clone https://github.com/ixoworld/ixo-oracles-boilerplate
    cd ixo-oracles-boilerplate
    ```
 
 2. **Install Dependencies**
 
-   ```bash
+   ```sh
    pnpm install
    ```
 
@@ -74,73 +149,72 @@ Welcome to the **ixo Oracles Base Repository**—a comprehensive, modular framew
 
 3. **Build the Project**
 
-   ```bash
+   ```sh
    pnpm build
    ```
 
-   This compiles the TypeScript packages into distributable artifacts.
-
 4. **Run Tests**
-   ```bash
+   ```sh
    pnpm test
    ```
-   - Includes both unit and (where implemented) integration tests.
-   - Coverage reports can be generated to maintain quality standards.
 
 ---
 
-## **Usage & Modules**
+## Development Workflow
 
-Below is a quick overview of each major module. More detailed instructions are in each package’s local `README`.
+### Local Development
 
-1. **Auth Module**
+1. **Start Required Services**
 
-   - **Purpose:** Validates whether an oracle is authorized to perform actions for a user.
-   - **Usage:** Integrate permission checks (e.g., `checkPermission(user, action)`) in your service layer.
+   ```sh
+   # Start ChromaDB
+   docker run -p 8000:8000 chromadb/chroma
+   ```
 
-2. **Data-Store Module**
+   - Start Matrix server (if running locally) following setup instructions.
 
-   - **Purpose:** Provides a straightforward CRUD interface, often used with Airtable or other structured data sources.
-   - **Usage:** Import the `IDataStore<T>` interface and implement your logic (create, read, update, delete).
+2. **Running Tests**
 
-3. **Knowledge Module**
+   ```sh
+   # All tests
+   pnpm test
 
-   - **Purpose:** Manages domain-specific knowledge, syncing data between structured sources (Airtable) and vector stores if needed.
-   - **Usage:** Call the module’s CRUD functions to update or retrieve knowledge items.
-
-4. **Vector DB Module**
-
-   - **Purpose:** Abstracts embedding-based search and retrieval with vector databases (e.g., Pinecone, Chroma).
-   - **Usage:** Implement the `IVectorDB<T>` interface in your chosen DB package. Store or query embeddings seamlessly.
-
-5. **Oracles Client SDK**
-
-   - **Purpose:** Provides hooks and components for real-time AI interactions (sessions, dynamic UI, message streaming).
-   - **Usage:** Wrap your React app in `UseOraclesProvider` for centralized config, then use hooks like `useAskOracle`.
-
-6. **Events Module (`@ixo/oracles-events`)**
-   - **Purpose:** Offers a robust event management system, powered by `eventemitter2` and `socket.io`, to enable real-time, event-driven communication across services and between backend and frontend.
-     - **Usage:**
-       - **Create custom events** that extend a base class for consistent validation and structure.
-       - **Register events** in a central `GraphEventEmitter` to allow them to be emitted and listened for over WebSockets.
-       - **Emit events** when critical actions occur (e.g., new data stored, tool invocation, or UI updates).
-     - **Benefits:**
-       - Decouples modules and microservices through asynchronous notifications.
-       - Simplifies real-time features, providing a central point to register and manage events.
-     - For a detailed walkthrough (creating events, registering them, emitting, and listening), see the package’s **README** in [`packages/oracles-events`](https://github.com/ixoworld/ixo-oracles-boilerplate/tree/main/packages/events).
+   # Single package
+   pnpm test --filter @ixo/events
+   ```
 
 ---
 
-## **Configuration**
+## Environment Setup
 
-- **Environment Variables & Secrets**:  
-  Each package may rely on environment variables (e.g., Airtable API keys, vector DB credentials). Provide them in a `.env` file or through a secure vault service.
-- **Provider-Based Approach** (e.g., `UseOraclesProvider` for the client SDK):
-  - Pass all relevant configuration (API URLs, auth tokens) in one place, reducing duplication and simplifying maintenance.
+1. **Copy Environment Variables Template**
 
----
+   ```sh
+   cp .env.example .env
+   ```
 
-## **Testing & Coverage**
+   This creates a local `.env` file from the template.
+
+2. **Configure Environment Variables**
+   Update the `.env` file with your specific configuration values.
+
+3. **Security Notes**
+
+   - Never commit the `.env` file
+   - Use secure methods to share environment variables in production
+   - Consider using a secrets manager for production deployments
+
+4. **Local Development**
+
+   - ChromaDB can be run locally using Docker:
+
+     ```sh
+     docker run -p 8000:8000 chromadb/chroma
+     ```
+
+   - Matrix server can be local or remote, but must support end-to-end encryption.
+
+## Testing & Coverage
 
 - **Unit Tests**: Each package includes or will include basic unit tests.
 - **Integration Tests**: Certain workflows (e.g., Knowledge Module syncing Airtable + Vector DB) may have additional tests in the `tests/` folder.
@@ -148,11 +222,11 @@ Below is a quick overview of each major module. More detailed instructions are i
   - **Core Modules**: 100% if possible (session management, core oracles logic).
   - **Others**: ~75% coverage to ensure stability.
 
-Use `pnpm test:coverage` (or a similar script) to generate coverage reports.
+Use `pnpm test` to generate coverage reports.
 
 ---
 
-## **Contributing**
+## Contributing
 
 1. **Open an Issue**: Start a discussion or propose a feature/bugfix.
 2. **Create a Feature Branch**: For new features or significant refactors.
@@ -163,23 +237,20 @@ We adhere to **ESLint** and **Prettier** standards to maintain a clean, consiste
 
 ---
 
-## **Roadmap & Next Steps**
+## Roadmap & Next Steps
 
-- **Finalize Module Test Coverage**: Reach 75%+ coverage on new modules, 100% on critical ones.
-- **Expand Vector DB Integrations**: Provide more out-of-the-box support for popular embeddings.
-- **Improve Documentation**: Deeper guides, advanced usage scenarios, best practices.
-- **Refine Auth**: Clarify roles, permissions, and token-based flows.
-- **Evolve Events Module**: Enhance tooling for advanced event-driven architectures and multi-service orchestration.
-
-Keep an eye on the `docs/` directory and upcoming issues or tickets for further developments.
+- **Finalize Module Test Coverage**
+- **Improve Documentation**
+- **Refine Auth**
+- **Evolve Events Module**
 
 ---
 
-## **Contact & Support**
+## Contact & Support
 
 - **Issues & Bugs**: [GitHub Issues](https://github.com/ixoworld/ixo-oracles-boilerplate/issues)
-- **Questions & Discussion**: [GitHub Discussions](https://github.com/ixoworld/ixo-oracles-boilerplate/discussions) or Slack/Discord (if applicable)
+- **Questions & Discussion**: [GitHub Discussions](https://github.com/ixoworld/ixo-oracles-boilerplate/discussions)
 
 ---
 
-**We hope this base repository accelerates your AI oracle development.** If you have any questions, suggestions, or run into problems, don’t hesitate to open an issue. Happy building!
+We hope this base repository accelerates your AI oracle development. Happy building!
