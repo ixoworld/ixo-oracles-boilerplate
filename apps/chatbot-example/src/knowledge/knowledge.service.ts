@@ -137,7 +137,7 @@ export class KnowledgeService {
 
     await Promise.all([
       this.chroma.delete(ids),
-      // this.db.delete(knowledge).where(eq(knowledge.id, id)),
+      this.db.delete(knowledge).where(eq(knowledge.id, id)),
     ]);
   }
 }
