@@ -10,11 +10,11 @@ import {
   type PendingWrite,
   type SerializerProtocol,
 } from '@langchain/langgraph-checkpoint';
-import { MatrixManager } from 'src/matrix-manager';
+import { MatrixManager } from '../matrix-manager';
 import {
   type IMatrixManagerInitConfig,
   type OraclesNamesOnMatrix,
-} from 'src/types';
+} from '../types';
 import {
   type ICheckpointRow,
   type IGraphStateWithRequiredFields,
