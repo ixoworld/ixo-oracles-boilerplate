@@ -1,7 +1,7 @@
 import { type VectorDBDataStore } from '@ixo/data-store';
 import { Document } from '@langchain/core/documents';
 import { FakeChatModel } from '@langchain/core/utils/testing';
-import { retrieverToolFactory } from './retriever-tool';
+import { retrieverToolFactory } from './retriever-tool.js';
 
 const fakeModel = new FakeChatModel({});
 

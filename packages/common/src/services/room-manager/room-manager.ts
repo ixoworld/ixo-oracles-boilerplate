@@ -1,5 +1,5 @@
 import { MatrixManager, type Room } from '@ixo/matrix';
-import { type CreateRoomDto, type GetRoomDto } from './dto';
+import { type CreateRoomDto, type GetRoomDto } from './dto.js';
 
 export class RoomManagerService {
   constructor(protected readonly matrixManger = MatrixManager.getInstance()) {}

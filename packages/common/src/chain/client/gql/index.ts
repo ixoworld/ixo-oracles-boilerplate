@@ -5,7 +5,7 @@ import {
   type IClaimCollectionQueryResponse,
   type IEntityQueryResponse,
   type IIdDoc,
-} from './types';
+} from './types.js';
 
 const request = async <T>(
   query: string,

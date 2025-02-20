@@ -1,5 +1,5 @@
 import { Document } from '@langchain/core/documents';
-import { filterSimilaritySearchResults } from '../filter-similarity-search-results';
+import { filterSimilaritySearchResults } from '../filter-similarity-search-results.js';
 
 describe('filterSimilaritySearchResults', () => {
   const createDoc = (content: string): Document =>

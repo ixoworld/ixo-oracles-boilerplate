@@ -1,2 +1,2 @@
-export * from './dto';
-export * from './room-manager';
+export * from './dto.js';
+export * from './room-manager.js';

@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return  -- f*/
 import { Logger } from '@ixo/logger';
+import { config } from 'dotenv';
 import { z } from 'zod';
+
+config();
 
 export class EnvService<T extends z.ZodType> {
   private static instance: EnvService<z.ZodType> | null = null;

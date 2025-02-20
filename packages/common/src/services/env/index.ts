@@ -1,1 +1,1 @@
-export { EnvService } from './env.service';
+export { EnvService } from './env.service.js';

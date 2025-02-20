@@ -1,1 +1,1 @@
-export * from './ask-ixo-guru';
+export * from './ask-ixo-guru.js';

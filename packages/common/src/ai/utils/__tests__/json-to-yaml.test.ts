@@ -1,4 +1,4 @@
-import { jsonToYaml } from '../json-to-yaml';
+import { jsonToYaml } from '../json-to-yaml.js';
 
 describe('jsonToYaml', () => {
   it('should convert flat JSON object to YAML', () => {

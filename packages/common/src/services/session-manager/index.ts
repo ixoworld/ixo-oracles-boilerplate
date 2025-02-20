@@ -1,3 +1,3 @@
-export * from './dto';
-export * from './errors';
-export * from './session-manager.service';
+export * from './dto.js';
+export * from './errors.js';
+export * from './session-manager.service.js';

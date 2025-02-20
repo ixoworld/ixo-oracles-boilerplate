@@ -1,8 +1,3 @@
-import {
-  getChatOpenAiModel,
-  retrieverToolFactory,
-  SELF_QUERY_RAG_PROMPT,
-} from '@ixo/common/index';
 import { type VectorDBDataStore } from '@ixo/data-store';
 import { Logger } from '@ixo/logger';
 import { type Document } from '@langchain/core/documents';
@@ -11,6 +6,11 @@ import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { type RunnableConfig } from '@langchain/core/runnables';
 import 'dotenv/config';
 import { z } from 'zod';
+import {
+  getChatOpenAiModel,
+  retrieverToolFactory,
+  SELF_QUERY_RAG_PROMPT,
+} from '../../index.js';
 
 interface IFindDocsNodeRequiredState {
   question: string;

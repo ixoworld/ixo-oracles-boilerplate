@@ -1,7 +1,7 @@
 import { tool } from '@langchain/core/tools';
 import { tavily } from '@tavily/core';
 import { z } from 'zod';
-import { jsonToYaml } from '../utils/json-to-yaml';
+import { jsonToYaml } from '../utils/json-to-yaml.js';
 
 const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY });
 

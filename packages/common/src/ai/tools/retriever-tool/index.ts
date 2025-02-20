@@ -1,1 +1,1 @@
-export * from './retriever-tool';
+export * from './retriever-tool.js';

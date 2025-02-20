@@ -2,7 +2,7 @@ import { Document } from '@langchain/core/documents';
 import { type BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { FakeChatModel } from '@langchain/core/utils/testing';
-import checkDocRelevance from '../doc-relevance-checker';
+import checkDocRelevance from '../doc-relevance-checker.js';
 
 jest.spyOn(ChatPromptTemplate, 'fromTemplate');
 

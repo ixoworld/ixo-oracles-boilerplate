@@ -1,5 +1,5 @@
 import { Document } from '@langchain/core/documents';
-import { stringifyDocs } from '../stringify-docs';
+import { stringifyDocs } from '../stringify-docs.js';
 
 describe('stringifyDocs', () => {
   it('should stringify a single document', () => {

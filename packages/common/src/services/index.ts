@@ -1,3 +1,3 @@
-export * from './env';
-export * from './room-manager';
-export * from './session-manager';
+export * from './env/index.js';
+export * from './room-manager/index.js';
+export * from './session-manager/index.js';

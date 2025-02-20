@@ -1,2 +1,2 @@
-export * from './create-fake-node';
-export * from './find-docs';
+export * from './create-fake-node.js';
+export * from './find-docs/index.js';

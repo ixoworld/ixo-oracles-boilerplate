@@ -1,6 +1,6 @@
-import { jsonToYaml } from 'src/ai/utils';
-import type { RequestPayload, ResponsePayload } from './ask-ixo-guru';
-import { askIXOGuruTool } from './ask-ixo-guru';
+import { jsonToYaml } from '../../utils/json-to-yaml.js';
+import type { RequestPayload, ResponsePayload } from './ask-ixo-guru.js';
+import { askIXOGuruTool } from './ask-ixo-guru.js';
 
 type FetchResponse = {
   ok: boolean;

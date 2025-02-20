@@ -1,10 +1,5 @@
 import { ChatOpenAI, OpenAIEmbeddings } from '@langchain/openai';
-import OpenAI from 'openai';
-import {
-  getChatOpenAiModel,
-  getOpenAiEmbeddings,
-  getRawOpenAiModel,
-} from './openai';
+import { getChatOpenAiModel, getOpenAiEmbeddings } from './openai.js';
 
 // Mock environment variables
 const originalEnv = process.env;
@@ -46,28 +41,6 @@ describe('OpenAI Models', () => {
     });
   });
 
-  describe('getRawOpenAiModel', () => {
-    it('should create an OpenAI instance with default parameters', () => {
-      const model = getRawOpenAiModel();
-
-      expect(model).toBeInstanceOf(OpenAI);
-      expect(model).toHaveProperty('apiKey', 'test-api-key');
-    });
-
-    it('should override default parameters when provided', () => {
-      const customParams = {
-        apiKey: 'custom-api-key',
-        organization: 'org-123',
-      };
-
-      const model = getRawOpenAiModel(customParams);
-
-      expect(model).toBeInstanceOf(OpenAI);
-      expect(model).toHaveProperty('apiKey', 'custom-api-key');
-      expect(model).toHaveProperty('organization', 'org-123');
-    });
-  });
-
   describe('getOpenAiEmbeddings', () => {
     it('should create an OpenAIEmbeddings instance with default parameters', () => {
       const embeddings = getOpenAiEmbeddings();
@@ -93,7 +66,6 @@ describe('OpenAI Models', () => {
       delete process.env.OPENAI_API_KEY;
 
       expect(() => getChatOpenAiModel()).toThrow();
-      expect(() => getRawOpenAiModel()).toThrow();
       expect(() => getOpenAiEmbeddings()).toThrow();
     });
   });

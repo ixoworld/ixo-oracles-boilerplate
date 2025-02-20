@@ -1,5 +1,5 @@
 import { Document } from '@langchain/core/documents';
-import { docSplitter } from '../doc-splitter';
+import { docSplitter } from '../doc-splitter.js';
 
 describe('docSplitter', () => {
   it('should split a single string into documents', async () => {

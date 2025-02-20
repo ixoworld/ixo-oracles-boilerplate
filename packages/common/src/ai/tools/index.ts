@@ -1,3 +1,3 @@
-export * from './ask-ixo-guru';
-export * from './retriever-tool';
-export * from './web-search-tool';
+export * from './ask-ixo-guru/index.js';
+export * from './retriever-tool/index.js';
+export * from './web-search-tool.js';

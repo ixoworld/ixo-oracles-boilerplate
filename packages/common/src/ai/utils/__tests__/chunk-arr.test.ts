@@ -1,4 +1,4 @@
-import { chunkArr } from '../chunk-arr';
+import { chunkArr } from '../chunk-arr.js';
 
 describe('chunkArr', () => {
   it('should split array into chunks of specified size', () => {

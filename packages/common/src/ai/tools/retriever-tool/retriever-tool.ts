@@ -2,10 +2,10 @@ import { type VectorDBDataStore } from '@ixo/data-store';
 import { Logger } from '@ixo/logger';
 import { Document } from '@langchain/core/documents';
 import { type BaseChatModel } from '@langchain/core/language_models/chat_models';
-import { type DynamicStructuredTool, tool } from '@langchain/core/tools';
-import z from 'zod';
-import { getChatOpenAiModel } from '../../models/openai';
-import checkDocRelevance from '../../utils/doc-relevance-checker';
+import { tool, type DynamicStructuredTool } from '@langchain/core/tools';
+import { z } from 'zod';
+import { getChatOpenAiModel } from '../../models/openai.js';
+import checkDocRelevance from '../../utils/doc-relevance-checker.js';
 
 type RetrieverToolFactoryArgs<
   Filters extends Record<string, unknown> = Record<string, unknown>,

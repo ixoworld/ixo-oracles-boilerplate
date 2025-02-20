@@ -1,6 +1,6 @@
 import { tool } from '@langchain/core/tools';
-import { jsonToYaml } from 'src/ai/utils';
 import { z } from 'zod';
+import { jsonToYaml } from '../../utils/json-to-yaml.js';
 
 export type RequestPayload = {
   matrixAccessToken: string;

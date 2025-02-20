@@ -1,4 +1,4 @@
-import { createSemanticRouter } from './create-semantic-router';
+import { createSemanticRouter } from './create-semantic-router.js';
 
 const parse = jest.fn();
 const create = jest.fn();

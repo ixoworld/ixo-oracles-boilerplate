@@ -6,10 +6,10 @@ import { type APIPromise } from 'openai/core.mjs';
 import { zodResponseFormat } from 'openai/helpers/zod';
 import { type ParsedChatCompletion } from 'openai/resources/beta/chat/completions.mjs';
 import { z } from 'zod';
-import { type EnsureKeys } from '../types';
-import { jsonToYaml } from '../utils';
-import { semanticRouterPrompt } from './semantic-router-prompt';
-import { validateRoutes } from './validate-routes';
+import { type EnsureKeys } from '../types.js';
+import { jsonToYaml } from '../utils/index.js';
+import { semanticRouterPrompt } from './semantic-router-prompt.js';
+import { validateRoutes } from './validate-routes.js';
 
 /**
  * Creates a semantic router that resolves the path based on the given routes and basedOn value.

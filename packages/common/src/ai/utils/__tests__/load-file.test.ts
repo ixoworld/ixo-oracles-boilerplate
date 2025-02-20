@@ -1,6 +1,6 @@
 import { Document } from '@langchain/core/documents';
-import fs from 'node:fs/promises';
-import { loadFile } from '../load-file';
+import { readFile } from 'fs/promises';
+import { loadFile } from '../load-file.js';
 
 // Mock the external dependencies
 jest.mock('node:fs/promises');
@@ -21,21 +21,21 @@ describe('loadFile', () => {
   describe('Local File Loading', () => {
     it('should load a PDF file', async () => {
       const mockBuffer = Buffer.from('mock pdf content');
-      (fs.readFile as jest.Mock).mockResolvedValue(mockBuffer);
+      (readFile as jest.Mock).mockResolvedValue(mockBuffer);
 
       await loadFile('test.pdf');
 
-      expect(fs.readFile).toHaveBeenCalledWith('test.pdf');
+      expect(readFile).toHaveBeenCalledWith('test.pdf');
     });
 
     it('should load a Markdown file', async () => {
       const mockContent = '# Test Markdown';
       const mockBuffer = Buffer.from(mockContent);
-      (fs.readFile as jest.Mock).mockResolvedValue(mockBuffer);
+      (readFile as jest.Mock).mockResolvedValue(mockBuffer);
 
       const result = await loadFile('test.md');
 
-      expect(fs.readFile).toHaveBeenCalledWith('test.md');
+      expect(readFile).toHaveBeenCalledWith('test.md');
       expect(Array.isArray(result)).toBe(true);
       expect(result[0]).toBeInstanceOf(Document);
     });
@@ -43,11 +43,11 @@ describe('loadFile', () => {
     it('should load a text file', async () => {
       const mockContent = 'Test text content';
       const mockBuffer = Buffer.from(mockContent);
-      (fs.readFile as jest.Mock).mockResolvedValue(mockBuffer);
+      (readFile as jest.Mock).mockResolvedValue(mockBuffer);
 
       const result = await loadFile('test.txt');
 
-      expect(fs.readFile).toHaveBeenCalledWith('test.txt');
+      expect(readFile).toHaveBeenCalledWith('test.txt');
       expect(Array.isArray(result)).toBe(true);
       expect(result[0]).toBeInstanceOf(Document);
     });
@@ -59,7 +59,7 @@ describe('loadFile', () => {
     });
 
     it('should handle file read errors', async () => {
-      (fs.readFile as jest.Mock).mockRejectedValue(new Error('File not found'));
+      (readFile as jest.Mock).mockRejectedValue(new Error('File not found'));
 
       await expect(loadFile('nonexistent.pdf')).rejects.toThrow(
         'File not found',
@@ -121,7 +121,7 @@ describe('loadFile', () => {
   describe('File Type Detection', () => {
     it('should detect file type from extension', async () => {
       const mockBuffer = Buffer.from('mock content');
-      (fs.readFile as jest.Mock).mockResolvedValue(mockBuffer);
+      (readFile as jest.Mock).mockResolvedValue(mockBuffer);
 
       await loadFile('test.pdf');
       await loadFile('test.md');
@@ -129,7 +129,7 @@ describe('loadFile', () => {
       await loadFile('test.html');
       await loadFile('test.docx');
 
-      expect(fs.readFile).toHaveBeenCalledTimes(5);
+      expect(readFile).toHaveBeenCalledTimes(5);
     });
 
     it('should detect file type from content-type header', async () => {

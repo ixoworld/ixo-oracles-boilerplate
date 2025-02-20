@@ -1,6 +1,6 @@
 import { MatrixManager } from '@ixo/matrix';
-import { getChatOpenAiModel } from 'src/ai';
-import { RoomManagerService } from '../room-manager/room-manager';
+import { getChatOpenAiModel } from '../../ai/index.js';
+import { RoomManagerService } from '../room-manager/room-manager.js';
 import {
   type ChatSession,
   type CreateChatSessionDto,
@@ -8,12 +8,12 @@ import {
   type DeleteChatSessionDto,
   type ListChatSessionsDto,
   type ListChatSessionsResponseDto,
-} from './dto';
+} from './dto.js';
 import {
   NoUserRoomsFoundError,
   RoomNotFoundError,
   UserNotInRoomError,
-} from './errors';
+} from './errors.js';
 
 export class SessionManagerService {
   constructor(

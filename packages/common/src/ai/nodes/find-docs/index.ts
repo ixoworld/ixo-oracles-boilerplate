@@ -1,2 +1,2 @@
-export * from './find-docs.prompt';
-export * from './node';
+export * from './find-docs.prompt.js';
+export * from './node.js';

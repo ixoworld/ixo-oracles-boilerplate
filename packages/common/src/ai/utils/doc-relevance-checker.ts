@@ -1,13 +1,13 @@
 import { type Document } from '@langchain/core/documents';
-import { type BaseChatModel } from '@langchain/core/language_models/chat_models';
+import { type BaseLanguageModel } from '@langchain/core/language_models/base';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import z from 'zod';
-import { getChatOpenAiModel } from '../models/openai';
+import { getChatOpenAiModel } from '../models/openai.js';
 
 type TCheckDocRelevanceArgs = {
   doc: Document | string;
   query: string;
-  model?: BaseChatModel;
+  model?: BaseLanguageModel;
 };
 
 async function checkDocRelevance({
@@ -36,6 +36,14 @@ async function checkDocRelevance({
   const zodSchema = z.object({
     answer: z.boolean(),
   });
+
+  if (!model) {
+    throw new Error('Model is not set');
+  }
+
+  if (!model.withStructuredOutput) {
+    throw new Error('Model does not support structured output');
+  }
 
   const structuredLlm = model.withStructuredOutput(zodSchema);
 
