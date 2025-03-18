@@ -1,0 +1,22 @@
+schema: https://testnet-blocksync-graphql.ixo.earth/graphql
+documents: ./src/**/*.graphql
+generates:
+  ./src/gql/generated/graphql.ts:
+    plugins:
+      - typescript
+      - typescript-operations
+  ./src/gql/generated/sdk.ts:
+    plugins:
+      - typescript
+      - typescript-operations
+      - typescript-graphql-request
+    config:
+      avoidOptionals: true
+      skipTypename: false
+      withHooks: false
+      withHOC: false
+      withComponent: false
+      gqlImport: graphql-tag#gql
+hooks:
+  afterAllFileWrite:
+    - prettier --write

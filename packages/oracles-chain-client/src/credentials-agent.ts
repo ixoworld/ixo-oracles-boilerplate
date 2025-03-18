@@ -35,19 +35,19 @@ import { KeyManagementSystem } from '@veramo/kms-local';
 import axios from 'axios';
 import { Resolver } from 'did-resolver';
 import 'dotenv/config';
-import { RESOLVER_NETWORKS } from './constants';
+import { RESOLVER_NETWORKS } from './constants.js';
 import {
   Identity,
   type AgentConfig,
   type AgentPluginMethodMap,
-} from './identity-agent';
-import { IxoClient } from './ixo-client';
+} from './identity-agent.js';
+import { IxoClient } from './ixo-client.js';
 import {
   type CreateAndSubmitResponse,
   type ICreateAndSubmitClaimPayload,
   type ISubmitClaim,
   type Networks,
-} from './type';
+} from './type.js';
 
 export class Credentials {
   agent?: TAgent<AgentPluginMethodMap>;
@@ -168,7 +168,7 @@ export class Credentials {
     );
 
     // Upload credentials
-    const uploadId = await IxoClient.instance.uploadFile(
+    const { cid: uploadId } = await IxoClient.instance.uploadFile(
       verifiedCredential,
       payload.storage,
     );
@@ -198,9 +198,12 @@ export class Credentials {
 const createExtraContexts = (
   contextUrls: string[] = [],
   contexts: ContextDoc[] = [],
-): Record<string, ContextDoc> =>
+): Record<string,any> =>
   contextUrls
     .map((url, index) => ({ [url]: contexts[index] }))
-    .reduce((acc, curr) => ({ ...acc, ...curr }), {});
+    .reduce(
+      (acc, curr) => ({ ...acc, ...curr }),
+      {} as Record<string, ContextDoc>,
+    );
 
 export default Credentials.instance;

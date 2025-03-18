@@ -1,7 +1,5 @@
-import {
-  type LinkedResource,
-  type Service,
-} from '@ixo/impactxclient-sdk/types/codegen/ixo/iid/v1beta1/types';
+import { type LinkedResource } from '@ixo/impactxclient-sdk/types/codegen/ixo/iid/v1beta1/types.js';
+import { type Service } from 'did-resolver';
 
 export const getServiceEndpoint = (url = '', services: Service[] = []) => {
   // if url includes :// it means it already an https link most probably
