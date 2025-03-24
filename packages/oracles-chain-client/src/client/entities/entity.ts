@@ -1,7 +1,12 @@
 import { utils } from '@ixo/impactxclient-sdk';
+import { MatrixBotService } from '../../matrix-bot/matrix-bot.service.js';
 import { gqlClient } from '../../gql/index.js';
 import Client from '../client.js';
-import { TGetSurveyJsDomainSchema } from './create-entity/types.js';
+import {
+  TGetSettingsResourceSchema,
+  TGetSurveyJsDomainSchema,
+} from './create-entity/types.js';
+
 export class Entities {
   constructor(public readonly client = Client) {}
   static async getEntityById(entityId: string) {
@@ -23,33 +28,42 @@ export class Entities {
 
   static async getSurveyJsDomain(
     domainParams: TGetSurveyJsDomainSchema,
-    matrixBotService: MatrixBotService,
+    matrixAccessToken?: string,
   ) {
-    const protocol = await Entities.getEntityById(domainParams.protocolDid);
+    return await this.getSettingsResource(
+      {
+        protocolDid: domainParams.protocolDid,
+        key: 'DomainSettingsTemplate',
+      },
+      matrixAccessToken,
+    );
+  }
 
+  static async getSettingsResource(
+    settingsResourceParams: TGetSettingsResourceSchema,
+    matrixAccessToken?: string,
+  ) {
+    const matrixBotService = new MatrixBotService(matrixAccessToken);
+    const protocol = await Entities.getEntityById(
+      settingsResourceParams.protocolDid,
+    );
     if (!protocol) {
       throw new Error('Protocol not found');
     }
-
-    const settingsResource = protocol?.settings?.DomainSettingsTemplate;
+    const settingsResource = protocol?.settings?.[settingsResourceParams.key];
     if (!settingsResource) {
-      throw new Error('Settings resource not found');
-    }
-    const roomId = await matrixBotService.getRoomIdFromAlias(protocol.id);
-
-    const matrixValue = await matrixBotService.get<
-      Array<{
-        data: Record<string, unknown>;
-        metadata: Record<string, unknown>;
-      }>
-    >(roomId, 'resources', settingsResource.proof);
-
-    if (!Array.isArray(matrixValue)) {
       throw new Error(
-        'MATRIX INTERNAL ERROR: The matrix value is not an array - The MCP service expects the State to matrix state Value to be an array of {data: Record<string, unknown>, metadata: Record<string, unknown>} in the first index for key "resources" and path settingsResource.proof',
+        `Settings resource not found for key ${settingsResourceParams.key}`,
       );
     }
-    return matrixValue[0]?.data;
+    const roomId = await matrixBotService.getRoomIdFromAlias(protocol.id);
+    const matrixValue = await matrixBotService.get(
+      roomId,
+      'resources',
+      settingsResource.proof,
+    );
+
+    return matrixValue;
   }
 
   public async getEntityIdFromTx(txHash: string): Promise<string | undefined> {
@@ -70,13 +84,4 @@ export class Entities {
   }
 
   static instance = new Entities();
-}
-
-interface MatrixBotService {
-  getRoomIdFromAlias(alias: string): Promise<string>;
-  get<T>(
-    roomId: string,
-    key: string,
-    path?: string,
-  ): Promise<T | Record<string, T>>;
 }

@@ -1,5 +1,9 @@
-import { DirectSecp256k1HdWallet } from '@cosmjs/proto-signing';
-import { type DeliverTxResponse, type StdFee } from '@cosmjs/stargate';
+import { DirectSecp256k1HdWallet, EncodeObject } from '@cosmjs/proto-signing';
+import {
+  GasPrice,
+  type DeliverTxResponse,
+  type StdFee,
+} from '@cosmjs/stargate';
 import {
   cosmos,
   createQueryClient,
@@ -33,9 +37,9 @@ export type SigningClientType = Awaited<ReturnType<typeof createSigningClient>>;
 export type QueryClientType = Awaited<ReturnType<typeof createQueryClient>>;
 
 export class IxoClient {
-  private queryClient?: QueryClientType;
-  private signingClient?: SigningClientType;
-  private wallet?: DirectSecp256k1HdWallet;
+  public queryClient?: QueryClientType;
+  public signingClient?: SigningClientType;
+  public wallet: DirectSecp256k1HdWallet;
 
   public static instance = new IxoClient();
 
@@ -69,7 +73,7 @@ export class IxoClient {
       this.rpcUrl,
       this.wallet,
       false,
-      undefined,
+      { gasPrice: GasPrice.fromString('0.025uixo') },
       {
         getLocalData: (k) => store.get(k),
         setLocalData: (k, d) => store.set(k, d),
@@ -266,6 +270,28 @@ export class IxoClient {
     return Boolean(evaluateAuth);
   }
 
+  public async signAndBroadcast(msgs: readonly EncodeObject[], memo?: string) {
+    await this.checkInitiated();
+    if (!this.wallet) {
+      throw new Error('wallet is not initialized');
+    }
+    const accounts = await this.wallet.getAccounts();
+    if (accounts.length === 0) {
+      throw new Error('No accounts found in wallet');
+    }
+    const address = accounts[0]?.address;
+    if (!address) {
+      throw new Error('No address found in wallet');
+    }
+
+    const gasEstimation = await this.signingClient?.simulate(
+      address,
+      msgs,
+      memo,
+    );
+    const fee = this.getFee(msgs.length, gasEstimation);
+    return this.signingClient?.signAndBroadcast(address, msgs, fee, memo);
+  }
   async oracleHasPendingAuthzClaim({
     userDid,
     claimCollectionId,
@@ -336,19 +362,24 @@ export class IxoClient {
     return { cid, serviceEndpoint };
   }
 
-  getFee(trxLength = 1, simGas?: number): StdFee {
-    const simOk = simGas && simGas > 50000;
+  getFee(trxLength = 1, simGas?: number): StdFee | 'auto' {
+    if (simGas && simGas > 50000) return 'auto';
+
+    const gasPrice = 0.025; // Or fetch from network dynamically
+    const simOk = typeof simGas === 'number' && simGas > 0;
 
     return {
       amount: [
         {
           denom: 'uixo',
           amount: simOk
-            ? (simGas * 0.1).toFixed(0)
-            : (trxLength * 30000).toString(),
+            ? (simGas * gasPrice).toFixed(0)
+            : (trxLength * 5000).toString(), // Lower fallback
         },
       ],
-      gas: simOk ? (simGas * 1.3).toFixed(0) : (trxLength * 700000).toString(),
+      gas: simOk
+        ? (simGas * 1.3).toFixed(0) // Buffer of 30%
+        : (trxLength * 200000).toString(), // Lower fallback
     };
   }
 

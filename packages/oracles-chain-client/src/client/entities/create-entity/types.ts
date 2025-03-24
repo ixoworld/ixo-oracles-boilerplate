@@ -116,3 +116,7 @@ export const GetSurveyJsDomainSchema = z.object(
     description: 'Get the Domain creation Form for a given protocol DID',
   },
 );
+export type TGetSettingsResourceSchema = z.infer<typeof GetSettingsResourceSchema>;
+export const GetSettingsResourceSchema = z.object({
+  key: z.string(),
+}).merge(GetSurveyJsDomainSchema);

@@ -1,7 +1,7 @@
 import axios from 'axios';
 import axiosRetry from 'axios-retry';
 import { RateLimiter } from 'limiter';
-import { timeout } from './general.js';
+import { timeout } from './utils/general.js';
 
 export const web3StorageRateLimiter = new RateLimiter({
   tokensPerInterval: 200,
