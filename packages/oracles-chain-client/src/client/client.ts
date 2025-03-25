@@ -15,8 +15,8 @@ const CELLNODE_URL = process.env.CELLNODE_URL;
 
 export class Client {
   public queryClient!: QueryClientType;
-  private signingClient!: SigningClientType;
-  private wallet!: DirectSecp256k1HdWallet;
+  public signingClient!: SigningClientType;
+  public wallet!: DirectSecp256k1HdWallet;
 
   private static instance: Client;
 

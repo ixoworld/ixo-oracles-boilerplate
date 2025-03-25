@@ -6,7 +6,9 @@
     "rootDir": "src",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "types": ["jest", "node"],
+    "incremental": false
   },
   "include": ["src/**/*", "src/**/*.test.ts"],
   "exclude": ["node_modules", "dist", "integration", "**/*.spec.ts"]

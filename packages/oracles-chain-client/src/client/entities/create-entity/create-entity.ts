@@ -44,66 +44,74 @@ export class EntityFactory {
 
   public setValueIfAvailable<T>(
     setter: (value: T) => void,
-    value: T | undefined,
+    value?: T | undefined | null,
   ) {
     if (value) {
       setter(value);
     }
   }
 
-  // static async create(params: CreateEntityParams) {
-  //   const instance = new EntityFactory(params);
-  //   await instance.initializeOwnerSettings();
-  //   if (!params.value) {
-  //     return instance;
-  //   }
-  //   const verificationMethods = [
-  //     ...customMessages.iid.createIidVerificationMethods({
-  //       did: await instance.getWalletDid(),
-  //       pubkey: await instance.getWalletPubKey(),
-  //       address: await instance.getWalletAddress(),
-  //       controller: await instance.getWalletDid(),
-  //       type: 'secp',
-  //     }),
-  //   ];
+  static async create(params: CreateEntityParams) {
+    const instance = new EntityFactory(params);
+    await instance.initializeOwnerSettings();
+    if (!params.value) {
+      return instance;
+    }
+    const verificationMethods = [
+      ...customMessages.iid.createIidVerificationMethods({
+        did: await instance.getWalletDid(),
+        pubkey: await instance.getWalletPubKey(),
+        address: await instance.getWalletAddress(),
+        controller: await instance.getWalletDid(),
+        type: 'secp',
+      }),
+    ];
 
-  //   instance.addVerificationMethods(verificationMethods);
-  //   instance.setValueIfAvailable(
-  //     instance.setEntityType,
-  //     params.value.entityType,
-  //   );
-  //   instance.setValueIfAvailable(instance.addServices, params.value.services);
-  //   instance.setValueIfAvailable(
-  //     instance.addContext,
-  //     params.value.context && [params.value.context],
-  //   );
-  //   instance.setValueIfAvailable(
-  //     instance.addAccordedRights,
-  //     params.value.accordedRights,
-  //   );
-  //   instance.setValueIfAvailable(
-  //     instance.addLinkedEntities,
-  //     params.value.linkedEntities,
-  //   );
-  //   instance.setValueIfAvailable(
-  //     instance.addLinkedClaims,
-  //     params.value.linkedClaims,
-  //   );
-  //   instance.setValueIfAvailable(
-  //     instance.setStartDate,
-  //     transformDate(params.value.startDate),
-  //   );
-  //   instance.setValueIfAvailable(
-  //     instance.setEndDate,
-  //     transformDate(params.value.endDate),
-  //   );
-  //   instance.setValueIfAvailable(
-  //     instance.addLinkedResources,
-  //     params.value.linkedResources,
-  //   );
+    instance.addVerificationMethods(verificationMethods);
+    instance.setValueIfAvailable(
+      instance.setEntityType,
+      params.value.entityType,
+    );
+    instance.setValueIfAvailable(instance.addServices, params.value.services);
+    const context = params.value.context?.at(0);
+    instance.setValueIfAvailable(
+      instance.addContext,
+      context
+        ? [
+            {
+              key: context.key,
+              val: context?.val ?? '',
+            },
+          ]
+        : undefined,
+    );
+    instance.setValueIfAvailable(
+      instance.addAccordedRights,
+      params.value.accordedRights as AccordedRight[] || undefined,
+    );
+    instance.setValueIfAvailable(
+      instance.addLinkedEntities,
+      params.value.linkedEntities as LinkedEntity[] || undefined,
+    );
+    instance.setValueIfAvailable(
+      instance.addLinkedClaims,
+      params.value.linkedClaims as LinkedClaim[] || undefined,
+    );
+    instance.setValueIfAvailable(
+      instance.setStartDate,
+      transformDate(params.value.startDate),
+    );
+    instance.setValueIfAvailable(
+      instance.setEndDate,
+      transformDate(params.value.endDate),
+    );
+    instance.setValueIfAvailable(
+      instance.addLinkedResources,
+      params.value.linkedResources as LinkedResource[] || undefined,
+    );
 
-  //   return instance;
-  // }
+    return instance;
+  }
 
   private async getWalletDid() {
     const address = await this.getWalletAddress();
@@ -280,9 +288,9 @@ export class EntityFactory {
   }
 }
 
-// const transformDate = (date: string | Date | undefined): string | undefined => {
-//   if (!date) {
-//     return undefined;
-//   }
-//   return typeof date === 'string' ? date : date.toISOString();
-// };
+const transformDate = (date: string | Date | undefined): string | undefined => {
+  if (!date) {
+    return undefined;
+  }
+  return typeof date === 'string' ? date : date.toISOString();
+};
