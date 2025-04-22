@@ -4,9 +4,8 @@ import {
   type WithRequiredEventProps,
 } from '../base-event/base-event';
 
-export interface IMessageCacheInvalidation {
+interface IMessageCacheInvalidation {
   status?: 'isRunning' | 'done';
-  oracle?: string;
 }
 
 export class MessageCacheInvalidationEvent extends BaseEvent<IMessageCacheInvalidation> {

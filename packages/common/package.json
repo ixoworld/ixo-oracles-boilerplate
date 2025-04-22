@@ -4,23 +4,24 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias",
     "test": "jest"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    "./*": {
-      "types": "./dist/*.d.ts",
-      "import": "./dist/*.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./ai": {
       "types": "./dist/ai/index.d.ts",
       "import": "./dist/ai/index.js"
     },
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js"
     }
   },
   "devDependencies": {
@@ -64,6 +65,7 @@
     "mammoth": "1.8.0",
     "openai": "^4.67.0",
     "pdf-parse": "^1.1.1",
+    "playwright": "^1.51.0",
     "store": "^2.0.12",
     "zod": "^3.23.8"
   }

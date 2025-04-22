@@ -24,16 +24,21 @@ class ChromaDataStore extends VectorDBDataStore {
   /**
    * Creates a new ChromaDataStore instance
    * @param options - Configuration options for the vector store
-   * @throws Error if OPENAI_API_KEY is not set
+   * @throws Error if OPENAI_API_KEY is not set and no embedding function is provided
    */
   constructor(options: IVectorStoreOptions) {
-    if (typeof process.env.OPENAI_API_KEY !== 'string') {
-      throw new Error('OPENAI_API_KEY is not set');
+    if (
+      typeof process.env.OPENAI_API_KEY !== 'string' &&
+      !options.embeddingFunction
+    ) {
+      throw new Error(
+        'OPENAI_API_KEY is not set and no embedding function is provided',
+      );
     }
     options.embeddingFunction =
       options.embeddingFunction ||
       new OpenAIEmbeddingFunction({
-        openai_api_key: process.env.OPENAI_API_KEY,
+        openai_api_key: process.env.OPENAI_API_KEY ?? '',
         openai_model: 'text-embedding-3-small',
       });
     options.url = options.url || 'http://localhost:8000';
@@ -191,6 +196,19 @@ class ChromaDataStore extends VectorDBDataStore {
       nResults: options?.topK || 10,
     });
     return createVectorStoreSearchResult(result);
+  }
+
+  /**
+   * Updates the metadata for a document by its ID
+   * @param ids - Array of document IDs to update
+   * @param metadata - Metadata to update
+   */
+  async updateMetadata(ids: string[], metadatas: Metadata[]): Promise<void> {
+    this.checkIsInitialized();
+    await this.collection.update({
+      ids,
+      metadatas,
+    });
   }
 }
 

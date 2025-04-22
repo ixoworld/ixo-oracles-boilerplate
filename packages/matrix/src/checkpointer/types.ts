@@ -25,6 +25,7 @@ interface IRunnableConfigWithRequiredFields extends RunnableConfig {
     thread_id?: string;
     checkpoint_ns?: string;
     checkpoint_id?: string;
+    requestId?: string;
     [key: string]: unknown;
   };
 }

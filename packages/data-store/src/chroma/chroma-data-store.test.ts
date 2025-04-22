@@ -43,7 +43,7 @@ describe('ChromaDataStore', () => {
       await expect(chromaDataStore.init()).resolves.not.toThrow();
     });
 
-    it('should throw error when OPENAI_API_KEY is not set', () => {
+    it('should throw error when OPENAI_API_KEY is not set and no embedding function is provided', () => {
       // Temporarily remove API key
       const originalKey = process.env.OPENAI_API_KEY;
       delete process.env.OPENAI_API_KEY;
