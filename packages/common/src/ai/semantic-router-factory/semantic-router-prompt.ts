@@ -13,7 +13,12 @@ export const semanticRouterPrompt = `You are semantic router responsible for det
      - Evaluating multiple conditions with logical connectors like "AND" or "OR" (e.g., "if the user type is 'guest' AND the access level is 'restricted'").
    - Your task is to convert these human-readable conditions into logical expressions that can be evaluated programmatically.
 
-3. **Evaluate Each Route:**
+3. **Special Handling for Message Arrays:**
+   - If the state contains a 'messages' array, respect their chronological order.
+   - The most recent messages (at the end of the array) should have higher significance for determining intent.
+   - Pay special attention to the last user message as it often contains the most current intent.
+
+4. **Evaluate Each Route:**
    - For each route, check if the current state satisfies the condition:
      - Example:
        - Condition: "if the user type is 'admin' AND the access level is 'full'"
@@ -24,7 +29,7 @@ export const semanticRouterPrompt = `You are semantic router responsible for det
          \`\`\`
        - Evaluation: This condition does NOT match because \`accessLevel\` is 'limited', not 'full'.
 
-4. **Return the Matching Route:**
+5. **Return the Matching Route:**
    - Identify and return the name of the first route where all conditions are met.
    - If no route matches, return 'undefined'.
 
@@ -79,7 +84,37 @@ export const semanticRouterPrompt = `You are semantic router responsible for det
 
 ---
 
-**Example 3:**
+**Example 3 (with Messages):**
+
+- **Routes:**
+  \`\`\`yaml
+  chatMode: "if the messages contain casual conversation or greetings"
+  taskExecution: "if the messages indicate a specific task to be performed"
+  informationRequest: "if the messages contain questions about how to use the system"
+  \`\`\`
+
+- **State:**
+  \`\`\`yaml
+  messages:
+    - sender: user
+      content: "Hello there!"
+    - sender: assistant
+      content: "Hi! How can I help you today?"
+    - sender: user
+      content: "I need to create a new domain for my project."
+  \`\`\`
+
+**Evaluation:**
+- **chatMode**: Does not match fully (initial messages were greetings, but the final message indicates a task).
+- **taskExecution**: Matches (the last message clearly indicates a specific task - domain creation).
+- **informationRequest**: Does not match (no questions about system usage).
+
+**Result:**
+- Output: "taskExecution" (Based on the latest user intent in the message array)
+
+---
+
+**Example 4:**
 
 - **Routes:**
   \`\`\`yaml
@@ -115,6 +150,8 @@ export const semanticRouterPrompt = `You are semantic router responsible for det
 - Be precise and ensure the evaluation logic follows the conditions specified.
 - If multiple conditions are specified, all must be met for a route to be valid.
 - The decision should be based on clear, logical reasoning derived from the state values.
+- When messages are included, prioritize the most recent message for determining intent.
+- Message ordering represents the chronological flow of conversation - later messages reflect the most current intent.
 
 ----
 YOUR MISSION IS TO RESOLVE THE ROUTE BASED ON THE STATE PROVIDED. GOOD LUCK!

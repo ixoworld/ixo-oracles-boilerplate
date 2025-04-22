@@ -88,7 +88,7 @@ export const createSemanticRouter = <
         });
 
         const route = choices[0]?.message?.content?.toString();
-        Logger.info('🚀 ~ route:', route);
+        Logger.debug('🚀 ~ route:', route);
         return client.beta.chat.completions.parse({
           model,
           messages: [
@@ -106,7 +106,13 @@ export const createSemanticRouter = <
       }
       return client.beta.chat.completions.parse({
         model,
-        messages,
+        messages: [
+          ...messages,
+          {
+            role: 'user',
+            content: 'Think and analyze the routes then select the next route',
+          },
+        ],
         response_format: zodResponseFormat(schema, 'routesResponse'),
       });
     };
@@ -130,7 +136,7 @@ export const createSemanticRouter = <
 
     if (message?.parsed) {
       const nextRoute = message.parsed.nextRoute;
-      Logger.info(
+      Logger.debug(
         `🚀 ~ nextRoute: ${message.parsed.nextRoute.toString()}`,
         message.parsed,
       );

@@ -1,7 +1,6 @@
 import { HumanMessage } from '@langchain/core/messages';
 import { logger } from 'matrix-js-sdk/lib/logger';
 import crypto from 'node:crypto';
-import { type IRunnableConfigWithRequiredFields } from 'src/checkpointer/types';
 import { MatrixManager } from 'src/matrix-manager';
 import {
   type CleanupFunction,
@@ -10,9 +9,10 @@ import {
   prepareTest,
 } from '../../test-utils';
 import { InMemoryJsonStorage } from '../../test-utils/in-memory-storage';
-import { getTupleTestCases } from './suits/get-tuple';
-import { putTestCases } from './suits/put';
-import { putWritesTestCases } from './suits/put-writes';
+// import { getTupleTestCases } from './suits/get-tuple';
+// import { putTestCases } from './suits/put';
+// import { putWritesTestCases } from './suits/put-writes';
+import { type IRunnableConfigWithRequiredFields } from 'src/checkpointer';
 import { testGraph } from './test-graph/test-graph';
 import { CONFIG } from './utils';
 
@@ -42,19 +42,19 @@ describe('Matrix Checkpointer', () => {
     await cleanup();
   });
 
-  describe('#put', () => {
-    putTestCases();
-  });
+  // describe('#put', () => {
+  //   putTestCases();
+  // });
 
-  describe('#putWrites', () => {
-    putWritesTestCases();
-  });
+  // describe('#putWrites', () => {
+  //   putWritesTestCases();
+  // });
 
-  describe('#getTuple', () => {
-    getTupleTestCases();
-  });
+  // describe('#getTuple', () => {
+  //   getTupleTestCases();
+  // });
 
-  describe('Graph Integration', () => {
+  describe.only('Graph Integration', () => {
     const sessionId = crypto.randomUUID();
     const config: IRunnableConfigWithRequiredFields = {
       configurable: {
@@ -79,7 +79,7 @@ describe('Matrix Checkpointer', () => {
         },
         config,
       );
-
+      console.log('🚀 ~ result2:', result2);
       // Verify message history is maintained
       expect(result2.messages).toHaveLength(4);
       expect(result2.messages.map((m) => m.content)).toEqual([

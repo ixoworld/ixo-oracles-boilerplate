@@ -3,13 +3,7 @@ import {
   shouldHaveConnectionId,
   type WithRequiredEventProps,
 } from '../base-event/base-event';
-
-interface IToolCallEvent {
-  toolName: string;
-  args?: unknown;
-  status?: 'isRunning' | 'done';
-  eventId?: string;
-}
+import { EVENT_NAME, IToolCallEvent } from './types';
 
 export class ToolCallEvent extends BaseEvent<IToolCallEvent> {
   constructor(public payload: WithRequiredEventProps<IToolCallEvent>) {
@@ -17,7 +11,7 @@ export class ToolCallEvent extends BaseEvent<IToolCallEvent> {
     super();
     shouldHaveConnectionId(payload);
   }
-  public eventName = 'tool_call';
+  public eventName = EVENT_NAME;
 
-  static eventName = 'tool_call' as const;
+  static eventName = EVENT_NAME;
 }
