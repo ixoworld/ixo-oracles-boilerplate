@@ -420,6 +420,8 @@ export class MatrixManager {
 }
 
 function cleanupClient(client: sdk.MatrixClient): void {
+  Logger.info('🚀 ~ cleanupClient ~ client:', client.credentials);
+
   // Stop all ongoing syncs
   client.stopClient();
 

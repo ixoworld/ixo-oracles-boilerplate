@@ -3,7 +3,7 @@ import {
   type ICreateVerifiableCredentialArgs,
   type VerifiableCredential,
 } from '@veramo/core';
-import { type AgentConfig } from './identity-agent.js';
+import { type AgentConfig } from './identity-agent';
 
 export type Networks = 'devnet' | 'testnet' | 'mainnet';
 export type * from '@veramo/core';

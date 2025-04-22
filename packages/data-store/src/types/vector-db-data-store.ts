@@ -7,7 +7,7 @@ export interface IVectorStoreDocument {
   /**
    * Unique identifier for the document.
    */
-  id: string;
+  id?: string;
 
   /**
    * The content or data of the document.

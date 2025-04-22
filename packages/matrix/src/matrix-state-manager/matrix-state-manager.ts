@@ -1,7 +1,7 @@
 import { Logger } from '@ixo/logger';
 import * as sdk from 'matrix-js-sdk';
 import { parse, stringify } from 'superjson';
-import { type OraclesNamesOnMatrix } from '../types';
+import { supportedOracles, type OraclesNamesOnMatrix } from '../types';
 
 interface IStatePayload<C> {
   roomId: string;
@@ -16,7 +16,6 @@ export class MatrixStateManager {
     const roomRegex =
       /^!(?<roomId>[a-zA-Z0-9]+):(?<domain>(?<temp2>localhost|[a-zA-Z0-9.]+)(?<temp1>:\d{1,5})?)?$/;
     if (!roomRegex.test(roomId)) {
-      Logger.error(`Invalid room ID: ${roomId}`);
       throw new Error(`Invalid room ID: ${roomId}`);
     }
   }
@@ -25,8 +24,16 @@ export class MatrixStateManager {
     const stateKeyRegex = /^(?<oracleName>[a-zA-Z]+)_(?<key>.+)$/;
     const stateKeyMatch = stateKeyRegex.exec(stateKey);
     if (!stateKeyMatch) {
-      Logger.error(`Invalid state key: ${stateKey}`);
       throw new Error(`Invalid state key: ${stateKey}`);
+    }
+
+    const { oracleName } = stateKeyMatch.groups as {
+      oracleName: OraclesNamesOnMatrix;
+      key: string;
+    };
+
+    if (!supportedOracles.includes(oracleName)) {
+      throw new Error(`Unsupported oracle: ${oracleName}`);
     }
   }
 
@@ -69,7 +76,8 @@ export class MatrixStateManager {
         payload.stateKey,
       );
     } catch (error) {
-      Logger.error('Error setting state', error);
+      // eslint-disable-next-line no-console -- we need to log the error
+      console.error('Error setting state', error);
       throw error;
     }
   }

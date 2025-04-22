@@ -3,10 +3,10 @@ import { tavily } from '@tavily/core';
 import { z } from 'zod';
 import { jsonToYaml } from '../utils/json-to-yaml.js';
 
+const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY });
 
 const webSearchTool = tool(
   async ({ input }) => {
-    const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY });
     const searchResults = await tvly.search(input, {
       maxResults: 3,
       includeAnswer: true,

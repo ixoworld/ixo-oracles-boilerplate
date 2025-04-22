@@ -15,7 +15,6 @@ import {
   UserNotInRoomError,
 } from './errors.js';
 
-export const ORACLE_SESSIONS_ROOM_NAME = 'oracleSessions_sessions';
 export class SessionManagerService {
   constructor(
     protected readonly matrixManger = MatrixManager.getInstance(),
@@ -78,15 +77,13 @@ export class SessionManagerService {
       });
       return session;
     }
-
-    const allowTitleUpdate = messages.length > 4;
     // update the session
     const title =
-      allowTitleUpdate
-        ? await this.createMessageTitle({
+      messages.length > 4
+        ? selectedSession.title
+        : await this.createMessageTitle({
             messages,
-          })
-        : selectedSession.title;
+          });
     await matrixManager.stateManager.setState<ChatSession[]>({
       roomId,
       stateKey: 'oracleSessions_sessions',
@@ -113,7 +110,7 @@ export class SessionManagerService {
     await this.matrixManger.init();
     const roomId = await this.roomManager.getOrCreateRoom({
       did: listSessionsDto.did,
-      oracleName: ORACLE_SESSIONS_ROOM_NAME,
+      oracleName: 'oracleSessions',
       userAccessToken: listSessionsDto.matrixAccessToken,
     });
 
@@ -135,7 +132,7 @@ export class SessionManagerService {
     try {
       const sessionsState = await this.matrixManger.stateManager.getState<
         ChatSession[]
-      >(roomId, ORACLE_SESSIONS_ROOM_NAME);
+      >(roomId, 'oracleSessions_sessions');
       return { sessions: sessionsState };
     } catch (error) {
       if (
@@ -156,7 +153,7 @@ export class SessionManagerService {
 
     const roomId = await this.roomManager.getOrCreateRoom({
       did: createSessionDto.did,
-      oracleName: ORACLE_SESSIONS_ROOM_NAME,
+      oracleName: 'oracleSessions',
 
       userAccessToken: createSessionDto.matrixAccessToken,
     });
@@ -183,7 +180,7 @@ export class SessionManagerService {
 
     const roomId = await this.matrixManger.getRoomId({
       did: deleteSessionDto.did,
-      oracleName: ORACLE_SESSIONS_ROOM_NAME,
+      oracleName: 'oracleSessions',
     });
 
     if (!roomId) {
