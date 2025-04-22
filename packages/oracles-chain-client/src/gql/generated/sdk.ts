@@ -6177,6 +6177,63 @@ export enum TransactionsOrderBy {
   TimeDesc = 'TIME_DESC',
 }
 
+export type ClaimsQueryVariables = Exact<{
+  agentAddress: InputMaybe<Scalars['String']['input']>;
+  collectionId: InputMaybe<Scalars['String']['input']>;
+}>;
+
+export type ClaimsQuery = {
+  __typename?: 'Query';
+  claims: {
+    __typename?: 'ClaimsConnection';
+    totalCount: number;
+    nodes: Array<{
+      __typename?: 'Claim';
+      nodeId: string;
+      claimId: string;
+      agentDid: string;
+      agentAddress: string;
+      submissionDate: any;
+      paymentsStatus: any;
+      schemaType: string | null;
+      collectionId: string;
+      evaluationByClaimId: {
+        __typename?: 'Evaluation';
+        nodeId: string;
+        collectionId: string;
+        oracle: string;
+        agentDid: string;
+        agentAddress: string;
+        status: number;
+        reason: number;
+        verificationProof: string | null;
+        amount: any;
+        evaluationDate: any;
+        claimId: string;
+      } | null;
+    }>;
+  } | null;
+};
+
+export type ClaimByIdQueryVariables = Exact<{
+  claimId: Scalars['String']['input'];
+}>;
+
+export type ClaimByIdQuery = {
+  __typename?: 'Query';
+  claim: {
+    __typename?: 'Claim';
+    claimId: string;
+    agentDid: string;
+    agentAddress: string;
+    submissionDate: any;
+    paymentsStatus: any;
+    schemaType: string | null;
+    collectionId: string;
+    evaluationByClaimId: { __typename?: 'Evaluation'; status: number } | null;
+  } | null;
+};
+
 export type GetEntitiesQueryVariables = Exact<{ [key: string]: never }>;
 
 export type GetEntitiesQuery = {
@@ -6280,6 +6337,89 @@ export type GetEntitiesByOwnerAddressQuery = {
   } | null;
 };
 
+export type GetEntityIdByClaimCollectionIdQueryVariables = Exact<{
+  claimCollectionId: Scalars['String']['input'];
+}>;
+
+export type GetEntityIdByClaimCollectionIdQuery = {
+  __typename?: 'Query';
+  claimCollection: { __typename?: 'ClaimCollection'; entityId: string } | null;
+};
+
+export type GetClaimCollectionQueryVariables = Exact<{
+  claimCollectionId: Scalars['String']['input'];
+}>;
+
+export type GetClaimCollectionQuery = {
+  __typename?: 'Query';
+  claimCollection: {
+    __typename?: 'ClaimCollection';
+    id: string;
+    admin: string;
+    protocol: string;
+    startDate: any | null;
+    endDate: any | null;
+    quota: number;
+    count: number;
+    evaluated: number;
+    approved: number;
+    rejected: number;
+    disputed: number;
+    invalidated: number;
+    state: number;
+    payments: any;
+    entityId: string;
+  } | null;
+};
+
+export const ClaimsDocument = gql`
+  query Claims($agentAddress: String, $collectionId: String) {
+    claims(
+      condition: { agentAddress: $agentAddress, collectionId: $collectionId }
+    ) {
+      totalCount
+      nodes {
+        nodeId
+        claimId
+        agentDid
+        agentAddress
+        submissionDate
+        paymentsStatus
+        schemaType
+        collectionId
+        evaluationByClaimId {
+          nodeId
+          collectionId
+          oracle
+          agentDid
+          agentAddress
+          status
+          reason
+          verificationProof
+          amount
+          evaluationDate
+          claimId
+        }
+      }
+    }
+  }
+`;
+export const ClaimByIdDocument = gql`
+  query ClaimById($claimId: String!) {
+    claim(claimId: $claimId) {
+      claimId
+      agentDid
+      agentAddress
+      submissionDate
+      paymentsStatus
+      schemaType
+      collectionId
+      evaluationByClaimId {
+        status
+      }
+    }
+  }
+`;
 export const GetEntitiesDocument = gql`
   query GetEntities {
     entities {
@@ -6361,6 +6501,34 @@ export const GetEntitiesByOwnerAddressDocument = gql`
     }
   }
 `;
+export const GetEntityIdByClaimCollectionIdDocument = gql`
+  query GetEntityIdByClaimCollectionId($claimCollectionId: String!) {
+    claimCollection(id: $claimCollectionId) {
+      entityId: entity
+    }
+  }
+`;
+export const GetClaimCollectionDocument = gql`
+  query getClaimCollection($claimCollectionId: String!) {
+    claimCollection(id: $claimCollectionId) {
+      id
+      entityId: entity
+      admin
+      protocol
+      startDate
+      endDate
+      quota
+      count
+      evaluated
+      approved
+      rejected
+      disputed
+      invalidated
+      state
+      payments
+    }
+  }
+`;
 
 export type SdkFunctionWrapper = <T>(
   action: (requestHeaders?: Record<string, string>) => Promise<T>,
@@ -6381,6 +6549,36 @@ export function getSdk(
   withWrapper: SdkFunctionWrapper = defaultWrapper,
 ) {
   return {
+    Claims(
+      variables?: ClaimsQueryVariables,
+      requestHeaders?: GraphQLClientRequestHeaders,
+    ): Promise<ClaimsQuery> {
+      return withWrapper(
+        (wrappedRequestHeaders) =>
+          client.request<ClaimsQuery>(ClaimsDocument, variables, {
+            ...requestHeaders,
+            ...wrappedRequestHeaders,
+          }),
+        'Claims',
+        'query',
+        variables,
+      );
+    },
+    ClaimById(
+      variables: ClaimByIdQueryVariables,
+      requestHeaders?: GraphQLClientRequestHeaders,
+    ): Promise<ClaimByIdQuery> {
+      return withWrapper(
+        (wrappedRequestHeaders) =>
+          client.request<ClaimByIdQuery>(ClaimByIdDocument, variables, {
+            ...requestHeaders,
+            ...wrappedRequestHeaders,
+          }),
+        'ClaimById',
+        'query',
+        variables,
+      );
+    },
     GetEntities(
       variables?: GetEntitiesQueryVariables,
       requestHeaders?: GraphQLClientRequestHeaders,
@@ -6439,6 +6637,38 @@ export function getSdk(
             { ...requestHeaders, ...wrappedRequestHeaders },
           ),
         'GetEntitiesByOwnerAddress',
+        'query',
+        variables,
+      );
+    },
+    GetEntityIdByClaimCollectionId(
+      variables: GetEntityIdByClaimCollectionIdQueryVariables,
+      requestHeaders?: GraphQLClientRequestHeaders,
+    ): Promise<GetEntityIdByClaimCollectionIdQuery> {
+      return withWrapper(
+        (wrappedRequestHeaders) =>
+          client.request<GetEntityIdByClaimCollectionIdQuery>(
+            GetEntityIdByClaimCollectionIdDocument,
+            variables,
+            { ...requestHeaders, ...wrappedRequestHeaders },
+          ),
+        'GetEntityIdByClaimCollectionId',
+        'query',
+        variables,
+      );
+    },
+    getClaimCollection(
+      variables: GetClaimCollectionQueryVariables,
+      requestHeaders?: GraphQLClientRequestHeaders,
+    ): Promise<GetClaimCollectionQuery> {
+      return withWrapper(
+        (wrappedRequestHeaders) =>
+          client.request<GetClaimCollectionQuery>(
+            GetClaimCollectionDocument,
+            variables,
+            { ...requestHeaders, ...wrappedRequestHeaders },
+          ),
+        'getClaimCollection',
         'query',
         variables,
       );

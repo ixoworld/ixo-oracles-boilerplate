@@ -146,4 +146,5 @@ export type Permission<T extends AuthorizationType> = {
 export type GetOracleAuthZConfigParams = {
   oracleDid: string;
   granterAddress: string;
+  customConfigName?: string;
 };

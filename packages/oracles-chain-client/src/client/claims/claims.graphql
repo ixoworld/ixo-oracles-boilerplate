@@ -1,0 +1,45 @@
+query Claims($agentAddress: String, $collectionId: String) {
+  claims(
+    condition: { agentAddress: $agentAddress, collectionId: $collectionId }
+  ) {
+    totalCount
+    nodes {
+      nodeId
+      claimId
+      agentDid
+      agentAddress
+      submissionDate
+      paymentsStatus
+      schemaType
+      collectionId
+      evaluationByClaimId {
+        nodeId
+        collectionId
+        oracle
+        agentDid
+        agentAddress
+        status
+        reason
+        verificationProof
+        amount
+        evaluationDate
+        claimId
+      }
+    }
+  }
+}
+
+query ClaimById($claimId: String!) {
+  claim(claimId: $claimId) {
+    claimId
+    agentDid
+    agentAddress
+    submissionDate
+    paymentsStatus
+    schemaType
+    collectionId
+    evaluationByClaimId {
+      status
+    }
+  }
+}

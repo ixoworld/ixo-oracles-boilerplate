@@ -6174,6 +6174,63 @@ export enum TransactionsOrderBy {
   TimeDesc = 'TIME_DESC',
 }
 
+export type ClaimsQueryVariables = Exact<{
+  agentAddress?: InputMaybe<Scalars['String']['input']>;
+  collectionId?: InputMaybe<Scalars['String']['input']>;
+}>;
+
+export type ClaimsQuery = {
+  __typename?: 'Query';
+  claims?: {
+    __typename?: 'ClaimsConnection';
+    totalCount: number;
+    nodes: Array<{
+      __typename?: 'Claim';
+      nodeId: string;
+      claimId: string;
+      agentDid: string;
+      agentAddress: string;
+      submissionDate: any;
+      paymentsStatus: any;
+      schemaType?: string | null;
+      collectionId: string;
+      evaluationByClaimId?: {
+        __typename?: 'Evaluation';
+        nodeId: string;
+        collectionId: string;
+        oracle: string;
+        agentDid: string;
+        agentAddress: string;
+        status: number;
+        reason: number;
+        verificationProof?: string | null;
+        amount: any;
+        evaluationDate: any;
+        claimId: string;
+      } | null;
+    }>;
+  } | null;
+};
+
+export type ClaimByIdQueryVariables = Exact<{
+  claimId: Scalars['String']['input'];
+}>;
+
+export type ClaimByIdQuery = {
+  __typename?: 'Query';
+  claim?: {
+    __typename?: 'Claim';
+    claimId: string;
+    agentDid: string;
+    agentAddress: string;
+    submissionDate: any;
+    paymentsStatus: any;
+    schemaType?: string | null;
+    collectionId: string;
+    evaluationByClaimId?: { __typename?: 'Evaluation'; status: number } | null;
+  } | null;
+};
+
 export type GetEntitiesQueryVariables = Exact<{ [key: string]: never }>;
 
 export type GetEntitiesQuery = {
@@ -6274,5 +6331,40 @@ export type GetEntitiesByOwnerAddressQuery = {
       type: string;
       status: number;
     }>;
+  } | null;
+};
+
+export type GetEntityIdByClaimCollectionIdQueryVariables = Exact<{
+  claimCollectionId: Scalars['String']['input'];
+}>;
+
+export type GetEntityIdByClaimCollectionIdQuery = {
+  __typename?: 'Query';
+  claimCollection?: { __typename?: 'ClaimCollection'; entityId: string } | null;
+};
+
+export type GetClaimCollectionQueryVariables = Exact<{
+  claimCollectionId: Scalars['String']['input'];
+}>;
+
+export type GetClaimCollectionQuery = {
+  __typename?: 'Query';
+  claimCollection?: {
+    __typename?: 'ClaimCollection';
+    id: string;
+    admin: string;
+    protocol: string;
+    startDate?: any | null;
+    endDate?: any | null;
+    quota: number;
+    count: number;
+    evaluated: number;
+    approved: number;
+    rejected: number;
+    disputed: number;
+    invalidated: number;
+    state: number;
+    payments: any;
+    entityId: string;
   } | null;
 };

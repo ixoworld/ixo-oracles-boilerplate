@@ -7,10 +7,10 @@ dotenv.config();
  * GraphQL endpoint URL for the IXO Blocksync API
  * This points to the testnet environment
  */
-const GRAPHQL_ENDPOINT = process.env.BLOCKSYNC_GRAPHQL_URL;
-
+const GRAPHQL_ENDPOINT =
+  process.env.BLOCKSYNC_GRAPHQL_URL || process.env.NEXT_PUBLIC_GRAPHQL_URL;
 if (!GRAPHQL_ENDPOINT) {
-  throw new Error('BLOCKSYNC_GRAPHQL_URL is not set');
+  throw new Error('BLOCKSYNC_GRAPHQL_URL or NEXT_PUBLIC_GRAPHQL_URL is not set');
 }
 
 /**

@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-unnecessary-condition -- f */
-import { DirectSecp256k1HdWallet } from '@cosmjs/proto-signing';
+import { DirectSecp256k1HdWallet, EncodeObject } from '@cosmjs/proto-signing';
 import { createQueryClient, createSigningClient } from '@ixo/impactxclient-sdk';
 import store from 'store';
 import { type QueryClientType, type SigningClientType } from '../ixo-client.js';
 
+import { GasPrice, StdFee } from '@cosmjs/stargate';
 import { TxResponse } from '@ixo/impactxclient-sdk/types/codegen/cosmos/base/abci/v1beta1/abci.js';
 import dotenv from 'dotenv';
 
@@ -17,7 +18,7 @@ export class Client {
   public queryClient!: QueryClientType;
   public signingClient!: SigningClientType;
   public wallet!: DirectSecp256k1HdWallet;
-
+  public address!: string;
   private static instance: Client;
 
   private readonly secpMnemonic: string;
@@ -56,7 +57,7 @@ export class Client {
       this.rpcUrl,
       this.wallet,
       false,
-      undefined,
+      { gasPrice: GasPrice.fromString('0.025uixo') },
       {
         getLocalData: (k) => store.get(k),
         setLocalData: (k, d) => store.set(k, d),
@@ -65,9 +66,12 @@ export class Client {
     this.queryClient = await createQueryClient(this.rpcUrl);
   }
 
-  public static getInstance(): Client {
+  public static getInstance(
+    secpMnemonic = SECP_MNEMONIC,
+    rpcUrl = RPC_URL,
+  ): Client {
     if (!Client.instance) {
-      Client.instance = new Client();
+      Client.instance = new Client(secpMnemonic, rpcUrl);
     }
     return Client.instance;
   }
@@ -79,10 +83,62 @@ export class Client {
     return fn(this);
   }
 
+  async signAndBroadcast(msgs: readonly EncodeObject[], memo?: string) {
+    await this.checkInitiated();
+    const accounts = await this.wallet.getAccounts();
+    const address = accounts[0]?.address;
+    if (!address) {
+      throw new Error('No address found in wallet');
+    }
+    const gasEstimation = await this.signingClient?.simulate(
+      address,
+      msgs,
+      memo,
+    );
+    const fee = this.getFee(msgs.length, gasEstimation);
+    return this.signingClient?.signAndBroadcast(address, msgs, fee, memo);
+  }
+
   public async getTxByHash(hash: string): Promise<TxResponse | undefined> {
     await this.checkInitiated();
     const tx = await this.queryClient.cosmos.tx.v1beta1.getTx({ hash });
     return tx.txResponse;
+  }
+
+  getFee(trxLength = 1, simGas?: number): StdFee | 'auto' {
+    if (simGas && simGas > 50000) return 'auto';
+
+    const gasPrice = 0.025; // Or fetch from network dynamically
+    const simOk = typeof simGas === 'number' && simGas > 0;
+
+    return {
+      amount: [
+        {
+          denom: 'uixo',
+          amount: simOk
+            ? (simGas * gasPrice).toFixed(0)
+            : (trxLength * 5000).toString(), // Lower fallback
+        },
+      ],
+      gas: simOk
+        ? (simGas * 1.3).toFixed(0) // Buffer of 30%
+        : (trxLength * 200000).toString(), // Lower fallback
+    };
+  }
+
+  static async createCustomClient(
+    secpMnemonic = SECP_MNEMONIC,
+    rpcUrl = RPC_URL,
+  ): Promise<Client> {
+    const client = new Client(secpMnemonic, rpcUrl);
+    await client.init();
+    const accounts = await client.wallet.getAccounts();
+    if (!accounts[0]?.address) {
+      throw new Error('No address found in wallet');
+    }
+    client.address = accounts[0]?.address;
+    console.log('🚀 ~ createCustomClient ~ client:', client.address);
+    return client;
   }
 }
 

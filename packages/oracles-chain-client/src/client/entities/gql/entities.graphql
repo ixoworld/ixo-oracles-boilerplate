@@ -73,3 +73,28 @@ query GetEntitiesByOwnerAddress($ownerAddress: String!) {
     }
   }
 }
+
+query GetEntityIdByClaimCollectionId($claimCollectionId: String!) {
+  claimCollection(id: $claimCollectionId) {
+    entityId: entity
+  }
+}
+query getClaimCollection($claimCollectionId: String!) {
+  claimCollection(id: $claimCollectionId) {
+    id
+    entityId: entity
+    admin
+    protocol
+    startDate
+    endDate
+    quota
+    count
+    evaluated
+    approved
+    rejected
+    disputed
+    invalidated
+    state
+    payments
+  }
+}

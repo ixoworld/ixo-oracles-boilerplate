@@ -17,6 +17,9 @@
     "@ixo/eslint-config": "workspace:*",
     "@ixo/typescript-config": "workspace:*",
     "prettier": "^3.2.5",
+    "tsc": "^2.0.4",
+    "tsc-alias": "^1.8.11",
+    "tsconfig-paths": "^4.2.0",
     "turbo": "^2.3.3",
     "typescript": "5.5.4"
   },

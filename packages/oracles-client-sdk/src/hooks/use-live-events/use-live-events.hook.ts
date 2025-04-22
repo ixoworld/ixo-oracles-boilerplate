@@ -1,0 +1,90 @@
+import type {
+  AllEvents,
+  EventNames,
+  WithRequiredEventProps,
+} from '@ixo/oracles-events/types';
+import { ErrorEvent, EventSource } from 'eventsource';
+import { useEffect, useState } from 'react';
+import { useOraclesContext } from '../../providers/oracles-provider/oracles-context.js';
+import { useOraclesConfig } from '../use-oracles-config.js';
+
+export const evNames = {
+  ToolCall: 'tool_call',
+  RenderComponent: 'render_component',
+  MessageCacheInvalidation: 'message_cache_invalidation',
+  RouterUpdate: 'router_update',
+} satisfies EventNames;
+
+export type Event<T = Record<string, any>> = {
+  eventName: string;
+  payload: WithRequiredEventProps<T>;
+};
+
+export const useLiveEvents = (props: {
+  oracleDid: string;
+  sessionId: string;
+  handleInvalidateCache: () => void;
+  overrides?: {
+    baseUrl?: string;
+  };
+}) => {
+  const [events, setEvents] = useState<Event[]>([]);
+  const [isConnected, setIsConnected] = useState(false);
+  const [error, setError] = useState<ErrorEvent | null>(null);
+  const { config } = useOraclesConfig(props.oracleDid);
+  const apiUrl = props.overrides?.baseUrl ?? config.apiUrl ?? '';
+  const { wallet } = useOraclesContext();
+
+  useEffect(() => {
+    if (!wallet || !props.sessionId) {
+      return;
+    }
+    const eventSource = new EventSource(`${apiUrl}/sse/${props.sessionId}`, {
+      fetch: (url, init) => {
+        return fetch(url, {
+          ...init,
+          headers: {
+            ...init?.headers,
+            'x-matrix-access-token': wallet?.matrix.accessToken,
+            'x-did': wallet?.did,
+          },
+        });
+      },
+    });
+    eventSource.onopen = () => {
+      setIsConnected(true);
+    };
+    eventSource.onerror = (error) => {
+      setIsConnected(false);
+      setError(error);
+      console.error(error);
+    };
+
+    // event listener for events
+    const handleEvent = (event: MessageEvent<AllEvents>) => {
+      setEvents((prev) => [
+        ...prev,
+        typeof event.data === 'string' ? JSON.parse(event.data) : event.data,
+      ]);
+    };
+    eventSource.addEventListener(evNames.ToolCall, handleEvent);
+    eventSource.addEventListener(evNames.RenderComponent, handleEvent);
+
+    // invalidate cache
+    eventSource.addEventListener(
+      evNames.MessageCacheInvalidation,
+      props.handleInvalidateCache,
+    );
+    return () => {
+      eventSource.removeEventListener(evNames.ToolCall, handleEvent);
+      eventSource.removeEventListener(evNames.RenderComponent, handleEvent);
+      eventSource.removeEventListener(
+        evNames.MessageCacheInvalidation,
+        props.handleInvalidateCache,
+      );
+      eventSource.close();
+    };
+  }, [apiUrl, props.oracleDid, props.sessionId]);
+
+  return { events, isConnected, error };
+};

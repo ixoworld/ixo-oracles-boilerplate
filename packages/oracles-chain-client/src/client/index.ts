@@ -9,5 +9,8 @@ export const IXO = {
 };
 
 export * from './authz/index.js';
-export * from './entities/create-entity/index.js';
+export * from './claims/index.js';
+export * from './client.js';
+export * from './entities/index.js';
 export * from './errors/matrix.js';
+export * from './payments/index.js';
