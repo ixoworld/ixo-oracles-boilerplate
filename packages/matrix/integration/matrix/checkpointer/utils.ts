@@ -9,7 +9,7 @@ import {
   type PendingWrite,
   type SendProtocol,
 } from '@langchain/langgraph-checkpoint';
-import { type MatrixCheckpointSaver } from 'src/checkpointer';
+import { type MatrixCheckpointSaver } from '../../../src/checkpointer';
 
 // to make the type signature of the skipOnModules function a bit more readable
 export type CheckpointerName = string;

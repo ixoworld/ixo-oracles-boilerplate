@@ -1,0 +1,2 @@
+# Ignore generated GraphQL files
+src/entities/gql/generated/**/* 
