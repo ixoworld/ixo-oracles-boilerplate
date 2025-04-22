@@ -17,20 +17,11 @@
     "@ixo/eslint-config": "workspace:*",
     "@ixo/typescript-config": "workspace:*",
     "prettier": "^3.2.5",
-    "tsc": "^2.0.4",
-    "tsc-alias": "^1.8.11",
-    "tsconfig-paths": "^4.2.0",
     "turbo": "^2.3.3",
     "typescript": "5.5.4"
   },
   "packageManager": "pnpm@8.15.5",
   "engines": {
     "node": ">=18"
-  },
-  "pnpm": {
-    "overrides": {
-      "@typescript-eslint/eslint-plugin": "6.17.0",
-      "@typescript-eslint/parser": "6.17.0"
-    }
   }
 }

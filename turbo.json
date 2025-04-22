@@ -3,9 +3,6 @@
   "globalDependencies": ["**/.env"],
   "globalEnv": [
     "NODE_ENV",
-    "PORT",
-    "LOG_LEVEL",
-    "CORS_ORIGIN",
     "BOT_OAUTH_TOKEN",
     "AIRTABLE_API_KEY",
     "AIRTABLE_BASE_ID",

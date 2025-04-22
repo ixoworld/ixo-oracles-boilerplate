@@ -1,7 +1,7 @@
 import { type Schema } from 'ajv';
 import axios from 'axios';
 import store from 'store';
-import { mapUri } from './url-map.js';
+import { mapUri } from './url-map';
 
 const StoreKey = 'schemas';
 
