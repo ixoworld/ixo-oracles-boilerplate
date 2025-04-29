@@ -7,6 +7,8 @@ type ENV = {
   ORACLE_NAME: string;
   CHROMA_COLLECTION_NAME: string;
   CHROMA_URL: string;
+  SLACK_BOT_OAUTH_TOKEN: string;
+  SLACK_APP_LEVEL_TOKEN: string;
 };
 
 export type { ENV };

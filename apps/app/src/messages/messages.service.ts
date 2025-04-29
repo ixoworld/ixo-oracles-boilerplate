@@ -19,7 +19,6 @@ import { CustomerSupportGraph } from 'src/graph';
 import { type TCustomerSupportGraphState } from 'src/graph/state';
 import { SseService } from 'src/sse/sse.service';
 import { type ENV } from 'src/types';
-import { StreamTagProcessor } from 'src/utils/thinking-filter-factory';
 import { type ListMessagesDto } from './dto/list-messages.dto';
 import { type SendMessagePayload } from './dto/send-message.dto';
 
@@ -115,7 +114,6 @@ export class MessagesService {
           args: 'args',
         });
 
-        const tagProcessor = new StreamTagProcessor();
         for await (const { data, event } of stream) {
           if (event === 'on_chat_model_stream') {
             const content = (data.chunk as AIMessageChunk).content;
@@ -132,14 +130,10 @@ export class MessagesService {
             if (!content) {
               continue;
             }
-            tagProcessor.processChunk(content.toString(), (chunk) => {
-              params.res?.write(chunk.replaceAll(/<\/answer>/g, ''));
-            });
+            params.res.write(content.toString());
           }
         }
-        tagProcessor.flush((chunk) => {
-          params.res?.write(chunk.replaceAll(/<\/answer>/g, ''));
-        });
+
         if (!params.res.writableEnded) {
           params.res.end();
         }

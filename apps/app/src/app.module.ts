@@ -16,6 +16,7 @@ import { MessagesModule } from './messages/messages.module';
 import { AuthHeaderMiddleware } from './middleware/auth-header.middleware';
 import { SessionsModule } from './sessions/sessions.module';
 import { SseModule } from './sse/sse.module';
+import { SlackModule } from './slack/slack.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { SseModule } from './sse/sse.module';
     KnowledgeModule,
     SseModule,
     ScheduleModule.forRoot(),
+    SlackModule,
   ],
   controllers: [AppController],
   providers: [
