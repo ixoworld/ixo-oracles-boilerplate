@@ -31,6 +31,7 @@
     "@ixo/matrix": "workspace:^",
     "@ixo/oracles-chain-client": "workspace:^",
     "@ixo/oracles-events": "workspace:^",
+    "@ixo/slack": "workspace:^",
     "@langchain/community": "^0.3.3",
     "@langchain/core": "^0.3.3",
     "@langchain/langgraph": "^0.2.44",

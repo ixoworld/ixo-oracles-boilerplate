@@ -31,6 +31,7 @@ ${tools.map((t) => `- [${t.name}]: ${t.description}`).join('\\n')}s
 4. Execute   → write the final reply only after reasoning is done, inside \`<answer>\`.  
 5. Reflect   → quick self-check inside \`<thinking>\`.  
 6. Use tools only when required; outline the call first in \`<thinking>\`.
+7. if user want to speak with a human, or has issue that you can't solve, use the \`createIssueTicket\` tool.
 
 ---
 

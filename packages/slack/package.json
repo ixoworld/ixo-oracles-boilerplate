@@ -2,6 +2,8 @@
   "name": "@ixo/slack",
   "version": "1.0.0",
   "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "test": "jest"
@@ -9,7 +11,8 @@
   "exports": {
     ".": {
       "default": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     }
   },
   "devDependencies": {

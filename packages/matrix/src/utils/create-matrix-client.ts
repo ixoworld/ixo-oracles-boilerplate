@@ -5,10 +5,13 @@ import {
   type ICreateClientOpts,
   type MatrixClient,
 } from 'matrix-js-sdk';
+import { logger } from 'matrix-js-sdk/lib/logger';
 import {
   cacheSecretStorageKey,
   getSecretStorageKey,
 } from './secret-storage-keys';
+
+logger.setLevel('ERROR');
 
 // const store = new LocalStorage('./scratch');
 

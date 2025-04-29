@@ -7,6 +7,9 @@ import {
 } from 'matrix-js-sdk';
 import { LocalJsonStorage } from '../local-storage/local-storage';
 import createMatrixClient from './create-matrix-client';
+import { logger } from 'matrix-js-sdk/lib/logger';
+
+logger.setLevel('ERROR');
 
 const cryptoStore = new LocalStorageCryptoStore(
   new LocalJsonStorage(

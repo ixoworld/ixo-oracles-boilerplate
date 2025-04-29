@@ -9,10 +9,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { Pool } from 'pg';
 import { type BatchKnowledgeDto } from './dto/batch-knowledge.dto';
-import {
-  KnowledgeStatusEnum,
-  type CreateKnowledgeDto,
-} from './dto/create-knowledge.dto';
+import { KnowledgeStatusEnum } from './dto/create-knowledge.dto';
 import { type IKnowledge } from './entities/knowledge.entity';
 import { KnowledgeService } from './knowledge.service';
 
@@ -25,9 +22,16 @@ export class KnowledgeBatchService {
   ) {}
 
   async createBatch(batchKnowledgeDto: BatchKnowledgeDto): Promise<void> {
-    await this.insertBatchRecordToDB(batchKnowledgeDto.items);
-    const records = await this.getRecordsForEmbedding();
-    await this.sendBatchToOpenAI(records);
+    const ids = await this.insertBatchRecordToDB(batchKnowledgeDto);
+    await this.sendBatchToOpenAI(
+      batchKnowledgeDto.items.map((item, idx) => ({
+        id: ids[idx],
+        title: item.title,
+        content: item.content,
+        links: item.links,
+        questions: item.questions,
+      })),
+    );
   }
 
   // Run every 10 minutes
@@ -40,13 +44,17 @@ export class KnowledgeBatchService {
       return;
     }
     const batchResults = await this.getBatchResultsFromOpenAI(batchId);
+    if (batchResults.length === 0) {
+      Logger.log('No Batch Results to process');
+      return;
+    }
     await this.addEmbeddingsToRecords(batchResults);
   }
   private async getBatchId(): Promise<string | null> {
     const client = await this.pgPool.connect();
     const result = await client.query<{ batch_id: string }>(
       'SELECT batch_id FROM knowledge WHERE status = $1 AND batch_id IS NOT NULL LIMIT 1',
-      [KnowledgeStatusEnum.INSERTED],
+      [KnowledgeStatusEnum.IN_QUEUE],
     );
     const batchId = result.rows.at(0)?.batch_id;
     if (!batchId) {
@@ -55,9 +63,15 @@ export class KnowledgeBatchService {
     return batchId;
   }
   private async insertBatchRecordToDB(
-    createKnowledgeDto: CreateKnowledgeDto[],
-  ): Promise<void> {
-    if (!createKnowledgeDto.length) return;
+    batchKnowledgeDto: BatchKnowledgeDto,
+  ): Promise<string[]> {
+    if (!batchKnowledgeDto.items.length) return [];
+    const createKnowledgeDto = batchKnowledgeDto.items;
+
+    Logger.log(
+      `Processing batch insertion of ${createKnowledgeDto.length} records`,
+      'KnowledgeBatchService',
+    );
 
     const client = await this.pgPool.connect();
     try {
@@ -70,7 +84,19 @@ export class KnowledgeBatchService {
       const valueClauses: string[] = [];
       const values: unknown[] = [];
 
-      createKnowledgeDto.forEach((dto, rowIdx) => {
+      // Filter out any potentially invalid records
+      const validRecords = createKnowledgeDto.filter((dto) =>
+        Boolean(dto.title),
+      );
+
+      if (validRecords.length !== createKnowledgeDto.length) {
+        Logger.warn(
+          `Filtered out ${createKnowledgeDto.length - validRecords.length} records with missing title`,
+          'KnowledgeBatchService',
+        );
+      }
+
+      validRecords.forEach((dto, rowIdx) => {
         const offset = rowIdx * columns.length;
         const placeholders = columns
           .map((_, colIdx) => `$${offset + colIdx + 1}`)
@@ -79,43 +105,46 @@ export class KnowledgeBatchService {
 
         values.push(
           dto.title,
-          dto.content,
-          dto.links,
-          dto.questions,
+          dto.content || '',
+          dto.links || '',
+          dto.questions || '',
           KnowledgeStatusEnum.INSERTED,
         );
       });
+
+      // Skip if no valid records after filtering
+      if (!validRecords.length) {
+        Logger.warn(
+          'No valid records to insert after filtering',
+          'KnowledgeBatchService',
+        );
+        await client.query('COMMIT');
+        return [];
+      }
 
       // 3) Compose the INSERT
       const sql = `
         INSERT INTO knowledge (${columns.join(', ')})
         VALUES ${valueClauses.join(', ')}
+        RETURNING id
       `;
 
       // 4) Run it inside the transaction
-      await client.query(sql, values);
+      const result = await client.query<{ id: string }>(sql, values);
+      Logger.log(
+        `Successfully inserted ${validRecords.length} records`,
+        'KnowledgeBatchService',
+      );
 
       await client.query('COMMIT');
+      return result.rows.map((row) => row.id);
     } catch (err) {
       await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
-  }
-
-  private async getRecordsForEmbedding(
-    limit = 100,
-  ): Promise<
-    Pick<IKnowledge, 'id' | 'title' | 'content' | 'links' | 'questions'>[]
-  > {
-    const client = await this.pgPool.connect();
-    try {
-      const result = await client.query<IKnowledge>(
-        'SELECT id, title, content, links, questions FROM knowledge WHERE status = $1 LIMIT $2',
-        [KnowledgeStatusEnum.INSERTED, limit],
+      Logger.error(
+        `Failed to insert batch records: ${err instanceof Error ? err.message : String(err)}`,
+        'KnowledgeBatchService',
       );
-      return result.rows;
+      throw err;
     } finally {
       client.release();
     }
@@ -190,8 +219,8 @@ export class KnowledgeBatchService {
     Logger.log(`Created batch ${batch.id}`);
     // update the batch id to the records
     await this.pgPool.query(
-      'UPDATE knowledge SET batch_id = $1 WHERE id = ANY($2)',
-      [batch.id, recordsIds],
+      'UPDATE knowledge SET batch_id = $1, status = $2 WHERE id = ANY($3)',
+      [batch.id, KnowledgeStatusEnum.IN_QUEUE, recordsIds],
     );
   }
 
@@ -320,7 +349,7 @@ export class KnowledgeBatchService {
           UPDATE knowledge SET status = $1, number_of_chunks = $2, questions = $3 WHERE id = $4
         `;
         await client.query(sql, [
-          KnowledgeStatusEnum.AI_EMBEDDED,
+          KnowledgeStatusEnum.PENDING_REVIEW,
           chunks.length,
           generatedQuestions
             .map((q) => q.qas.map((qa) => qa.question).join(','))
@@ -334,19 +363,25 @@ export class KnowledgeBatchService {
 
         // insert into chroma
         await this.chromaStore.addDocumentsWithEmbeddings(
-          chunks.map((chunk) => ({
-            id: chunk.chunkId,
-            embedding: chunk.embeddings,
-            content: chunk.content,
-            metadata: {
-              id: recordId,
-              questions:
-                generatedQuestions
-                  .find((q) => q.chunkId === chunk.chunkId)
-                  ?.qas.map((qa) => qa.question)
-                  .join(',') || '',
-            },
-          })),
+          chunks.map((chunk) => {
+            const faqs = generatedQuestions.find(
+              (question) => question.chunkId === chunk.chunkId,
+            )?.qas;
+            return {
+              id: chunk.chunkId,
+              embedding: chunk.embeddings,
+              content: `${chunk.content}\n ####FAQs\n${faqs
+                ?.map((q) => `- ${q.question}\n${q.answer}\n`)
+                .join('\n')}`,
+              metadata: {
+                id: recordId,
+                questions: faqs?.map((q) => q.question).join(',') || '',
+                links: knowledge.links || '',
+                title: knowledge.title,
+                status: KnowledgeStatusEnum.PENDING_REVIEW,
+              },
+            };
+          }),
         );
       }
 

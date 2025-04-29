@@ -19,7 +19,7 @@ import { syncMatrixState } from './utils/sync';
 const ADMIN_POWER_LEVEL = 9999;
 const INITIAL_SYNC_LIMIT = 1;
 
-logger.setLevel('silent');
+logger.setLevel('ERROR');
 
 // olm is a global variable required by the matrix-js-sdk
 global.Olm = olm;
