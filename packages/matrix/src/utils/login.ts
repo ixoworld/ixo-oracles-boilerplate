@@ -17,5 +17,5 @@ export async function login(
 login(
   'https://devmx.ixo.earth/',
   '@did-ixo-ixo1sdf4ny5yuxvz8hzhgnrjkd674f32v34ru8afe7:devmx.ixo.earth',
-  'ZGU4MTM0MTY0ZmY0NmRhNWZh',
+  'password',
 );
