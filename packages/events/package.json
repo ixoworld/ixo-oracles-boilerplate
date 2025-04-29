@@ -2,11 +2,19 @@
   "name": "@ixo/oracles-events",
   "version": "0.0.1",
   "private": true,
+  "main": "./dist/server.js",
+  "types": "./dist/server.d.ts",
+  "module": "./dist/server.js",
   "scripts": {
     "build": "tsc",
     "test": "jest"
   },
   "exports": {
+    ".": {
+      "require": "./dist/server.js",
+      "import": "./dist/server.js",
+      "types": "./dist/server.d.ts"
+    },
     "./server": {
       "require": "./dist/server.js",
       "import": "./dist/server.js",

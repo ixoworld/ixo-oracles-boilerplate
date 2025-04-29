@@ -1,12 +1,14 @@
 import {
   ChromaClient,
   type Collection,
+  type Embeddings,
   type Metadata,
   type QueryRecordsParams,
 } from 'chromadb';
 import {
   VectorDBDataStore,
   type IVectorStoreDocument,
+  type IVectorStoreDocumentWithEmbeddings,
   type IVectorStoreOptions,
   type IVectorStoreQueryOptions,
 } from '../types/vector-db-data-store';
@@ -147,6 +149,43 @@ class ChromaDataStore extends VectorDBDataStore {
       ids,
       documents: contents,
       metadatas,
+    });
+  }
+
+  async addDocumentsWithEmbeddings(
+    documents: IVectorStoreDocumentWithEmbeddings[],
+  ): Promise<void> {
+    this.checkIsInitialized();
+    const [ids, embeddings, metadatas, contents]: [
+      string[],
+      number[][],
+      Metadata[],
+      string[],
+    ] = documents.reduce<[string[], Embeddings, Metadata[], string[]]>(
+      (acc, doc) => {
+        const id = doc.id;
+        const metadata = doc.metadata ?? {};
+        const embedding = doc.embedding;
+        if (!id) {
+          throw new Error('Document ID is required');
+        }
+        if (embedding.length < 1536) {
+          throw new Error('Embedding is required');
+        }
+        acc[0].push(id);
+        acc[1].push(embedding);
+        acc[2].push(metadata);
+        acc[3].push(doc.content);
+        return acc;
+      },
+      [[], [], [], []],
+    );
+
+    await this.collection.add({
+      ids,
+      embeddings,
+      metadatas,
+      documents: contents,
     });
   }
 

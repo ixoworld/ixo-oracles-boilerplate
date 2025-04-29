@@ -7,7 +7,10 @@ import {
 import { useCallback, useState } from 'react';
 import { useOraclesContext } from '../../providers/oracles-provider/oracles-context.js';
 import { useOraclesConfig } from '../use-oracles-config.js';
-import { IMessage, MessagesMap } from './transform-to-messages-map.js';
+import {
+  type IMessage,
+  type MessagesMap,
+} from './transform-to-messages-map.js';
 
 interface IUseSendMessageReturn {
   sendMessage: UseMutateAsyncFunction<
@@ -88,14 +91,14 @@ export function useSendMessage({
       if (!wallet?.did) {
         throw new Error('DID is required');
       }
-      if (!wallet?.matrix.accessToken) {
+      if (!wallet.matrix.accessToken) {
         throw new Error('Matrix access token is required');
       }
       await askOracleStream({
         apiURL: apiUrl,
-        did: wallet?.did,
+        did: wallet.did,
         message,
-        matrixAccessToken: wallet?.matrix.accessToken,
+        matrixAccessToken: wallet.matrix.accessToken,
         sessionId: sId,
 
         cb: addAIResponse,
@@ -120,7 +123,7 @@ export function useSendMessage({
         type: 'human',
       };
       queryClient.setQueryData(
-          [oracleDid, 'messages', sId],
+        [oracleDid, 'messages', sId],
         (old: MessagesMap = {}): MessagesMap => {
           return {
             ...old,

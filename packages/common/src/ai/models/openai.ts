@@ -17,7 +17,7 @@ const getChatOpenAiModel = (params?: ChatOpenAIFields): ChatOpenAI =>
     ...params,
   });
 
-const getRawOpenAiModel = (params?: ClientOptions): OpenAI =>
+const getOpenAiClient = (params?: ClientOptions): OpenAI =>
   new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
     ...params,
@@ -31,5 +31,9 @@ const getOpenAiEmbeddings = (
     apiKey: process.env.OPENAI_API_KEY,
     ...params,
   });
-export { getChatOpenAiModel, getOpenAiEmbeddings, getRawOpenAiModel };
+export {
+  getChatOpenAiModel,
+  getOpenAiClient,
+  getOpenAiEmbeddings,
+};
 export type { ChatOpenAIResponseFormat };

@@ -9,10 +9,14 @@ import { LocalJsonStorage } from '../local-storage/local-storage';
 import createMatrixClient from './create-matrix-client';
 
 const cryptoStore = new LocalStorageCryptoStore(
-  new LocalJsonStorage(process.env.MATRIX_CRYPTO_STORE_PATH ||'./matrix-crypto-store-new'),
+  new LocalJsonStorage(
+    process.env.MATRIX_CRYPTO_STORE_PATH || './matrix-crypto-store-new',
+  ),
 );
 const store = new MemoryStore({
-  localStorage: new LocalJsonStorage( process.env.MATRIX_STORE_PATH ||'./matrix-store-new'),
+  localStorage: new LocalJsonStorage(
+    process.env.MATRIX_STORE_PATH || './matrix-store-new',
+  ),
 });
 /**
  * Creates an Oracle Admin Matrix client.
