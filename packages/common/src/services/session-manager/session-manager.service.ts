@@ -18,8 +18,8 @@ import {
 export const ORACLE_SESSIONS_ROOM_NAME = 'oracleSessions_sessions';
 export class SessionManagerService {
   constructor(
-    protected readonly matrixManger = MatrixManager.getInstance(),
-    protected readonly roomManager = new RoomManagerService(),
+    public readonly matrixManger = MatrixManager.getInstance(),
+    public readonly roomManager = new RoomManagerService(),
   ) {}
 
   private async createMessageTitle({
@@ -27,16 +27,24 @@ export class SessionManagerService {
   }: {
     messages: string[];
   }): Promise<string> {
+    if (messages.length === 0) {
+      return 'Untitled';
+    }
     const llm = getChatOpenAiModel();
     const response = await llm.invoke(
-      `Based on this messages messages, Add a title for this convo and only based on the messages? MAKE SURE TO ONLY RESPOND WITH THE TITLE. <messages>\n\n${messages.join('\n\n')}</messages>`,
+      `Based on this messages messages, Add a title for this convo and only based on the messages? MAKE SURE TO ONLY RESPOND WITH THE TITLE. <messages>\n\n${messages.join('\n\n')}</messages>
+      
+      ## RESPONSE FORMAT
+      ONLY RESPOND WITH THE TITLE not anything else that title will be saved to the store directly from your response so generated based on the messages.
+      
+      `,
     );
 
     const title = response.content.toString();
     return title;
   }
 
-  protected async syncSessionSet({
+  public async syncSessionSet({
     sessionId,
     roomId,
     oracleName,
@@ -60,7 +68,6 @@ export class SessionManagerService {
     });
 
     const selectedSession = sessions.find((s) => s.sessionId === sessionId);
-
     if (!selectedSession) {
       const session: ChatSession = {
         sessionId,
@@ -79,14 +86,13 @@ export class SessionManagerService {
       return session;
     }
 
-    const allowTitleUpdate = messages.length > 4;
+    const allowTitleUpdate = messages.length > 2
     // update the session
-    const title =
-      allowTitleUpdate
-        ? await this.createMessageTitle({
-            messages,
-          })
-        : selectedSession.title;
+    const title = allowTitleUpdate
+      ? await this.createMessageTitle({
+          messages,
+        })
+      : selectedSession.title;
     await matrixManager.stateManager.setState<ChatSession[]>({
       roomId,
       stateKey: 'oracleSessions_sessions',

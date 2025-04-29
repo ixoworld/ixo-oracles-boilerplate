@@ -64,7 +64,7 @@ The module provides convenient OpenAI model factories:
 import {
   getChatOpenAiModel,
   getOpenAiEmbeddings,
-  getRawOpenAiModel,
+  getOpenAiClient,
 } from '@ixo/common/ai/models';
 
 // Get a ChatOpenAI instance
@@ -76,7 +76,7 @@ const embeddings = getOpenAiEmbeddings({
 });
 
 // Get raw OpenAI client
-const openai = getRawOpenAiModel();
+const openai = getOpenAiClient();
 ```
 
 ### 5. Tools & Utilities

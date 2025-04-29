@@ -7,8 +7,8 @@ import { useOraclesConfig } from '../use-oracles-config.js';
 import { resolveContent } from './resolve-content.js';
 import { type UIComponents } from './resolve-ui-component.js';
 import transformToMessagesMap, {
-  IMessage,
-  MessagesMap,
+  type IMessage,
+  type MessagesMap,
 } from './transform-to-messages-map.js';
 import { useSendMessage } from './use-send-message.js';
 
@@ -79,7 +79,7 @@ export function useChat({
     }
     const event = events[events.length - 1];
     if (!event) return;
-    if (!event.payload?.sessionId) {
+    if (!event.payload.sessionId) {
       console.log('🚀 ~ useChat ~ event:', event);
       return;
     }

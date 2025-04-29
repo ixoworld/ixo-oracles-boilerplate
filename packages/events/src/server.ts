@@ -2,3 +2,4 @@
 export * from './events';
 
 export * from './graph-event-emitter';
+export * from './types';

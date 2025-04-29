@@ -6,3 +6,4 @@ export * from './json-to-yaml.js';
 export * from './load-file.js';
 export * from './stringify-docs.js';
 export * from './transformGraphStateMessageToListMessageResponse.js';
+export * from './generate-questions-from-chunks.js';

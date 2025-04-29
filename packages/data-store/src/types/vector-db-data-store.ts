@@ -24,6 +24,12 @@ export interface IVectorStoreDocument {
    */
   score?: number;
 }
+
+export interface IVectorStoreDocumentWithEmbeddings
+  extends IVectorStoreDocument {
+  embedding: number[];
+}
+
 /**
  * Options for querying the vector store.
  */
@@ -65,6 +71,8 @@ export abstract class VectorDBDataStore {
     query: string,
     options?: IVectorStoreQueryOptions & { similarityThreshold: number },
   ): Promise<IVectorStoreDocument[]>;
-
+  abstract addDocumentsWithEmbeddings(
+    documents: IVectorStoreDocumentWithEmbeddings[],
+  ): Promise<void>;
   abstract init(): Promise<void>;
 }
