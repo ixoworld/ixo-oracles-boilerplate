@@ -17,6 +17,11 @@ export enum KnowledgeStatusEnum {
   IN_QUEUE = 'in_queue',
 
   /**
+   * Processing
+   */
+  PROCESSING = 'processing',
+
+  /**
    * Waiting for review
    */
   PENDING_REVIEW = 'pending_review',

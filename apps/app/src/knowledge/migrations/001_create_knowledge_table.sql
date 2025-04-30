@@ -3,7 +3,8 @@
 CREATE TYPE knowledge_status AS ENUM (
   'inserted',        -- row just inserted
   'in_queue',        -- in queue for embedding
-  'ai_embedded',     -- embedding done
+  'ai_embedded',     -- embedding done,
+  'processing',      -- processing
   'pending_review',  -- waiting for review
   'approved'         -- review passed
 );

@@ -18,17 +18,20 @@ const customerSupportDBSearchTool = tool(
     });
 
     Logger.log(`Searching for ${query} in ${CHROMA_COLLECTION_NAME}`);
-    const result = await store.queryWithSimilarity(query);
-    Logger.log(`Found ${result.length} results`);
-    return `Search results: ${result.map(jsonToYaml).join('\n')}`;
+    const results = await store.queryWithSimilarity(query, {
+      topK: 4,
+      similarityThreshold: 0.4,
+    });
+    Logger.log(`Found ${results.length} results`);
+    return `Search results: ${results.map(jsonToYaml).join('\n')}`;
   },
   {
     name: 'customerSupportDBSearch',
     description:
-      'Search the customer support database for the given input. use this tool when the user asks about the product or the company - this data includes our blogs and faqs and product information. no customer data is included.',
+      'Search the Knowledge base for the given input. use this tool when the user asks about the product or the company or product features or processes or general information - this data includes our blogs and faqs and product information. no customer data is included.',
     schema: z.object({
       query: z.string({
-        description: 'The query to search the customer support database with',
+        description: 'The query to search the Knowledge base with',
       }),
     }),
   },
@@ -42,7 +45,7 @@ const createIssueTicketTool = tool(
   }: {
     title: string;
     description: string;
-    priority?: string;
+    priority?: 'Low' | 'Medium' | 'High';
   }) => {
     Logger.log(`Creating issue ticket: ${title}`);
     if (
@@ -121,7 +124,7 @@ const createIssueTicketTool = tool(
         description: 'Detailed description of the issue',
       }),
       priority: z
-        .string({
+        .enum(['Low', 'Medium', 'High'], {
           description: 'Priority of the issue (Low, Medium, High)',
         })
         .optional(),
@@ -130,10 +133,9 @@ const createIssueTicketTool = tool(
 );
 
 // Helper function to get priority emoji
-function getPriorityEmoji(priority: string): string {
-  const lowercasePriority = priority.toLowerCase();
-  if (lowercasePriority.includes('high')) return '🔴';
-  if (lowercasePriority.includes('low')) return '🟢';
+function getPriorityEmoji(priority: 'Low' | 'Medium' | 'High'): string {
+  if (priority === 'High') return '🔴';
+  if (priority === 'Low') return '🟢';
   return '🟨'; // Medium or default
 }
 

@@ -1,6 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, ValidateNested } from 'class-validator';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsObject,
+  ValidateNested,
+} from 'class-validator';
 import { CreateKnowledgeDto } from './create-knowledge.dto';
 
 export class BatchKnowledgeDto {
@@ -12,5 +17,9 @@ export class BatchKnowledgeDto {
   @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => CreateKnowledgeDto)
+  @IsObject({
+    each: true,
+    message: 'Each item must be an object, type: CreateKnowledgeDto',
+  })
   items: CreateKnowledgeDto[];
 }

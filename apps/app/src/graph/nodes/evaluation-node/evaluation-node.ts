@@ -2,7 +2,6 @@ import { getChatOpenAiModel } from '@ixo/common';
 import { AIMessage } from '@langchain/core/messages';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Command, END } from '@langchain/langgraph';
-import { Logger } from '@nestjs/common';
 import { type TCustomerSupportGraphState } from 'src/graph/state';
 import { GraphNodes } from 'src/graph/types';
 import { z } from 'zod';
@@ -53,12 +52,9 @@ export const evaluationNode = async (state: TCustomerSupportGraphState) => {
     ),
   );
 
-  Logger.log(userQuestion, 'userQuestion');
-  Logger.log(agentAnswer, 'agentAnswer');
   const results = await chain.invoke(null);
 
   if (results.understanding === 'No') {
-    Logger.log(results, 'results');
     return new Command({
       goto: GraphNodes.AgentWithChainOfThoughts,
       update: {
