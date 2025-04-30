@@ -1,10 +1,9 @@
 export const oracleConfig = {
-  appName: 'IXO Portal',
-  appPurpose:
-    'The IXO Portal is a platform for managing IXO products and services.',
+  appName: '',
+  appPurpose: 'e-commerce store for selling products and services.',
   appMainFeatures:
-    'The IXO Portal provides a range of features for managing IXO products and services.',
-  appTargetUsers: 'The IXO Portal is targeted at IXO customers.',
+    'The e-commerce store provides a range of features for selling products and services.',
+  appTargetUsers: 'The e-commerce store is targeted at customers.',
   appUniqueSellingPoints:
-    'The IXO Portal is a platform for managing IXO products and services.',
+    'The e-commerce store is a platform for selling products and services.',
 };

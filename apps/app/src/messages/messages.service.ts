@@ -5,7 +5,7 @@ import {
   transformGraphStateMessageToListMessageResponse,
 } from '@ixo/common';
 import { type IRunnableConfigWithRequiredFields } from '@ixo/matrix';
-import { ToolCallEvent } from '@ixo/oracles-events';
+import { ThinkingEvent, ToolCallEvent } from '@ixo/oracles-events';
 import { type AIMessageChunk } from '@langchain/core/messages';
 import {
   BadRequestException,
@@ -19,6 +19,7 @@ import { CustomerSupportGraph } from 'src/graph';
 import { type TCustomerSupportGraphState } from 'src/graph/state';
 import { SseService } from 'src/sse/sse.service';
 import { type ENV } from 'src/types';
+import { StreamTagProcessor } from 'src/utils/thinking-filter-factory';
 import { type ListMessagesDto } from './dto/list-messages.dto';
 import { type SendMessagePayload } from './dto/send-message.dto';
 
@@ -113,7 +114,14 @@ export class MessagesService {
           toolName: 'toolName',
           args: 'args',
         });
-
+        const thinkingEvent = new ThinkingEvent({
+          message: '',
+          connectionId: sessionId,
+          requestId: runnableConfig.configurable.requestId ?? '',
+          sessionId,
+        });
+        const filter = new StreamTagProcessor();
+        let fullContent = '';
         for await (const { data, event } of stream) {
           if (event === 'on_chat_model_stream') {
             const content = (data.chunk as AIMessageChunk).content;
@@ -130,10 +138,35 @@ export class MessagesService {
             if (!content) {
               continue;
             }
-            params.res.write(content.toString());
+
+            // append content to fullContent
+            fullContent += content.toString();
+
+            filter.processChunk(
+              content.toString(),
+              (filteredContent) => {
+                params.res?.write(filteredContent);
+              },
+              (filteredThinking) => {
+                thinkingEvent.appendMessage(filteredThinking);
+                this.sseService.publishToSession(sessionId, thinkingEvent);
+              },
+            );
           }
         }
-
+        filter.flush(
+          (filteredContent) => {
+            params.res?.write(filteredContent);
+          },
+          (filteredThinking) => {
+            thinkingEvent.appendMessage(filteredThinking);
+            this.sseService.publishToSession(sessionId, thinkingEvent);
+          },
+        );
+        if (!fullContent.includes('<answer>')) {
+          // send the full content as a message
+          params.res.write(fullContent);
+        }
         if (!params.res.writableEnded) {
           params.res.end();
         }

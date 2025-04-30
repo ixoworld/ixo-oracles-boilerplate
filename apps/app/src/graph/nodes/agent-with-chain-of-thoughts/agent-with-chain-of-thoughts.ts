@@ -82,8 +82,7 @@ ${response.content.toString()}`,
 
 function extractAnswer(documentText: string): string | null {
   // Pattern to match content between <answer> and </answer> tags
-  Logger.log(documentText, 'documentText');
-  const pattern = /<answer>([\s\S]*?)<\/answer>/g;
+  const pattern = /<answer>(?<temp1>[\s\S]*?)<\/answer>/g;
 
   // Find all matches
   const matches = [...documentText.matchAll(pattern)];

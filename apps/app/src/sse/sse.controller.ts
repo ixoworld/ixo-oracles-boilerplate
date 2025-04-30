@@ -46,7 +46,6 @@ export class SseController {
     // Get the specific stream for this session
     return this.sse.getClientStream(sessionId).pipe(
       map((data) => {
-        this.logger.log(`Sending event to client ${sessionId}:`, data);
         return { data };
       }),
     );

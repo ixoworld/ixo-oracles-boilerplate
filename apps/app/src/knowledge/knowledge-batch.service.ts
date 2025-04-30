@@ -1,4 +1,5 @@
 import {
+  chunkArr,
   docSplitter,
   generateQuestionsFromChunks,
   getOpenAiClient,
@@ -35,7 +36,7 @@ export class KnowledgeBatchService {
   }
 
   // Run every 10 minutes
-  @Cron('*/10 * * * *')
+  @Cron('*/1 * * * *')
   async processBatch(): Promise<void> {
     Logger.log('Checking for batches to process');
     const batchId = await this.getBatchId();
@@ -48,7 +49,10 @@ export class KnowledgeBatchService {
       Logger.log('No Batch Results to process');
       return;
     }
-    await this.addEmbeddingsToRecords(batchResults);
+    const batches = chunkArr(batchResults, 10);
+    for await (const batch of batches) {
+      await this.addEmbeddingsToRecords(batchId, batch);
+    }
   }
   private async getBatchId(): Promise<string | null> {
     const client = await this.pgPool.connect();
@@ -274,6 +278,7 @@ export class KnowledgeBatchService {
   }
 
   private async addEmbeddingsToRecords(
+    batchId: string,
     batchResults: {
       chunkId: string;
       embeddings: number[];
@@ -282,6 +287,26 @@ export class KnowledgeBatchService {
     const client = await this.pgPool.connect();
 
     Logger.log(`Adding ${batchResults.length} embeddings to records`);
+
+    // all records ids
+    const recordsIds = batchResults.map((r) => r.chunkId.split('/')[0]);
+
+    // set status to processing
+    const [, { rows }] = await Promise.all([
+      client.query('UPDATE knowledge SET status = $1 WHERE id = ANY($2)', [
+        KnowledgeStatusEnum.PROCESSING,
+        recordsIds,
+      ]),
+      client.query('SELECT id, content FROM knowledge WHERE id = ANY($1)', [
+        recordsIds,
+      ]),
+    ]);
+
+    // full content of the records
+    const recordsMap = new Map<string, string>(
+      rows.map((r) => [r.id, r.content]),
+    );
+
     const records = new Map<
       string,
       {
@@ -297,8 +322,12 @@ export class KnowledgeBatchService {
 
     const getChunks = async (recordId: string) => {
       if (chunksCache.has(recordId)) return chunksCache.get(recordId);
-      const knowledge = await this.knowledgeService.getKnowledge(recordId);
-      const chunks = await docSplitter(knowledge.content);
+      const knowledgeContent = recordsMap.get(recordId);
+      if (!knowledgeContent)
+        throw new Error(
+          `Knowledge content not found for record id: ${recordId}`,
+        );
+      const chunks = await docSplitter(knowledgeContent);
       chunksCache.set(
         recordId,
         chunks.map((c, idx) => ({
@@ -332,9 +361,14 @@ export class KnowledgeBatchService {
       await client.query('BEGIN');
 
       for await (const [recordId, { chunks }] of records.entries()) {
-        const knowledge = await this.knowledgeService.getKnowledge(recordId);
+        const knowledgeContent = recordsMap.get(recordId);
+        if (!knowledgeContent)
+          throw new Error(
+            `Knowledge content not found for record id: ${recordId}`,
+          );
+
         const generatedQuestions = await generateQuestionsFromChunks(
-          knowledge.content,
+          knowledgeContent,
           chunks.map((c) => ({
             pageContent: c.content,
             id: c.chunkId,
@@ -348,48 +382,49 @@ export class KnowledgeBatchService {
         const sql = `
           UPDATE knowledge SET status = $1, number_of_chunks = $2, questions = $3 WHERE id = $4
         `;
-        await client.query(sql, [
-          KnowledgeStatusEnum.PENDING_REVIEW,
-          chunks.length,
-          generatedQuestions
-            .map((q) => q.qas.map((qa) => qa.question).join(','))
-            .join(','),
-          recordId,
+
+        await Promise.all([
+          client.query(sql, [
+            KnowledgeStatusEnum.PENDING_REVIEW,
+            chunks.length,
+            generatedQuestions
+              .map((q) => q.qas.map((qa) => qa.question).join(','))
+              .join(','),
+            recordId,
+          ]),
+          this.chromaStore.addDocumentsWithEmbeddings(
+            chunks.map((chunk) => {
+              const faqs = generatedQuestions.find(
+                (question) => question.chunkId === chunk.chunkId,
+              )?.qas;
+              return {
+                id: chunk.chunkId,
+                embedding: chunk.embeddings,
+                content: `${chunk.content}\n ####FAQs\n${faqs
+                  ?.map((q) => `- ${q.question}\n${q.answer}\n`)
+                  .join('\n')}`,
+                metadata: {
+                  id: recordId,
+                  questions: faqs?.map((q) => q.question).join(',') || '',
+                  status: KnowledgeStatusEnum.PENDING_REVIEW,
+                },
+              };
+            }),
+          ),
         ]);
 
         Logger.log(
           `Updated record ${recordId} with ${chunks.length} chunks and ${generatedQuestions.length} questions`,
         );
-
-        // insert into chroma
-        await this.chromaStore.addDocumentsWithEmbeddings(
-          chunks.map((chunk) => {
-            const faqs = generatedQuestions.find(
-              (question) => question.chunkId === chunk.chunkId,
-            )?.qas;
-            return {
-              id: chunk.chunkId,
-              embedding: chunk.embeddings,
-              content: `${chunk.content}\n ####FAQs\n${faqs
-                ?.map((q) => `- ${q.question}\n${q.answer}\n`)
-                .join('\n')}`,
-              metadata: {
-                id: recordId,
-                questions: faqs?.map((q) => q.question).join(',') || '',
-                links: knowledge.links || '',
-                title: knowledge.title,
-                status: KnowledgeStatusEnum.PENDING_REVIEW,
-              },
-            };
-          }),
-        );
       }
 
       await client.query('COMMIT');
-      Logger.log(
-        `Successfully added embeddings to records ${records.size} records`,
-      );
+      Logger.log(`Successfully completed batch of ${records.size} records`);
     } catch (err) {
+      Logger.error(
+        `Failed to add embeddings to records: ${err instanceof Error ? err.message : String(err)}`,
+        'KnowledgeBatchService',
+      );
       await client.query('ROLLBACK');
       throw err;
     } finally {
