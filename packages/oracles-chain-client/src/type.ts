@@ -3,7 +3,6 @@ import {
   type ICreateVerifiableCredentialArgs,
   type VerifiableCredential,
 } from '@veramo/core';
-import { type AgentConfig } from './identity-agent.js';
 
 export type Networks = 'devnet' | 'testnet' | 'mainnet';
 export type * from '@veramo/core';
@@ -26,8 +25,6 @@ export interface ICreateAndSubmitClaimPayload {
   storage: 'cellnode' | 'ipfs';
   // must provide either credentials or generate
   credential: ICreateVerifiableCredentialArgs;
-
-  agentConfig: AgentConfig;
 }
 
 export interface ISubmitClaim {
