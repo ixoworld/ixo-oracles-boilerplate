@@ -128,7 +128,7 @@ Before you begin, ensure you have:
 - Docker (for running ChromaDB)
 - Access to a Matrix server (for secure communication)
 - Required API keys (OpenAI, Airtable, etc.)
-- pnpm installed (`npm install -g pnpm`)
+- pnpm 9+ installed (`npm install -g pnpm`)
 
 ## Getting Started
 
