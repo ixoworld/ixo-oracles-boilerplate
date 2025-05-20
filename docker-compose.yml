@@ -33,7 +33,7 @@ services:
     ports:
       - '3000:3000'
     env_file:
-      - .env
+      - apps/app/.env
     environment:
       - CHROMA_URL=http://chroma:8000
     depends_on:
