@@ -1,5 +1,14 @@
 # @ixo/oracles-client-sdk
 
+## 0.1.5
+
+### Patch Changes
+
+- [`c050676`](https://github.com/ixoworld/ixo-oracles-boilerplate/commit/c050676976a8f2bf90d9ecc55be115614639c253) Thanks [@LukePetzer-ixo](https://github.com/LukePetzer-ixo)! - bump
+
+- Updated dependencies [[`c050676`](https://github.com/ixoworld/ixo-oracles-boilerplate/commit/c050676976a8f2bf90d9ecc55be115614639c253)]:
+  - @ixo/oracles-chain-client@1.0.5
+
 ## 0.1.4
 
 ### Patch Changes
