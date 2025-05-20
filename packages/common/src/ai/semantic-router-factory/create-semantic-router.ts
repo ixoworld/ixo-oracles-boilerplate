@@ -1,6 +1,6 @@
 import { Logger } from '@ixo/logger';
 import { PromptTemplate } from '@langchain/core/prompts';
-import { traceable } from 'langsmith/traceable';
+import { LangfuseConfig, observeOpenAI } from 'langfuse';
 import { OpenAI } from 'openai';
 import { type APIPromise } from 'openai/core.mjs';
 import { zodResponseFormat } from 'openai/helpers/zod';
@@ -33,9 +33,16 @@ export const createSemanticRouter = <
 >(
   routes: R,
   basedOn: K,
-  model: 'gpt-4o-mini' | 'gpt-4o' = 'gpt-4o-mini',
+  model:
+    | 'gpt-4o-mini'
+    | 'gpt-4o'
+    | 'gpt-4.1-nano'
+    | 'gpt-4.1-mini' = 'gpt-4.1-mini',
   isComplex = false,
-): ((state: EnsureKeys<Record<string, unknown>, K>) => Promise<keyof R>) => {
+): ((
+  state: EnsureKeys<Record<string, unknown>, K>,
+  traceConfig?: LangfuseConfig,
+) => Promise<keyof R>) => {
   const keys = validateRoutes(routes, basedOn);
   const schema = z.object({
     nextRoute: z.enum(keys as [string, ...string[]], {
@@ -44,6 +51,7 @@ export const createSemanticRouter = <
   });
   return async <T extends Record<string, unknown>>(
     state: EnsureKeys<T, K>,
+    traceConfig?: LangfuseConfig,
   ): Promise<keyof R> => {
     const selectedValues = {} as Record<string, string | object>;
     for (const key of basedOn) {
@@ -63,8 +71,8 @@ export const createSemanticRouter = <
     // find the route that matches the state
     const prompt = PromptTemplate.fromTemplate(semanticRouterPrompt);
 
-    const client = new OpenAI();
-    const content = await prompt.format({
+    const client = observeOpenAI(new OpenAI(), traceConfig);
+    const promptWithState = await prompt.format({
       routes: jsonToYaml(routes),
       state: jsonToYaml(selectedValues),
     });
@@ -81,7 +89,7 @@ export const createSemanticRouter = <
         }>
       >
     > => {
-      if (model === 'gpt-4o-mini' && isComplex) {
+      if (model === 'gpt-4.1-nano' && isComplex) {
         const { choices } = await client.chat.completions.create({
           messages,
           model,
@@ -91,45 +99,23 @@ export const createSemanticRouter = <
         Logger.debug('🚀 ~ route:', route);
         return client.beta.chat.completions.parse({
           model,
-          messages: [
-            {
-              role: 'system',
-              content: 'You should extract the next route from the response',
-            },
-            {
-              role: 'user',
-              content: route ?? '',
-            },
-          ],
+          messages,
           response_format: zodResponseFormat(schema, 'routesResponse'),
         });
       }
       return client.beta.chat.completions.parse({
         model,
-        messages: [
-          ...messages,
-          {
-            role: 'user',
-            content: 'Think and analyze the routes then select the next route',
-          },
-        ],
+        messages,
         response_format: zodResponseFormat(schema, 'routesResponse'),
       });
     };
-    const getRoutesTraceable = traceable(getRoute, {
-      __finalTracedIteratorKey: 'semanticRouter',
-      metadata: {
-        model,
-        type: 'semanticRouter',
-      },
-      name: 'Semantic Router',
-    });
 
-    const completion = await getRoutesTraceable([
-      { role: 'system', content },
+    const completion = await getRoute([
+      { role: 'system', content: promptWithState },
       {
         role: 'user',
-        content: 'Think and analyze the routes then select the next route',
+        content:
+          'Think and analyze the routes and messages then select the next route',
       },
     ]);
     const message = completion.choices[0]?.message;
