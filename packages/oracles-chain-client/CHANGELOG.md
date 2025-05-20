@@ -1,5 +1,11 @@
 # @ixo/oracles-chain-client
 
+## 1.0.7
+
+### Patch Changes
+
+- [`bdff5e0`](https://github.com/ixoworld/ixo-oracles-boilerplate/commit/bdff5e0fdee1b52bbdd84f6c68d6cd6679b9c05d) Thanks [@LukePetzer-ixo](https://github.com/LukePetzer-ixo)! - Dockerfile
+
 ## 1.0.6
 
 ### Patch Changes
