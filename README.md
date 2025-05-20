@@ -253,4 +253,4 @@ We adhere to **ESLint** and **Prettier** standards to maintain a clean, consiste
 
 ---
 
-We hope this base repository accelerates your AI oracle development. Happy building!
+We hope this base repository accelerates your AI oracle development. Happy building!!
