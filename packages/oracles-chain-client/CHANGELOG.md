@@ -1,5 +1,11 @@
 # @ixo/oracles-chain-client
 
+## 1.0.4
+
+### Patch Changes
+
+- [`53d6155`](https://github.com/ixoworld/ixo-oracles-boilerplate/commit/53d61558d5054d74288b38d4af47a60d15a066a6) Thanks [@LukePetzer-ixo](https://github.com/LukePetzer-ixo)! - bump
+
 ## 1.0.3
 
 ### Patch Changes
