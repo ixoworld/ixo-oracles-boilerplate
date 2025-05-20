@@ -21,6 +21,8 @@ playwright/.cache/
 playwright-report/
 
 
+# tsconfig build
+tsconfig.tsbuildinfo
 # Turbo
 .turbo
 
