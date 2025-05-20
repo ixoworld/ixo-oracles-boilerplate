@@ -3,11 +3,11 @@ ARG NODE_VERSION=22.11.0
 # Alpine image
 FROM --platform=linux/amd64 node:${NODE_VERSION}-alpine AS alpine
 RUN apk update
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat python3 make g++ gcc
 
 # Setup pnpm and turbo on the alpine base
 FROM --platform=linux/amd64 alpine as base
-RUN npm install pnpm turbo --global
+RUN npm install pnpm@9.15.9 turbo --global
 RUN pnpm config set store-dir ~/.pnpm-store
 
 # Prune projects
@@ -58,7 +58,8 @@ ENV NODE_ENV=production
 
 EXPOSE 3000
 
-CMD node dist/main
+# CMD node --experimental-vm-modules dist/main
+CMD NODE_OPTIONS='--experimental-require-module' node dist/main
 
 # docker build -t api:latest --build-arg PROJECT=api .
 # docker build -t ghcr.io/ixofoundation/ixo-ai-oracles:v0.0.2 --build-arg PROJECT=guru .

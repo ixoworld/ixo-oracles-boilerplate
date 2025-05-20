@@ -1,5 +1,5 @@
 import { jsonToYaml, webSearchTool } from '@ixo/common';
-import { tool } from '@langchain/core/tools';
+import { tool, type StructuredTool } from '@langchain/core/tools';
 import { Logger } from '@nestjs/common';
 import 'dotenv/config';
 import { SlackService } from 'src/slack/slack.service';
@@ -139,7 +139,7 @@ function getPriorityEmoji(priority: 'Low' | 'Medium' | 'High'): string {
   return '🟨'; // Medium or default
 }
 
-const tools = [
+const tools: StructuredTool[] = [
   webSearchTool,
   customerSupportDBSearchTool,
   createIssueTicketTool,
