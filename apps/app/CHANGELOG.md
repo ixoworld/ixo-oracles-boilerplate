@@ -1,5 +1,11 @@
 # app
 
+## 0.1.0
+
+### Minor Changes
+
+- [#25](https://github.com/ixoworld/ixo-oracles-boilerplate/pull/25) [`407a565`](https://github.com/ixoworld/ixo-oracles-boilerplate/commit/407a56560545b6e259a9d384efef6717b5050cab) Thanks [@Michael-Ixo](https://github.com/Michael-Ixo)! - Fixes for dockerfile
+
 ## 0.0.8
 
 ### Patch Changes
