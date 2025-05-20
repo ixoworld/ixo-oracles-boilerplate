@@ -1,0 +1,14 @@
+name: Build and Release
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-release:
+    uses: ixoworld/ixo-github-actions/.github/workflows/node-monorepo-ci-build.yml@main
+    secrets: inherit
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write

@@ -1,0 +1,29 @@
+# This workflow will run tests using node and then publish a package to GitHub Packages when a release is created
+# For 7447k,=o=o=/o*= see: https://docs.github.com/en/actions/publishing-packages/publishing-nodejs-packages
+
+name: NPM Package Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  publish-npm:
+    # needs: [build, versioning]
+    runs-on: buildjet-4vcpu-ubuntu-2204
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9.0
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18.18.0
+          registry-url: https://registry.npmjs.org/
+      - name: Install dependencies pnpm
+        run: pnpm install --frozen-lockfile
+      - name: Build packages
+        run: pnpm build --filter=@ixo/oracles-chain-client --filter=@ixo/oracles-client-sdk
+      - run: pnpm publish --filter=@ixo/oracles-chain-client --filter=@ixo/oracles-client-sdk
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.npm_token}}
