@@ -37,7 +37,7 @@ async function testPostgres(): Promise<boolean> {
 async function testChroma(): Promise<boolean> {
   Logger.log('Testing ChromaDB connection...');
   try {
-    const response = await fetch('http://localhost:8000/api/v1/heartbeat');
+    const response = await fetch('http://localhost:8000/api/v2/heartbeat');
     if (response.status === 200) {
       Logger.log('✅ ChromaDB connection successful!');
       const data = (await response.json()) as { nanosecond_heartbeat: number };

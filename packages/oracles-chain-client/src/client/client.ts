@@ -2,7 +2,6 @@
 import { DirectSecp256k1HdWallet, EncodeObject } from '@cosmjs/proto-signing';
 import { createQueryClient, createSigningClient } from '@ixo/impactxclient-sdk';
 import store from 'store';
-import { type QueryClientType, type SigningClientType } from '../ixo-client.js';
 
 import { GasPrice, StdFee } from '@cosmjs/stargate';
 import { TxResponse } from '@ixo/impactxclient-sdk/types/codegen/cosmos/base/abci/v1beta1/abci.js';
@@ -10,9 +9,10 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+export type SigningClientType = Awaited<ReturnType<typeof createSigningClient>>;
+export type QueryClientType = Awaited<ReturnType<typeof createQueryClient>>;
 const RPC_URL = process.env.RPC_URL;
 const SECP_MNEMONIC = process.env.SECP_MNEMONIC;
-const CELLNODE_URL = process.env.CELLNODE_URL;
 
 export class Client {
   public queryClient!: QueryClientType;
@@ -23,20 +23,14 @@ export class Client {
 
   private readonly secpMnemonic: string;
   private readonly rpcUrl: string;
-  // private readonly cellnode: string;
 
-  private constructor(
-    secpMnemonic = SECP_MNEMONIC,
-    rpcUrl = RPC_URL,
-    // cellnode = validateEnvVariable('CELLNODE_URL'),
-  ) {
-    if (!secpMnemonic || !rpcUrl || !CELLNODE_URL) {
-      throw new Error('RPC_URL and SECP_MNEMONIC and CELLNODE_URL must be set');
+  private constructor(secpMnemonic = SECP_MNEMONIC, rpcUrl = RPC_URL) {
+    if (!secpMnemonic || !rpcUrl) {
+      throw new Error('RPC_URL and SECP_MNEMONIC must be set');
     }
 
     this.secpMnemonic = secpMnemonic;
     this.rpcUrl = rpcUrl;
-    // this.cellnode = cellnode;
   }
 
   async checkInitiated(): Promise<void> {
@@ -64,6 +58,10 @@ export class Client {
       },
     );
     this.queryClient = await createQueryClient(this.rpcUrl);
+    const accounts = await this.wallet.getAccounts();
+    this.address = accounts[0]?.address ?? '';
+
+    
   }
 
   public static getInstance(

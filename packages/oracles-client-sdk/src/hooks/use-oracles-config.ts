@@ -10,7 +10,12 @@ type Service = {
   id: string;
 };
 
-export const useOraclesConfig = (oracleId: string) => {
+export const useOraclesConfig = (
+  oracleId: string,
+  overrides?: {
+    baseUrl?: string;
+  },
+) => {
   const { wallet } = useOraclesContext();
 
   const { data, isLoading } = useQuery({
@@ -38,10 +43,10 @@ export const useOraclesConfig = (oracleId: string) => {
         (service: Service) => service.type === 'oracleService',
       ) as Service | undefined;
       if (!url) {
-        // throw new Error(
-        //   `Unsupported entity or oracle: ${oracleId} does not have a service of type oracleService with a valid url`,
-        // );
-        return 'http://localhost:4200';
+        if (overrides?.baseUrl) {
+          return overrides.baseUrl;
+        }
+        return null;
       }
       // validate url
       try {

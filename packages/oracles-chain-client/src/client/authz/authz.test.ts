@@ -24,7 +24,7 @@ describe('Authz', () => {
   it('Should fail to submit intent without permission', async () => {
     const Promise = claims.sendClaimIntent({
       amount: [{ denom: 'uixo', amount: '1000' }],
-      userAddress,
+      userClaimCollection: '138',
       granteeAddress: oracleAddress,
     });
     expect(Promise).rejects.toThrow();
@@ -105,11 +105,12 @@ describe('Authz', () => {
         userAddress,
         claimId: Math.random().toString(36).substring(2, 15),
         useIntent: true,
+        collectionId: '138',
       }));
     await claims.sendClaimIntent({
       amount: [{ denom: 'uixo', amount: '1000' }],
       granteeAddress: oracleAddress,
-      userAddress,
+      userClaimCollection: '138',
     });
     intentList = await client.queryClient.ixo.claims.v1beta1.intentList({});
     console.log('🚀 ~ Authz ~ it.only ~ intentList:', intentList.intents);
@@ -118,11 +119,12 @@ describe('Authz', () => {
       userAddress,
       claimId: Math.random().toString(36).substring(2, 15),
       useIntent: true,
+      collectionId: '138',
     });
     await claims.sendClaimIntent({
       amount: [{ denom: 'uixo', amount: '478' }],
       granteeAddress: oracleAddress,
-      userAddress,
+      userClaimCollection: '138',
     });
     // await expect(Promise).resolves.toBeDefined();
     intentList = await client.queryClient.ixo.claims.v1beta1.intentList({});
@@ -136,6 +138,7 @@ describe('Authz', () => {
       claimId: '1',
       amount: [{ denom: 'uixo', amount: '1000' }],
       useIntent: true,
+      collectionId: '138',
     });
     // console.log(tx);
     // expect(tx).toBeDefined();
@@ -215,26 +218,37 @@ describe('Authz', () => {
   }, 1000_000);
 
   it('should grant claim submit authorization - success', async () => {
-    let hasPermission = await authz.hasPermission(
-      '/ixo.claims.v1beta1.SubmitClaimAuthorization',
-    );
     const claimCollectionId =
       (await claims.getUserOraclesClaimCollection(userAddress)) ?? '';
-    const tx = await authz.grantClaimSubmitAuthorization(
+    let hasPermission = await authz.hasPermission(
+      '/ixo.claims.v1beta1.SubmitClaimAuthorization',
       claimCollectionId,
+    );
+    const tx = await authz.grantClaimSubmitAuthorization(
+      {
+        claimCollectionId,
+        adminAddress: userAddress,
+        granteeAddress: oracleAddress,
+        granterAddress: userAddress,
+        oracleName: 'test',
+      },
       (msgs, memo) => client.signAndBroadcast(msgs, memo),
     );
     console.log(tx);
     expect(tx).toBeDefined();
     hasPermission = await authz.hasPermission(
       '/ixo.claims.v1beta1.SubmitClaimAuthorization',
+      claimCollectionId,
     );
     expect(hasPermission).toBe(true);
   }, 1000_000);
 
   it('should check if user has permission to submit claim - success', async () => {
+    const claimCollectionId =
+      (await claims.getUserOraclesClaimCollection(userAddress)) ?? '';
     const hasPermission = await authz.hasPermission(
       '/ixo.claims.v1beta1.MsgSubmitClaim',
+      claimCollectionId,
     );
     expect(hasPermission).toBe(true);
   }, 1000_000);

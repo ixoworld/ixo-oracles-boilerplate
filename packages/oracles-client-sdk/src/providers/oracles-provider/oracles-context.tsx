@@ -2,12 +2,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   createContext,
-  PropsWithChildren,
+  type PropsWithChildren,
   useCallback,
   useContext,
   useMemo,
 } from 'react';
-import request from '../../utils/request.js';
+import { request } from '../../utils/request.js';
 import {
   type IOraclesContextProps,
   type IOraclesProviderProps,

@@ -11,6 +11,11 @@ type InitialPaymentParams = {
    * The address of the grantee who is receiving the initial amount ex. oracle address
    */
   granteeAddress: string;
+
+  /**
+   * The claim collection id of the user who is paying the initial amount ex. collection owner
+   */
+  userClaimCollection: string;
 };
 
 export const InitialPaymentParamsSchema = z.object({
@@ -20,6 +25,7 @@ export const InitialPaymentParamsSchema = z.object({
   }),
   userAddress: z.string(),
   granteeAddress: z.string(),
+  userClaimCollection: z.string(),
 });
 export enum IntentStatus {
   /**

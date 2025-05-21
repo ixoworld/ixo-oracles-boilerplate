@@ -1,4 +1,5 @@
 import { ixo, utils } from '@ixo/impactxclient-sdk';
+import { LinkedResource } from '@ixo/impactxclient-sdk/types/codegen/ixo/iid/v1beta1/types.js';
 import { gqlClient } from '../../gql/index.js';
 import { MatrixBotService } from '../../matrix-bot/matrix-bot.service.js';
 import type { Client } from '../client.js';
@@ -75,13 +76,26 @@ export class Entities {
       settingsResourceParams.protocolDid,
     );
     if (!protocol) {
-      throw new Error('Protocol not found');
+      throw new Error(
+        'Protocol not found with did: ' + settingsResourceParams.protocolDid,
+      );
     }
     const settingsResource = protocol?.settings?.[settingsResourceParams.key];
     if (!settingsResource) {
-      throw new Error(
-        `Settings resource not found for key ${settingsResourceParams.key}`,
-      );
+      // try using old implementation
+      const linkedResource = Array.isArray(protocol?.linkedResource)
+        ? protocol?.linkedResource
+        : [];
+      const resource = (await getResourceFromIpfs(
+        linkedResource,
+        settingsResourceParams.key,
+      )) as T;
+      if (!resource) {
+        throw new Error(
+          `Settings resource not found for key ${settingsResourceParams.key}`,
+        );
+      }
+      return resource;
     }
     const roomId = await matrixBotService.getRoomIdFromAlias(protocol.id);
     const matrixValue = await matrixBotService.get<T>(
@@ -164,3 +178,23 @@ export class Entities {
     return claimCollection.claimCollection;
   }
 }
+
+const getResourceFromIpfs = async (
+  linkedResource: LinkedResource[],
+  key: string,
+) => {
+  const resource = linkedResource.find(
+    (resource) => resource.description === key,
+  );
+  if (!resource) {
+    throw new Error('Resource not found');
+  }
+
+  if (resource.serviceEndpoint.includes('ipfs.w3s.link')) {
+    const response = await fetch(resource.serviceEndpoint);
+    const data = await response.json();
+    return data;
+  }
+
+  return resource.serviceEndpoint;
+};

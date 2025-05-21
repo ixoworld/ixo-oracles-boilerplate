@@ -4,35 +4,33 @@ import { ValidationError } from '../../utils/validation-error.js';
 import { TransactionFn } from '../authz/types.js';
 import Claims from '../claims/claims.js';
 import Client from '../client.js';
-import { Entities } from '../entities/entity.js';
 import {
   InitialPaymentParams as InitialPaymentRequestParams,
   IntentStatus,
 } from './types.js';
 
-class Payments {
+export class Payments {
   /**
    * Initiates the payment process by sending funds to an escrow account
    * using the `MsgClaimIntent` message or `Claims.sendClaimIntent` method.
    * This is the first step in the payment workflow.
    */
-  public async sendPaymentToEscrow(params: InitialPaymentRequestParams) {
-    const { amount, userAddress, granteeAddress } = params;
+  public async sendPaymentToEscrow(
+    params: Omit<InitialPaymentRequestParams, 'userAddress'> & {
+      userClaimCollection: string;
+    },
+  ) {
+    const { amount, granteeAddress, userClaimCollection } = params;
     return Claims.sendClaimIntent({
       amount: [amount],
-      userAddress,
+      userClaimCollection,
       granteeAddress,
     });
   }
 
-  async checkForActiveIntent(params: InitialPaymentRequestParams) {
-    const claimCollectionId = await Claims.getUserOraclesClaimCollection(
-      params.userAddress,
-    );
-    if (!claimCollectionId) {
-      throw new Error('Claim collection not found');
-    }
-
+  async checkForActiveIntent(
+    params: Omit<InitialPaymentRequestParams, 'amount'>,
+  ) {
     await Client.init();
 
     // get all intents
@@ -41,15 +39,9 @@ class Payments {
 
     const intent = activeIntents.intents.find(
       (intent) =>
-        intent.collectionId === claimCollectionId &&
+        intent.collectionId === params.userClaimCollection &&
         intent.status === IntentStatus.ACTIVE &&
-        intent.agentAddress === params.granteeAddress &&
-        // ideally this should be coming from the pricing list in the settings of oracle entity `Entity.getOraclePricingList`
-        intent.amount.some(
-          (amount) =>
-            amount.denom === params.amount.denom &&
-            amount.amount === params.amount.amount,
-        ),
+        intent.agentAddress === params.granteeAddress,
     );
 
     return !!intent;
@@ -61,21 +53,18 @@ class Payments {
    *
    */
   public async submitPaymentClaim(
-    params: Omit<InitialPaymentRequestParams, 'amount'>,
+    params: InitialPaymentRequestParams,
     claimId: string,
   ) {
-    const { userAddress, granteeAddress } = params;
-    const claimCollectionId =
-      await Claims.getUserOraclesClaimCollection(userAddress);
-    if (!claimCollectionId) {
-      throw new Error('Claim collection not found');
-    }
+    const { userAddress, granteeAddress, userClaimCollection } = params;
 
     return Claims.submitClaim({
       granteeAddress,
       userAddress,
       claimId,
       useIntent: true,
+      collectionId: userClaimCollection,
+      amount: [params.amount],
     });
   }
 
@@ -86,28 +75,18 @@ class Payments {
    */
   public async payClaim(params: {
     userAddress: string;
-    userDid: string;
-    oracleAddress: string;
+    claimCollectionId: string;
+    adminAddress: string;
     claimId: string;
     sign: TransactionFn;
   }) {
-    const claimCollectionId = await Claims.getUserOraclesClaimCollection(
-      params.userAddress,
-    );
-    if (!claimCollectionId) {
-      throw new Error('Claim collection not found');
-    }
-    const collection = await Entities.getClaimCollection(claimCollectionId);
-    if (!collection) {
-      throw new ValidationError('Claim collection not found');
-    }
     const claim = await gqlClient.ClaimById({
       claimId: params.claimId,
     });
 
-    if (claim.claim?.collectionId !== claimCollectionId) {
+    if (claim.claim?.collectionId !== params.claimCollectionId) {
       throw new ValidationError(
-        `Claim ${params.claimId} does not belong to collection ${claimCollectionId}`,
+        `Claim ${params.claimId} does not belong to collection ${params.claimCollectionId}`,
       );
     }
 
@@ -118,7 +97,6 @@ class Payments {
         `Claim ${params.claimId} already evaluated (${status ? ixo.claims.v1beta1.EvaluationStatus[status] : 'unknown'}), cannot pay`,
       );
     }
-    const adminAddress = collection.admin;
 
     const msg = {
       typeUrl: '/cosmos.authz.v1beta1.MsgExec',
@@ -129,19 +107,15 @@ class Payments {
             typeUrl: '/ixo.claims.v1beta1.MsgEvaluateClaim',
             value: ixo.claims.v1beta1.MsgEvaluateClaim.encode(
               ixo.claims.v1beta1.MsgEvaluateClaim.fromPartial({
-                adminAddress,
+                adminAddress: params.adminAddress,
                 agentAddress: params.userAddress,
-                agentDid: params.userDid,
-                oracle: params.userDid,
+                agentDid: `did:ixo:${params.userAddress}`,
+                oracle: `did:ixo:${params.userAddress}`,
                 claimId: params.claimId,
+                collectionId: params.claimCollectionId,
+                status: 1,
                 reason: 1,
-                collectionId: claimCollectionId,
-                status: ixo.claims.v1beta1.EvaluationStatus.APPROVED,
-
                 verificationProof: 'cid of verificationProof',
-                // if want to do custom amount, must be within allowed authz if through authz
-                // amount: customAmount,
-                // cw20Payment: customCW20Payment,
               }),
             ).finish(),
           },
@@ -162,18 +136,12 @@ class Payments {
   public async getOutstandingPayments(params: {
     userAddress: string;
     oracleAddress: string;
+    userClaimCollection: string;
   }): Promise<string[] | undefined> {
-    const claimCollectionId = await Claims.getUserOraclesClaimCollection(
-      params.userAddress,
-    );
-    if (!claimCollectionId) {
-      throw new Error('Claim collection not found');
-    }
-
     const claims = await Claims.listClaims({
       oracleAddress: params.oracleAddress,
       userAddress: params.userAddress,
-      collectionId: claimCollectionId,
+      collectionId: params.userClaimCollection,
     });
 
     const outstandingPayments = claims.claims?.nodes.filter(

@@ -1,6 +1,6 @@
 {
   "name": "@ixo/oracles-chain-client",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "private": true,
   "type": "module",
   "main": "dist/index.js",
@@ -57,7 +57,7 @@
     "@cosmjs/proto-signing": "0.32.4",
     "@cosmjs/stargate": "0.32.4",
     "@ixo/did-provider-x": "0.0.2",
-    "@ixo/impactxclient-sdk": "2.3.0",
+    "@ixo/impactxclient-sdk": "2.4.0",
     "@ixo/logger": "workspace:*",
     "@ixo/matrixclient-sdk": "^0.2.1",
     "@veramo/core": "4.3.0",
