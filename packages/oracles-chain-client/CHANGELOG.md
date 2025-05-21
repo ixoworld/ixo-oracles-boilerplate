@@ -1,5 +1,11 @@
 # @ixo/oracles-chain-client
 
+## 1.0.11
+
+### Patch Changes
+
+- [#35](https://github.com/ixoworld/ixo-oracles-boilerplate/pull/35) [`da24aae`](https://github.com/ixoworld/ixo-oracles-boilerplate/commit/da24aae97260c4fa186d3a2cc8f797c731d9cb98) Thanks [@youssefhany-ixo](https://github.com/youssefhany-ixo)! - Fix for Using with FE React
+
 ## 1.0.10
 
 ### Patch Changes
