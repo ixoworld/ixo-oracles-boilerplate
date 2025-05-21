@@ -1,6 +1,5 @@
 import { Coin } from '@cosmjs/proto-signing';
 import { cosmos, ixo, utils } from '@ixo/impactxclient-sdk';
-import { Logger } from '@ixo/logger';
 import { gqlClient } from '../../gql/index.js';
 import { ValidationError } from '../../utils/validation-error.js';
 import Client from '../client.js';
@@ -17,22 +16,13 @@ export class Claims {
     return Claims.instance;
   }
   public async getUserOraclesClaimCollection(
-    userAddress: string,
+    _userAddress: string,
   ): Promise<string | undefined> {
     if (process.env.NODE_ENV === 'production') {
       return undefined;
     }
-    Logger.warn(
-      '[Authz] getUserOraclesClaimCollection is not implemented',
-      'getUserOraclesClaimCollection',
-      'notImplemented',
-      'userAddress',
-      userAddress,
-    );
-    Logger.warn(
-      '[Authz] getUserOraclesClaimCollection returning hardcoded value',
-    );
-    return process.env.USER_CLAIM_COLLECTION_ID ?? '138';
+
+    throw new Error('getUserOraclesClaimCollection is not implemented');
   }
 
   public async sendClaimIntent({

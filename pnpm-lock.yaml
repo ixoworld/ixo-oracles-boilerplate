@@ -622,9 +622,6 @@ importers:
       '@ixo/impactxclient-sdk':
         specifier: 2.4.0
         version: 2.4.0
-      '@ixo/logger':
-        specifier: workspace:*
-        version: link:../logger
       '@ixo/matrixclient-sdk':
         specifier: ^0.2.1
         version: 0.2.1

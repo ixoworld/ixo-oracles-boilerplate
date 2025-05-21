@@ -58,7 +58,6 @@
     "@cosmjs/stargate": "0.32.4",
     "@ixo/did-provider-x": "0.0.2",
     "@ixo/impactxclient-sdk": "2.4.0",
-    "@ixo/logger": "workspace:*",
     "@ixo/matrixclient-sdk": "^0.2.1",
     "@veramo/core": "4.3.0",
     "@veramo/credential-ld": "4.3.0",
