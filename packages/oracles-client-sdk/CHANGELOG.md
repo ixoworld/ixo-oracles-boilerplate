@@ -1,5 +1,14 @@
 # @ixo/oracles-client-sdk
 
+## 0.1.9
+
+### Patch Changes
+
+- [#29](https://github.com/ixoworld/ixo-oracles-boilerplate/pull/29) [`267de8c`](https://github.com/ixoworld/ixo-oracles-boilerplate/commit/267de8c8065387f69ae882920e101331fb93d2dd) Thanks [@youssefhany-ixo](https://github.com/youssefhany-ixo)! - Update interfacesand small fixes for FE clients
+
+- Updated dependencies [[`267de8c`](https://github.com/ixoworld/ixo-oracles-boilerplate/commit/267de8c8065387f69ae882920e101331fb93d2dd)]:
+  - @ixo/oracles-chain-client@1.0.9
+
 ## 0.1.8
 
 ### Patch Changes
