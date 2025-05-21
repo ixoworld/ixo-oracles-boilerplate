@@ -1,18 +1,12 @@
 import type { TransactionFn } from '@ixo/oracles-chain-client/client/authz/types';
 
 export interface IMatrixLoginProps {
-  address: string;
   accessToken: string;
-  roomId: string;
-  userId: string;
 }
 
 export interface IWalletProps {
   address: string;
-  algo: string;
   did: string;
-  name: string;
-  pubKey: string;
   matrix: IMatrixLoginProps;
 }
 
