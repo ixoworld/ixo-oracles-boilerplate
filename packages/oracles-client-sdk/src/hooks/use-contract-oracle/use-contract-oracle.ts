@@ -6,6 +6,7 @@ import { useOraclesConfig } from '../use-oracles-config.js';
 
 const useContractOracle = (
   oracleDid: string,
+  userClaimCollectionId: string,
   overrides?: {
     baseUrl?: string;
   },
@@ -23,7 +24,7 @@ const useContractOracle = (
       });
       return authzConfig;
     },
-    enabled: !!wallet?.address,
+    enabled: Boolean(wallet?.address),
   });
 
   const { mutateAsync: contractOracle, isPending: isContractingOracle } =
@@ -35,7 +36,7 @@ const useContractOracle = (
         }
 
         const authz = new Authz(config);
-        return authz.contractOracle(transactSignX);
+        return authz.contractOracle(userClaimCollectionId, transactSignX);
       },
     });
 

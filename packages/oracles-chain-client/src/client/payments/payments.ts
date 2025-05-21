@@ -10,29 +10,26 @@ import {
   IntentStatus,
 } from './types.js';
 
-class Payments {
+export class Payments {
   /**
    * Initiates the payment process by sending funds to an escrow account
    * using the `MsgClaimIntent` message or `Claims.sendClaimIntent` method.
    * This is the first step in the payment workflow.
    */
-  public async sendPaymentToEscrow(params: InitialPaymentRequestParams) {
-    const { amount, userAddress, granteeAddress } = params;
+  public async sendPaymentToEscrow(
+    params: Omit<InitialPaymentRequestParams, 'userAddress'> & {
+      userClaimCollection: string;
+    },
+  ) {
+    const { amount, granteeAddress, userClaimCollection } = params;
     return Claims.sendClaimIntent({
       amount: [amount],
-      userAddress,
+      userClaimCollection,
       granteeAddress,
     });
   }
 
   async checkForActiveIntent(params: InitialPaymentRequestParams) {
-    const claimCollectionId = await Claims.getUserOraclesClaimCollection(
-      params.userAddress,
-    );
-    if (!claimCollectionId) {
-      throw new Error('Claim collection not found');
-    }
-
     await Client.init();
 
     // get all intents
@@ -41,7 +38,7 @@ class Payments {
 
     const intent = activeIntents.intents.find(
       (intent) =>
-        intent.collectionId === claimCollectionId &&
+        intent.collectionId === params.userClaimCollection &&
         intent.status === IntentStatus.ACTIVE &&
         intent.agentAddress === params.granteeAddress &&
         // ideally this should be coming from the pricing list in the settings of oracle entity `Entity.getOraclePricingList`
@@ -61,21 +58,18 @@ class Payments {
    *
    */
   public async submitPaymentClaim(
-    params: Omit<InitialPaymentRequestParams, 'amount'>,
+    params: InitialPaymentRequestParams,
     claimId: string,
   ) {
-    const { userAddress, granteeAddress } = params;
-    const claimCollectionId =
-      await Claims.getUserOraclesClaimCollection(userAddress);
-    if (!claimCollectionId) {
-      throw new Error('Claim collection not found');
-    }
+    const { userAddress, granteeAddress, userClaimCollection } = params;
 
     return Claims.submitClaim({
       granteeAddress,
       userAddress,
       claimId,
       useIntent: true,
+      collectionId: userClaimCollection,
+      amount: [params.amount],
     });
   }
 
@@ -162,18 +156,12 @@ class Payments {
   public async getOutstandingPayments(params: {
     userAddress: string;
     oracleAddress: string;
+    userClaimCollection: string;
   }): Promise<string[] | undefined> {
-    const claimCollectionId = await Claims.getUserOraclesClaimCollection(
-      params.userAddress,
-    );
-    if (!claimCollectionId) {
-      throw new Error('Claim collection not found');
-    }
-
     const claims = await Claims.listClaims({
       oracleAddress: params.oracleAddress,
       userAddress: params.userAddress,
-      collectionId: claimCollectionId,
+      collectionId: params.userClaimCollection,
     });
 
     const outstandingPayments = claims.claims?.nodes.filter(

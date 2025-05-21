@@ -37,30 +37,35 @@ export class Claims {
 
   public async sendClaimIntent({
     amount,
-    userAddress,
-    overrideClaimCollectionId,
+    userClaimCollection,
     granteeAddress,
   }: {
     amount: Coin[];
-    userAddress: string; // collection owner
-    overrideClaimCollectionId?: string;
+    userClaimCollection: string;
     granteeAddress: string; // oracle address
   }) {
-    const claimCollectionId =
-      overrideClaimCollectionId ??
-      (await this.getUserOraclesClaimCollection(userAddress));
-    if (!claimCollectionId) {
+    if (!userClaimCollection) {
       throw new ValidationError('Claim collection ID not found');
     }
     return this.client.runWithInitiatedClient(async (client) => {
       const granteeDid = utils.did.generateSecpDid(granteeAddress);
       const message = {
-        typeUrl: '/ixo.claims.v1beta1.MsgClaimIntent',
-        value: ixo.claims.v1beta1.MsgClaimIntent.fromPartial({
-          agentAddress: granteeAddress,
-          agentDid: granteeDid,
-          collectionId: claimCollectionId,
-          amount,
+        typeUrl: '/cosmos.authz.v1beta1.MsgExec',
+        value: cosmos.authz.v1beta1.MsgExec.fromPartial({
+          grantee: granteeAddress,
+          msgs: [
+            {
+              typeUrl: '/ixo.claims.v1beta1.MsgClaimIntent',
+              value: ixo.claims.v1beta1.MsgClaimIntent.encode(
+                ixo.claims.v1beta1.MsgClaimIntent.fromPartial({
+                  agentAddress: granteeAddress,
+                  agentDid: granteeDid,
+                  collectionId: userClaimCollection,
+                  amount,
+                }),
+              ).finish(),
+            },
+          ],
         }),
       };
       const tx = await client.signAndBroadcast([message]);
@@ -79,16 +84,14 @@ export class Claims {
     granteeAddress: string;
     userAddress?: string;
     claimId: string;
-    collectionId?: string;
+    collectionId: string;
     useIntent?: boolean;
     amount?: Coin[];
   }) {
     if (!userAddress && !collectionId) {
       throw new ValidationError('User address or collection ID is required');
     }
-    if (!collectionId && userAddress) {
-      collectionId = await this.getUserOraclesClaimCollection(userAddress);
-    }
+
     if (!collectionId) {
       throw new ValidationError('Claim collection ID not found');
     }
@@ -130,17 +133,11 @@ export class Claims {
   public async listClaims(params: {
     oracleAddress: string;
     userAddress: string;
-    collectionId?: string;
+    collectionId: string;
   }) {
-    const claimCollectionId =
-      params.collectionId ??
-      (await this.getUserOraclesClaimCollection(params.userAddress));
-    if (!claimCollectionId) {
-      throw new ValidationError('Claim collection ID not found');
-    }
     const claimsList = await gqlClient.Claims({
       agentAddress: params.oracleAddress,
-      collectionId: claimCollectionId,
+      collectionId: params.collectionId,
     });
     return claimsList;
   }

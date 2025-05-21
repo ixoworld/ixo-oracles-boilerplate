@@ -9,7 +9,6 @@ import {
 import { gqlClient } from '../../gql/index.js';
 import { addDays } from '../../utils/general.js';
 import { ValidationError } from '../../utils/validation-error.js';
-import { getUserOraclesClaimCollection } from '../claims/utils.js';
 import { Entities } from '../entities/entity.js';
 import {
   AuthorizationType,
@@ -246,10 +245,10 @@ export class Authz {
     }
     return permissions;
   }
-  public async hasPermission(msgTypeUrl: string | string[]) {
-    const userClaimCollectionId = await getUserOraclesClaimCollection(
-      this.config.granteeAddress,
-    );
+  public async hasPermission(
+    msgTypeUrl: string | string[],
+    userClaimCollectionId: string,
+  ) {
     if (!userClaimCollectionId) {
       throw new ValidationError('User has no oracles claim collection');
     }
@@ -323,10 +322,10 @@ export class Authz {
     return sign([message], `Grant Claim Submit Authorization ${oracleName}`);
   }
 
-  public async contractOracle(sign: TransactionFn) {
-    const claimCollectionId = await getUserOraclesClaimCollection(
-      this.config.granteeAddress,
-    );
+  public async contractOracle(
+    claimCollectionId: string,
+    sign: TransactionFn,
+  ) {
     if (!claimCollectionId) {
       throw new ValidationError('User has no oracles claim collection');
     }

@@ -31,7 +31,6 @@ export class Client {
 
     this.secpMnemonic = secpMnemonic;
     this.rpcUrl = rpcUrl;
-    // this.cellnode = cellnode;
   }
 
   async checkInitiated(): Promise<void> {
@@ -59,6 +58,10 @@ export class Client {
       },
     );
     this.queryClient = await createQueryClient(this.rpcUrl);
+    const accounts = await this.wallet.getAccounts();
+    this.address = accounts[0]?.address ?? '';
+
+    
   }
 
   public static getInstance(
