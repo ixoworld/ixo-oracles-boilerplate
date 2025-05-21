@@ -13,6 +13,7 @@ import { Entities } from '../entities/entity.js';
 import {
   AuthorizationType,
   GetOracleAuthZConfigParams,
+  GrantClaimSubmitAuthorizationParams,
   IAuthzConfig,
   Permission,
   TransactionFn,
@@ -260,62 +261,48 @@ export class Authz {
   }
 
   public async grantClaimSubmitAuthorization(
-    claimCollectionId: string,
+    params: GrantClaimSubmitAuthorizationParams,
     sign: TransactionFn,
   ) {
-    const { granteeAddress, oracleName } = this.config;
-    const { granteeGrants, adminAddress, ownerAddress, claimCollection } =
-      await this.prepareForClaimSubmitAuthorization(claimCollectionId);
-    const submitAuth = granteeGrants.grants.find(
-      (g) =>
-        g.authorization?.typeUrl ==
-          '/ixo.claims.v1beta1.SubmitClaimAuthorization' &&
-        g.granter == adminAddress,
-    );
-    const granteeCurrentAuthConstraints = submitAuth?.authorization
-      ? ixo.claims.v1beta1.SubmitClaimAuthorization.decode(
-          submitAuth.authorization?.value,
-        ).constraints
-      : [];
+    const {
+      granteeAddress,
+      oracleName,
+      granterAddress,
+      adminAddress,
+      claimCollectionId,
+    } = params;
 
     const message = {
-      typeUrl: '/ixo.entity.v1beta1.MsgGrantEntityAccountAuthz',
-      value: ixo.entity.v1beta1.MsgGrantEntityAccountAuthz.fromPartial({
-        id: claimCollection?.entityId,
-        ownerAddress,
-        name: 'admin',
-        granteeAddress,
-        grant: cosmos.authz.v1beta1.Grant.fromPartial({
-          authorization: {
-            typeUrl: '/ixo.claims.v1beta1.SubmitClaimAuthorization',
-            value: ixo.claims.v1beta1.SubmitClaimAuthorization.encode(
-              ixo.claims.v1beta1.SubmitClaimAuthorization.fromPartial({
-                admin: adminAddress,
-                constraints: [
-                  ixo.claims.v1beta1.SubmitClaimConstraints.fromPartial({
-                    collectionId: claimCollectionId,
-                    agentQuota: utils.proto.numberToLong(
-                      claimCollection?.quota ?? 0,
-                    ),
-                    maxAmount: [
-                      {
-                        amount:
-                          this.config.spendLimit?.[0]?.amount ??
-                          '100000000000000000',
-                        denom: this.config.spendLimit?.[0]?.denom ?? 'uixo',
-                      },
-                    ],
-                    intentDurationNs: utils.proto.toDuration(
-                      (1000000000 * 60 * 3).toString(),
-                    ),
-                  }),
-                  ...granteeCurrentAuthConstraints,
+      typeUrl: '/cosmos.authz.v1beta1.MsgExec',
+      value: cosmos.authz.v1beta1.MsgExec.fromPartial({
+        grantee: granteeAddress,
+        msgs: [
+          {
+            typeUrl: '/ixo.claims.v1beta1.MsgCreateClaimAuthorization',
+            value: ixo.claims.v1beta1.MsgCreateClaimAuthorization.encode(
+              ixo.claims.v1beta1.MsgCreateClaimAuthorization.fromPartial({
+                creatorAddress: granterAddress,
+                creatorDid: `did:ixo:${granterAddress}`,
+                adminAddress,
+                granteeAddress: granteeAddress,
+                collectionId: claimCollectionId,
+                agentQuota: utils.proto.numberToLong(1000),
+                intentDurationNs: utils.proto.toDuration(
+                  (1000000000 * 60 * 60 * 24 * 30).toString(), // 30 days
+                ), // ms *
+                maxAmount: [
+                  {
+                    denom: 'uixo',
+                    amount: params.maxAmount?.toString() ?? '1000000000',
+                  },
                 ],
+
+                authType:
+                  ixo.claims.v1beta1.CreateClaimAuthorizationType.SUBMIT,
               }),
             ).finish(),
           },
-          expiration: utils.proto.toTimestamp(addDays(new Date(), 365 * 3)),
-        }),
+        ],
       }),
     };
 
@@ -323,15 +310,11 @@ export class Authz {
   }
 
   public async contractOracle(
-    claimCollectionId: string,
+    params: GrantClaimSubmitAuthorizationParams,
     sign: TransactionFn,
   ) {
-    if (!claimCollectionId) {
-      throw new ValidationError('User has no oracles claim collection');
-    }
-
     await this.grant(sign);
-    await this.grantClaimSubmitAuthorization(claimCollectionId, sign);
+    await this.grantClaimSubmitAuthorization(params, sign);
   }
 
   static createMsgGrantAuthz(
@@ -480,32 +463,5 @@ export class Authz {
       '/cosmos.bank.v1beta1.MsgMultiSend',
     ];
     return sendMsgTypes.includes(permission);
-  }
-
-  private async prepareForClaimSubmitAuthorization(claimCollectionId: string) {
-    if (!claimCollectionId) {
-      throw new ValidationError('Claim collection ID is required');
-    }
-    const { granteeAddress } = this.config;
-    const queryClient = await this.queryClientPromise;
-    const granteeGrants = await queryClient.cosmos.authz.v1beta1.granteeGrants({
-      grantee: granteeAddress,
-    });
-    const claimCollection =
-      await Entities.getClaimCollection(claimCollectionId);
-    if (!claimCollection) {
-      throw new ValidationError(
-        `Claim collection ${claimCollectionId} not found`,
-      );
-    }
-    const ownerAddress = this.config.granterAddress; // entity owner address
-    const adminAddress = claimCollection?.admin;
-
-    return {
-      ownerAddress,
-      adminAddress,
-      claimCollection,
-      granteeGrants,
-    };
   }
 }

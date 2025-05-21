@@ -148,3 +148,12 @@ export type GetOracleAuthZConfigParams = {
   granterAddress: string;
   customConfigName?: string;
 };
+
+export type GrantClaimSubmitAuthorizationParams = {
+  claimCollectionId: string;
+  granterAddress: string;
+  granteeAddress: string;
+  oracleName: string;
+  adminAddress: string;
+  maxAmount?:number
+};

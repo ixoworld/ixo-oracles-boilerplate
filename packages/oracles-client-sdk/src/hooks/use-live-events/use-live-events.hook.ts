@@ -3,7 +3,7 @@ import type {
   EventNames,
   WithRequiredEventProps,
 } from '@ixo/oracles-events/types';
-import { ErrorEvent, EventSource } from 'eventsource';
+import { type ErrorEvent, EventSource } from 'eventsource';
 import { useEffect, useState } from 'react';
 import { useOraclesContext } from '../../providers/oracles-provider/oracles-context.js';
 import { useOraclesConfig } from '../use-oracles-config.js';
@@ -39,18 +39,21 @@ export const useLiveEvents = (props: {
     if (!wallet || !props.sessionId) {
       return;
     }
-    const eventSource = new EventSource(`${apiUrl}/sse/${props.sessionId}`, {
-      fetch: (url, init) => {
-        return fetch(url, {
-          ...init,
-          headers: {
-            ...init?.headers,
-            'x-matrix-access-token': wallet?.matrix.accessToken,
-            'x-did': wallet?.did,
-          },
-        });
+    const eventSource = new EventSource(
+      `${apiUrl}/sse/events?sessionId=${props.sessionId}`,
+      {
+        fetch: (url, init) => {
+          return fetch(url, {
+            ...init,
+            headers: {
+              ...init?.headers,
+              'x-matrix-access-token': wallet.matrix.accessToken,
+              'x-did': wallet.did,
+            },
+          });
+        },
       },
-    });
+    );
     eventSource.onopen = () => {
       setIsConnected(true);
     };

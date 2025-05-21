@@ -10,7 +10,7 @@ export const useOracleSessions = (
   },
 ) => {
   const queryClient = useQueryClient();
-  const { wallet, apiKey, authedRequest } = useOraclesContext();
+  const { wallet, authedRequest } = useOraclesContext();
 
   if (!wallet) {
     throw new Error(
@@ -25,7 +25,7 @@ export const useOracleSessions = (
   const { data, isLoading, error, refetch } = useQuery<{
     sessions: IChatSession[];
   }>({
-    queryKey: ['oracle-sessions', wallet.address],
+    queryKey: ['oracle-sessions', wallet.address, oracleDid],
     queryFn: () =>
       authedRequest<{ sessions: IChatSession[] }>(`${apiUrl}/sessions`, 'GET'),
     enabled: Boolean(overrides?.baseUrl ?? config.apiUrl),
@@ -39,7 +39,7 @@ export const useOracleSessions = (
     mutationFn: () => authedRequest<IChatSession>(`${apiUrl}/sessions`, 'POST'),
     onSettled: async () => {
       await queryClient.invalidateQueries({
-        queryKey: ['oracle-sessions', wallet.address],
+        queryKey: ['oracle-sessions', wallet.address, oracleDid],
       });
     },
   });
@@ -53,7 +53,7 @@ export const useOracleSessions = (
       authedRequest<void>(`${apiUrl}/sessions/${sessionId}`, 'DELETE'),
     onSettled: async () => {
       await queryClient.invalidateQueries({
-        queryKey: ['oracle-sessions', wallet.address],
+        queryKey: ['oracle-sessions', wallet.address, oracleDid],
       });
     },
   });

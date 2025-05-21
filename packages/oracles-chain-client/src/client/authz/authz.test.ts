@@ -225,7 +225,13 @@ describe('Authz', () => {
       claimCollectionId,
     );
     const tx = await authz.grantClaimSubmitAuthorization(
-      claimCollectionId,
+      {
+        claimCollectionId,
+        adminAddress: userAddress,
+        granteeAddress: oracleAddress,
+        granterAddress: userAddress,
+        oracleName: 'test',
+      },
       (msgs, memo) => client.signAndBroadcast(msgs, memo),
     );
     console.log(tx);
