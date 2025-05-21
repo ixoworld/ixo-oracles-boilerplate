@@ -1,5 +1,11 @@
 # @ixo/oracles-client-sdk
 
+## 0.1.10
+
+### Patch Changes
+
+- [#31](https://github.com/ixoworld/ixo-oracles-boilerplate/pull/31) [`4b91a61`](https://github.com/ixoworld/ixo-oracles-boilerplate/commit/4b91a6140fba5d25d406a32e4254fcc2433cd391) Thanks [@youssefhany-ixo](https://github.com/youssefhany-ixo)! - Make package public
+
 ## 0.1.9
 
 ### Patch Changes
