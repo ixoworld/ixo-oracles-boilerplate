@@ -1,4 +1,4 @@
-import type { TransactionFn } from '@ixo/oracles-chain-client/client/authz/types';
+import type { TransactionFn } from '@ixo/oracles-chain-client/react';
 
 export interface IMatrixLoginProps {
   accessToken: string;
