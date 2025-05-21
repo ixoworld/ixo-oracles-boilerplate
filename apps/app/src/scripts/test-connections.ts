@@ -1,11 +1,9 @@
 import { Logger } from '@nestjs/common';
-import * as dotenv from 'dotenv';
-import * as path from 'node:path';
+import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
 
 // Load environment variables
-dotenv.config({ path: path.resolve(process.cwd(), '.env') });
-
+const configService = new ConfigService();
 /**
  * Script to test database connections
  * Run with: npx ts-node src/scripts/test-connections.ts
@@ -14,13 +12,15 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 async function testPostgres(): Promise<boolean> {
   Logger.log('Testing PostgreSQL connection...');
   const pool = new Pool({
-    user: process.env.POSTGRES_USER || 'postgres',
-    host: process.env.POSTGRES_HOST || 'localhost',
-    database: process.env.POSTGRES_DB || 'knowledge',
-    password: process.env.POSTGRES_PASSWORD || 'postgres',
-    port: parseInt(process.env.POSTGRES_PORT || '5432'),
+    user: configService.getOrThrow<string>('POSTGRES_USER', 'postgres'),
+    host: configService.getOrThrow<string>('POSTGRES_HOST', 'localhost'),
+    database: configService.getOrThrow<string>('POSTGRES_DB', 'knowledge'),
+    password: configService.getOrThrow<string>('POSTGRES_PASSWORD', 'postgres'),
+    port: configService.getOrThrow<number>('POSTGRES_PORT', 5432),
+    ...(configService.getOrThrow<string>('DATABASE_USE_SSL') && {
+      ssl: { rejectUnauthorized: false },
+    }),
   });
-
   try {
     const result = await pool.query('SELECT NOW()');
     Logger.log('✅ PostgreSQL connection successful!');

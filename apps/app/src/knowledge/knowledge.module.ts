@@ -17,11 +17,20 @@ import { KnowledgeService } from './knowledge.service';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
         return new Pool({
-          user: configService.get('POSTGRES_USER', 'postgres'),
-          host: configService.get('POSTGRES_HOST', 'localhost'),
-          database: configService.get('POSTGRES_DB', 'knowledge'),
-          password: configService.get('POSTGRES_PASSWORD', 'postgres'),
-          port: parseInt(configService.get('POSTGRES_PORT', '5432')),
+          user: configService.getOrThrow<string>('POSTGRES_USER', 'postgres'),
+          host: configService.getOrThrow<string>('POSTGRES_HOST', 'localhost'),
+          database: configService.getOrThrow<string>(
+            'POSTGRES_DB',
+            'knowledge',
+          ),
+          password: configService.getOrThrow<string>(
+            'POSTGRES_PASSWORD',
+            'postgres',
+          ),
+          port: configService.getOrThrow<number>('POSTGRES_PORT', 5432),
+          ...(configService.getOrThrow<string>('DATABASE_USE_SSL') && {
+            ssl: { rejectUnauthorized: false },
+          }),
         });
       },
     },
