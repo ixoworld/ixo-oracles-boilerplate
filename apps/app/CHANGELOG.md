@@ -1,5 +1,12 @@
 # app
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies [[`c56f5c0`](https://github.com/ixoworld/ixo-oracles-boilerplate/commit/c56f5c0aff5867e300a7008c480bd76abd68557e)]:
+  - @ixo/oracles-chain-client@1.0.10
+
 ## 0.1.2
 
 ### Patch Changes
