@@ -1,12 +1,10 @@
 import { Logger } from '@nestjs/common';
-import * as dotenv from 'dotenv';
+import { ConfigService } from '@nestjs/config';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Pool } from 'pg';
 
-// Load environment variables from .env file
-dotenv.config({ path: path.resolve(process.cwd(), '.env') });
-
+const configService = new ConfigService();
 /**
  * Script to run knowledge module PostgreSQL migrations
  *
@@ -19,15 +17,18 @@ async function runMigrations() {
 
   // Configure PostgreSQL connection from environment variables
   const pool = new Pool({
-    user: process.env.POSTGRES_USER || 'postgres',
-    host: process.env.POSTGRES_HOST || 'localhost',
-    database: process.env.POSTGRES_DB || 'knowledge',
-    password: process.env.POSTGRES_PASSWORD || 'postgres',
-    port: parseInt(process.env.POSTGRES_PORT || '5432'),
+    user: configService.getOrThrow<string>('POSTGRES_USER', 'postgres'),
+    host: configService.getOrThrow<string>('POSTGRES_HOST', 'localhost'),
+    database: configService.getOrThrow<string>('POSTGRES_DB', 'knowledge'),
+    password: configService.getOrThrow<string>('POSTGRES_PASSWORD', 'postgres'),
+    port: configService.getOrThrow<number>('POSTGRES_PORT', 5432),
+    ...(configService.getOrThrow<string>('DATABASE_USE_SSL') && {
+      ssl: { rejectUnauthorized: false },
+    }),
   });
 
   Logger.log(
-    `Connecting to PostgreSQL at ${process.env.POSTGRES_HOST || 'localhost'}:${process.env.POSTGRES_PORT || '5432'}`,
+    `Connecting to PostgreSQL at ${configService.getOrThrow<string>('POSTGRES_HOST', 'localhost')}:${configService.getOrThrow<number>('POSTGRES_PORT', 5432)}`,
   );
 
   // Create migrations table if it doesn't exist
