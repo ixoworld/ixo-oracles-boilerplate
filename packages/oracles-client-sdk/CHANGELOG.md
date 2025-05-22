@@ -1,5 +1,14 @@
 # @ixo/oracles-client-sdk
 
+## 0.1.13
+
+### Patch Changes
+
+- [#38](https://github.com/ixoworld/ixo-oracles-boilerplate/pull/38) [`e4c8f86`](https://github.com/ixoworld/ixo-oracles-boilerplate/commit/e4c8f866f6a51716e0c2074c9fe54d76beb4e92f) Thanks [@youssefhany-ixo](https://github.com/youssefhany-ixo)! - refactor: update Authz and Payments classes to improve authorization handling and integrate new settings resource utility
+
+- Updated dependencies [[`e4c8f86`](https://github.com/ixoworld/ixo-oracles-boilerplate/commit/e4c8f866f6a51716e0c2074c9fe54d76beb4e92f)]:
+  - @ixo/oracles-chain-client@1.0.12
+
 ## 0.1.12
 
 ### Patch Changes
