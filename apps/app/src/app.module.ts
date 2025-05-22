@@ -7,7 +7,7 @@ import {
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerGuard, ThrottlerModule } from 'nestjs-throttler';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ChromaDbModule } from './chroma/chroma-db.module';
@@ -15,8 +15,8 @@ import { KnowledgeModule } from './knowledge/knowledge.module';
 import { MessagesModule } from './messages/messages.module';
 import { AuthHeaderMiddleware } from './middleware/auth-header.middleware';
 import { SessionsModule } from './sessions/sessions.module';
-import { SseModule } from './sse/sse.module';
 import { SlackModule } from './slack/slack.module';
+import { SseModule } from './sse/sse.module';
 
 @Module({
   imports: [
@@ -24,10 +24,12 @@ import { SlackModule } from './slack/slack.module';
       isGlobal: true, // Make ConfigModule available globally
       envFilePath: '.env', // Specify the .env file path
     }),
-    ThrottlerModule.forRoot({
-      ttl: 60000, // Time-to-live in milliseconds (e.g., 60 seconds)
-      limit: 10, // Max requests per TTL period
-    }),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000, // Time-to-live in milliseconds (e.g., 60 seconds)
+        limit: 10, // Max requests per TTL period
+      },
+    ]),
     ChromaDbModule.forRoot(),
     SessionsModule,
     MessagesModule,

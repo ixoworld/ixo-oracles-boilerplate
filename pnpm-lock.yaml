@@ -93,6 +93,9 @@ importers:
       '@nestjs/swagger':
         specifier: ^11.1.5
         version: 11.1.5(@nestjs/common@11.1.0(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@11.1.0)(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)
+      '@nestjs/throttler':
+        specifier: ^6.4.0
+        version: 6.4.0(@nestjs/common@11.1.0(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@11.1.0)(reflect-metadata@0.2.2)
       '@types/pg':
         specifier: ^8.11.14
         version: 8.11.14
@@ -117,9 +120,6 @@ importers:
       langfuse-langchain:
         specifier: ^3.37.2
         version: 3.37.2(langchain@0.3.13(@langchain/core@0.3.36(openai@4.80.1(ws@8.18.1)(zod@3.24.1)))(axios@1.8.4)(openai@4.80.1(ws@8.18.1)(zod@3.24.1))(typeorm@0.3.20(better-sqlite3@11.8.1)(pg@8.15.5)(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.13.13)(typescript@5.8.2)))(ws@8.18.1))
-      nestjs-throttler:
-        specifier: ^0.3.0
-        version: 0.3.0(@nestjs/common@11.1.0(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@11.1.0)(reflect-metadata@0.2.2)
       pg:
         specifier: ^8.15.5
         version: 8.15.5
@@ -3637,6 +3637,13 @@ packages:
         optional: true
       '@nestjs/platform-express':
         optional: true
+
+  '@nestjs/throttler@6.4.0':
+    resolution: {integrity: sha512-osL67i0PUuwU5nqSuJjtUJZMkxAnYB4VldgYUMGzvYRJDCqGRFMWbsbzm/CkUtPLRL30I8T74Xgt/OQxnYokiA==}
+    peerDependencies:
+      '@nestjs/common': ^7.0.0 || ^8.0.0 || ^9.0.0 || ^10.0.0 || ^11.0.0
+      '@nestjs/core': ^7.0.0 || ^8.0.0 || ^9.0.0 || ^10.0.0 || ^11.0.0
+      reflect-metadata: ^0.1.13 || ^0.2.0
 
   '@next/env@14.1.1':
     resolution: {integrity: sha512-7CnQyD5G8shHxQIIg3c7/pSeYFeMhsNbpU/bmvH7ZnDql7mNRgg8O2JZrhrc/soFnfBnKP4/xXNiiSIPn2w8gA==}
@@ -9223,13 +9230,6 @@ packages:
 
   nested-error-stacks@2.0.1:
     resolution: {integrity: sha512-SrQrok4CATudVzBS7coSz26QRSmlK9TzzoFbeKfcPBUFPjcQM9Rqvr/DlJkOrwI/0KcgvMub1n1g5Jt9EgRn4A==}
-
-  nestjs-throttler@0.3.0:
-    resolution: {integrity: sha512-zJPYdBS98eDCXKbzyboMXp0hYW6c5519kRPmwTAY09oDngy2XEtaI/RCtw0D1pbUFGv08pYJiQ26pz6YT22Ong==}
-    peerDependencies:
-      '@nestjs/common': ^7.0.0
-      '@nestjs/core': ^7.0.0
-      reflect-metadata: ^0.1.13
 
   next@14.1.1:
     resolution: {integrity: sha512-McrGJqlGSHeaz2yTRPkEucxQKe5Zq7uPwyeHNmJaZNY4wx9E9QdxmTp310agFRoMuIYgQrCrT3petg13fSVOww==}
@@ -16322,6 +16322,12 @@ snapshots:
     optionalDependencies:
       '@nestjs/platform-express': 11.1.0(@nestjs/common@11.1.0(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@11.1.0)
 
+  '@nestjs/throttler@6.4.0(@nestjs/common@11.1.0(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@11.1.0)(reflect-metadata@0.2.2)':
+    dependencies:
+      '@nestjs/common': 11.1.0(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.1)
+      '@nestjs/core': 11.1.0(@nestjs/common@11.1.0(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/platform-express@11.1.0)(reflect-metadata@0.2.2)(rxjs@7.8.1)
+      reflect-metadata: 0.2.2
+
   '@next/env@14.1.1': {}
 
   '@next/swc-darwin-arm64@14.1.1':
@@ -19378,7 +19384,8 @@ snapshots:
 
   chardet@0.7.0: {}
 
-  charenc@0.0.2: {}
+  charenc@0.0.2:
+    optional: true
 
   chokidar@3.6.0:
     dependencies:
@@ -19885,7 +19892,8 @@ snapshots:
       shebang-command: 2.0.0
       which: 2.0.2
 
-  crypt@0.0.2: {}
+  crypt@0.0.2:
+    optional: true
 
   crypto-ld@6.0.0: {}
 
@@ -22041,7 +22049,8 @@ snapshots:
       call-bound: 1.0.4
       has-tostringtag: 1.0.2
 
-  is-buffer@1.1.6: {}
+  is-buffer@1.1.6:
+    optional: true
 
   is-buffer@2.0.5: {}
 
@@ -23686,6 +23695,7 @@ snapshots:
       charenc: 0.0.2
       crypt: 0.0.2
       is-buffer: 1.1.6
+    optional: true
 
   mdast-util-find-and-replace@1.1.1:
     dependencies:
@@ -24188,13 +24198,6 @@ snapshots:
 
   nested-error-stacks@2.0.1:
     optional: true
-
-  nestjs-throttler@0.3.0(@nestjs/common@11.1.0(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@11.1.0)(reflect-metadata@0.2.2):
-    dependencies:
-      '@nestjs/common': 11.1.0(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.1)
-      '@nestjs/core': 11.1.0(@nestjs/common@11.1.0(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/platform-express@11.1.0)(reflect-metadata@0.2.2)(rxjs@7.8.1)
-      md5: 2.3.0
-      reflect-metadata: 0.2.2
 
   next@14.1.1(@babel/core@7.26.10)(react-dom@18.3.1(react@19.0.0))(react@19.0.0):
     dependencies:

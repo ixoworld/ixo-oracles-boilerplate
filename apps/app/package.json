@@ -50,7 +50,7 @@
     "helmet": "^8.1.0",
     "langchain": "^0.3.2",
     "langfuse-langchain": "^3.37.2",
-    "nestjs-throttler": "^0.3.0",
+    "@nestjs/throttler": "^6.4.0",
     "pg": "^8.15.5",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
