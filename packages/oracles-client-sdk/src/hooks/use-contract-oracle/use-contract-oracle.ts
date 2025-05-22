@@ -1,8 +1,4 @@
-import {
-  Authz,
-  type IAuthzConfig,
-  Payments,
-} from '@ixo/oracles-chain-client/react';
+import { Authz, Payments } from '@ixo/oracles-chain-client/react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useOraclesContext } from '../../providers/oracles-provider/oracles-context.js';
 
@@ -14,7 +10,11 @@ interface IUseContractOracleProps {
     userClaimCollectionId: string;
     adminAddress: string;
     claimId: string;
-    maxAmount?: number;
+    agentQuota?: number;
+    maxAmount?: {
+      amount: number;
+      denom: string;
+    };
   };
 }
 
@@ -32,12 +32,29 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
     enabled: Boolean(wallet?.address),
   });
 
+  // Get pricing list
+  const { data: pricingList, isLoading: isLoadingPricingList } = useQuery({
+    queryKey: ['pricing-list', params.oracleDid],
+    queryFn: async () => {
+      const list = await payments.getOraclePricingList(params.oracleDid);
+      return list;
+    },
+  });
+
   const { mutateAsync: contractOracle, isPending: isContractingOracle } =
     useMutation({
-      mutationFn: (overrideAuthzConfig?: IAuthzConfig) => {
-        const config = overrideAuthzConfig ?? authzConfig;
-        if (!config) {
-          throw new Error('Authz config not found');
+      mutationFn: async () => {
+        const config =
+          authzConfig ??
+          (await Authz.getOracleAuthZConfig({
+            oracleDid: params.oracleDid,
+            granterAddress: wallet?.address ?? '',
+          }));
+
+        if (pricingList?.length === 0 && !params.maxAmount) {
+          throw new Error(
+            'No pricing list found please provide a max amount or add a pricing list to the oracle',
+          );
         }
 
         const authz = new Authz(config);
@@ -45,10 +62,23 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
           {
             adminAddress: params.adminAddress,
             claimCollectionId: params.userClaimCollectionId,
-            granteeAddress: params.oracleDid,
-            granterAddress: wallet?.address ?? '',
+            oracleAddress: config.granteeAddress,
             oracleName: config.oracleName,
-            maxAmount: params.maxAmount,
+            accountAddress: wallet?.address ?? '',
+            agentQuota: params.agentQuota ?? 1,
+            maxAmount: params.maxAmount
+              ? [
+                  {
+                    amount: params.maxAmount.amount.toString(),
+                    denom: params.maxAmount.denom,
+                  },
+                ]
+              : [
+                  {
+                    amount: pricingList?.[0]?.amount.amount ?? '0',
+                    denom: pricingList?.[0]?.amount.denom ?? 'uixo',
+                  },
+                ],
           },
           transactSignX,
         );
@@ -75,7 +105,8 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
     isContractingOracle,
     payClaim,
     isPayingClaim,
-
+    isLoadingPricingList,
+    pricingList,
     isLoadingAuthzConfig,
     authzConfig,
   };

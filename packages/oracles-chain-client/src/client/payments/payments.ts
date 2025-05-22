@@ -1,5 +1,7 @@
 import { cosmos, ixo } from '@ixo/impactxclient-sdk';
+import { OraclePricingListSchemaResponse } from 'src/react/types.js';
 import { gqlClient } from '../../gql/index.js';
+import { getSettingsResource } from '../../utils/get-settings-resouce.js';
 import { ValidationError } from '../../utils/validation-error.js';
 import { TransactionFn } from '../authz/types.js';
 import Claims from '../claims/claims.js';
@@ -149,6 +151,21 @@ export class Payments {
     );
 
     return outstandingPayments?.map((claim) => claim.claimId);
+  }
+
+  static async getOraclePricingList(
+    oracleDid: string,
+    matrixAccessToken?: string,
+  ) {
+    const settingsResource = await getSettingsResource(
+      {
+        protocolDid: oracleDid,
+        key: 'pricingList',
+      },
+      matrixAccessToken,
+    );
+    const pricingList = OraclePricingListSchemaResponse.parse(settingsResource);
+    return pricingList;
   }
 }
 

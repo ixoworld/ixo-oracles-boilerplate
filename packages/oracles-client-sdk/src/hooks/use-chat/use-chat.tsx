@@ -16,10 +16,13 @@ export function useChat({
   oracleDid,
   sessionId,
   overrides,
+  onPaymentRequiredError,
   ...props
 }: {
   oracleDid: string;
   sessionId: string;
+  onPaymentRequiredError: (claimIds: string[]) => void;
+
   uiComponents?: Partial<UIComponents>;
   overrides?: {
     baseUrl?: string;
@@ -34,6 +37,7 @@ export function useChat({
     oracleDid,
     sessionId,
     overrides,
+    onPaymentRequiredError,
   });
   const { config } = useOraclesConfig(oracleDid);
   const { authedRequest } = useOraclesContext();

@@ -43,10 +43,23 @@ export const request = async <T>(
 
     // Handle error responses
     if (!response.ok) {
-      const errorData = await response.text();
-      throw new Error(
-        `Request failed with status ${response.status}: ${errorData}`,
-      );
+      try {
+        const errorData = (await response.json()) as {
+          error: string;
+          message: string;
+          statusCode: number;
+        };
+        throw new RequestError(errorData.message, {
+          status: errorData.statusCode,
+          error: errorData.error,
+          message: errorData.message,
+        });
+      } catch (error) {
+        const errorData = await response.text();
+        throw new Error(
+          `Request failed with status ${response.status}: ${errorData}`,
+        );
+      }
     }
 
     // Parse and return JSON
@@ -63,3 +76,23 @@ export const request = async <T>(
 
 export default request;
 
+class RequestError extends Error {
+  status?: number;
+  [key: string]: any;
+
+  constructor(message: string, errorProps?: Record<string, any>) {
+    super(message);
+    this.name = 'RequestError';
+
+    // Add all properties from errorProps to the error instance
+    if (errorProps) {
+      Object.assign(this, errorProps);
+    }
+  }
+
+  static isRequestError(error: unknown): error is RequestError {
+    return error instanceof RequestError;
+  }
+}
+
+export { RequestError };

@@ -8,8 +8,8 @@ import {
 } from '@ixo/impactxclient-sdk';
 import { gqlClient } from '../../gql/index.js';
 import { addDays } from '../../utils/general.js';
+import { getSettingsResource } from '../../utils/get-settings-resouce.js';
 import { ValidationError } from '../../utils/validation-error.js';
-import { Entities } from '../entities/entity.js';
 import {
   AuthorizationType,
   GetOracleAuthZConfigParams,
@@ -265,37 +265,34 @@ export class Authz {
     sign: TransactionFn,
   ) {
     const {
-      granteeAddress,
+      oracleAddress,
       oracleName,
-      granterAddress,
+      accountAddress,
       adminAddress,
       claimCollectionId,
+      maxAmount,
+      agentQuota
     } = params;
 
     const message = {
       typeUrl: '/cosmos.authz.v1beta1.MsgExec',
       value: cosmos.authz.v1beta1.MsgExec.fromPartial({
-        grantee: granteeAddress,
+        grantee: accountAddress,
         msgs: [
           {
             typeUrl: '/ixo.claims.v1beta1.MsgCreateClaimAuthorization',
             value: ixo.claims.v1beta1.MsgCreateClaimAuthorization.encode(
               ixo.claims.v1beta1.MsgCreateClaimAuthorization.fromPartial({
-                creatorAddress: granterAddress,
-                creatorDid: `did:ixo:${granterAddress}`,
+                creatorAddress: accountAddress,
+                creatorDid: `did:ixo:${accountAddress}`,
                 adminAddress,
-                granteeAddress: granteeAddress,
+                granteeAddress: oracleAddress,
                 collectionId: claimCollectionId,
-                agentQuota: utils.proto.numberToLong(1000),
+                agentQuota: utils.proto.numberToLong(agentQuota),
                 intentDurationNs: utils.proto.toDuration(
                   (1000000000 * 60 * 60 * 24 * 30).toString(), // 30 days
                 ), // ms *
-                maxAmount: [
-                  {
-                    denom: 'uixo',
-                    amount: params.maxAmount?.toString() ?? '1000000000',
-                  },
-                ],
+                maxAmount,
 
                 authType:
                   ixo.claims.v1beta1.CreateClaimAuthorizationType.SUBMIT,
@@ -305,7 +302,6 @@ export class Authz {
         ],
       }),
     };
-
     return sign([message], `Grant Claim Submit Authorization ${oracleName}`);
   }
 
@@ -313,8 +309,10 @@ export class Authz {
     params: GrantClaimSubmitAuthorizationParams,
     sign: TransactionFn,
   ) {
-    await this.grant(sign);
     await this.grantClaimSubmitAuthorization(params, sign);
+  }
+  public async grantAllPermissions(sign: TransactionFn) {
+    await this.grant(sign);
   }
 
   static createMsgGrantAuthz(
@@ -437,7 +435,7 @@ export class Authz {
   static async getOracleAuthZConfig(
     params: GetOracleAuthZConfigParams,
   ): Promise<IAuthzConfig> {
-    const config = await Entities.getSettingsResource({
+    const config = await getSettingsResource({
       protocolDid: params.oracleDid,
       key: params.customConfigName ?? 'oracleAuthZConfig',
     });

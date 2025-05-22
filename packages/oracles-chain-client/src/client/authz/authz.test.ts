@@ -228,9 +228,10 @@ describe('Authz', () => {
       {
         claimCollectionId,
         adminAddress: userAddress,
-        granteeAddress: oracleAddress,
-        granterAddress: userAddress,
+        oracleAddress,
+        accountAddress: userAddress,
         oracleName: 'test',
+        agentQuota: 1000,
       },
       (msgs, memo) => client.signAndBroadcast(msgs, memo),
     );

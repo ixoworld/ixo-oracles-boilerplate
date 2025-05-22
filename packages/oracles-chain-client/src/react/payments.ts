@@ -1,7 +1,9 @@
 import { cosmos, ixo } from '@ixo/impactxclient-sdk';
 import { TransactionFn } from 'src/client/index.js';
 import { gqlClient } from 'src/gql/index.js';
+import { getSettingsResource } from 'src/utils/get-settings-resouce.js';
 import { ValidationError } from 'src/utils/validation-error.js';
+import { TOraclePricingListSchemaResponse } from './types.js';
 
 export class Payments {
   /**
@@ -60,5 +62,19 @@ export class Payments {
     };
 
     return params.sign([msg], `Approve claim ${params.claimId}`);
+  }
+
+  public async getOraclePricingList(
+    oracleDid: string,
+    matrixAccessToken?: string,
+  ) {
+    const settingsResource = await getSettingsResource(
+      {
+        protocolDid: oracleDid,
+        key: 'pricingList',
+      },
+      matrixAccessToken,
+    );
+    return settingsResource as TOraclePricingListSchemaResponse;
   }
 }

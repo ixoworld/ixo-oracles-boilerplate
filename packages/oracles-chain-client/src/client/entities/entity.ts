@@ -1,11 +1,9 @@
 import { ixo, utils } from '@ixo/impactxclient-sdk';
-import { LinkedResource } from '@ixo/impactxclient-sdk/types/codegen/ixo/iid/v1beta1/types.js';
 import { gqlClient } from '../../gql/index.js';
-import { MatrixBotService } from '../../matrix-bot/matrix-bot.service.js';
+import { getSettingsResource } from '../../utils/get-settings-resouce.js';
 import type { Client } from '../client.js';
 import {
   CreateEntityParams,
-  OraclePricingListSchemaResponse,
   TGetSettingsResourceSchema,
   TGetSurveyJsDomainSchema,
 } from './types.js';
@@ -45,7 +43,7 @@ export class Entities {
     domainParams: TGetSurveyJsDomainSchema,
     matrixAccessToken?: string,
   ) {
-    const settingsResource = await this.getSettingsResource<
+    const settingsResource = await getSettingsResource<
       | {
           data: object;
         }
@@ -71,55 +69,7 @@ export class Entities {
     settingsResourceParams: TGetSettingsResourceSchema,
     matrixAccessToken?: string,
   ): Promise<T> {
-    const matrixBotService = new MatrixBotService(matrixAccessToken);
-    const protocol = await Entities.getEntityById(
-      settingsResourceParams.protocolDid,
-    );
-    if (!protocol) {
-      throw new Error(
-        'Protocol not found with did: ' + settingsResourceParams.protocolDid,
-      );
-    }
-    const settingsResource = protocol?.settings?.[settingsResourceParams.key];
-    if (!settingsResource) {
-      // try using old implementation
-      const linkedResource = Array.isArray(protocol?.linkedResource)
-        ? protocol?.linkedResource
-        : [];
-      const resource = (await getResourceFromIpfs(
-        linkedResource,
-        settingsResourceParams.key,
-      )) as T;
-      if (!resource) {
-        throw new Error(
-          `Settings resource not found for key ${settingsResourceParams.key}`,
-        );
-      }
-      return resource;
-    }
-    const roomId = await matrixBotService.getRoomIdFromAlias(protocol.id);
-    const matrixValue = await matrixBotService.get<T>(
-      roomId,
-      'resources',
-      settingsResource.proof,
-    );
-
-    return matrixValue as T;
-  }
-
-  static async getOraclePricingList(
-    oracleDid: string,
-    matrixAccessToken?: string,
-  ) {
-    const settingsResource = await this.getSettingsResource(
-      {
-        protocolDid: oracleDid,
-        key: 'pricingList',
-      },
-      matrixAccessToken,
-    );
-    const pricingList = OraclePricingListSchemaResponse.parse(settingsResource);
-    return pricingList;
+    return getSettingsResource<T>(settingsResourceParams, matrixAccessToken);
   }
 
   public async getEntityIdFromTx(txHash: string): Promise<string | undefined> {
@@ -178,23 +128,3 @@ export class Entities {
     return claimCollection.claimCollection;
   }
 }
-
-const getResourceFromIpfs = async (
-  linkedResource: LinkedResource[],
-  key: string,
-) => {
-  const resource = linkedResource.find(
-    (resource) => resource.description === key,
-  );
-  if (!resource) {
-    throw new Error('Resource not found');
-  }
-
-  if (resource.serviceEndpoint.includes('ipfs.w3s.link')) {
-    const response = await fetch(resource.serviceEndpoint);
-    const data = await response.json();
-    return data;
-  }
-
-  return resource.serviceEndpoint;
-};
