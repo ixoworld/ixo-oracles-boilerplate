@@ -35,17 +35,3 @@ export const GetSettingsResourceSchema = z
  * const decodedMessage = ixo.entity.v1beta1.MsgCreateEntity.decode(buffer); // decodedMessage is the same as messageValue and it's ready to be used to create an entity on the chain
  */
 export type CreateEntityParams = Uint8Array;
-
-export type TOraclePricingListSchemaResponse = z.infer<
-  typeof OraclePricingListSchemaResponse
->;
-export const OraclePricingListSchemaResponse = z.array(
-  z.object({
-    title: z.string(),
-    description: z.string(),
-    amount: z.object({
-      amount: z.string(),
-      denom: z.string(),
-    }),
-  }),
-);

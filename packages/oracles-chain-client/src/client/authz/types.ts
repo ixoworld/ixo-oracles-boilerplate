@@ -1,4 +1,4 @@
-import { EncodeObject } from '@cosmjs/proto-signing';
+import { Coin, EncodeObject } from '@cosmjs/proto-signing';
 import { DeliverTxResponse } from '@cosmjs/stargate';
 import { SubmitClaimAuthorization } from '@ixo/impactxclient-sdk/types/codegen/ixo/claims/v1beta1/authz.js';
 import { z } from 'zod';
@@ -151,9 +151,10 @@ export type GetOracleAuthZConfigParams = {
 
 export type GrantClaimSubmitAuthorizationParams = {
   claimCollectionId: string;
-  granterAddress: string;
-  granteeAddress: string;
+  accountAddress: string;
+  oracleAddress: string;
+  agentQuota: number;
   oracleName: string;
   adminAddress: string;
-  maxAmount?:number
+  maxAmount?: Coin[];
 };

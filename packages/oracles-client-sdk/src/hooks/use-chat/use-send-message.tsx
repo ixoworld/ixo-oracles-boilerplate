@@ -6,6 +6,7 @@ import {
 } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { useOraclesContext } from '../../providers/oracles-provider/oracles-context.js';
+import { RequestError } from '../../utils/request.js';
 import { useOraclesConfig } from '../use-oracles-config.js';
 import {
   type IMessage,
@@ -29,12 +30,14 @@ export function useSendMessage({
   oracleDid,
   sessionId,
   overrides,
+  onPaymentRequiredError,
 }: {
   oracleDid: string;
   sessionId: string;
   overrides?: {
     baseUrl?: string;
   };
+  onPaymentRequiredError: (claimIds: string[]) => void;
 }): IUseSendMessageReturn {
   const queryClient = useQueryClient();
   const [, forceUpdate] = useState<IMessage | null>(null);
@@ -94,15 +97,23 @@ export function useSendMessage({
       if (!wallet.matrix.accessToken) {
         throw new Error('Matrix access token is required');
       }
-      await askOracleStream({
-        apiURL: apiUrl,
-        did: wallet.did,
-        message,
-        matrixAccessToken: wallet.matrix.accessToken,
-        sessionId: sId,
+      try {
+        await askOracleStream({
+          apiURL: apiUrl,
+          did: wallet.did,
+          message,
+          matrixAccessToken: wallet.matrix.accessToken,
+          sessionId: sId,
 
-        cb: addAIResponse,
-      });
+          cb: addAIResponse,
+        });
+      } catch (err) {
+        if (RequestError.isRequestError(err) && err.claims) {
+          onPaymentRequiredError(err.claims as string[]);
+          return;
+        }
+        throw err;
+      }
     },
 
     async onMutate({ message, sId }: { message: string; sId: string }) {
@@ -188,7 +199,7 @@ const askOracleStream = async (props: {
 
   if (!response.ok) {
     const err = (await response.json()) as { message: string };
-    throw new Error(err.message);
+    throw new RequestError(err.message, err);
   }
   const requestId = response.headers.get('X-Request-Id');
   if (!requestId) {
