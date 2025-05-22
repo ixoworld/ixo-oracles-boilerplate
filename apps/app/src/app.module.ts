@@ -1,4 +1,5 @@
 import {
+  Logger,
   type MiddlewareConsumer,
   Module,
   type NestModule,
@@ -11,18 +12,34 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ChromaDbModule } from './chroma/chroma-db.module';
+import { EnvSchema } from './config';
 import { KnowledgeModule } from './knowledge/knowledge.module';
 import { MessagesModule } from './messages/messages.module';
 import { AuthHeaderMiddleware } from './middleware/auth-header.middleware';
 import { SessionsModule } from './sessions/sessions.module';
 import { SlackModule } from './slack/slack.module';
 import { SseModule } from './sse/sse.module';
+import { normalizeDid } from './utils/header.utils';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
-      isGlobal: true, // Make ConfigModule available globally
-      envFilePath: '.env', // Specify the .env file path
+      isGlobal: true,
+      validate: (config) => {
+        const result = EnvSchema.safeParse(config);
+        if (!result.success) {
+          // Log detailed errors
+          Logger.error('Environment variable validation failed:', result.error);
+          throw result.error;
+        }
+        const ORACLE_DID = normalizeDid(
+          result.data.MATRIX_ORACLE_ADMIN_USER_ID,
+        );
+        return {
+          ...result.data,
+          ORACLE_DID,
+        };
+      },
     }),
     ThrottlerModule.forRoot([
       {

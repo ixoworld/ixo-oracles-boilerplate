@@ -64,7 +64,7 @@ describe('Matrix Manager Integration Tests -- Rooms', () => {
   describe('Room Queries', () => {
     it('should retrieve room by ID and validate properties with both SDKs', async () => {
       // Get room using our SDK
-      const room = manager.getRoom(testRoom.roomId);
+      const room = await manager.getRoom(testRoom.roomId, testUser.accessToken);
       expect(room).toBeTruthy();
       expect(room?.roomId).toBe(testRoom.roomId);
 
@@ -127,7 +127,7 @@ describe('Matrix Manager Integration Tests -- Rooms', () => {
 
     it('should retrieve room ID by alias and validate with both SDKs', async () => {
       // Get room alias using our SDK
-      const room = manager.getRoom(testRoom.roomId);
+      const room = await manager.getRoom(testRoom.roomId, testUser.accessToken);
       const roomState = room
         ?.getLiveTimeline()
         .getState(sdk.EventTimeline.FORWARDS);
@@ -161,16 +161,16 @@ describe('Matrix Manager Integration Tests -- Rooms', () => {
       userClient.stopClient();
     });
 
-    it('should have a valid room configuration', () => {
-      const room = manager.getRoom(testRoom.roomId);
+    it('should have a valid room configuration', async () => {
+      const room = await manager.getRoom(testRoom.roomId, testUser.accessToken);
       expect(room).toBeTruthy();
       expect(room?.roomId).toBe(testRoom.roomId);
     });
   });
 
   describe('Matrix Room Configuration Tests', () => {
-    it('should configure room encryption correctly', () => {
-      const room = manager.getRoom(testRoom.roomId);
+    it('should configure room encryption correctly', async () => {
+      const room = await manager.getRoom(testRoom.roomId, testUser.accessToken);
       expect(room).toBeTruthy();
 
       const roomState = room
@@ -186,8 +186,8 @@ describe('Matrix Manager Integration Tests -- Rooms', () => {
       });
     });
 
-    it('should configure guest access correctly', () => {
-      const room = manager.getRoom(testRoom.roomId);
+    it('should configure guest access correctly', async () => {
+      const room = await manager.getRoom(testRoom.roomId, testUser.accessToken);
       expect(room).toBeTruthy();
 
       const roomState = room
@@ -203,8 +203,8 @@ describe('Matrix Manager Integration Tests -- Rooms', () => {
       });
     });
 
-    it('should configure history visibility correctly', () => {
-      const room = manager.getRoom(testRoom.roomId);
+    it('should configure history visibility correctly', async () => {
+      const room = await manager.getRoom(testRoom.roomId, testUser.accessToken);
       expect(room).toBeTruthy();
 
       const roomState = room
@@ -220,8 +220,8 @@ describe('Matrix Manager Integration Tests -- Rooms', () => {
       });
     });
 
-    it('should configure power levels correctly', () => {
-      const room = manager.getRoom(testRoom.roomId);
+    it('should configure power levels correctly', async () => {
+      const room = await manager.getRoom(testRoom.roomId, testUser.accessToken);
       expect(room).toBeTruthy();
 
       const roomState = room
@@ -252,8 +252,8 @@ describe('Matrix Manager Integration Tests -- Rooms', () => {
       }
     });
 
-    it('should set correct room name and topic', () => {
-      const room = manager.getRoom(testRoom.roomId);
+    it('should set correct room name and topic', async () => {
+      const room = await manager.getRoom(testRoom.roomId, testUser.accessToken);
       expect(room).toBeTruthy();
 
       const expectedName = MatrixManager.generateRoomNameFromDidAndOracle(
@@ -270,8 +270,8 @@ describe('Matrix Manager Integration Tests -- Rooms', () => {
       expect(topicEvent?.getContent().topic).toBe(expectedName);
     });
 
-    it('should set correct room visibility', () => {
-      const room = manager.getRoom(testRoom.roomId);
+    it('should set correct room visibility', async () => {
+      const room = await manager.getRoom(testRoom.roomId, testUser.accessToken);
       expect(room).toBeTruthy();
 
       const roomState = room
@@ -281,8 +281,8 @@ describe('Matrix Manager Integration Tests -- Rooms', () => {
       expect(joinRulesEvent?.getContent().join_rule).toBe('invite');
     });
 
-    it('should set correct room alias', () => {
-      const room = manager.getRoom(testRoom.roomId);
+    it('should set correct room alias', async () => {
+      const room = await manager.getRoom(testRoom.roomId, testUser.accessToken);
       expect(room).toBeTruthy();
 
       const expectedName = MatrixManager.generateRoomNameFromDidAndOracle(
@@ -305,8 +305,8 @@ describe('Matrix Manager Integration Tests -- Rooms', () => {
       expect(fullAlias).toContain(expectedAlias);
     });
 
-    it('should invite the correct user', () => {
-      const room = manager.getRoom(testRoom.roomId);
+    it('should invite the correct user', async () => {
+      const room = await manager.getRoom(testRoom.roomId, testUser.accessToken);
       expect(room).toBeTruthy();
 
       const roomState = room

@@ -16,6 +16,10 @@ export class CreateChatSessionDto extends UserAuthDto {
   @IsString()
   @IsNotEmpty()
   oracleName: string;
+
+  @IsString()
+  @IsNotEmpty()
+  oracleDid: string;
 }
 
 export class DeleteChatSessionDto extends UserAuthDto {
@@ -44,6 +48,10 @@ export class ChatSession {
   @IsString()
   @IsNotEmpty()
   oracleName: string;
+
+  @IsString()
+  @IsNotEmpty()
+  oracleDid: string;
 }
 
 export class ListChatSessionsResponseDto {

@@ -42,10 +42,14 @@ export class MessagesService {
       throw new BadRequestException('Invalid parameters');
     }
 
-    const roomId = await this.sessionManagerService.roomManager.getRoomId({
-      did,
-      oracleName: this.config.getOrThrow('ORACLE_NAME'),
-    });
+    const roomId = await this.sessionManagerService.roomManager.getOrCreateRoom(
+      {
+        did,
+        oracleName: this.config.getOrThrow('ORACLE_NAME'),
+        userAccessToken: matrixAccessToken,
+      },
+    );
+
     if (!roomId) {
       throw new NotFoundException('Room not found or Invalid Session Id');
     }
@@ -238,6 +242,7 @@ export class MessagesService {
       userAccessToken: accessToken,
       did,
       messages: messages.map((message) => message.content),
+      oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
     });
 
     const config: TCustomerSupportGraphState['config'] = {

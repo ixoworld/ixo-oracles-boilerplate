@@ -25,6 +25,7 @@ export class SessionsService {
         did: data.did,
         matrixAccessToken: data.matrixAccessToken,
         oracleName: this.configService.getOrThrow('ORACLE_NAME'),
+        oracleDid: this.configService.getOrThrow<string>('ORACLE_DID'),
       });
       return session;
     } catch (error) {
@@ -47,14 +48,18 @@ export class SessionsService {
         did: data.did,
       });
 
+      const oracleDid = this.configService.getOrThrow<string>('ORACLE_DID');
+
       // Sort sessions by lastUpdatedAt descending
-      const sortedSessions = sessionsResult.sessions.sort((a, b) => {
-        // Assuming lastUpdatedAt is a valid date string or Date object
-        return (
-          new Date(b.lastUpdatedAt).getTime() -
-          new Date(a.lastUpdatedAt).getTime()
-        );
-      });
+      const sortedSessions = sessionsResult.sessions
+        .filter((session) => session.oracleDid === oracleDid)
+        .sort((a, b) => {
+          // Assuming lastUpdatedAt is a valid date string or Date object
+          return (
+            new Date(b.lastUpdatedAt).getTime() -
+            new Date(a.lastUpdatedAt).getTime()
+          );
+        });
 
       return { sessions: sortedSessions };
     } catch (error) {

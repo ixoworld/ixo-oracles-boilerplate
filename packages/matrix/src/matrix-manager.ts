@@ -10,7 +10,6 @@ import {
   type IMessageOptions,
   type IRoomCreationOptions,
 } from './types/matrix';
-import createMatrixClient from './utils/create-matrix-client';
 import { createOracleAdminClient } from './utils/create-oracle-admin-client';
 import { formatMsg } from './utils/format-msg';
 import { syncMatrixState } from './utils/sync';
@@ -90,7 +89,24 @@ export class MatrixManager {
     return this.initializeClient(this.adminClient);
   }
 
-  public getRoom(roomId: string): sdk.Room | null {
+  public async getRoom(
+    roomId: string,
+    accessToken: string,
+  ): Promise<sdk.Room | null> {
+    if (!accessToken) {
+      throw new sdk.MatrixError({
+        error: 'Access token not found for getting room',
+      });
+    }
+    const room = await this.runMatrixCallOnUserClient(
+      accessToken,
+      async (client) => {
+        return client.getRoom(roomId);
+      },
+    );
+    return room;
+  }
+  public getOracleRoom(roomId: string): sdk.Room | null {
     if (!this.adminClient?.clientRunning) {
       throw new sdk.MatrixError({ error: 'Admin client not initialized' });
     }
@@ -197,12 +213,32 @@ export class MatrixManager {
     adminUserId: string,
   ): sdk.StateEvents['m.room.power_levels'] {
     return {
+      // 1. Grant your admin/bot a high level
+      users: {
+        [adminUserId]: ADMIN_POWER_LEVEL, // e.g. 100
+      },
+      users_default: 0, // everyone else starts at 0
+
+      // 2. Allow sending any message or state event (including your custom state type)
+      events: {
+        // standard overrides:
+        'm.room.name': ADMIN_POWER_LEVEL,
+        'm.room.power_levels': ADMIN_POWER_LEVEL,
+        // explicitly allow your custom state event:
+        'ixo.room.state/oracleSessions_sessions': 0,
+      },
+      events_default: 0, // 0 for ordinary messages
+      state_default: 0, // 0 for any state event
+
+      // 3. Set invite/kick/ban/redact to your ADMIN_POWER_LEVEL
+      invite: ADMIN_POWER_LEVEL, // match your ADMIN_POWER_LEVEL
       kick: ADMIN_POWER_LEVEL,
       ban: ADMIN_POWER_LEVEL,
-      invite: ADMIN_POWER_LEVEL,
       redact: ADMIN_POWER_LEVEL,
-      users: {
-        [adminUserId]: ADMIN_POWER_LEVEL,
+
+      // 4. (Optionally) push-rule notifications
+      notifications: {
+        room: ADMIN_POWER_LEVEL,
       },
     };
   }
@@ -313,12 +349,28 @@ export class MatrixManager {
     });
   }
 
-  private async runMatrixCallOnUserClient<T>(
+  public async runMatrixCallOnUserClient<T>(
     accessToken: string,
     fn: (client: sdk.MatrixClient) => Promise<T>,
+    withInit = true,
   ): Promise<T> {
     const loginResponse = await this.getLoginResponse(accessToken);
-    const client = await this.createAuthenticatedClient(loginResponse);
+    const client = sdk.createClient({
+      baseUrl: process.env.MATRIX_BASE_URL ?? '',
+      accessToken,
+      userId: loginResponse.user_id,
+      deviceId: loginResponse.device_id,
+      useAuthorizationHeader: true,
+    });
+    if (withInit) {
+      await client.startClient({
+        lazyLoadMembers: false,
+        initialSyncLimit: INITIAL_SYNC_LIMIT,
+        includeArchivedRooms: false,
+      });
+
+      await syncMatrixState(client);
+    }
 
     try {
       return await fn(client);
@@ -351,17 +403,6 @@ export class MatrixManager {
       access_token: accessToken,
       device_id: loginResponse.device_id,
     };
-  }
-
-  private async createAuthenticatedClient(
-    loginResponse: sdk.LoginResponse,
-  ): Promise<sdk.MatrixClient> {
-    return createMatrixClient({
-      baseUrl: process.env.MATRIX_BASE_URL ?? '',
-      accessToken: loginResponse.access_token,
-      userId: loginResponse.user_id,
-      deviceId: loginResponse.device_id,
-    });
   }
 
   private async initializeClient(client: sdk.MatrixClient): Promise<void> {

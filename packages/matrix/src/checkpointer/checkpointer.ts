@@ -89,7 +89,7 @@ export class MatrixCheckpointSaver<
       throw new Error('MatrixManager not initialized');
     }
     if (!checkpointId) {
-      const room = this.matrixManager.getRoom(roomId);
+      const room = this.matrixManager.getOracleRoom(roomId);
 
       if (!room) {
         throw new Error(`getCheckpoint: Room not found: ${roomId}`);
@@ -448,7 +448,7 @@ export class MatrixCheckpointSaver<
       throw new Error('MatrixManager not initialized');
     }
 
-    const room = this.matrixManager.getRoom(configs.matrix.roomId);
+    const room = this.matrixManager.getOracleRoom(configs.matrix.roomId);
     if (!room) {
       throw new Error('Room not found');
     }

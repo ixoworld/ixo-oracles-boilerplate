@@ -37,7 +37,7 @@ describe('Matrix Manager Integration Tests -- Messages', () => {
       Math.random().toString(36).substring(2, 15),
     );
     const { roomId } = await createRoomForUser(manager, testUser, 'guru');
-    const r = manager.getRoom(roomId);
+    const r = await manager.getRoom(roomId, testUser.accessToken);
     if (!r) {
       throw new Error('Room not found');
     }

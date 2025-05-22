@@ -9,6 +9,11 @@ export class RoomManagerService {
     return roomId;
   }
 
+  /**
+   * Get the room id for a given oracle name and did
+   * @param dto - The dto containing the oracle name and did
+   * @returns The room id
+   */
   public getRoomId(dto: GetRoomDto): Promise<string | undefined> {
     return this.matrixManger.getRoomId(dto);
   }
@@ -21,10 +26,10 @@ export class RoomManagerService {
     return this.createRoom(dto);
   }
 
-  public async getRoom(dto: GetRoomDto): Promise<Room | undefined> {
+  public async getRoom(dto: GetRoomDto): Promise<Room | undefined | null> {
     const roomId = await this.getRoomId(dto);
-    if (roomId) {
-      return this.matrixManger.getRoom(roomId) ?? undefined;
+    if (roomId && dto.userAccessToken) {
+      return this.matrixManger.getRoom(roomId, dto.userAccessToken);
     }
     return undefined;
   }
