@@ -1,5 +1,11 @@
 # @ixo/oracles-client-sdk
 
+## 0.1.14
+
+### Patch Changes
+
+- [#40](https://github.com/ixoworld/ixo-oracles-boilerplate/pull/40) [`78ddd3b`](https://github.com/ixoworld/ixo-oracles-boilerplate/commit/78ddd3b407dde28b7f6ca16c91ee7452f5491d73) Thanks [@youssefhany-ixo](https://github.com/youssefhany-ixo)! - enhance useChat and useOracleSessions hooks for improved performance and query handling
+
 ## 0.1.13
 
 ### Patch Changes
