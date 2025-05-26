@@ -24,10 +24,11 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
   const { data: authzConfig, isLoading: isLoadingAuthzConfig } = useQuery({
     queryKey: ['authz-config', params.oracleDid],
     queryFn: async () => {
-      return Authz.getOracleAuthZConfig({
+      const config = await Authz.getOracleAuthZConfig({
         oracleDid: params.oracleDid,
         granterAddress: wallet?.address ?? '',
       });
+      return config;
     },
     enabled: Boolean(wallet?.address),
   });

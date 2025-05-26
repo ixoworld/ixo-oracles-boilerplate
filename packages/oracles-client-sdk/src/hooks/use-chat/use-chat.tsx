@@ -46,7 +46,13 @@ export function useChat({
   const apiUrl = overridesUrl ?? baseUrl;
   const queryClient = useQueryClient();
 
-  const { isLoading, error, isRefetching, refetch } = useQuery({
+  const {
+    data: messagesMap,
+    isLoading,
+    error,
+    isRefetching,
+    refetch,
+  } = useQuery({
     queryKey: [oracleDid, 'messages', sessionId],
     queryFn: async () => {
       const result = await authedRequest<{
@@ -59,7 +65,14 @@ export function useChat({
       });
     },
     enabled: Boolean(sessionId),
+    retry: false,
   });
+
+  // Convert MessagesMap to array using useMemo for better performance
+  const messages = useMemo(() => {
+    if (!messagesMap) return [];
+    return Object.values(messagesMap);
+  }, [messagesMap]);
 
   const revalidate = useCallback(async () => {
     await refetch();
@@ -117,21 +130,18 @@ export function useChat({
         };
       },
     );
-  }, [events, isRefetching, queryClient, sessionId]);
-
-  const messagesState = queryClient.getQueryData<MessagesMap>([
-    oracleDid,
-    'messages',
+  }, [
+    events,
+    isRefetching,
+    queryClient,
     sessionId,
+    uiComponents,
+    oracleDid,
+    liveEventsError,
   ]);
 
-  const messagesList = useMemo(
-    () => Object.values(messagesState ?? {}),
-    [messagesState],
-  );
-
   return {
-    messages: messagesList,
+    messages,
     isLoading,
     error,
     isSending,
