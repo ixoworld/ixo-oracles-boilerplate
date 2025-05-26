@@ -156,7 +156,7 @@ export function useSendMessage({
           queryKey: [oracleDid, 'messages', sessionId],
         }),
         queryClient.invalidateQueries({
-          queryKey: ['oracle-sessions'],
+          queryKey: ['oracle-sessions', oracleDid],
         }),
       ]);
     },
