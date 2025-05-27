@@ -57,7 +57,7 @@ export const EnvSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
 
   SUBSCRIPTION_ORACLE_MCP_URL: z.string().url().optional(),
-  DATABASE_USE_SSL: z.coerce.boolean().default(false),
+  DATABASE_USE_SSL: z.string().default('false'),
 });
 
 export type ENV = z.infer<typeof EnvSchema> & {

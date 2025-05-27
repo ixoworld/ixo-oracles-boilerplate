@@ -28,7 +28,8 @@ import { KnowledgeService } from './knowledge.service';
             'postgres',
           ),
           port: configService.getOrThrow<number>('POSTGRES_PORT', 5432),
-          ...(configService.getOrThrow<string>('DATABASE_USE_SSL') && {
+          ...(configService.getOrThrow<string>('DATABASE_USE_SSL') ===
+            'true' && {
             ssl: { rejectUnauthorized: false },
           }),
         });

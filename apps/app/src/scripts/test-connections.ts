@@ -1,9 +1,16 @@
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import * as dotenv from 'dotenv';
+import * as path from 'node:path';
+
 import { Pool } from 'pg';
 
+dotenv.config({
+  path: path.join(__dirname, '../../.env'),
+});
+
 // Load environment variables
-const configService = new ConfigService();
+const configService = new ConfigService(process.env);
 /**
  * Script to test database connections
  * Run with: npx ts-node src/scripts/test-connections.ts
@@ -17,7 +24,7 @@ async function testPostgres(): Promise<boolean> {
     database: configService.getOrThrow<string>('POSTGRES_DB', 'knowledge'),
     password: configService.getOrThrow<string>('POSTGRES_PASSWORD', 'postgres'),
     port: configService.getOrThrow<number>('POSTGRES_PORT', 5432),
-    ...(configService.getOrThrow<string>('DATABASE_USE_SSL') && {
+    ...(configService.getOrThrow<string>('DATABASE_USE_SSL') === 'true' && {
       ssl: { rejectUnauthorized: false },
     }),
   });

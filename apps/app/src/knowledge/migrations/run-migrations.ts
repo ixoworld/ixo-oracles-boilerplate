@@ -1,10 +1,16 @@
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import * as dotenv from 'dotenv';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Pool } from 'pg';
 
-const configService = new ConfigService();
+dotenv.config({
+  path: path.join(__dirname, '../../../.env'),
+});
+
+const configService = new ConfigService(process.env);
+
 /**
  * Script to run knowledge module PostgreSQL migrations
  *
@@ -22,7 +28,7 @@ async function runMigrations() {
     database: configService.getOrThrow<string>('POSTGRES_DB', 'knowledge'),
     password: configService.getOrThrow<string>('POSTGRES_PASSWORD', 'postgres'),
     port: configService.getOrThrow<number>('POSTGRES_PORT', 5432),
-    ...(configService.getOrThrow<string>('DATABASE_USE_SSL') && {
+    ...(configService.getOrThrow<string>('DATABASE_USE_SSL') === 'true' && {
       ssl: { rejectUnauthorized: false },
     }),
   });
