@@ -1,4 +1,3 @@
-import { MatrixManager } from '@ixo/matrix';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
@@ -80,9 +79,6 @@ async function bootstrap(): Promise<void> {
     // customSiteTitle: 'API Documentation',
     swaggerUrl: '/docs/json',
   });
-
-  const matrixManager = MatrixManager.getInstance();
-  await matrixManager.init();
 
   await app.listen(port);
   Logger.log(`Application is running on: ${await app.getUrl()}`);

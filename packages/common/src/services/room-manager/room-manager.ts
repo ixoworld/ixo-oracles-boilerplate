@@ -2,10 +2,10 @@ import { MatrixManager, type Room } from '@ixo/matrix';
 import { type CreateRoomDto, type GetRoomDto } from './dto.js';
 
 export class RoomManagerService {
-  constructor(protected readonly matrixManger = MatrixManager.getInstance()) {}
+  constructor(protected readonly matrixManger: MatrixManager) {}
 
   public async createRoom(dto: CreateRoomDto): Promise<string> {
-    const roomId = await this.matrixManger.createRoomAndJoin(dto);
+    const roomId = await this.matrixManger.createRoom(dto);
     return roomId;
   }
 
@@ -28,8 +28,8 @@ export class RoomManagerService {
 
   public async getRoom(dto: GetRoomDto): Promise<Room | undefined | null> {
     const roomId = await this.getRoomId(dto);
-    if (roomId && dto.userAccessToken) {
-      return this.matrixManger.getRoom(roomId, dto.userAccessToken);
+    if (roomId) {
+      return this.matrixManger.getRoom(roomId);
     }
     return undefined;
   }

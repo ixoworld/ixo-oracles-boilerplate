@@ -1,10 +1,11 @@
 import {
+  SessionManagerService,
   type CreateChatSessionResponseDto,
   type ListChatSessionsResponseDto,
-  SessionManagerService,
 } from '@ixo/common'; // Assuming this path is correct
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { MatrixManagerRegistryService } from 'src/matrix-registry/matrix-manager-registry-service.service';
 import { type ENV } from 'src/types';
 import { type CreateSessionDto } from './dto/create-session.dto'; // Import DTO
 import { type DeleteSessionDto } from './dto/delete-session.dto'; // Import DTO
@@ -13,15 +14,29 @@ import { type ListSessionsDto } from './dto/list-sessions.dto'; // Import DTO
 @Injectable()
 export class SessionsService {
   constructor(
-    private readonly sessionManager: SessionManagerService,
     private readonly configService: ConfigService<ENV>,
+    private readonly matrixManagerRegistryService: MatrixManagerRegistryService,
   ) {}
+
+  private async getSessionManagerService(
+    matrixAccessToken: string,
+  ): Promise<SessionManagerService> {
+    const matrixManager =
+      await this.matrixManagerRegistryService.getManager(matrixAccessToken);
+
+    return new SessionManagerService(matrixManager);
+  }
 
   async createSession(
     data: CreateSessionDto,
   ): Promise<CreateChatSessionResponseDto> {
     try {
-      const session = await this.sessionManager.createSession({
+      //
+      const sessionManager = await this.getSessionManagerService(
+        data.matrixAccessToken,
+      );
+
+      const session = await sessionManager.createSession({
         did: data.did,
         matrixAccessToken: data.matrixAccessToken,
         oracleName: this.configService.getOrThrow('ORACLE_NAME'),
@@ -43,7 +58,11 @@ export class SessionsService {
     data: ListSessionsDto,
   ): Promise<ListChatSessionsResponseDto> {
     try {
-      const sessionsResult = await this.sessionManager.listSessions({
+      const sessionManager = await this.getSessionManagerService(
+        data.matrixAccessToken,
+      );
+
+      const sessionsResult = await sessionManager.listSessions({
         matrixAccessToken: data.matrixAccessToken,
         did: data.did,
       });
@@ -75,7 +94,11 @@ export class SessionsService {
 
   async deleteSession(data: DeleteSessionDto): Promise<{ message: string }> {
     try {
-      await this.sessionManager.deleteSession({
+      const sessionManager = await this.getSessionManagerService(
+        data.matrixAccessToken,
+      );
+
+      await sessionManager.deleteSession({
         matrixAccessToken: data.matrixAccessToken,
         did: data.did,
         sessionId: data.sessionId,

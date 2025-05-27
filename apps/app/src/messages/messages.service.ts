@@ -17,6 +17,7 @@ import { type Response } from 'express';
 import * as crypto from 'node:crypto';
 import { CustomerSupportGraph } from 'src/graph';
 import { type TCustomerSupportGraphState } from 'src/graph/state';
+import { MatrixManagerRegistryService } from 'src/matrix-registry/matrix-manager-registry-service.service';
 import { SseService } from 'src/sse/sse.service';
 import { type ENV } from 'src/types';
 import { StreamTagProcessor } from 'src/utils/thinking-filter-factory';
@@ -27,10 +28,20 @@ import { type SendMessagePayload } from './dto/send-message.dto';
 export class MessagesService {
   constructor(
     private readonly customerSupportGraph: CustomerSupportGraph,
-    private readonly sessionManagerService: SessionManagerService,
     private readonly config: ConfigService<ENV>,
     private readonly sseService: SseService,
+    private readonly matrixManagerRegistryService: MatrixManagerRegistryService,
   ) {}
+
+  private async getSessionManagerService(
+    matrixAccessToken: string,
+  ): Promise<SessionManagerService> {
+    const matrixManager =
+      await this.matrixManagerRegistryService.getManager(matrixAccessToken);
+
+    return new SessionManagerService(matrixManager);
+  }
+
   public async listMessages(
     params: ListMessagesDto & {
       did: string;
@@ -42,25 +53,19 @@ export class MessagesService {
       throw new BadRequestException('Invalid parameters');
     }
 
-    const roomId = await this.sessionManagerService.roomManager.getOrCreateRoom(
-      {
-        did,
-        oracleName: this.config.getOrThrow('ORACLE_NAME'),
-        userAccessToken: matrixAccessToken,
-      },
-    );
+    const sessionManagerService =
+      await this.getSessionManagerService(matrixAccessToken);
+
+    const roomId = await sessionManagerService.roomManager.getOrCreateRoom({
+      did,
+      oracleName: this.config.getOrThrow('ORACLE_NAME'),
+      userAccessToken: matrixAccessToken,
+    });
 
     if (!roomId) {
       throw new NotFoundException('Room not found or Invalid Session Id');
     }
-    const isUserInRoom =
-      await this.sessionManagerService.matrixManger.checkIsUserInRoom({
-        userAccessToken: matrixAccessToken,
-        roomId,
-      });
-    if (!isUserInRoom) {
-      throw new NotFoundException('User not in room');
-    }
+
     const state = await this.customerSupportGraph.getGraphState({
       sessionId,
       did,
@@ -217,13 +222,16 @@ export class MessagesService {
         ? (payload.requestId as string)
         : crypto.randomUUID();
 
+    const sessionManagerService =
+      await this.getSessionManagerService(accessToken);
+
     const [roomId, sessionsRoomId] = await Promise.all([
-      this.sessionManagerService.roomManager.getOrCreateRoom({
+      sessionManagerService.roomManager.getOrCreateRoom({
         did,
         oracleName: this.config.getOrThrow('ORACLE_NAME'),
         userAccessToken: accessToken,
       }),
-      this.sessionManagerService.roomManager.getOrCreateRoom({
+      sessionManagerService.roomManager.getOrCreateRoom({
         did,
         oracleName: ORACLE_SESSIONS_ROOM_NAME,
         userAccessToken: accessToken,
@@ -235,7 +243,7 @@ export class MessagesService {
       matrixAccessToken: accessToken,
       sessionId,
     });
-    await this.sessionManagerService.syncSessionSet({
+    await sessionManagerService.syncSessionSet({
       sessionId,
       roomId: sessionsRoomId,
       oracleName: this.config.getOrThrow('ORACLE_NAME'),

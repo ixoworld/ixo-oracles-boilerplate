@@ -1,3 +1,4 @@
+import { CacheModule } from '@nestjs/cache-manager';
 import {
   Logger,
   type MiddlewareConsumer,
@@ -14,6 +15,7 @@ import { AppService } from './app.service';
 import { ChromaDbModule } from './chroma/chroma-db.module';
 import { EnvSchema } from './config';
 import { KnowledgeModule } from './knowledge/knowledge.module';
+import { MatrixRegistryModule } from './matrix-registry/matrix-registry.module';
 import { MessagesModule } from './messages/messages.module';
 import { AuthHeaderMiddleware } from './middleware/auth-header.middleware';
 import { SessionsModule } from './sessions/sessions.module';
@@ -54,6 +56,12 @@ import { normalizeDid } from './utils/header.utils';
     SseModule,
     ScheduleModule.forRoot(),
     SlackModule,
+    CacheModule.register({
+      isGlobal: true,
+      ttl: 300, // default TTL (in seconds)  // 5 minutes
+      max: 1000, // max items in cache
+    }),
+    MatrixRegistryModule,
   ],
   controllers: [AppController],
   providers: [

@@ -1,8 +1,6 @@
 export interface IRoomCreationOptions {
   name: string;
   alias: string;
-  adminUserId: string;
-  inviteUserId: string;
 }
 
 export interface IMessageOptions {
@@ -12,8 +10,7 @@ export interface IMessageOptions {
   threadId?: string;
 }
 
-export interface ICreateRoomAndJoinOptions {
+export interface ICreateRoomOptions {
   did: string;
   oracleName: string;
-  userAccessToken: string;
 }

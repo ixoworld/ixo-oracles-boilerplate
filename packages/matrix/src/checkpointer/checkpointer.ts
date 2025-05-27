@@ -28,38 +28,31 @@ export class MatrixCheckpointSaver<
     IGraphStateWithRequiredFields = IGraphStateWithRequiredFields,
 > extends BaseCheckpointSaver {
   private matrixManager: MatrixManager | undefined;
-  public readonly oracleName: OraclesNamesOnMatrix;
 
-  constructor(oracleName: OraclesNamesOnMatrix, serde?: SerializerProtocol) {
+  constructor(
+    public readonly oracleName: OraclesNamesOnMatrix,
+    serde?: SerializerProtocol,
+  ) {
     super(serde);
-    this.oracleName = oracleName;
   }
 
-  private setupMatrixManager = async (
+  private async setupMatrixManager(
     matrixConfig: Pick<IMatrixManagerInitConfig, 'accessToken'> & {
       roomId: string;
     },
-  ): Promise<void> => {
-    if (this.matrixManager) {
-      return;
-    }
-    if (!matrixConfig.accessToken) {
-      throw new Error('Missing access token');
-    }
-    const matrixManager = MatrixManager.getInstance();
+  ): Promise<void> {
+    this.matrixManager = await MatrixManager.createInstance(
+      matrixConfig.accessToken,
+    );
+  }
 
-    await matrixManager.init();
-
-    this.matrixManager = matrixManager;
-  };
-
-  private getState = async ({
+  public async getState({
     stateKey,
     roomId,
   }: {
     stateKey: string;
     roomId: string;
-  }): Promise<ICheckpointRow<GraphState> | IWritesRow[] | undefined> => {
+  }): Promise<ICheckpointRow<GraphState> | IWritesRow[] | undefined> {
     try {
       if (!this.matrixManager?.stateManager) {
         throw new Error('MatrixManager not initialized');
@@ -72,7 +65,7 @@ export class MatrixCheckpointSaver<
     } catch (error) {
       return undefined;
     }
-  };
+  }
 
   private async getCheckpoint({
     threadId,
@@ -89,7 +82,7 @@ export class MatrixCheckpointSaver<
       throw new Error('MatrixManager not initialized');
     }
     if (!checkpointId) {
-      const room = this.matrixManager.getOracleRoom(roomId);
+      const room = this.matrixManager.getRoom(roomId);
 
       if (!room) {
         throw new Error(`getCheckpoint: Room not found: ${roomId}`);
@@ -141,7 +134,10 @@ export class MatrixCheckpointSaver<
       data: checkpoint,
     });
 
-    if (!process.env.SKIP_LOGGING_CHAT_HISTORY_TO_MATRIX) {
+    const shouldSendMessage =
+      process.env.SKIP_LOGGING_CHAT_HISTORY_TO_MATRIX === 'true';
+
+    if (!shouldSendMessage) {
       this.sendMessageToMatrixInBackground({ ...checkpoint }, roomId);
     }
   }
@@ -448,7 +444,7 @@ export class MatrixCheckpointSaver<
       throw new Error('MatrixManager not initialized');
     }
 
-    const room = this.matrixManager.getOracleRoom(configs.matrix.roomId);
+    const room = this.matrixManager.getRoom(configs.matrix.roomId);
     if (!room) {
       throw new Error('Room not found');
     }
@@ -588,5 +584,11 @@ export class MatrixCheckpointSaver<
         });
       }),
     );
+  }
+
+  async end(): Promise<void> {
+    if (this.matrixManager) {
+      this.matrixManager.killClient();
+    }
   }
 }

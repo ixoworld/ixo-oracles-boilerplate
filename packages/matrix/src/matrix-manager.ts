@@ -1,44 +1,132 @@
 import { Logger } from '@ixo/logger';
 import olm from '@matrix-org/olm';
 import * as sdk from 'matrix-js-sdk';
+import {
+  VerificationPhase,
+  VerificationRequestEvent,
+} from 'matrix-js-sdk/lib/crypto-api';
 import { logger } from 'matrix-js-sdk/lib/logger';
 import crypto from 'node:crypto';
-import { CrossSigningManager } from './crypto/cross-signign';
 import { MatrixStateManager } from './matrix-state-manager';
 import {
-  type ICreateRoomAndJoinOptions,
+  type ICreateRoomOptions,
   type IMessageOptions,
   type IRoomCreationOptions,
 } from './types/matrix';
-import { createOracleAdminClient } from './utils/create-oracle-admin-client';
+import createMatrixClient from './utils/create-matrix-client';
 import { formatMsg } from './utils/format-msg';
 import { syncMatrixState } from './utils/sync';
 
 // Constants
-const ADMIN_POWER_LEVEL = 9999;
 const INITIAL_SYNC_LIMIT = 1;
 
-logger.setLevel('ERROR');
-
-// olm is a global variable required by the matrix-js-sdk
+// Configure global Olm and SDK logging level
 global.Olm = olm;
+logger.setLevel(logger.levels.ERROR);
+
+// FinalizationRegistry fallback for orphaned managers
+const matrixRegistry = new FinalizationRegistry<sdk.MatrixClient>((client) => {
+  Logger.info('MatrixClient auto-cleaned by FinalizationRegistry');
+  cleanupClient(client);
+});
 
 export class MatrixManager {
-  private adminClient: sdk.MatrixClient | undefined;
   public stateManager: MatrixStateManager;
-  private static instance: MatrixManager | undefined;
-  private isInitialized = false;
+  private readonly idleTimeoutMs: number;
+  private idleTimeout?: NodeJS.Timeout;
+  private destroyed = false;
+  private readonly client: sdk.MatrixClient;
 
-  private constructor() {
-    // Private constructor to prevent direct instantiation
+  /**
+   * Private constructor: use createInstance()
+   */
+  private constructor(client: sdk.MatrixClient, idleTimeoutMs = 5 * 60_000) {
+    this.client = client;
+    this.idleTimeoutMs = idleTimeoutMs;
+    this.stateManager = new MatrixStateManager(client);
+    this.scheduleIdleCleanup();
   }
 
-  public static getInstance(): MatrixManager {
-    if (!MatrixManager.instance) {
-      MatrixManager.instance = new MatrixManager();
+  /**
+   * Factory to login, initialize, and register for GC cleanup
+   */
+  public static async createInstance(
+    userAccessToken: string,
+    idleTimeoutMs?: number,
+  ): Promise<MatrixManager> {
+    const loginResponse = await MatrixManager.getLoginResponse(userAccessToken);
+    const client = createMatrixClient({
+      baseUrl: process.env.MATRIX_BASE_URL ?? '',
+      accessToken: userAccessToken,
+      userId: loginResponse.user_id,
+      deviceId: loginResponse.device_id,
+      useAuthorizationHeader: true,
+    });
+
+    await MatrixManager.initializeClient(client);
+    const manager = new MatrixManager(client, idleTimeoutMs);
+    matrixRegistry.register(manager, client);
+    return manager;
+  }
+
+  /**
+   * Explicit teardown: idempotent, unregisters from GC registry
+   */
+  public killClient(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    matrixRegistry.unregister(this);
+    this.clearIdleCleanup();
+    Logger.info(`Killing MatrixClient for user ${this.client.getUserId()}`);
+    cleanupClient(this.client);
+  }
+
+  /**
+   * Guard for use-after-destroy & reset idle timer
+   */
+  private touch(): void {
+    if (this.destroyed) {
+      throw new Error('MatrixManager has been destroyed.');
     }
-    return MatrixManager.instance;
+    this.scheduleIdleCleanup();
   }
+
+  /**
+   * Schedule the idle-timeout cleanup
+   */
+  private scheduleIdleCleanup(): void {
+    const hadTimer = this.idleTimeout !== undefined;
+    this.clearIdleCleanup();
+    if (!hadTimer) {
+      Logger.info(
+        `Scheduling idle cleanup in ${this.idleTimeoutMs}ms for user ${this.client.getUserId()}`,
+      );
+    } else {
+      Logger.debug(
+        `Rescheduling idle cleanup in ${this.idleTimeoutMs}ms for user ${this.client.getUserId()}`,
+      );
+    }
+    this.idleTimeout = setTimeout(() => {
+      Logger.info(
+        `Idle timeout reached (${this.idleTimeoutMs}ms) for user ${this.client.getUserId()}, tearing down`,
+      );
+      this.killClient();
+    }, this.idleTimeoutMs);
+  }
+
+  /**
+   * Clear pending idle-timeout
+   */
+  private clearIdleCleanup(): void {
+    if (this.idleTimeout) {
+      clearTimeout(this.idleTimeout);
+      this.idleTimeout = undefined;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // Public API methods: each begins with touch()
+  // ─────────────────────────────────────────────────────────
 
   public async getRoomId({
     did,
@@ -47,6 +135,7 @@ export class MatrixManager {
     did: string;
     oracleName: string;
   }): Promise<string | undefined> {
+    this.touch();
     const roomName = MatrixManager.generateRoomNameFromDidAndOracle(
       did,
       oracleName,
@@ -56,119 +145,47 @@ export class MatrixManager {
     );
   }
 
-  async getRoomIdFromAlias(roomAlias: string): Promise<string | undefined> {
-    try {
-      const adminClient = this.adminClient ?? (await createOracleAdminClient());
-      const userId = adminClient.getUserId();
-      if (!userId) {
-        throw new sdk.MatrixError({ error: 'User ID not found' });
-      }
-      const [, domain, port] = userId.split(':');
-      let prefix = domain;
-      if (port) {
-        prefix += `:${port}`;
-      }
+  public isDestroyed(): boolean {
+    return this.destroyed;
+  }
 
-      const { room_id: roomId } = await adminClient.getRoomIdForAlias(
-        `#${roomAlias}:${prefix}`,
+  public async getRoomIdFromAlias(
+    roomAlias: string,
+  ): Promise<string | undefined> {
+    this.touch();
+    try {
+      const host = new URL(process.env.MATRIX_BASE_URL ?? '').host;
+      const { room_id: roomId } = await this.client.getRoomIdForAlias(
+        `#${roomAlias}:${host}`,
       );
       return roomId;
     } catch (error) {
       const err = error as sdk.MatrixError;
-      if (err.errcode === 'M_INVALID_PARAM') {
-        throw err;
-      }
+      if (err.errcode === 'M_INVALID_PARAM') throw err;
       return undefined;
     }
   }
 
-  public startAdminClient(): Promise<void> {
-    if (!this.adminClient) {
-      throw new sdk.MatrixError({ error: 'Admin client not initialized' });
-    }
-    return this.initializeClient(this.adminClient);
-  }
-
-  public async getRoom(
-    roomId: string,
-    accessToken: string,
-  ): Promise<sdk.Room | null> {
-    if (!accessToken) {
-      throw new sdk.MatrixError({
-        error: 'Access token not found for getting room',
-      });
-    }
-    const room = await this.runMatrixCallOnUserClient(
-      accessToken,
-      async (client) => {
-        return client.getRoom(roomId);
-      },
-    );
-    return room;
-  }
-  public getOracleRoom(roomId: string): sdk.Room | null {
-    if (!this.adminClient?.clientRunning) {
-      throw new sdk.MatrixError({ error: 'Admin client not initialized' });
-    }
-    return this.adminClient.getRoom(roomId);
+  public getRoom(roomId: string): sdk.Room | null {
+    this.touch();
+    return this.client.getRoom(roomId);
   }
 
   public async checkIsUserInRoom({
     roomId,
-    userAccessToken,
+    userId,
   }: {
     roomId: string;
-    userAccessToken: string;
+    userId: string;
   }): Promise<boolean> {
+    this.touch();
     try {
-      return await this.runMatrixCallOnUserClient(
-        userAccessToken,
-        async (client) => {
-          const members = await client.getJoinedRoomMembers(roomId);
-          const userId = client.getUserId();
-          if (!userId) {
-            throw new sdk.MatrixError({ error: 'User ID not found' });
-          }
-          return members.joined[userId] !== undefined;
-        },
-      );
+      const room = this.client.getRoom(roomId);
+      if (!room) return false;
+      return room.getJoinedMembers().some((m) => m.userId === userId);
     } catch (error) {
       Logger.error('Error checking user membership:', error);
       return false;
-    }
-  }
-  async stop(): Promise<void> {
-    try {
-      if (this.adminClient) {
-        cleanupClient(this.adminClient);
-        this.adminClient = undefined;
-      }
-
-      // Reset initialization state
-      this.isInitialized = false;
-    } catch (error) {
-      Logger.error('Error during stop:', error);
-      throw error;
-    }
-  }
-  async init(): Promise<void> {
-    if (this.isInitialized) {
-      return;
-    }
-    try {
-      this.adminClient = await createOracleAdminClient();
-      this.stateManager = new MatrixStateManager(this.adminClient);
-      await this.initializeClient(this.adminClient);
-      Logger.info('MatrixManager initialized');
-      this.isInitialized = true;
-    } catch (error) {
-      Logger.error('Error during initialization:', error);
-      throw new sdk.MatrixError({
-        error:
-          error instanceof Error
-            ? error.message
-            : 'unknown error happened during initialization',
-      });
     }
   }
 
@@ -187,59 +204,49 @@ export class MatrixManager {
     return `ixo-${id}`;
   }
 
+  public async createRoom(options: ICreateRoomOptions): Promise<string> {
+    this.touch();
+    try {
+      const name = MatrixManager.generateRoomNameFromDidAndOracle(
+        options.did,
+        options.oracleName,
+      );
+      const alias = MatrixManager.generateRoomAliasFromName(name);
+      return await this.createRoomWithConfig({ name, alias });
+    } catch (error) {
+      Logger.error('Error creating room:', error);
+      throw error;
+    }
+  }
+
   private async createRoomWithConfig(
     options: IRoomCreationOptions,
   ): Promise<string> {
-    if (!this.adminClient) {
-      throw new sdk.MatrixError({ error: 'Admin client not initialized' });
-    }
+    this.touch();
+    const userId = this.client.getUserId();
+    if (!userId) throw new sdk.MatrixError({ error: 'User ID not found' });
 
-    const results = await this.adminClient.createRoom({
+    const roomResponse = await this.client.createRoom({
       name: options.name,
       room_alias_name: options.alias,
       topic: options.name,
       visibility: sdk.Visibility.Private,
-      power_level_content_override: this.getRoomPowerLevels(
-        options.adminUserId,
-      ),
+      power_level_content_override: this.getRoomPowerLevels(userId),
       initial_state: this.getInitialRoomState(),
-      invite: [options.inviteUserId],
     });
-
-    return results.room_id;
+    return roomResponse.room_id;
   }
 
   private getRoomPowerLevels(
-    adminUserId: string,
+    userId: string,
   ): sdk.StateEvents['m.room.power_levels'] {
     return {
-      // 1. Grant your admin/bot a high level
-      users: {
-        [adminUserId]: ADMIN_POWER_LEVEL, // e.g. 100
-      },
-      users_default: 0, // everyone else starts at 0
-
-      // 2. Allow sending any message or state event (including your custom state type)
-      events: {
-        // standard overrides:
-        'm.room.name': ADMIN_POWER_LEVEL,
-        'm.room.power_levels': ADMIN_POWER_LEVEL,
-        // explicitly allow your custom state event:
-        'ixo.room.state/oracleSessions_sessions': 0,
-      },
-      events_default: 0, // 0 for ordinary messages
-      state_default: 0, // 0 for any state event
-
-      // 3. Set invite/kick/ban/redact to your ADMIN_POWER_LEVEL
-      invite: ADMIN_POWER_LEVEL, // match your ADMIN_POWER_LEVEL
-      kick: ADMIN_POWER_LEVEL,
-      ban: ADMIN_POWER_LEVEL,
-      redact: ADMIN_POWER_LEVEL,
-
-      // 4. (Optionally) push-rule notifications
-      notifications: {
-        room: ADMIN_POWER_LEVEL,
-      },
+      users: { [userId]: 999 },
+      users_default: 0,
+      invite: 999,
+      kick: 999,
+      ban: 999,
+      redact: 999,
     };
   }
 
@@ -248,86 +255,31 @@ export class MatrixManager {
       {
         type: sdk.EventType.RoomEncryption,
         state_key: '',
-        content: {
-          algorithm: 'm.megolm.v1.aes-sha2',
-        },
+        content: { algorithm: 'm.megolm.v1.aes-sha2' },
       } as sdk.ICreateRoomStateEvent,
       {
         type: sdk.EventType.RoomGuestAccess,
         state_key: '',
-        content: {
-          guest_access: sdk.GuestAccess.Forbidden,
-        } satisfies sdk.StateEvents['m.room.guest_access'],
+        content: { guest_access: sdk.GuestAccess.Forbidden },
       } as sdk.ICreateRoomStateEvent,
       {
         type: sdk.EventType.RoomHistoryVisibility,
         state_key: '',
-        content: {
-          history_visibility: sdk.HistoryVisibility.Shared,
-        } satisfies sdk.StateEvents['m.room.history_visibility'],
+        content: { history_visibility: sdk.HistoryVisibility.Shared },
       } as sdk.ICreateRoomStateEvent,
     ];
   }
 
-  async createRoomAndJoin(options: ICreateRoomAndJoinOptions): Promise<string> {
+  public async sendMessage(
+    options: IMessageOptions,
+  ): Promise<sdk.ISendEventResponse> {
+    this.touch();
     try {
-      if (!this.isInitialized || !this.adminClient) {
-        throw new sdk.MatrixError({
-          error: 'MatrixManager not initialized',
-        });
-      }
-
-      const adminUserId = this.adminClient.getUserId();
-      if (!adminUserId) {
-        throw new sdk.MatrixError({ error: 'Admin user ID not found' });
-      }
-
-      const res = await this.runMatrixCallOnUserClient(
-        options.userAccessToken,
-        async (client) => {
-          const userId = client.getUserId();
-          if (!userId) {
-            throw new sdk.MatrixError({ error: 'User ID not found' });
-          }
-
-          const roomName = MatrixManager.generateRoomNameFromDidAndOracle(
-            options.did,
-            options.oracleName,
-          );
-          const alias = MatrixManager.generateRoomAliasFromName(roomName);
-
-          const roomId = await this.createRoomWithConfig({
-            name: roomName,
-            alias,
-            adminUserId,
-            inviteUserId: userId,
-          });
-          await client.joinRoom(roomId);
-          return roomId;
-        },
-      );
-      return res;
-    } catch (error) {
-      Logger.error('Error creating room:', error);
-      throw error;
-    }
-  }
-
-  async sendMessage(options: IMessageOptions): Promise<sdk.ISendEventResponse> {
-    try {
-      if (!this.adminClient) {
-        throw new sdk.MatrixError({ error: 'Admin client not initialized' });
-      }
-
-      return await this.adminClient.sendMessage(options.roomId, {
+      return await this.client.sendMessage(options.roomId, {
         msgtype: sdk.MsgType.Text,
         body: formatMsg(options.message, Boolean(options.isOracleAdmin)),
         'm.relates_to': options.threadId
-          ? {
-              'm.in_reply_to': {
-                event_id: options.threadId,
-              },
-            }
+          ? { 'm.in_reply_to': { event_id: options.threadId } }
           : undefined,
       });
     } catch (error) {
@@ -336,7 +288,42 @@ export class MatrixManager {
     }
   }
 
-  async sendActionLog(
+  public async requestUserVerification(): Promise<void> {
+    const cryptoApi = this.client.getCrypto();
+    if (!cryptoApi) throw new sdk.MatrixError({ error: 'Crypto not found' });
+    // Listen for SAS display
+    const req = await cryptoApi.requestOwnUserVerification();
+    // Sends `m.key.verification.request` to the user’s other devices
+
+    req.on(VerificationRequestEvent.Change, () => {
+      (async () => {
+        // Step 2: once the request is acknowledged, send the “start” event
+        if (req.phase === VerificationPhase.Requested) {
+          await req.startVerification('m.sas.v1');
+        }
+
+        // Step 3: when SAS is ready, display & confirm
+        if (req.phase === VerificationPhase.Started && req.verifier) {
+          const sas = req.verifier.getShowSasCallbacks();
+          if (!sas) return;
+
+          Logger.info(
+            'SAS (emoji):',
+            sas.sas.emoji?.map((e) => e[0]).join(' '),
+          );
+          Logger.info('SAS (decimal):', sas.sas.decimal?.join(' • '));
+
+          await sas.confirm(); // sends the MAC
+          await req.verifier.verify(); // waits for final DONE
+          Logger.info('✅ Server device verified');
+        }
+      })().catch((err) => {
+        Logger.error('Verification flow failed:', err);
+      });
+    });
+  }
+
+  public async sendActionLog(
     roomId: string,
     action: string,
     threadId?: string,
@@ -349,81 +336,40 @@ export class MatrixManager {
     });
   }
 
-  public async runMatrixCallOnUserClient<T>(
-    accessToken: string,
-    fn: (client: sdk.MatrixClient) => Promise<T>,
-    withInit = true,
-  ): Promise<T> {
-    const loginResponse = await this.getLoginResponse(accessToken);
-    const client = sdk.createClient({
-      baseUrl: process.env.MATRIX_BASE_URL ?? '',
-      accessToken,
-      userId: loginResponse.user_id,
-      deviceId: loginResponse.device_id,
-      useAuthorizationHeader: true,
-    });
-    if (withInit) {
-      await client.startClient({
-        lazyLoadMembers: false,
-        initialSyncLimit: INITIAL_SYNC_LIMIT,
-        includeArchivedRooms: false,
-      });
-
-      await syncMatrixState(client);
-    }
-
-    try {
-      return await fn(client);
-    } catch (error) {
-      Logger.error('Error running matrix call on user client:', error);
-      throw error;
-    } finally {
-      cleanupClient(client);
-    }
-  }
-
-  public async getLoginResponse(
+  static async getLoginResponse(
     accessToken: string,
   ): Promise<sdk.LoginResponse> {
     const tempClient = sdk.createClient({
       baseUrl: process.env.MATRIX_BASE_URL ?? '',
       accessToken,
     });
-
-    const loginResponse = await tempClient.whoami();
-    if (!loginResponse.user_id || !loginResponse.device_id) {
-      throw new sdk.MatrixError({
-        error: 'Invalid access token: User ID or device ID not found',
-      });
-    }
-
+    const resp = await tempClient.whoami();
+    if (!resp.user_id || !resp.device_id)
+      throw new sdk.MatrixError({ error: 'Invalid access token' });
     cleanupClient(tempClient);
     return {
-      user_id: loginResponse.user_id,
+      user_id: resp.user_id,
       access_token: accessToken,
-      device_id: loginResponse.device_id,
+      device_id: resp.device_id,
     };
   }
 
-  private async initializeClient(client: sdk.MatrixClient): Promise<void> {
-    if (client.clientRunning) {
-      return;
-    }
-
-    await this.setupClientCrypto(client);
-    await this.startClientWithConfig(client);
-    await this.setupCrossSigning(client);
-    await this.finalizeClientSetup(client);
+  static async initializeClient(client: sdk.MatrixClient): Promise<void> {
+    if (client.clientRunning) return;
+    await MatrixManager.setupClientCrypto(client);
+    await MatrixManager.startClientWithConfig(client);
+    await MatrixManager.finalizeClientSetup(client);
   }
 
-  private async setupClientCrypto(client: sdk.MatrixClient): Promise<void> {
-    const userId = client.getUserId() ?? '';
-    Logger.info(`Filter for user ${userId}:`);
+  private static async setupClientCrypto(
+    client: sdk.MatrixClient,
+  ): Promise<void> {
     await client.initCrypto();
-    Logger.info(`Crypto initialized for user ${userId}`);
   }
 
-  private async startClientWithConfig(client: sdk.MatrixClient): Promise<void> {
+  private static async startClientWithConfig(
+    client: sdk.MatrixClient,
+  ): Promise<void> {
     await client.startClient({
       lazyLoadMembers: false,
       initialSyncLimit: INITIAL_SYNC_LIMIT,
@@ -432,41 +378,23 @@ export class MatrixManager {
     await syncMatrixState(client);
   }
 
-  private async setupCrossSigning(client: sdk.MatrixClient): Promise<void> {
-    if (!process.env.MATRIX_RECOVERY_PHRASE) {
-      throw new sdk.MatrixError({ error: 'Recovery phrase not found' });
-    }
-
-    const crossSigningManager = new CrossSigningManager(
-      client,
-      process.env.MATRIX_RECOVERY_PHRASE,
-    );
-    await crossSigningManager.ensureCrossSigningIsSetup();
-  }
-
-  private async finalizeClientSetup(client: sdk.MatrixClient): Promise<void> {
-    const userId = client.getUserId() ?? '';
-    const deviceId = client.getDeviceId() ?? '';
-
-    Logger.info(`Matrix client started for user ${userId}`);
+  private static async finalizeClientSetup(
+    client: sdk.MatrixClient,
+  ): Promise<void> {
+    const userId = client.getUserId();
+    if (!userId) throw new sdk.MatrixError({ error: 'User ID not found' });
+    const deviceId = client.getDeviceId();
+    if (!deviceId) throw new sdk.MatrixError({ error: 'Device ID not found' });
     await client.setDeviceVerified(userId, deviceId, true);
-
-    const cryptoApi = client.getCrypto();
-    if (!cryptoApi) {
-      throw new sdk.MatrixError({ error: 'Crypto API not found' });
-    }
-
     client.setGlobalErrorOnUnknownDevices(false);
   }
 }
 
+/**
+ * Cleanup helper: stops sync, removes listeners, aborts HTTP
+ */
 function cleanupClient(client: sdk.MatrixClient): void {
-  // Stop all ongoing syncs
   client.stopClient();
-
-  // Remove all listeners
   client.removeAllListeners();
-
-  // Close any open connections
   client.http.abort();
 }

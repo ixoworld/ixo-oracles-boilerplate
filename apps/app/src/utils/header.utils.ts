@@ -56,9 +56,8 @@ export function normalizeDid(input: string): string {
 
 const getLoginResponse = async (matrixAccessToken: string) => {
   try {
-    const matrixManager = MatrixManager.getInstance();
     const loginResponse =
-      await matrixManager.getLoginResponse(matrixAccessToken);
+      await MatrixManager.getLoginResponse(matrixAccessToken);
     return loginResponse;
   } catch (error) {
     if (error instanceof MatrixError) {

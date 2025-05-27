@@ -3,7 +3,7 @@ version: '3.8'
 services:
   postgres:
     image: postgres:14-alpine
-    container_name: ixo-knowledge-postgres
+    container_name: ixo-knowledge-postgres-dev
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
@@ -20,7 +20,7 @@ services:
       retries: 5
   chroma:
     image: chromadb/chroma:latest
-    container_name: ixo-knowledge-chroma
+    container_name: ixo-knowledge-chroma-dev
     restart: unless-stopped
     ports:
       - '8000:8000'
@@ -28,17 +28,17 @@ services:
       - chroma_data:/chroma/chroma
     environment:
       - CHROMA_PERSIST_DIRECTORY=/chroma/chroma
-  app:
-    image: api:latest # whatever image you built
-    ports:
-      - '3000:3000'
-    env_file:
-      - apps/app/.env
-    environment:
-      - CHROMA_URL=http://chroma:8000
-    depends_on:
-      - postgres
-      - chroma
+  # app:
+  #   image: api:latest # whatever image you built
+  #   ports:
+  #     - '3000:3000'
+  #   env_file:
+  #     - apps/app/.env
+  #   environment:
+  #     - CHROMA_URL=http://chroma:8000
+  #   depends_on:
+  #     - postgres
+  #     - chroma
 
 volumes:
   pg_data:

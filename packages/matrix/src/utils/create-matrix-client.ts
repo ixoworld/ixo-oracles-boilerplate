@@ -1,17 +1,29 @@
 import {
-  MemoryCryptoStore,
+  LocalStorageCryptoStore,
   MemoryStore,
   createClient,
   type ICreateClientOpts,
   type MatrixClient,
 } from 'matrix-js-sdk';
 import { logger } from 'matrix-js-sdk/lib/logger';
+import { LocalJsonStorage } from '../local-storage/local-storage';
 import {
   cacheSecretStorageKey,
   getSecretStorageKey,
 } from './secret-storage-keys';
 
 logger.setLevel('ERROR');
+
+const cryptoStore = new LocalStorageCryptoStore(
+  new LocalJsonStorage(
+    process.env.MATRIX_CRYPTO_STORE_PATH || './matrix-crypto-store-new',
+  ),
+);
+const store = new MemoryStore({
+  localStorage: new LocalJsonStorage(
+    process.env.MATRIX_STORE_PATH || './matrix-store-new',
+  ),
+});
 
 // const store = new LocalStorage('./scratch');
 
@@ -27,15 +39,14 @@ export default function createMatrixClient(
     useAuthorizationHeader: true,
   };
 
-  storeOpts.cryptoStore = new MemoryCryptoStore();
-  storeOpts.store = new MemoryStore({});
+  storeOpts.cryptoStore = cryptoStore;
+  storeOpts.store = store;
 
   return createClient({
     ...storeOpts,
     ...opts,
     verificationMethods: ['m.sas.v1'],
     timelineSupport: true,
-
     // cryptoCallbacks,
     cryptoCallbacks: {
       getSecretStorageKey,
