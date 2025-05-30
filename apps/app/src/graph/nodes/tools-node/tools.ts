@@ -48,17 +48,12 @@ const createIssueTicketTool = tool(
     priority?: 'Low' | 'Medium' | 'High';
   }) => {
     Logger.log(`Creating issue ticket: ${title}`);
-    if (
-      !process.env.SLACK_BOT_OAUTH_TOKEN ||
-      !process.env.SLACK_APP_LEVEL_TOKEN
-    ) {
-      throw new Error(
-        'SLACK_BOT_OAUTH_TOKEN or SLACK_APP_LEVEL_TOKEN is not set',
-      );
+    if (!process.env.SLACK_BOT_OAUTH_TOKEN || !process.env.SLACK_APP_TOKEN) {
+      throw new Error('SLACK_BOT_OAUTH_TOKEN or SLACK_APP_TOKEN is not set');
     }
     const slackService = await SlackService.createInstance(
       process.env.SLACK_BOT_OAUTH_TOKEN,
-      process.env.SLACK_APP_LEVEL_TOKEN,
+      process.env.SLACK_APP_TOKEN,
     );
     const message = await slackService.postMessage({
       channel: 'C07GC8GLWJH',

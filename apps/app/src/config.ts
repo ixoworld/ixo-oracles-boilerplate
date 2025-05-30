@@ -38,7 +38,10 @@ export const EnvSchema = z.object({
 
   // Slack
   SLACK_BOT_OAUTH_TOKEN: z.string().optional(),
-  SLACK_APP_LEVEL_TOKEN: z.string().optional(),
+  SLACK_APP_TOKEN: z.string().optional(),
+  SLACK_USE_SOCKET_MODE: z.string().default('true'),
+  SLACK_MAX_RECONNECT_ATTEMPTS: z.coerce.number().default(10),
+  SLACK_RECONNECT_DELAY_MS: z.coerce.number().default(1000),
 
   // Matrix
   MATRIX_BASE_URL: z.string(),
