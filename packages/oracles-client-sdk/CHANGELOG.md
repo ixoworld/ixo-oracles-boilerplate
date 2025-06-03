@@ -1,5 +1,11 @@
 # @ixo/oracles-client-sdk
 
+## 0.1.15
+
+### Patch Changes
+
+- [#42](https://github.com/ixoworld/ixo-oracles-boilerplate/pull/42) [`27ddf3b`](https://github.com/ixoworld/ixo-oracles-boilerplate/commit/27ddf3b04d70604f856a55f537599626266c54b6) Thanks [@youssefhany-ixo](https://github.com/youssefhany-ixo)! - support metadata in chat
+
 ## 0.1.14
 
 ### Patch Changes
