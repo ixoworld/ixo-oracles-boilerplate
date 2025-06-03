@@ -17,7 +17,7 @@ interface IUseSendMessageReturn {
   sendMessage: UseMutateAsyncFunction<
     void,
     Error,
-    { message: string; sId: string },
+    { message: string; sId: string; metadata?: Record<string, unknown> },
     {
       previousValue: unknown;
     }
@@ -84,7 +84,15 @@ export function useSendMessage({
   );
 
   const { mutateAsync, isPending, error } = useMutation({
-    mutationFn: async ({ message, sId }: { message: string; sId: string }) => {
+    mutationFn: async ({
+      message,
+      sId,
+      metadata,
+    }: {
+      message: string;
+      sId: string;
+      metadata?: Record<string, unknown>;
+    }) => {
       await queryClient.cancelQueries({
         queryKey: [oracleDid, 'messages', sId],
       });
@@ -104,7 +112,7 @@ export function useSendMessage({
           message,
           matrixAccessToken: wallet.matrix.accessToken,
           sessionId: sId,
-
+          metadata,
           cb: addAIResponse,
         });
       } catch (err) {
@@ -174,6 +182,7 @@ const askOracleStream = async (props: {
   message: string;
   sessionId: string;
   matrixAccessToken: string;
+  metadata?: Record<string, unknown>;
   cb: ({
     requestId,
     message,
@@ -192,6 +201,7 @@ const askOracleStream = async (props: {
     body: JSON.stringify({
       message: props.message,
       stream: true,
+      metadata: props.metadata,
     }),
     method: 'POST',
     signal: abortController.signal,
