@@ -3,29 +3,33 @@ import { IsArray, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 export class UserAuthDto {
   @IsString()
   @IsNotEmpty()
-  matrixAccessToken: string;
-
-  @IsString()
-  @IsNotEmpty()
   did: string;
 }
 
-export class ListChatSessionsDto extends UserAuthDto {}
+export class ListChatSessionsDto extends UserAuthDto {
+  @IsString()
+  @IsNotEmpty()
+  oracleDid: string;
+}
 
 export class CreateChatSessionDto extends UserAuthDto {
   @IsString()
   @IsNotEmpty()
-  oracleName: string;
+  oracleDid: string;
 
   @IsString()
   @IsNotEmpty()
-  oracleDid: string;
+  oracleName: string;
 }
 
 export class DeleteChatSessionDto extends UserAuthDto {
   @IsString()
   @IsNotEmpty()
   sessionId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  oracleDid: string;
 }
 
 export class ChatSession {

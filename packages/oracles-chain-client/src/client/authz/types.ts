@@ -56,9 +56,7 @@ export interface IAuthzConfig {
  * Provides runtime validation for authorization configuration.
  */
 export const AuthzConfigSchema = z.object({
-  requiredPermissions: z.array(z.string()).nonempty({
-    message: 'At least one permission must be specified',
-  }),
+  requiredPermissions: z.array(z.string()),
 
   granteeAddress: z.string().min(1, {
     message: 'Grantee address is required',
