@@ -1,6 +1,5 @@
 import {
   type ListOracleMessagesResponse,
-  ORACLE_SESSIONS_ROOM_NAME,
   SessionManagerService,
   transformGraphStateMessageToListMessageResponse,
 } from '@ixo/common';
@@ -42,31 +41,33 @@ export class MessagesService {
       throw new BadRequestException('Invalid parameters');
     }
 
-    const roomId = await this.sessionManagerService.roomManager.getOrCreateRoom(
-      {
-        did,
-        oracleName: this.config.getOrThrow('ORACLE_NAME'),
-        userAccessToken: matrixAccessToken,
-      },
-    );
+    const { roomId } =
+      await this.sessionManagerService.matrixManger.getOracleRoomId({
+        userDid: did,
+        oracleDid: this.config.getOrThrow('ORACLE_DID'),
+      });
 
     if (!roomId) {
       throw new NotFoundException('Room not found or Invalid Session Id');
     }
-    const isUserInRoom =
-      await this.sessionManagerService.matrixManger.checkIsUserInRoom({
-        userAccessToken: matrixAccessToken,
-        roomId,
-      });
-    if (!isUserInRoom) {
-      throw new NotFoundException('User not in room');
-    }
-    const state = await this.customerSupportGraph.getGraphState({
+
+    const config: IRunnableConfigWithRequiredFields & { sessionId: string } = {
+      configurable: {
+        thread_id: sessionId,
+        configs: {
+          matrix: {
+            accessToken: matrixAccessToken,
+            roomId,
+            oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
+          },
+          user: {
+            did,
+          },
+        },
+      },
       sessionId,
-      did,
-      matrixAccessToken,
-      roomId,
-    });
+    };
+    const state = await this.customerSupportGraph.getGraphState(config);
     if (!state || (state.config.did && state.config.did !== did)) {
       return transformGraphStateMessageToListMessageResponse([]);
     }
@@ -217,19 +218,14 @@ export class MessagesService {
         ? (payload.requestId as string)
         : crypto.randomUUID();
 
-    const [roomId, sessionsRoomId] = await Promise.all([
-      this.sessionManagerService.roomManager.getOrCreateRoom({
-        did,
-        oracleName: this.config.getOrThrow('ORACLE_NAME'),
-        userAccessToken: accessToken,
-      }),
-      this.sessionManagerService.roomManager.getOrCreateRoom({
-        did,
-        oracleName: ORACLE_SESSIONS_ROOM_NAME,
-        userAccessToken: accessToken,
-      }),
-    ]);
-
+    const { roomId } =
+      await this.sessionManagerService.matrixManger.getOracleRoomId({
+        userDid: did,
+        oracleDid: this.config.getOrThrow('ORACLE_DID'),
+      });
+    if (!roomId) {
+      throw new NotFoundException('Room not found or Invalid Session Id');
+    }
     const { messages } = await this.listMessages({
       did,
       matrixAccessToken: accessToken,
@@ -237,9 +233,7 @@ export class MessagesService {
     });
     await this.sessionManagerService.syncSessionSet({
       sessionId,
-      roomId: sessionsRoomId,
       oracleName: this.config.getOrThrow('ORACLE_NAME'),
-      userAccessToken: accessToken,
       did,
       messages: messages.map((message) => message.content),
       oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
@@ -261,6 +255,7 @@ export class MessagesService {
           matrix: {
             accessToken,
             roomId,
+            oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
           },
           user: {
             did,

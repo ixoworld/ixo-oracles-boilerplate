@@ -66,8 +66,9 @@ export class CrossSigningManager {
     // Setup secret storage first
     await cryptoApi.bootstrapSecretStorage({
       createSecretStorageKey: async () => recoveryKey,
-      setupNewSecretStorage: true,
-      setupNewKeyBackup: true,
+      setupNewSecretStorage: false,
+      setupNewKeyBackup: false,
+
     });
     Logger.info('Secret storage bootstrapped');
 

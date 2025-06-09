@@ -123,31 +123,10 @@ export class CustomerSupportGraph {
     return stream;
   }
 
-  public async getGraphState({
-    matrixAccessToken,
-    roomId,
-    sessionId,
-    did,
-  }: {
-    matrixAccessToken: string;
-    roomId: string;
-    sessionId: string;
-    did: string;
-  }): Promise<TCustomerSupportGraphState | undefined> {
-    const state = await this.graph.getState({
-      configurable: {
-        thread_id: sessionId,
-        configs: {
-          matrix: {
-            accessToken: matrixAccessToken,
-            roomId,
-          },
-          user: {
-            did,
-          },
-        },
-      },
-    });
+  public async getGraphState(
+    config: IRunnableConfigWithRequiredFields & { sessionId: string },
+  ): Promise<TCustomerSupportGraphState | undefined> {
+    const state = await this.graph.getState(config);
     if (Object.keys(state.values as TCustomerSupportGraphState).length === 0) {
       return undefined;
     }

@@ -23,7 +23,6 @@ export class SessionsService {
     try {
       const session = await this.sessionManager.createSession({
         did: data.did,
-        matrixAccessToken: data.matrixAccessToken,
         oracleName: this.configService.getOrThrow('ORACLE_NAME'),
         oracleDid: this.configService.getOrThrow<string>('ORACLE_DID'),
       });
@@ -44,8 +43,8 @@ export class SessionsService {
   ): Promise<ListChatSessionsResponseDto> {
     try {
       const sessionsResult = await this.sessionManager.listSessions({
-        matrixAccessToken: data.matrixAccessToken,
         did: data.did,
+        oracleDid: this.configService.getOrThrow('ORACLE_DID'),
       });
 
       const oracleDid = this.configService.getOrThrow<string>('ORACLE_DID');
@@ -76,9 +75,9 @@ export class SessionsService {
   async deleteSession(data: DeleteSessionDto): Promise<{ message: string }> {
     try {
       await this.sessionManager.deleteSession({
-        matrixAccessToken: data.matrixAccessToken,
         did: data.did,
         sessionId: data.sessionId,
+        oracleDid: this.configService.getOrThrow('ORACLE_DID'),
       });
       return { message: 'Session deleted successfully' };
     } catch (error) {
