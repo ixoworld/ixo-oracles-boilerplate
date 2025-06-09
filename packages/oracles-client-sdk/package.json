@@ -1,6 +1,6 @@
 {
   "name": "@ixo/oracles-client-sdk",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "type": "module",
   "private": false,
   "description": "Client SDK for interacting with IXO Oracles, designed for React applications",
