@@ -17,6 +17,7 @@ interface IRunnableConfigWithRequiredFields extends RunnableConfig {
     configs?: {
       matrix: Pick<IMatrixManagerInitConfig, 'accessToken'> & {
         roomId: string;
+        oracleDid: string;
       };
       user: {
         did: string;

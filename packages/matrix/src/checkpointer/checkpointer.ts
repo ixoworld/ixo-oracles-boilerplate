@@ -47,8 +47,9 @@ export class MatrixCheckpointSaver<
       throw new Error('Missing access token');
     }
     const matrixManager = MatrixManager.getInstance();
-
-    await matrixManager.init();
+    if (!matrixManager.getInitializationStatus().isInitialized) {
+      await matrixManager.init();
+    }
 
     this.matrixManager = matrixManager;
   };
@@ -56,9 +57,11 @@ export class MatrixCheckpointSaver<
   private getState = async ({
     stateKey,
     roomId,
+    oracleDid,
   }: {
     stateKey: string;
     roomId: string;
+    oracleDid: string;
   }): Promise<ICheckpointRow<GraphState> | IWritesRow[] | undefined> => {
     try {
       if (!this.matrixManager?.stateManager) {
@@ -67,7 +70,7 @@ export class MatrixCheckpointSaver<
 
       const state = await this.matrixManager.stateManager.getState<
         ICheckpointRow<GraphState> | IWritesRow[]
-      >(roomId, `${this.oracleName}_${stateKey}`);
+      >(roomId, `${oracleDid}_graph_${stateKey}`);
       return state;
     } catch (error) {
       return undefined;
@@ -79,11 +82,13 @@ export class MatrixCheckpointSaver<
     roomId,
     checkpointId,
     checkpointNamespace,
+    oracleDid,
   }: {
     threadId: string;
     roomId: string;
     checkpointId?: string;
     checkpointNamespace?: string;
+    oracleDid: string;
   }): Promise<ICheckpointRow<GraphState> | undefined> {
     if (!this.matrixManager) {
       throw new Error('MatrixManager not initialized');
@@ -97,6 +102,7 @@ export class MatrixCheckpointSaver<
 
       const latestCheckpointEvent = (await this.getState({
         roomId,
+        oracleDid,
         stateKey: `${threadId}_latest_checkpoint`,
       })) as ICheckpointRow<GraphState> | undefined;
 
@@ -107,6 +113,7 @@ export class MatrixCheckpointSaver<
     const checkpointState = (await this.getState({
       stateKey: checkpointStateKey,
       roomId,
+      oracleDid,
     })) as ICheckpointRow<GraphState>;
     return checkpointState;
   }
@@ -116,12 +123,14 @@ export class MatrixCheckpointSaver<
     checkpointId,
     checkpointNamespace,
     checkpoint,
+    oracleDid,
   }: {
     threadId: string;
     roomId: string;
     checkpointId: string;
     checkpointNamespace: string;
     checkpoint: ICheckpointRow<GraphState>;
+    oracleDid: string;
   }): Promise<void> {
     const checkpointStateKey = `${threadId}_${checkpointNamespace}_${checkpointId}`;
     if (!this.matrixManager?.stateManager) {
@@ -129,7 +138,7 @@ export class MatrixCheckpointSaver<
     }
     await this.matrixManager.stateManager.setState<ICheckpointRow<GraphState>>({
       roomId,
-      stateKey: `${this.oracleName}_${checkpointStateKey}`,
+      stateKey: `${oracleDid}_graph_${checkpointStateKey}`,
       data: checkpoint,
     });
 
@@ -137,7 +146,7 @@ export class MatrixCheckpointSaver<
     const latestCheckpointStateKey = `${threadId}_latest_checkpoint`;
     await this.matrixManager.stateManager.setState<ICheckpointRow<GraphState>>({
       roomId,
-      stateKey: `${this.oracleName}_${latestCheckpointStateKey}`,
+      stateKey: `${oracleDid}_graph_${latestCheckpointStateKey}`,
       data: checkpoint,
     });
 
@@ -151,16 +160,19 @@ export class MatrixCheckpointSaver<
     roomId,
     checkpointId,
     checkpointNamespace,
+    oracleDid,
   }: {
     threadId: string;
     roomId: string;
     checkpointId?: string;
     checkpointNamespace?: string;
+    oracleDid: string;
   }): Promise<IWritesRow[] | undefined> {
     const checkpointStateKey = `${threadId}_${checkpointNamespace}_${checkpointId}_w`;
     const writes = (await this.getState({
       roomId,
       stateKey: checkpointStateKey,
+      oracleDid,
     })) as IWritesRow[];
     return writes;
   }
@@ -171,12 +183,14 @@ export class MatrixCheckpointSaver<
     checkpointId,
     checkpointNamespace,
     writes,
+    oracleDid,
   }: {
     threadId: string;
     roomId: string;
     checkpointId: string;
     checkpointNamespace: string;
     writes: IWritesRow[];
+    oracleDid: string;
   }): Promise<void> {
     const checkpointStateKey = `${threadId}_${checkpointNamespace}_${checkpointId}_w`;
     if (!this.matrixManager?.stateManager) {
@@ -188,10 +202,11 @@ export class MatrixCheckpointSaver<
         roomId,
         checkpointId,
         checkpointNamespace,
+        oracleDid,
       })) ?? [];
     await this.matrixManager.stateManager.setState<IWritesRow[]>({
       roomId,
-      stateKey: `${this.oracleName}_${checkpointStateKey}`,
+      stateKey: `${oracleDid}_graph_${checkpointStateKey}`,
       data: [...writes, ...oldWrites],
     });
   }
@@ -257,6 +272,7 @@ export class MatrixCheckpointSaver<
         checkpointNamespace: checkpointValue.checkpoint_ns ?? '',
         roomId: matrix.roomId,
         threadId,
+        oracleDid: matrix.oracleDid,
       });
     } else if (writesValue) {
       await this.saveWrites({
@@ -265,6 +281,7 @@ export class MatrixCheckpointSaver<
         roomId: matrix.roomId,
         threadId,
         writes: [writesValue],
+        oracleDid: matrix.oracleDid,
       });
     } else {
       throw new Error('Missing value');
@@ -301,6 +318,7 @@ export class MatrixCheckpointSaver<
         threadId,
         checkpointId,
         checkpointNamespace,
+        oracleDid: matrix.oracleDid,
       });
       if (!checkpointRow) return undefined;
       const checkpoint = (await this.serde.loadsTyped(
@@ -332,6 +350,7 @@ export class MatrixCheckpointSaver<
       threadId,
       checkpointId,
       checkpointNamespace,
+      oracleDid: matrix.oracleDid,
     });
     if (!writesRows)
       return [] as unknown as T extends 'checkpoints'

@@ -43,23 +43,16 @@ export const request = async <T>(
 
     // Handle error responses
     if (!response.ok) {
-      try {
-        const errorData = (await response.json()) as {
-          error: string;
-          message: string;
-          statusCode: number;
-        };
-        throw new RequestError(errorData.message, {
-          status: errorData.statusCode,
-          error: errorData.error,
-          message: errorData.message,
-        });
-      } catch (error) {
-        const errorData = await response.text();
-        throw new Error(
-          `Request failed with status ${response.status}: ${errorData}`,
-        );
-      }
+      const errorData = (await response.json()) as {
+        error: string;
+        message: string;
+        statusCode: number;
+      };
+      throw new RequestError(errorData.message, {
+        status: errorData.statusCode,
+        error: errorData.error,
+        message: errorData.message,
+      });
     }
 
     // Parse and return JSON

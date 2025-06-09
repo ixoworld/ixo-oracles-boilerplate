@@ -21,21 +21,11 @@ export class MatrixStateManager {
     }
   }
 
-  private validateStateKey(stateKey: string): void {
-    const stateKeyRegex = /^(?<oracleName>[a-zA-Z]+)_(?<key>.+)$/;
-    const stateKeyMatch = stateKeyRegex.exec(stateKey);
-    if (!stateKeyMatch) {
-      Logger.error(`Invalid state key: ${stateKey}`);
-      throw new Error(`Invalid state key: ${stateKey}`);
-    }
-  }
-
   async getState<C>(
     roomId: string,
     stateKey: `${OraclesNamesOnMatrix}_${string}`,
   ): Promise<C> {
     this.validateRoom(roomId);
-    this.validateStateKey(stateKey);
 
     const stateEvent = await this.client.getStateEvent(
       roomId,

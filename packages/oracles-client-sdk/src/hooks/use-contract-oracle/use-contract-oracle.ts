@@ -1,5 +1,7 @@
 import { Authz, Payments } from '@ixo/oracles-chain-client/react';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
+import MatrixClient from '../../matrix/matrix-client.js';
 import { useOraclesContext } from '../../providers/oracles-provider/oracles-context.js';
 
 const payments = new Payments();
@@ -20,6 +22,13 @@ interface IUseContractOracleProps {
 
 const useContractOracle = ({ params }: IUseContractOracleProps) => {
   const { wallet, transactSignX } = useOraclesContext();
+  const matrixClientRef = useMemo(
+    () =>
+      new MatrixClient({
+        userAccessToken: wallet?.matrix.accessToken ?? '',
+      }),
+    [wallet?.matrix.accessToken],
+  );
 
   const { data: authzConfig, isLoading: isLoadingAuthzConfig } = useQuery({
     queryKey: ['authz-config', params.oracleDid],
@@ -59,13 +68,31 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
         }
 
         const authz = new Authz(config);
+
+        if (!wallet?.did || !wallet.matrix.accessToken) {
+          throw new Error('Wallet or matrix access token not found');
+        }
+
+        const mainSpaceId = await matrixClientRef.sourceMainSpace({
+          userDID: wallet.did,
+        });
+
+        await matrixClientRef.joinSpaceOrRoom({
+          roomId: mainSpaceId,
+        });
+
+        await matrixClientRef.createAndJoinOracleRoom({
+          oracleDID: `did:ixo:${config.granteeAddress}`,
+          userDID: wallet.did,
+        });
+
         return authz.contractOracle(
           {
             adminAddress: params.adminAddress,
             claimCollectionId: params.userClaimCollectionId,
             oracleAddress: config.granteeAddress,
             oracleName: config.oracleName,
-            accountAddress: wallet?.address ?? '',
+            accountAddress: wallet.address ?? '',
             agentQuota: params.agentQuota ?? 1,
             maxAmount: params.maxAmount
               ? [
