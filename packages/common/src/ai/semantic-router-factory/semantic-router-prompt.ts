@@ -157,8 +157,12 @@ export const semanticRouterPrompt = `You are semantic router responsible for det
 YOUR MISSION IS TO RESOLVE THE ROUTE BASED ON THE STATE PROVIDED. GOOD LUCK!
 
 - **Routes:**
- {routes}
+\`\`\`yaml
+{routes}
+\`\`\`
 
 - **State:**
- {state}
+\`\`\`yaml
+{state}
+\`\`\`
 `;

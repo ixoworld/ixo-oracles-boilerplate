@@ -64,7 +64,7 @@ export class MatrixStateManager {
     }
   }
 
-  async updateState<C>(payload: IStatePayload<C>): Promise<void> {
+  async updateState<C>(payload: IStatePayload<C>): Promise<C> {
     let oldState: C | undefined;
     try {
       oldState = await this.getState<C>(payload.roomId, payload.stateKey);
@@ -78,6 +78,8 @@ export class MatrixStateManager {
       ...payload,
       data: newState,
     });
+
+    return newState;
   }
 
   async listStateEvents<D>(room: sdk.Room): Promise<D[]> {
