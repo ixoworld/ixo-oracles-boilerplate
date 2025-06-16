@@ -18,7 +18,7 @@
     "clean": "rm -rf dist node_modules"
   },
   "dependencies": {
-    "@ixo/oracles-chain-client": "file:../oracles-chain-client",
+    "@ixo/oracles-chain-client": "workspace:*",
     "@tanstack/react-query": "^5.29.0",
     "eventsource": "^3.0.6",
     "socket.io-client": "^4.8.1",
