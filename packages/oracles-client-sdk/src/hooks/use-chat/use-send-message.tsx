@@ -45,7 +45,6 @@ export function useSendMessage({
 }): IUseSendMessageReturn {
   const queryClient = useQueryClient();
   const abortControllerRef = useRef<AbortController>();
-  const [_, forceUpdate] = useState(0);
   const { config } = useOraclesConfig(oracleDid);
   const { apiUrl: baseUrl } = config;
   const { baseUrl: overridesUrl } = overrides ?? {};

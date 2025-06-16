@@ -1,3 +1,4 @@
+import { type AllEvents } from '@ixo/oracles-events/types';
 import { useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { useOraclesContext } from '../../providers/oracles-provider/oracles-context.js';
@@ -74,6 +75,17 @@ export function useWebSocketEvents(
       setError(err);
       setLastActivity(new Date().toISOString());
     });
+
+    const handleEvent = (event: AllEvents) => {
+      setEvents((prev) => [...prev, event]);
+    };
+
+    newSocket.on(evNames.ToolCall, handleEvent);
+    newSocket.on(evNames.RenderComponent, handleEvent);
+    newSocket.on(
+      evNames.MessageCacheInvalidation,
+      handleInvalidateCacheRef.current ?? (() => {}),
+    );
 
     if (props.browserTools && Object.keys(props.browserTools).length > 0) {
       // Listen for browser tool calls

@@ -13,7 +13,7 @@ export const evNames = {
   RenderComponent: 'render_component',
   MessageCacheInvalidation: 'message_cache_invalidation',
   RouterUpdate: 'router_update',
-} satisfies EventNames;
+} satisfies Partial<EventNames>;
 
 export type Event<T = Record<string, any>> = {
   eventName: string;
