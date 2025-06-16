@@ -18,6 +18,7 @@ export const intentRouter = async (
   state: TCustomerSupportGraphState,
   _RunnableConfig?: RunnableConfig,
 ): Promise<GraphNodes> => {
+  return GraphNodes.Chat;
   const simplifiedState = {
     messages: state.messages.reduce<{ sender: string; content: string }[]>(
       (acc, message) => {

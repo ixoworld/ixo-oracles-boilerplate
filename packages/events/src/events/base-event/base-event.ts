@@ -1,8 +1,8 @@
 import { Logger } from '@ixo/logger';
-import { type Socket } from 'socket.io';
+import { type DefaultEventsMap, type Server } from 'socket.io';
 import { rootEventEmitter } from '../../root-event-emitter/root-event-emitter';
 
-export const shouldHaveConnectionId = <P>(
+export const shouldHaveSessionId = <P>(
   payload: P,
 ): WithRequiredEventProps<P> => {
   if (!payload) {
@@ -16,8 +16,8 @@ export const shouldHaveConnectionId = <P>(
     );
   }
 
-  if (!('connectionId' in payload)) {
-    throw new TypeError('Payload must include a connectionId property.');
+  if (!('sessionId' in payload)) {
+    throw new TypeError('Payload must include a sessionId property.');
   }
 
   return payload as WithRequiredEventProps<P>;
@@ -48,20 +48,22 @@ export abstract class BaseEvent<P> {
 
   /**
    * Register event handlers for this event
-   *  @param socket - The socket to register the event handlers on
+   *  @param server - The server to register the event handlers on
    *  @returns void
    *
-   * This method registers event handlers for this event on the provided socket.
+   * This method registers event handlers for this event on the provided server.
    * When the event is emitted, the event handlers will be called with the provided data. and the data will be sent to WS client with the provided sessionId.
    */
-  static registerEventHandlers(socket: Socket): void {
+  static registerEventHandlers(
+    server: Server<DefaultEventsMap, DefaultEventsMap>,
+  ): void {
     rootEventEmitter.on(this.eventName, (data) => {
-      const payload = shouldHaveConnectionId(data);
+      const payload = shouldHaveSessionId(data);
       Logger.info(
         `Emitting WS event: ${this.eventName} with payload:`,
         payload,
       );
-      socket.to(payload.connectionId).emit(this.eventName, data);
+      server.to(payload.sessionId).emit(this.eventName, data);
     });
   }
 
@@ -77,8 +79,8 @@ export abstract class BaseEvent<P> {
     if (!this.eventName) {
       throw new Error('Event name must be provided.');
     }
-    if (!this.payload.connectionId) {
-      throw new Error('Connection ID must be provided.');
+    if (!this.payload.sessionId) {
+      throw new Error('Session ID must be provided.');
     }
     Logger.info(
       `Emitting event: ${this.eventName} with payload:`,
@@ -89,8 +91,6 @@ export abstract class BaseEvent<P> {
 }
 
 export type WithRequiredEventProps<P> = P & {
-  readonly connectionId: string;
-
   /**
    * The session ID associated with the chat
    * Each chat conversation has a unique session ID

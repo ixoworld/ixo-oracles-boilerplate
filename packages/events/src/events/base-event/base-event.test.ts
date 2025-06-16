@@ -1,9 +1,9 @@
 import { Logger } from '@ixo/logger';
-import { type Socket } from 'socket.io';
+import { Server } from 'socket.io';
 import { rootEventEmitter } from '../../root-event-emitter/root-event-emitter';
 import {
   BaseEvent,
-  shouldHaveConnectionId,
+  shouldHaveSessionId,
   type WithRequiredEventProps,
 } from './base-event';
 
@@ -25,7 +25,6 @@ describe('BaseEvent', () => {
     expect(
       () =>
         new TestEvent({
-          connectionId: '123',
           sessionId: '456',
           requestId: '789',
         }),
@@ -47,7 +46,6 @@ describe('BaseEvent', () => {
     expect(
       () =>
         new InvalidEvent({
-          connectionId: '123',
           sessionId: '456',
           requestId: '789',
         }),
@@ -57,7 +55,7 @@ describe('BaseEvent', () => {
   });
 
   it('should emit an event with the correct payload', () => {
-    const payload = { connectionId: '123', sessionId: '456', requestId: '789' };
+    const payload = { sessionId: '456', requestId: '789' };
     const event = new TestEvent(payload);
     const emitSpy = jest.spyOn(rootEventEmitter, 'emit');
     event.emit();
@@ -65,47 +63,47 @@ describe('BaseEvent', () => {
   });
 
   it('should register event handlers correctly', () => {
-    const payload = { connectionId: '123', sessionId: '456', requestId: '789' };
-    const socket = {
+    const payload = { sessionId: '456', requestId: '789' };
+    const server = {
       to: jest.fn().mockReturnThis(),
       emit: jest.fn(),
-    } as unknown as Socket;
+    } as unknown as Server;
     const logSpy = jest.spyOn(Logger, 'info');
-    TestEvent.registerEventHandlers(socket);
+    TestEvent.registerEventHandlers(server);
     rootEventEmitter.emit(TestEvent.eventName, payload);
     expect(logSpy).toHaveBeenCalled();
-    expect(socket.to).toHaveBeenCalledWith(payload.connectionId);
-    expect(socket.emit).toHaveBeenCalledWith(TestEvent.eventName, payload);
+    expect(server.to).toHaveBeenCalledWith(payload.sessionId);
+    expect(server.emit).toHaveBeenCalledWith(TestEvent.eventName, payload);
   });
 });
 
-describe('shouldHaveConnectionId', () => {
+describe('shouldHaveSessionId', () => {
   it('should throw an error if payload is null or undefined', () => {
-    expect(() => shouldHaveConnectionId(null)).toThrow(
+    expect(() => shouldHaveSessionId(null)).toThrow(
       'Payload must be provided and cannot be null or undefined.',
     );
-    expect(() => shouldHaveConnectionId(undefined)).toThrow(
+    expect(() => shouldHaveSessionId(undefined)).toThrow(
       'Payload must be provided and cannot be null or undefined.',
     );
   });
 
   it('should throw an error if payload is not an object', () => {
-    expect(() => shouldHaveConnectionId(123)).toThrow(
+    expect(() => shouldHaveSessionId(123)).toThrow(
       'Payload must be an object. Received: number',
     );
-    expect(() => shouldHaveConnectionId('string')).toThrow(
+    expect(() => shouldHaveSessionId('string')).toThrow(
       'Payload must be an object. Received: string',
     );
   });
 
-  it('should throw an error if payload does not include connectionId', () => {
-    expect(() => shouldHaveConnectionId({})).toThrow(
-      'Payload must include a connectionId property.',
+  it('should throw an error if payload does not include sessionId', () => {
+    expect(() => shouldHaveSessionId({})).toThrow(
+      'Payload must include a sessionId property.',
     );
   });
 
   it('should return the payload if it includes connectionId', () => {
     const payload = { connectionId: '123', sessionId: '456', requestId: '789' };
-    expect(shouldHaveConnectionId(payload)).toBe(payload);
+    expect(shouldHaveSessionId(payload)).toBe(payload);
   });
 });

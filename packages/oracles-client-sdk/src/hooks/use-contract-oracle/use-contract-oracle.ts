@@ -103,8 +103,8 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
                 ]
               : [
                   {
-                    amount: pricingList?.[0]?.amount.amount ?? '0',
-                    denom: pricingList?.[0]?.amount.denom ?? 'uixo',
+                    amount: pricingList?.[0]?.amount ?? '0',
+                    denom: pricingList?.[0]?.denom ?? 'uixo',
                   },
                 ],
           },

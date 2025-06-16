@@ -8,6 +8,7 @@ import { type IterableReadableStream } from '@langchain/core/utils/stream';
 import { END, START, StateGraph } from '@langchain/langgraph';
 import 'dotenv/config';
 import CallbackHandler from 'langfuse-langchain';
+import { type BrowserToolCallDto } from 'src/messages/dto/send-message.dto';
 import { chatNode } from './chat-node/chat-node';
 import { agentWithChainOfThoughtsNode } from './nodes/agent-with-chain-of-thoughts/agent-with-chain-of-thoughts';
 import { evaluationNode } from './nodes/evaluation-node/evaluation-node';
@@ -42,12 +43,19 @@ const workflow = new StateGraph(CustomerSupportGraphState)
   // Routes
   .addConditionalEdges(START, intentRouter)
 
-  .addConditionalEdges(GraphNodes.AgentWithChainOfThoughts, toolsChatRouter, {
+  // .addConditionalEdges(GraphNodes.AgentWithChainOfThoughts, toolsChatRouter, {
+  //   [GraphNodes.Tools]: GraphNodes.Tools,
+  //   [GraphNodes.Evaluation]: GraphNodes.Evaluation,
+  //   [END]: END,
+  // })
+  // .addEdge(GraphNodes.Tools, GraphNodes.AgentWithChainOfThoughts);
+
+  .addConditionalEdges(GraphNodes.Chat, toolsChatRouter, {
     [GraphNodes.Tools]: GraphNodes.Tools,
-    [GraphNodes.Evaluation]: GraphNodes.Evaluation,
+    [GraphNodes.Evaluation]: END,
     [END]: END,
   })
-  .addEdge(GraphNodes.Tools, GraphNodes.AgentWithChainOfThoughts);
+  .addEdge(GraphNodes.Tools, GraphNodes.Chat);
 
 const compiledGraph = workflow.compile({
   checkpointer: new MatrixCheckpointSaver(oracleName),
@@ -63,6 +71,7 @@ export class CustomerSupportGraph {
         sessionId: string;
       };
     },
+    browserTools?: BrowserToolCallDto[],
   ): Promise<TCustomerSupportGraphState> {
     if (!runnableConfig.configurable.sessionId) {
       throw new Error('sessionId is required');
@@ -70,6 +79,7 @@ export class CustomerSupportGraph {
     return this.graph.invoke(
       {
         messages: [new HumanMessage(input)],
+        browserTools,
       } satisfies Partial<TCustomerSupportGraphState>,
 
       {
@@ -95,6 +105,7 @@ export class CustomerSupportGraph {
         sessionId: string;
       };
     },
+    browserTools?: BrowserToolCallDto[],
   ): Promise<IterableReadableStream<StreamEvent>> {
     if (!runnableConfig.configurable.sessionId) {
       throw new Error('sessionId is required');
@@ -102,6 +113,7 @@ export class CustomerSupportGraph {
     const stream = this.graph.streamEvents(
       {
         messages: [new HumanMessage(input)],
+        browserTools,
       } satisfies Partial<TCustomerSupportGraphState>,
 
       {

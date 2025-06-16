@@ -1,6 +1,6 @@
 import {
   BaseEvent,
-  shouldHaveConnectionId,
+  shouldHaveSessionId,
   type WithRequiredEventProps,
 } from '../base-event/base-event';
 
@@ -11,7 +11,7 @@ interface IRouterEvent {
 export class RouterEvent extends BaseEvent<IRouterEvent> {
   constructor(public payload: WithRequiredEventProps<IRouterEvent>) {
     super();
-    shouldHaveConnectionId(payload);
+    shouldHaveSessionId(payload);
   }
   public eventName = 'router.update';
 

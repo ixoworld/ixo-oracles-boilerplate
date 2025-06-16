@@ -1,6 +1,6 @@
 import {
   BaseEvent,
-  shouldHaveConnectionId,
+  shouldHaveSessionId,
   type WithRequiredEventProps,
 } from '../base-event/base-event';
 
@@ -21,7 +21,7 @@ export class RenderComponentEvent<
   ) {
     payload.status = payload.status ?? 'isRunning';
     super();
-    shouldHaveConnectionId(payload);
+    shouldHaveSessionId(payload);
   }
   public eventName = 'render_component';
 

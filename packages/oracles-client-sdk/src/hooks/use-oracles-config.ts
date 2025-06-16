@@ -50,12 +50,10 @@ export const useOraclesConfig = (
       }
       // validate url
       try {
-        // eslint-disable-next-line no-new -- url is validated
-        new URL(url.serviceEndpoint);
-        return url.serviceEndpoint;
+        const urlObj = new URL(url.serviceEndpoint);
+        return urlObj.origin;
       } catch (error) {
-        console.error(error);
-        console.log(url);
+        console.error(error, url);
         throw new Error(`Invalid url: ${url.serviceEndpoint}`, {
           cause: error,
         });

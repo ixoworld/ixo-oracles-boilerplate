@@ -36,7 +36,6 @@ async function bootstrap(): Promise<void> {
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true, // Strip properties that do not have any decorators
-      forbidNonWhitelisted: true, // Throw an error if non-whitelisted values are provided
       transform: true, // Automatically transform payloads to DTO instances
     }),
   );

@@ -17,7 +17,6 @@ describe('RenderComponentEvent', () => {
 
   it('should retain the provided status', () => {
     const payload: RenderComponentEvent['payload'] = {
-      connectionId: '123',
       sessionId: '456',
       requestId: '789',
       componentName: 'testComponent',

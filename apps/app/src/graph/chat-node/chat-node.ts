@@ -1,4 +1,4 @@
-import { getChatOpenAiModel } from '@ixo/common';
+import { getChatOpenAiModel, parserBrowserTool } from '@ixo/common';
 import {
   ChatPromptTemplate,
   MessagesPlaceholder,
@@ -22,11 +22,18 @@ export async function chatNode(
     APP_TARGET_USERS: 'users',
     APP_UNIQUE_SELLING_POINTS: 'the best',
   });
+  const browserTools = state.browserTools?.map((tool) =>
+    parserBrowserTool({
+      description: tool.description,
+      schema: tool.schema,
+      toolName: tool.name,
+    }),
+  );
 
   const chain = ChatPromptTemplate.fromMessages([
     ['system', systemPrompt],
     new MessagesPlaceholder('msgs'),
-  ]).pipe(llm.bindTools(tools));
+  ]).pipe(llm.bindTools([...tools, ...(browserTools ?? [])]));
 
   const result = await chain.invoke(
     {

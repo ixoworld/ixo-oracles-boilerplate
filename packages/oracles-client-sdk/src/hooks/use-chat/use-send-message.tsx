@@ -4,8 +4,10 @@ import {
   useQueryClient,
   type UseMutateAsyncFunction,
 } from '@tanstack/react-query';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 import { useOraclesContext } from '../../providers/oracles-provider/oracles-context.js';
+import { type IBrowserTools } from '../../types/browser-tool.type.js';
 import { RequestError } from '../../utils/request.js';
 import { useOraclesConfig } from '../use-oracles-config.js';
 import {
@@ -31,6 +33,7 @@ export function useSendMessage({
   sessionId,
   overrides,
   onPaymentRequiredError,
+  browserTools,
 }: {
   oracleDid: string;
   sessionId: string;
@@ -38,14 +41,26 @@ export function useSendMessage({
     baseUrl?: string;
   };
   onPaymentRequiredError: (claimIds: string[]) => void;
+  browserTools?: IBrowserTools;
 }): IUseSendMessageReturn {
   const queryClient = useQueryClient();
-  const [, forceUpdate] = useState<IMessage | null>(null);
+  const abortControllerRef = useRef<AbortController>();
+  const [_, forceUpdate] = useState(0);
   const { config } = useOraclesConfig(oracleDid);
   const { apiUrl: baseUrl } = config;
   const { baseUrl: overridesUrl } = overrides ?? {};
   const apiUrl = overridesUrl ?? baseUrl;
   const { wallet } = useOraclesContext();
+
+  // Cleanup effect for aborting ongoing requests when unmounting
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
   const addAIResponse = useCallback(
     async ({ message, requestId }: { message: string; requestId: string }) => {
       queryClient.setQueryData(
@@ -71,8 +86,6 @@ export function useSendMessage({
                 </>
               ),
           };
-          forceUpdate(updatedMessage);
-
           return {
             ...old,
             [updatedMessage.id]: updatedMessage,
@@ -93,6 +106,14 @@ export function useSendMessage({
       sId: string;
       metadata?: Record<string, unknown>;
     }) => {
+      // Abort any ongoing request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+
+      // Create new abort controller for this request
+      abortControllerRef.current = new AbortController();
+
       await queryClient.cancelQueries({
         queryKey: [oracleDid, 'messages', sId],
       });
@@ -114,6 +135,12 @@ export function useSendMessage({
           sessionId: sId,
           metadata,
           cb: addAIResponse,
+          abortSignal: abortControllerRef.current.signal,
+          browserTools: Object.values(browserTools ?? {}).map((tool) => ({
+            name: tool.toolName,
+            description: tool.description,
+            schema: zodToJsonSchema(tool.schema),
+          })),
         });
       } catch (err) {
         if (RequestError.isRequestError(err) && err.claims) {
@@ -183,6 +210,12 @@ const askOracleStream = async (props: {
   sessionId: string;
   matrixAccessToken: string;
   metadata?: Record<string, unknown>;
+  browserTools?: {
+    name: string;
+    description: string;
+    schema: Record<string, unknown>;
+  }[];
+  abortSignal: AbortSignal;
   cb: ({
     requestId,
     message,
@@ -191,7 +224,6 @@ const askOracleStream = async (props: {
     message: string;
   }) => Promise<void>;
 }): Promise<{ text: string; requestId: string }> => {
-  const abortController = new AbortController();
   const response = await fetch(`${props.apiURL}/messages/${props.sessionId}`, {
     headers: {
       'x-matrix-access-token': props.matrixAccessToken,
@@ -202,9 +234,10 @@ const askOracleStream = async (props: {
       message: props.message,
       stream: true,
       metadata: props.metadata,
+      tools: props.browserTools,
     }),
     method: 'POST',
-    signal: abortController.signal,
+    signal: props.abortSignal,
   });
 
   if (!response.ok) {
@@ -213,7 +246,6 @@ const askOracleStream = async (props: {
   }
   const requestId = response.headers.get('X-Request-Id');
   if (!requestId) {
-    abortController.abort();
     throw new Error('Did not receive a request ID');
   }
 

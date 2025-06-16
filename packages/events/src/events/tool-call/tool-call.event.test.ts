@@ -17,7 +17,6 @@ describe('ToolCallEvent', () => {
 
   it('should retain the provided status', () => {
     const payload: ToolCallEvent['payload'] = {
-      connectionId: '123',
       sessionId: '456',
       requestId: '789',
       toolName: 'testTool',

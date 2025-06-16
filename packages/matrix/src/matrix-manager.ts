@@ -2,12 +2,13 @@ import { Logger } from '@ixo/logger';
 import olm from '@matrix-org/olm';
 import * as sdk from 'matrix-js-sdk';
 import { logger } from 'matrix-js-sdk/lib/logger';
+import { promisify } from 'node:util';
 import { CrossSigningManager } from './crypto/cross-signing';
 import { MatrixStateManager } from './matrix-state-manager';
 import { type IMessageOptions } from './types/matrix';
+import { Cache } from './utils/cache';
 import { createOracleAdminClient } from './utils/create-oracle-admin-client';
 import { formatMsg } from './utils/format-msg';
-import { Cache } from './utils/cache';
 import { syncMatrixState } from './utils/sync';
 
 function getEntityRoomAliasFromDid(did: string) {
@@ -101,7 +102,7 @@ export class MatrixManager {
         // For Node.js event loop, this prevents race conditions
         while (MatrixManager.instanceLock && !MatrixManager.instance) {
           // Yield control to event loop
-          require('node:util').promisify(setImmediate)();
+          promisify(setImmediate)();
         }
         if (MatrixManager.instance) {
           return MatrixManager.instance;
@@ -355,15 +356,37 @@ export class MatrixManager {
 
   async sendActionLog(
     roomId: string,
-    action: string,
+    action: object,
     threadId?: string,
-  ): Promise<sdk.ISendEventResponse> {
-    return this.sendMessage({
-      roomId,
-      message: `The Oracle has performed the following action: ${action}`,
-      threadId,
-      isOracleAdmin: true,
-    });
+  ): Promise<void> {
+    if (!this.adminClient) {
+      throw new sdk.MatrixError({ error: 'Admin client not initialized' });
+    }
+
+    const txId = this.adminClient.makeTxnId();
+    if (!txId) {
+      throw new sdk.MatrixError({ error: 'Failed to generate transaction ID' });
+    }
+
+    // action event
+    await Promise.all([
+      this.adminClient.sendEvent(
+        roomId,
+        threadId ?? null,
+        'ixo.agent.action' as keyof sdk.TimelineEvents,
+        {
+          action,
+          ts: Date.now(),
+        } as unknown as sdk.TimelineEvents[keyof sdk.TimelineEvents],
+        txId,
+      ),
+      this.sendMessage({
+        roomId,
+        message: `The Oracle has performed the following action: ${JSON.stringify(action, null, 2)}`,
+        threadId,
+        isOracleAdmin: true,
+      }),
+    ]);
   }
 
   public async getLoginResponse(

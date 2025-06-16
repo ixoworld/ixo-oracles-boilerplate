@@ -20,6 +20,7 @@ import { SessionsModule } from './sessions/sessions.module';
 import { SlackModule } from './slack/slack.module';
 import { SseModule } from './sse/sse.module';
 import { normalizeDid } from './utils/header.utils';
+import { WsModule } from './ws/ws.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { normalizeDid } from './utils/header.utils';
         limit: 10, // Max requests per TTL period
       },
     ]),
+    WsModule,
     ChromaDbModule.forRoot(),
     SessionsModule,
     MessagesModule,

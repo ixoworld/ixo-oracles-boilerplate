@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "@ixo/data-store": "workspace:^",
+    "@ixo/oracles-events": "workspace:^",
     "@ixo/eslint-config": "workspace:*",
     "@ixo/jest-config": "workspace:*",
     "@ixo/typescript-config": "workspace:*",

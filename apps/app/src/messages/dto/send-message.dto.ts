@@ -1,5 +1,43 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsArray,
+  IsBoolean,
+  IsNotEmpty,
+  IsObject,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from 'class-validator';
+
+export class BrowserToolCallDto {
+  @ApiProperty({
+    description: 'The tool name',
+    required: true,
+    type: String,
+  })
+  @IsNotEmpty()
+  @IsString()
+  name: string;
+
+  @ApiProperty({
+    description: 'The tool schema to be passed to the LLM',
+    required: true,
+    type: Object,
+  })
+  @IsNotEmpty()
+  @IsObject()
+  schema: Record<string, unknown>;
+
+  @ApiProperty({
+    description: 'The tool description to be passed to the LLM',
+    required: true,
+    type: String,
+  })
+  @IsNotEmpty()
+  @IsString()
+  description: string;
+}
 
 export class SendMessageDto {
   @ApiProperty({
@@ -21,6 +59,17 @@ export class SendMessageDto {
   @IsNotEmpty()
   @IsString()
   message: string;
+
+  @ApiProperty({
+    description: 'The tool list to be passed to the LLM',
+    required: false,
+    type: [BrowserToolCallDto],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BrowserToolCallDto)
+  tools?: BrowserToolCallDto[];
 }
 
 export class SendMessagePayload {
@@ -29,4 +78,5 @@ export class SendMessagePayload {
   sessionId: string;
   matrixAccessToken: string;
   did: string;
+  tools?: BrowserToolCallDto[];
 }

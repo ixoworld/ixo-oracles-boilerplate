@@ -1,6 +1,6 @@
 import {
   BaseEvent,
-  shouldHaveConnectionId,
+  shouldHaveSessionId,
   type WithRequiredEventProps,
 } from '../base-event/base-event';
 
@@ -14,7 +14,7 @@ export class MessageCacheInvalidationEvent extends BaseEvent<IMessageCacheInvali
   ) {
     payload.status = payload.status ?? 'done';
     super();
-    shouldHaveConnectionId(payload);
+    shouldHaveSessionId(payload);
   }
   public eventName = 'message_cache_invalidation';
 

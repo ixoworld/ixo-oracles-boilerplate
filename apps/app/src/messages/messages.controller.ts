@@ -83,11 +83,10 @@ export class MessagesController {
         res,
       });
       // The response is handled inside the service when streaming
-      return;
+    } else {
+      // Regular response without streaming
+      const result = await this.messagesService.sendMessage(payload);
+      return res.status(HttpStatus.OK).json(result);
     }
-
-    // Regular response without streaming
-    const result = await this.messagesService.sendMessage(payload);
-    return res.status(HttpStatus.OK).json(result);
   }
 }

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/unbound-method -- This is a utility function */
 import { Logger } from '@ixo/logger';
-import { type Socket } from 'socket.io';
+import { type Server } from 'socket.io';
 import { rootEventEmitter } from 'src/root-event-emitter';
 import { type AllEventsAsClass } from 'src/types';
 
@@ -22,18 +22,18 @@ export const shouldRegisterEvent = <
   EventClass: C,
   payload: InstanceType<C>['payload'],
 ): boolean => {
-  const socket = {
+  const server = {
     to: jest.fn().mockReturnThis(),
     emit: jest.fn(),
-  } as unknown as Socket;
+  } as unknown as Server;
   const logSpy = jest.spyOn(Logger, 'info');
 
-  EventClass.registerEventHandlers(socket);
+  EventClass.registerEventHandlers(server);
   rootEventEmitter.emit(EventClass.eventName, payload);
 
   expect(logSpy).toHaveBeenCalled();
-  expect(socket.to).toHaveBeenCalledWith(payload.connectionId);
-  expect(socket.emit).toHaveBeenCalledWith(EventClass.eventName, payload);
+  expect(server.to).toHaveBeenCalledWith(payload.sessionId);
+  expect(server.emit).toHaveBeenCalledWith(EventClass.eventName, payload);
 
   return true;
 };
