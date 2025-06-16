@@ -2,11 +2,7 @@ import { ixo, utils } from '@ixo/impactxclient-sdk';
 import { gqlClient } from '../../gql/index.js';
 import { getSettingsResource } from '../../utils/get-settings-resouce.js';
 import type { Client } from '../client.js';
-import {
-  CreateEntityParams,
-  TGetSettingsResourceSchema,
-  TGetSurveyJsDomainSchema,
-} from './types.js';
+import { CreateEntityParams, TGetSettingsResourceSchema } from './types.js';
 
 export class Entities {
   constructor(public readonly client: Client) {}
@@ -37,32 +33,6 @@ export class Entities {
   static async getEntityByType(type: string) {
     const entity = await gqlClient.GetEntityByType({ type });
     return entity.entities?.nodes;
-  }
-
-  static async getSurveyJsDomain(
-    domainParams: TGetSurveyJsDomainSchema,
-    matrixAccessToken?: string,
-  ) {
-    const settingsResource = await getSettingsResource<
-      | {
-          data: object;
-        }
-      | [
-          {
-            data: object;
-          },
-        ]
-    >(
-      {
-        protocolDid: domainParams.protocolDid,
-        key: 'DomainSettingsTemplate',
-      },
-      matrixAccessToken,
-    );
-    const surveyJsDomain = Array.isArray(settingsResource)
-      ? settingsResource[0].data
-      : settingsResource.data;
-    return surveyJsDomain;
   }
 
   static async getSettingsResource<T>(

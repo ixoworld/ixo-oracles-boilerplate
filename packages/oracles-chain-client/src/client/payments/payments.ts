@@ -1,5 +1,8 @@
 import { cosmos, ixo } from '@ixo/impactxclient-sdk';
-import { OraclePricingListSchemaResponse } from 'src/react/types.js';
+import {
+  TOraclePricingLisJSONLD,
+  TOraclePricingListSchemaResponse,
+} from 'src/react/types.js';
 import { gqlClient } from '../../gql/index.js';
 import { getSettingsResource } from '../../utils/get-settings-resouce.js';
 import { ValidationError } from '../../utils/validation-error.js';
@@ -157,14 +160,21 @@ export class Payments {
     oracleDid: string,
     matrixAccessToken?: string,
   ) {
-    const settingsResource = await getSettingsResource(
+    const settingsResource = await getSettingsResource<TOraclePricingLisJSONLD>(
       {
         protocolDid: oracleDid,
-        key: 'pricingList',
+        id: '{id}#fee',
       },
       matrixAccessToken,
     );
-    const pricingList = OraclePricingListSchemaResponse.parse(settingsResource);
+    const pricingList: TOraclePricingListSchemaResponse = [
+      {
+        amount: settingsResource.offers.priceSpecification.price.toString(),
+        denom: settingsResource.offers.priceSpecification.priceCurrency,
+        description: settingsResource.description,
+        title: settingsResource.name,
+      },
+    ];
     return pricingList;
   }
 }

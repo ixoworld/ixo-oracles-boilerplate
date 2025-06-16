@@ -3,7 +3,10 @@ import { TransactionFn } from 'src/client/index.js';
 import { gqlClient } from 'src/gql/index.js';
 import { getSettingsResource } from 'src/utils/get-settings-resouce.js';
 import { ValidationError } from 'src/utils/validation-error.js';
-import { TOraclePricingListSchemaResponse } from './types.js';
+import {
+  TOraclePricingLisJSONLD,
+  TOraclePricingListSchemaResponse,
+} from './types.js';
 
 export class Payments {
   /**
@@ -68,13 +71,21 @@ export class Payments {
     oracleDid: string,
     matrixAccessToken?: string,
   ) {
-    const settingsResource = await getSettingsResource(
+    const settingsResource = await getSettingsResource<TOraclePricingLisJSONLD>(
       {
         protocolDid: oracleDid,
-        key: 'pricingList',
+        id: '{id}#fee',
       },
       matrixAccessToken,
     );
-    return settingsResource as TOraclePricingListSchemaResponse;
+    const pricingList: TOraclePricingListSchemaResponse = [
+      {
+        amount: settingsResource.offers.priceSpecification.price.toString(),
+        denom: settingsResource.offers.priceSpecification.priceCurrency,
+        description: settingsResource.description,
+        title: settingsResource.name,
+      },
+    ];
+    return pricingList;
   }
 }

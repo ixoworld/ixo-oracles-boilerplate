@@ -5,7 +5,7 @@ dotenv.config();
 export const chainNetwork: 'devnet' | 'testnet' | 'mainnet' = process.env
   .CHAIN_NETWORK as 'devnet' | 'testnet' | 'mainnet' ??
   (process.env.NEXT_PUBLIC_CHAIN_NETWORK as 'devnet' | 'testnet' | 'mainnet') ??
-  'testnet';
+  'devnet';
 if (!chainNetwork) {
   throw new Error('CHAIN_NETWORK is not set: ' + process.env.CHAIN_NETWORK);
 }

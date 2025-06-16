@@ -26,7 +26,7 @@ export class Authz {
     private readonly queryClientPromise: Promise<QueryClient> = createQueryClient(
       process.env.RPC_URL ??
         (process.env.NEXT_PUBLIC_RPC_URL as string) ??
-        'https://testnet.ixo.earth/rpc/',
+        'https://devnet.ixo.earth/rpc/',
     ),
     private readonly logger: {
       info: (message: string, ...meta: unknown[]) => void;
@@ -271,7 +271,7 @@ export class Authz {
       adminAddress,
       claimCollectionId,
       maxAmount,
-      agentQuota
+      agentQuota,
     } = params;
 
     const message = {
@@ -437,15 +437,13 @@ export class Authz {
   ): Promise<IAuthzConfig> {
     const config = await getSettingsResource({
       protocolDid: params.oracleDid,
-      key: params.customConfigName ?? 'oracleAuthZConfig',
+      id: '{id}#orz',
     });
-
     if (!params.granterAddress) {
       throw new ValidationError(
         'Missing granterAddress: Please provide a granterAddress.',
       );
     }
-
     const validConfig = validateAuthzConfig(config, false);
     return {
       ...validConfig,

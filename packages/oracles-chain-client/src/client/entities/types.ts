@@ -12,12 +12,17 @@ export const GetSurveyJsDomainSchema = z.object(
     description: 'Get the Domain creation Form for a given protocol DID',
   },
 );
-export type TGetSettingsResourceSchema = z.infer<
-  typeof GetSettingsResourceSchema
->;
+export type TGetSettingsResourceSchema =
+  | (z.infer<typeof GetSettingsResourceSchema> & {
+      id: string;
+    })
+  | (z.infer<typeof GetSettingsResourceSchema> & {
+      type: string;
+    });
 export const GetSettingsResourceSchema = z
   .object({
-    key: z.string(),
+    id: z.string().optional(),
+    type: z.string().optional(),
   })
   .merge(GetSurveyJsDomainSchema);
 
