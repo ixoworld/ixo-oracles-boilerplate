@@ -32,7 +32,7 @@ export function useWebSocketEvents(
   handleInvalidateCacheRef.current = props.handleInvalidateCache;
 
   const { sessionId, overrides } = props;
-  const apiUrl = overrides?.baseUrl ?? config.apiUrl;
+  const apiUrl = overrides?.wsUrl ?? config.socketUrl;
 
   useEffect(() => {
     if (!wallet || !sessionId || !apiUrl) {

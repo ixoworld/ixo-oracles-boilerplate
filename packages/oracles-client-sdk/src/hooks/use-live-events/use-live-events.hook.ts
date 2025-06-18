@@ -36,7 +36,13 @@ export const useLiveEvents = (props: {
   const { wallet } = useOraclesContext();
 
   useEffect(() => {
-    if (!wallet || !props.sessionId) {
+    if (
+      !wallet ||
+      !props.sessionId ||
+      !apiUrl ||
+      !wallet.did ||
+      !wallet.matrix.accessToken
+    ) {
       return;
     }
     const eventSource = new EventSource(
@@ -87,7 +93,7 @@ export const useLiveEvents = (props: {
       );
       eventSource.close();
     };
-  }, [apiUrl, props.oracleDid, props.sessionId]);
+  }, [apiUrl, props.oracleDid, props.sessionId, wallet]);
 
   return { events, isConnected, error };
 };

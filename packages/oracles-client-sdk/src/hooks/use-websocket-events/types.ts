@@ -19,6 +19,7 @@ export interface IWebSocketConfig {
   browserTools?: IBrowserTools;
   overrides?: {
     baseUrl?: string;
+    wsUrl?: string;
   };
 }
 

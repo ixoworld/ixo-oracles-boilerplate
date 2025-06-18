@@ -2,7 +2,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useOraclesContext } from '../../providers/oracles-provider/oracles-context.js';
-import { IBrowserTools } from '../../types/browser-tool.type.js';
+import { type IBrowserTools } from '../../types/browser-tool.type.js';
 import { useLiveEvents } from '../use-live-events/use-live-events.hook.js';
 import { useOraclesConfig } from '../use-oracles-config.js';
 import { useWebSocketEvents } from '../use-websocket-events/use-websocket-events.js';
@@ -76,7 +76,6 @@ export function useChat({
     if (!messagesMap) return [];
     return Object.values(messagesMap);
   }, [messagesMap]);
-
   const revalidate = useCallback(async () => {
     await refetch();
   }, [refetch]);

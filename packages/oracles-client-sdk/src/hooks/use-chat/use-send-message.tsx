@@ -4,7 +4,7 @@ import {
   useQueryClient,
   type UseMutateAsyncFunction,
 } from '@tanstack/react-query';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback } from 'react';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { useOraclesContext } from '../../providers/oracles-provider/oracles-context.js';
 import { type IBrowserTools } from '../../types/browser-tool.type.js';
@@ -44,21 +44,11 @@ export function useSendMessage({
   browserTools?: IBrowserTools;
 }): IUseSendMessageReturn {
   const queryClient = useQueryClient();
-  const abortControllerRef = useRef<AbortController>();
   const { config } = useOraclesConfig(oracleDid);
   const { apiUrl: baseUrl } = config;
   const { baseUrl: overridesUrl } = overrides ?? {};
   const apiUrl = overridesUrl ?? baseUrl;
   const { wallet } = useOraclesContext();
-
-  // Cleanup effect for aborting ongoing requests when unmounting
-  useEffect(() => {
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
-  }, []);
 
   const addAIResponse = useCallback(
     async ({ message, requestId }: { message: string; requestId: string }) => {
@@ -105,14 +95,6 @@ export function useSendMessage({
       sId: string;
       metadata?: Record<string, unknown>;
     }) => {
-      // Abort any ongoing request
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-
-      // Create new abort controller for this request
-      abortControllerRef.current = new AbortController();
-
       await queryClient.cancelQueries({
         queryKey: [oracleDid, 'messages', sId],
       });
@@ -134,12 +116,13 @@ export function useSendMessage({
           sessionId: sId,
           metadata,
           cb: addAIResponse,
-          abortSignal: abortControllerRef.current.signal,
-          browserTools: Object.values(browserTools ?? {}).map((tool) => ({
-            name: tool.toolName,
-            description: tool.description,
-            schema: zodToJsonSchema(tool.schema),
-          })),
+          browserTools: browserTools
+            ? Object.values(browserTools).map((tool) => ({
+                name: tool.toolName,
+                description: tool.description,
+                schema: zodToJsonSchema(tool.schema),
+              }))
+            : undefined,
         });
       } catch (err) {
         if (RequestError.isRequestError(err) && err.claims) {
@@ -188,9 +171,11 @@ export function useSendMessage({
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: [oracleDid, 'messages', sessionId],
+          refetchType: 'all',
         }),
         queryClient.invalidateQueries({
           queryKey: ['oracle-sessions', oracleDid],
+          refetchType: 'all',
         }),
       ]);
     },
@@ -214,7 +199,6 @@ const askOracleStream = async (props: {
     description: string;
     schema: Record<string, unknown>;
   }[];
-  abortSignal: AbortSignal;
   cb: ({
     requestId,
     message,
@@ -232,11 +216,10 @@ const askOracleStream = async (props: {
     body: JSON.stringify({
       message: props.message,
       stream: true,
-      metadata: props.metadata,
-      tools: props.browserTools,
+      ...(props.metadata && { metadata: props.metadata }),
+      ...(props.browserTools && { tools: props.browserTools }),
     }),
     method: 'POST',
-    signal: props.abortSignal,
   });
 
   if (!response.ok) {

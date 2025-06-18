@@ -62,10 +62,28 @@ export const useOraclesConfig = (
     return null;
   }, [data?.service]);
 
+  const socketUrl = useMemo(() => {
+    if (!data?.service) return null;
+    if (Array.isArray(data.service)) {
+      const service = data.service.find(
+        (s: Service) => s.type === 'wsService',
+      ) as Service | undefined;
+      if (!service) return null;
+      try {
+        const urlObj = new URL(service.serviceEndpoint);
+        return urlObj.origin;
+      } catch (error) {
+        console.error(error, service);
+        return null;
+      }
+    }
+  }, [data?.service]);
+
   return {
     config: {
       authConfig,
       apiUrl,
+      socketUrl,
     },
     isLoading,
   };
