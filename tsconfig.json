@@ -1,0 +1,3 @@
+{
+  "extends": "@ixo/typescript-config/base.json"
+}

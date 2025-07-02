@@ -1,0 +1,42 @@
+{
+  "name": "my-turborepo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "",
+  "author": "",
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "test": "turbo test",
+    "test:e2e": "turbo test:e2e",
+    "lint": "turbo lint",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "version": "changeset version",
+    "release": "changeset tag"
+  },
+  "devDependencies": {
+    "@changesets/changelog-github": "^0.5.1",
+    "@changesets/cli": "^2.29.4",
+    "@ixo/eslint-config": "workspace:*",
+    "@ixo/typescript-config": "workspace:*",
+    "prettier": "^3.2.5",
+    "tsc": "^2.0.4",
+    "tsc-alias": "^1.8.11",
+    "tsconfig-paths": "^4.2.0",
+    "turbo": "^2.3.3",
+    "typescript": "5.5.4"
+  },
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=9.0.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "@typescript-eslint/eslint-plugin": "6.17.0",
+      "@typescript-eslint/parser": "6.17.0",
+      "ws": "8.18.2"
+    }
+  }
+}

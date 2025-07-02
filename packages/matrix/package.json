@@ -1,0 +1,54 @@
+{
+  "name": "@ixo/matrix",
+  "version": "1.0.1",
+  "private": true,
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "module": "./dist/src/index.js",
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "clean": "rimraf dist",
+    "prebuild": "npm run clean",
+    "test": "jest -c jest.config.js",
+    "test:watch": "jest --watch -c jest.config.js",
+    "test:e2e": "jest -c jest.integration.config.js --forceExit --detectOpenHandles"
+  },
+  "exports": {
+    ".": {
+      "require": "./dist/src/index.js",
+      "import": "./dist/src/index.js",
+      "types": "./dist/src/index.d.ts"
+    },
+    "./types": {
+      "require": "./dist/src/types/index.js",
+      "import": "./dist/src/types/index.js",
+      "types": "./dist/src/types/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "devDependencies": {
+    "@ixo/eslint-config": "workspace:*",
+    "@ixo/jest-config": "workspace:*",
+    "@ixo/typescript-config": "workspace:*",
+    "@jest/types": "^29.6.3",
+    "@langchain/core": "^0.3.3",
+    "@langchain/langgraph": "^0.2.44",
+    "@langchain/langgraph-checkpoint-validation": "^0.0.2",
+    "@testcontainers/postgresql": "^10.16.0",
+    "@types/jest": "^29.5.12",
+    "jest": "^29.7.0",
+    "rimraf": "^6.0.1",
+    "testcontainers": "^10.16.0",
+    "ts-jest": "^29.1.2",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@ixo/logger": "workspace:*",
+    "@langchain/langgraph-checkpoint": "0.0.10",
+    "@matrix-org/olm": "3.2.15",
+    "matrix-js-sdk": "32.4.0",
+    "superjson": "1.13.3"
+  }
+}

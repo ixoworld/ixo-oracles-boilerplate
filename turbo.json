@@ -1,0 +1,84 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["**/.env"],
+  "globalEnv": [
+    "NODE_ENV",
+    "PORT",
+    "LOG_LEVEL",
+    "CORS_ORIGIN",
+    "BOT_OAUTH_TOKEN",
+    "AIRTABLE_API_KEY",
+    "AIRTABLE_BASE_ID",
+    "AIRTABLE_TABLE_NAME",
+    "AITABLE_BASE_TABLE_LINK",
+    "OPENAI_API_KEY",
+    "PINECONE_API_KEY",
+    "PINECONE_INDEX",
+    "GURU_ASSISTANCE_API_TOKEN",
+    "IXO_GURU_API_URL",
+    "SLACK_APP_TOKEN",
+    "REDIS_URL",
+    "CRON_JOBS",
+    "MATRIX_BASE_URL",
+    "MATRIX_ORACLE_ADMIN_ACCESS_TOKEN",
+    "MATRIX_ORACLE_ADMIN_USER_ID",
+    "MATRIX_ORACLE_ADMIN_DEVICE_ID",
+    "IS_LOCAL",
+    "TRAVEL_IMPACT_MODEL_API_KEY",
+    "TAVILY_API_KEY",
+    "BLOCKSYNC_GRAPHQL_URL",
+    "SUPAMOTO_API_KEY",
+    "GIZA_API_URL",
+    "GIZA_PROVING_JOBS_API_URL",
+    "ISSUER_DID",
+    "CREDENTIALS_MNEMONIC",
+    "SECP_MNEMONIC",
+    "RPC_URL",
+    "CELLNODE_URL",
+    "NETWORK",
+    "MATRIX_RECOVERY_PHRASE",
+    "MATRIX_ORACLE_ADMIN_PASSWORD",
+    "MATRIX_RECOVERY_PHRASE",
+    "OPENAI_API_KEY",
+    "IXO_GURU_QUERY_ENDPOINT",
+    "GURU_ASSISTANCE_API_TOKEN",
+    "ORACLE_DID",
+    "SKIP_LOGGING_CHAT_HISTORY_TO_MATRIX",
+    "API_KEY_PEPPER",
+    "CHROMA_COLLECTION_NAME",
+    "CHROMA_URL",
+    "SLACK_BOT_OAUTH_TOKEN",
+    "SLACK_APP_TOKEN",
+    "MATRIX_CRYPTO_STORE_PATH",
+    "MATRIX_STORE_PATH",
+    "DATABASE_USE_SSL"
+  ],
+
+  "tasks": {
+    "dev": {
+      "cache": false,
+      "persistent": true,
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        ".env.production.local",
+        ".env.local",
+        ".env.production",
+        ".env"
+      ]
+    },
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        ".env.production.local",
+        ".env.local",
+        ".env.production",
+        ".env"
+      ],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "lint": {},
+    "test": {},
+    "test:e2e": {}
+  }
+}

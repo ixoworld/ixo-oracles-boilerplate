@@ -1,0 +1,74 @@
+{
+  "name": "@ixo/common",
+  "version": "1.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc && tsc-alias",
+    "test": "jest"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./ai": {
+      "types": "./dist/ai/index.d.ts",
+      "import": "./dist/ai/index.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js"
+    }
+  },
+  "devDependencies": {
+    "@ixo/data-store": "workspace:^",
+    "@ixo/oracles-events": "workspace:^",
+    "@ixo/eslint-config": "workspace:*",
+    "@ixo/jest-config": "workspace:*",
+    "@ixo/typescript-config": "workspace:*",
+    "@jest/types": "^29.6.3",
+    "@langchain/langgraph-checkpoint-validation": "^0.0.2",
+    "@testcontainers/postgresql": "^10.16.0",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.7.3",
+    "@types/store": "^2.0.5",
+    "jest": "^29.7.0",
+    "testcontainers": "^10.16.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@cosmjs/proto-signing": "^0.33.0",
+    "@cosmjs/stargate": "^0.33.0",
+    "@ixo/impactxclient-sdk": "^2.3.1",
+    "@ixo/logger": "workspace:*",
+    "@ixo/matrix": "workspace:*",
+    "@langchain/community": "^0.3.3",
+    "@langchain/core": "^0.3.3",
+    "@langchain/langgraph-checkpoint": "0.0.10",
+    "@langchain/langgraph-checkpoint-sqlite": "^0.1.2",
+    "@langchain/openai": "^0.3.2",
+    "@tavily/core": "0.0.2",
+    "@veramo/core": "^6.0.0",
+    "axios": "^1.7.9",
+    "axios-retry": "^4.5.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "dotenv": "^16.4.5",
+    "duck-duck-scrape": "^2.2.5",
+    "html-to-text": "9.0.5",
+    "langchain": "^0.3.2",
+    "langfuse": "^3.37.2",
+    "langsmith": "^0.1.61",
+    "mammoth": "1.8.0",
+    "openai": "^4.67.0",
+    "pdf-parse": "^1.1.1",
+    "playwright": "^1.51.0",
+    "store": "^2.0.12",
+    "zod": "^3.23.8"
+  }
+}
