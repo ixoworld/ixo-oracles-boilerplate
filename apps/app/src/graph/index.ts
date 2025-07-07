@@ -6,11 +6,12 @@ import { type StreamEvent } from '@langchain/core/dist/tracers/event_stream';
 import { HumanMessage } from '@langchain/core/messages';
 import { type IterableReadableStream } from '@langchain/core/utils/stream';
 import { END, START, StateGraph } from '@langchain/langgraph';
+import { Logger } from '@nestjs/common';
 import 'dotenv/config';
 import CallbackHandler from 'langfuse-langchain';
 import { type BrowserToolCallDto } from 'src/messages/dto/send-message.dto';
-import { chatNode } from './chat-node/chat-node';
 import { agentWithChainOfThoughtsNode } from './nodes/agent-with-chain-of-thoughts/agent-with-chain-of-thoughts';
+import { chatNode } from './nodes/chat-node/chat-node';
 import { evaluationNode } from './nodes/evaluation-node/evaluation-node';
 import { toolNode } from './nodes/tools-node';
 import { intentRouter } from './router/intent.router';
@@ -72,13 +73,23 @@ export class CustomerSupportGraph {
       };
     },
     browserTools?: BrowserToolCallDto[],
+    msgFromMatrixRoom = false,
   ): Promise<TCustomerSupportGraphState> {
     if (!runnableConfig.configurable.sessionId) {
       throw new Error('sessionId is required');
     }
+    Logger.log(`[sendMessage]: msgFromMatrixRoom: ${msgFromMatrixRoom}`);
     return this.graph.invoke(
       {
-        messages: [new HumanMessage(input)],
+        messages: [
+          new HumanMessage({
+            content: input,
+            // this is to prevent the matrix manager to log this message as this message is from the matrix room itself not from the REST api
+            additional_kwargs: {
+              msgFromMatrixRoom,
+            },
+          }),
+        ],
         browserTools,
       } satisfies Partial<TCustomerSupportGraphState>,
 
@@ -106,13 +117,19 @@ export class CustomerSupportGraph {
       };
     },
     browserTools?: BrowserToolCallDto[],
+    msgFromMatrixRoom = false,
   ): Promise<IterableReadableStream<StreamEvent>> {
     if (!runnableConfig.configurable.sessionId) {
       throw new Error('sessionId is required');
     }
     const stream = this.graph.streamEvents(
       {
-        messages: [new HumanMessage(input)],
+        messages: [
+          new HumanMessage(input, {
+            // this is to prevent the matrix manager to log this message as this message is from the matrix room itself not from the REST api
+            msgFromMatrixRoom,
+          }),
+        ],
         browserTools,
       } satisfies Partial<TCustomerSupportGraphState>,
 

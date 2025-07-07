@@ -66,12 +66,12 @@ export class MessagesController {
     @Param('sessionId') sessionId: string,
     @Res() res: Response,
   ) {
-    const { matrixAccessToken, did } = req.authData;
+    const { did } = req.authData;
 
     // Build the payload
     const payload = {
       ...sendMessageDto,
-      matrixAccessToken,
+
       did,
       sessionId,
     };
