@@ -1,5 +1,5 @@
 /* eslint-disable turbo/no-undeclared-env-vars -- test */
-import { z } from 'zod';
+import * as z from 'zod/v3';
 import { EnvService } from './env.service.js';
 
 describe('EnvService', () => {

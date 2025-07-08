@@ -2,10 +2,8 @@ import { PlaywrightWebBaseLoader } from '@langchain/community/document_loaders/w
 import { HtmlToTextTransformer } from '@langchain/community/document_transformers/html_to_text';
 import { Document } from '@langchain/core/documents';
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import { StringOutputParser } from '@langchain/core/output_parsers';
 import { PromptTemplate } from '@langchain/core/prompts';
-import { createStuffDocumentsChain } from 'langchain/chains/combine_documents';
-import { getChatOpenAiModel } from '../models/openai.js';
+// import { createStuffDocumentsChain } from 'langchain/chains/combine_documents';
 
 export const scrapeWebPage = async (url: string) => {
   const content = await PlaywrightWebBaseLoader._scrape(url, {
@@ -52,24 +50,26 @@ const prompt = PromptTemplate.fromTemplate(
 );
 
 export const scrapeAndSummarizeWebPage = async (
-  url: string,
-  llm?: BaseChatModel,
+  _url: string,
+  _llm?: BaseChatModel,
 ) => {
-  const doc = await scrapeWebPage(url);
-  const _llm =
-    llm ??
-    getChatOpenAiModel({
-      temperature: 0,
-    });
-  const chain = await createStuffDocumentsChain({
-    llm: _llm,
-    outputParser: new StringOutputParser(),
-    prompt,
-  });
+  console.log('scrapeAndSummarizeWebPage', _url, _llm);
+  console.log('prompt', prompt);
+  // const doc = await scrapeWebPage(url);
+  // const _llm =
+  //   llm ??
+  //   getChatOpenAiModel({
+  //     temperature: 0,
+  //   });
+  // const chain = await createStuffDocumentsChain({
+  //   llm: _llm,
+  //   outputParser: new StringOutputParser(),
+  //   prompt,
+  // });
 
-  const result = await chain.invoke({
-    context: doc.pageContent,
-  });
+  // const result = await chain.invoke({
+  //   context: doc.pageContent,
+  // });
 
-  return result;
+  return 'result';
 };

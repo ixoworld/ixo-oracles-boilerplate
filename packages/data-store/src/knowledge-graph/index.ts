@@ -1,14 +1,14 @@
 import { Logger } from '@ixo/logger';
-import {
-  LLMGraphTransformer,
-  SYSTEM_PROMPT,
-  type LLMGraphTransformerProps,
-} from '@langchain/community/experimental/graph_transformers/llm';
+// import {
+//   LLMGraphTransformer,
+//   SYSTEM_PROMPT,
+//   type LLMGraphTransformerProps,
+// } from '@langchain/community/experimental/graph_transformers/llm';
 import { type GraphDocument } from '@langchain/community/graphs/document';
 import { Neo4jGraph } from '@langchain/community/graphs/neo4j_graph';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { ChatOpenAI } from '@langchain/openai';
-import { Document } from 'langchain/document';
+import { Document } from '@langchain/core/documents';
 import { Neo4jError } from 'neo4j-driver';
 
 interface IKnowledgeGraphConfig {
@@ -18,7 +18,7 @@ interface IKnowledgeGraphConfig {
     password: string;
   };
 
-  graphTransformerConfig?: LLMGraphTransformerProps;
+  graphTransformerConfig?: any;
 }
 
 export class KnowledgeGraph {
@@ -91,52 +91,59 @@ export class KnowledgeGraph {
     try {
       const schema = this.graph.getStructuredSchema();
       Logger.info('Inserting knowledge into the graph...');
-      const llmGraphTransformer = new LLMGraphTransformer({
-        llm: this.config.graphTransformerConfig?.llm ?? new ChatOpenAI(),
-        prompt:
-          this.config.graphTransformerConfig?.prompt ??
-          ChatPromptTemplate.fromMessages([
-            ['system', SYSTEM_PROMPT],
-            [
-              'human',
-              'Tip: Make sure to answer in the correct format and do not include any explanations. Use the given format to extract information from the following input: {input}',
-            ],
-          ]),
-        ...this.config.graphTransformerConfig,
-      });
-      const result = await llmGraphTransformer.convertToGraphDocuments(
-        texts.map((text) => new Document({ pageContent: text })),
-      );
+      // const llmGraphTransformer = new LLMGraphTransformer({
+      //   llm: this.config.graphTransformerConfig?.llm ?? new ChatOpenAI(),
+      //   prompt:
+      //     this.config.graphTransformerConfig?.prompt ??
+      //     ChatPromptTemplate.fromMessages([
+      //       ['system', SYSTEM_PROMPT],
+      //       [
+      //         'human',
+      //         'Tip: Make sure to answer in the correct format and do not include any explanations. Use the given format to extract information from the following input: {input}',
+      //       ],
+      //     ]),
+      //   ...this.config.graphTransformerConfig,
+      // });
+      // const result = await llmGraphTransformer.convertToGraphDocuments(
+      //   texts.map(
+      //     (text) =>
+      //       new Document({
+      //         pageContent: text,
+      //         metadata: {},
+      //       }),
+      //   ),
+      // );
 
-      Logger.info(`Created ${result.length} documents`);
+      // Logger.info(`Created ${result.length} documents`);
 
-      const reletionShipSet = new Set();
-      for (const doc of result) {
-        for (const relationship of doc.relationships) {
-          reletionShipSet.add(relationship.type);
-        }
-      }
-      Logger.info(
-        `Relationships: ${JSON.stringify(Array.from(reletionShipSet))}`,
-      );
-      await this.graph.addGraphDocuments(result, {
-        includeSource: true,
-        baseEntityLabel: true,
-      });
+      // const reletionShipSet = new Set();
+      // for (const doc of result) {
+      //   for (const relationship of doc.relationships) {
+      //     reletionShipSet.add(relationship.type);
+      //   }
+      // }
+      // Logger.info(
+      //   `Relationships: ${JSON.stringify(Array.from(reletionShipSet))}`,
+      // );
+      // await this.graph.addGraphDocuments(result, {
+      //   includeSource: true,
+      //   baseEntityLabel: true,
+      // });
 
-      const totals = result.reduce(
-        (acc, curr) => {
-          acc.nodes += curr.nodes.length;
-          acc.relationships += curr.relationships.length;
-          return acc;
-        },
-        { nodes: 0, relationships: 0 },
-      );
+      // const totals = result.reduce(
+      //   (acc, curr) => {
+      //     acc.nodes += curr.nodes.length;
+      //     acc.relationships += curr.relationships.length;
+      //     return acc;
+      //   },
+      //   { nodes: 0, relationships: 0 },
+      // );
 
-      Logger.info(
-        `Knowledge inserted into the graph successfully\n Number of nodes: ${totals.nodes} \n Number of relationships: ${totals.relationships}`,
-      );
-      return result;
+      // Logger.info(
+      //   `Knowledge inserted into the graph successfully\n Number of nodes: ${totals.nodes} \n Number of relationships: ${totals.relationships}`,
+      // );
+      // return result;
+      return [];
     } catch (error) {
       Logger.error(
         `Error inserting knowledge into the graph${

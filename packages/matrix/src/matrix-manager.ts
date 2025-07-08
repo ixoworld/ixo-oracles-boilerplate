@@ -85,7 +85,7 @@ export class MatrixManager {
   private constructor() {
     // Private constructor to prevent direct instantiation
     const url = new URL(process.env.MATRIX_BASE_URL ?? '');
-    this.homeserverName = url.hostname;
+    this.homeserverName = process.env.MATRIX_HOMESERVER_NAME ?? url.hostname;
     this.roomCache = new Cache();
   }
 
@@ -331,6 +331,69 @@ export class MatrixManager {
     return roomName.replace(/\s/g, '_');
   }
 
+  public async sendMatrixEvent(
+    roomId: string,
+    eventType: string,
+    content: object,
+  ) {
+    return this.adminClient?.sendEvent(
+      roomId,
+      eventType as keyof sdk.TimelineEvents,
+      content as sdk.TimelineEvents[keyof sdk.TimelineEvents],
+    );
+  }
+
+  public listenToMatrixEvent<T extends sdk.EmittedEvents>(
+    eventType: T,
+    callback: sdk.ClientEventHandlerMap[T],
+  ): (() => void) | undefined {
+    this.adminClient?.on(eventType, callback as any);
+
+    return () => {
+      this.adminClient?.removeListener(eventType, callback as any);
+    };
+  }
+
+  public async onMessage(
+    callback: (event: sdk.MatrixEvent, room: sdk.Room) => void,
+  ): Promise<() => void> {
+    if (!this.adminClient) {
+      throw new sdk.MatrixError({ error: 'Admin client not initialized' });
+    }
+
+    // Create a wrapper callback that filters by roomId
+    const roomSpecificCallback = async (
+      event: sdk.MatrixEvent,
+      room: sdk.Room | undefined,
+      _toStartOfTimeline: boolean | undefined,
+      removed: boolean,
+      _data: sdk.IRoomTimelineData,
+    ) => {
+      // Only process messages from the specified room
+      if (room && event.getType() === 'm.room.message' && !removed) {
+        callback(event, room);
+      }
+
+      // m.room.encrypted
+      if (room && event.getType() === 'm.room.encrypted' && !removed) {
+        event.once(sdk.MatrixEventEvent.Decrypted, (ev) => {
+          callback(ev, room);
+        });
+      }
+    };
+
+    // Listen to room timeline events (which includes messages)
+    this.adminClient.on(sdk.RoomEvent.Timeline, roomSpecificCallback);
+
+    // Return a cleanup function to remove the listener
+    return () => {
+      this.adminClient?.removeListener(
+        sdk.RoomEvent.Timeline,
+        roomSpecificCallback,
+      );
+    };
+  }
+
   async sendMessage(options: IMessageOptions): Promise<sdk.ISendEventResponse> {
     try {
       if (!this.adminClient) {
@@ -343,11 +406,15 @@ export class MatrixManager {
         'm.relates_to': options.threadId
           ? {
               'm.in_reply_to': {
+                rel_type: 'm.thread',
                 event_id: options.threadId,
+                is_falling_back: false,
               },
             }
           : undefined,
-      });
+        // Using this var so in MessagesService we can filter out messages from the bot -- as there is an event listener for message so if we received a message from user in the matrix room the bot can respond to it and filter out the message the we sent from here otherwise the bot will respond to itself infinite times
+        INTERNAL: true,
+      } as any);
     } catch (error) {
       Logger.error('Error sending message:', error);
       throw error;

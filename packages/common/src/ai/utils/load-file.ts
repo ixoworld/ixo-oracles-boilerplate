@@ -3,7 +3,7 @@ import { DocxLoader } from '@langchain/community/document_loaders/fs/docx';
 import { PDFLoader } from '@langchain/community/document_loaders/fs/pdf';
 import { HtmlToTextTransformer } from '@langchain/community/document_transformers/html_to_text';
 import { Document } from '@langchain/core/documents';
-import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
+import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import fs from 'node:fs/promises';
 
 type SupportedFileType = 'pdf' | 'markdown' | 'html' | 'text' | 'doc';

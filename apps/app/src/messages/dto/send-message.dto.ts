@@ -76,7 +76,6 @@ export class SendMessagePayload {
   stream?: boolean;
   message: string;
   sessionId: string;
-  matrixAccessToken: string;
   did: string;
   tools?: BrowserToolCallDto[];
 }

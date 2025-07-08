@@ -6,7 +6,7 @@ import {
 } from '@langchain/core/prompts';
 import { Logger } from '@nestjs/common';
 import { oracleConfig } from 'src/config';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { type TCustomerSupportGraphState } from '../../state';
 import { tools } from '../tools-node';
 import { chainOfThoughtPromptTemplate } from './prompt';
@@ -33,13 +33,12 @@ export const agentWithChainOfThoughtsNode = async (
     messages: state.messages,
   });
   const content = response.content.toString();
+  const FinalAnswerSchema = z.object({
+    finalAnswer: z.string(),
+  });
 
   if (response.tool_calls?.length === 0) {
-    const llm = getChatOpenAiModel().withStructuredOutput(
-      z.object({
-        finalAnswer: z.string(),
-      }),
-    );
+    const llm = getChatOpenAiModel().withStructuredOutput(FinalAnswerSchema);
     const finalAnswer =
       extractAnswer(content) ??
       (

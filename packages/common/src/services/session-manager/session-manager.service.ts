@@ -45,12 +45,14 @@ export class SessionManagerService {
     messages,
     oracleDid,
     oracleName,
+    roomId: _roomId,
   }: {
     sessionId: string;
     did: string;
     messages: string[];
     oracleDid: string;
     oracleName: string;
+    roomId?: string;
   }): Promise<ChatSession> {
     const matrixManager = MatrixManager.getInstance();
     await matrixManager.init();
@@ -104,10 +106,12 @@ export class SessionManagerService {
     if (!this.matrixManger.stateManager) {
       throw new Error('MatrixStateManager not initialized');
     }
-    const { roomId } = await this.matrixManger.getOracleRoomId({
-      userDid: did,
-      oracleDid,
-    });
+    const { roomId } = _roomId
+      ? { roomId: _roomId }
+      : await this.matrixManger.getOracleRoomId({
+          userDid: did,
+          oracleDid,
+        });
     if (!roomId) {
       throw new Error('Room ID not found');
     }
@@ -168,14 +172,27 @@ export class SessionManagerService {
   public async createSession(
     createSessionDto: CreateChatSessionDto,
   ): Promise<CreateChatSessionResponseDto> {
-    const sessionId = crypto.randomUUID();
+    // const sessionId = crypto.randomUUID();
+    const { roomId } = await this.matrixManger.getOracleRoomId({
+      userDid: createSessionDto.did,
+      oracleDid: createSessionDto.oracleDid,
+    });
+    if (!roomId) {
+      throw new Error('Room ID not found');
+    }
+    const { event_id } = await this.matrixManger.sendMessage({
+      roomId,
+      message: 'New session created',
+      isOracleAdmin: true,
+    });
 
     const session = await this.syncSessionSet({
-      sessionId,
+      sessionId: event_id,
       oracleName: createSessionDto.oracleName,
       did: createSessionDto.did,
       oracleDid: createSessionDto.oracleDid,
       messages: [],
+      roomId,
     });
 
     return session;

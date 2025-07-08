@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod/v3';
 
 export type TGetSurveyJsDomainSchema = z.infer<typeof GetSurveyJsDomainSchema>;
 export const GetSurveyJsDomainSchema = z.object(

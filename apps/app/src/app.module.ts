@@ -11,11 +11,10 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { ChromaDbModule } from './chroma/chroma-db.module';
 import { EnvSchema } from './config';
-import { KnowledgeModule } from './knowledge/knowledge.module';
 import { MessagesModule } from './messages/messages.module';
 import { AuthHeaderMiddleware } from './middleware/auth-header.middleware';
+// import { QueueModule } from './queue/queue.module';
 import { SessionsModule } from './sessions/sessions.module';
 import { SlackModule } from './slack/slack.module';
 import { SseModule } from './sse/sse.module';
@@ -49,10 +48,11 @@ import { WsModule } from './ws/ws.module';
       },
     ]),
     WsModule,
-    ChromaDbModule.forRoot(),
+    // ChromaDbModule.forRoot(),
     SessionsModule,
     MessagesModule,
-    KnowledgeModule,
+    // QueueModule,
+    // KnowledgeModule,
     SseModule,
     ScheduleModule.forRoot(),
     SlackModule,

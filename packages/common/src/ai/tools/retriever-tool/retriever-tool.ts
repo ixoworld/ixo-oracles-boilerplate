@@ -3,7 +3,7 @@ import { Logger } from '@ixo/logger';
 import { Document } from '@langchain/core/documents';
 import { type BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { tool, type DynamicStructuredTool } from '@langchain/core/tools';
-import { z } from 'zod';
+import * as z from 'zod/v3';
 import { getChatOpenAiModel } from '../../models/openai.js';
 import checkDocRelevance from '../../utils/doc-relevance-checker.js';
 
