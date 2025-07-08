@@ -1,5 +1,5 @@
 import { Coin } from '@cosmjs/proto-signing';
-import { z } from 'zod';
+import * as z from 'zod/v3';
 
 type InitialPaymentParams = {
   amount: Coin;

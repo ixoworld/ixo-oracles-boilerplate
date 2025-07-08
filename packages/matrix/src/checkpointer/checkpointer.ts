@@ -233,13 +233,22 @@ export class MatrixCheckpointSaver<
     const msgs = checkpointValue.checkpoint.channel_values.messages ?? [];
     const lastMessage = msgs.at(-1);
 
-    if (lastMessage && !lastMessage.lc_kwargs.sent) {
+    const msgFromMatrixRoom = Boolean(
+      lastMessage?.additional_kwargs.msgFromMatrixRoom,
+    );
+
+    if (
+      lastMessage &&
+      !lastMessage.additional_kwargs.sent &&
+      !msgFromMatrixRoom
+    ) {
       const isOracleMessage = lastMessage.getType() === 'ai';
       this.matrixManager
         .sendMessage({
           message: lastMessage.content.toString(),
           roomId,
           isOracleAdmin: isOracleMessage,
+          threadId: checkpointValue.thread_id,
         })
         .then(() => {
           lastMessage.lc_kwargs.sent = true;

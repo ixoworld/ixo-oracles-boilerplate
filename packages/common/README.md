@@ -159,7 +159,7 @@ The Environment Service provides a type-safe way to manage and access environmen
 
 ```typescript
 // src/services/env/schema.ts
-import { z } from 'zod';
+import * as z from 'zod/v3';
 
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']),
@@ -176,7 +176,7 @@ export type Schema = typeof envSchema;
 
 ```typescript
 // src/services/env/env.ts
-import { type Schema } from 'zod';
+import { type Schema } from 'zod/v3';
 import { EnvService } from './env.service';
 
 const envService = EnvService.getInstance<Schema>();

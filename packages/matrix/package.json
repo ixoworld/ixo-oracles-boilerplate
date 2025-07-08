@@ -33,7 +33,7 @@
     "@ixo/jest-config": "workspace:*",
     "@ixo/typescript-config": "workspace:*",
     "@jest/types": "^29.6.3",
-    "@langchain/core": "^0.3.3",
+    "@langchain/core": "^0.3.62",
     "@langchain/langgraph": "^0.2.44",
     "@langchain/langgraph-checkpoint-validation": "^0.0.2",
     "@testcontainers/postgresql": "^10.16.0",

@@ -1,7 +1,7 @@
 import { Coin, EncodeObject } from '@cosmjs/proto-signing';
 import { DeliverTxResponse } from '@cosmjs/stargate';
 import { SubmitClaimAuthorization } from '@ixo/impactxclient-sdk/types/codegen/ixo/claims/v1beta1/authz.js';
-import { z } from 'zod';
+import * as z from 'zod/v3';
 import { ValidationError } from '../../utils/validation-error.js';
 
 /**
