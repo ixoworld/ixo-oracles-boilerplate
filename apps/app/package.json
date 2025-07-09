@@ -3,7 +3,7 @@
   "version": "0.1.6",
   "description": "",
   "author": "",
-  "private": true,
+  "private": false,
   "license": "UNLICENSED",
   "scripts": {
     "build": "NODE_OPTION='--experimental-require-module' nest build",
