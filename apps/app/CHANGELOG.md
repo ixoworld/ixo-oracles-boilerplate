@@ -1,5 +1,11 @@
 # app
 
+## 0.1.7
+
+### Patch Changes
+
+- [#5](https://github.com/ixoworld/companion/pull/5) [`47f961d`](https://github.com/ixoworld/companion/commit/47f961d9d88cfc88af03a67a56f326040e519680) Thanks [@LukePetzer-ixo](https://github.com/LukePetzer-ixo)! - init
+
 ## 0.1.6
 
 ### Patch Changes
