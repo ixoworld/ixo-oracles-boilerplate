@@ -37,6 +37,32 @@ export class CrossSigningManager {
   }
 
   /**
+   * Checks if cross-signing setup is needed.
+   * @returns True if cross-signing setup is required
+   */
+  public async needsCrossSigningSetup(): Promise<boolean> {
+    try {
+      // Check if cross-signing is enabled
+      if (!this.hasCrossSigningAccountData()) {
+        return true;
+      }
+
+      // Check if we can access secret storage
+      const keyData = await this.accessSecretStorage();
+      if (!keyData) {
+        return true;
+      }
+
+      // Check if device is verified
+      const isVerified = await this.isCrossVerified();
+      return !isVerified;
+    } catch (error) {
+      Logger.warn('Error checking cross-signing setup requirements:', error);
+      return true; // Assume setup is needed if we can't determine status
+    }
+  }
+
+  /**
    * Gets the crypto API from the Matrix client.
    * @returns The Matrix crypto API instance
    * @throws Error if crypto API is not found
@@ -54,8 +80,26 @@ export class CrossSigningManager {
    * @throws Error if setup fails or admin password is not found
    */
   public async setupCrossSigning(): Promise<void> {
-    clearSecretStorageKeys();
     const cryptoApi = this.getCryptoApi();
+
+    // Only clear keys if we're doing a fresh setup
+    try {
+      // Check if we already have valid secret storage
+      const defaultKey = this.getDefaultSSKey();
+      if (defaultKey && !hasPrivateKey(defaultKey)) {
+        // We have a key but no private key - this might be a recovery scenario
+        Logger.info(
+          'Existing secret storage found but no private key - clearing to start fresh',
+        );
+        clearSecretStorageKeys();
+      }
+    } catch (error) {
+      Logger.warn(
+        'Error checking existing secret storage, proceeding with fresh setup:',
+        error,
+      );
+      clearSecretStorageKeys();
+    }
 
     // Create recovery key
     const recoveryKey = await cryptoApi.createRecoveryKeyFromPassphrase(
@@ -64,11 +108,11 @@ export class CrossSigningManager {
     Logger.info('Recovery key created', { recoveryKey });
 
     // Setup secret storage first
+    // For initial setup, we need to create new secret storage and key backup
     await cryptoApi.bootstrapSecretStorage({
       createSecretStorageKey: async () => recoveryKey,
-      setupNewSecretStorage: false,
-      setupNewKeyBackup: false,
-
+      setupNewSecretStorage: true,
+      setupNewKeyBackup: true,
     });
     Logger.info('Secret storage bootstrapped');
 
@@ -90,13 +134,13 @@ export class CrossSigningManager {
       },
       setupNewCrossSigning: true,
     });
-    // Create the key backup
-    await cryptoApi.resetKeyBackup();
+    Logger.info('Cross-signing bootstrapped');
   }
 
   /**
    * Restores backup using secret storage.
    * @param keyData - Optional key data for backup restoration
+   * @throws Error with specific details about restoration failure
    */
   public async restoreBackup(keyData?: {
     keyId: string;
@@ -105,43 +149,74 @@ export class CrossSigningManager {
     privateKey: Uint8Array;
   }): Promise<void> {
     const progressCallback = (progress: ImportRoomKeyProgressData): void => {
-      Logger.info('restoreBackup', { progress });
-      if (!progress.successes) {
-        Logger.error('Failed to restore backup keys');
-        return;
+      Logger.info('restoreBackup progress', { progress });
+      if ((progress.successes ?? 0) === 0 && (progress.failures ?? 0) > 0) {
+        Logger.warn('Some backup keys failed to restore');
       }
-      Logger.info(
-        `Restoring backup keys... (${progress.successes}/${progress.total})`,
-      );
+      if ((progress.successes ?? 0) > 0) {
+        Logger.info(
+          `Restoring backup keys... (${progress.successes ?? 0}/${progress.total})`,
+        );
+      }
     };
 
     try {
       const backupInfo = await this.client.getKeyBackupVersion();
-      Logger.info('backupInfo', { backupInfo });
+      Logger.info('Backup info retrieved', { backupInfo });
+
       if (!backupInfo) {
-        Logger.error('No backup info found');
+        Logger.warn(
+          'No backup info found - this may be expected for new devices',
+        );
         return;
       }
+
       const info = await this.client.restoreKeyBackupWithSecretStorage(
         backupInfo,
         undefined,
         undefined,
         { progressCallback },
       );
+
       Logger.info(
-        `Successfully restored backup keys (${info.imported}/${info.total}).`,
+        `Successfully restored backup keys (${info.imported}/${info.total})`,
+        {
+          imported: info.imported,
+          total: info.total,
+          backupVersion: backupInfo.version,
+        },
       );
+
+      if (info.imported === 0 && info.total > 0) {
+        Logger.warn('No keys were imported despite backup existing');
+      }
     } catch (error) {
       const e = error as sdk.MatrixError;
-      Logger.error('restoreBackup', error);
+      Logger.error('Backup restoration failed', {
+        error: e.message,
+        errcode: e.errcode,
+      });
+
       if (e.errcode === 'RESTORE_BACKUP_ERROR_BAD_KEY') {
         if (keyData) {
-          Logger.info(`Deleting private key for ${keyData.keyId}`);
+          Logger.info(`Deleting corrupted private key for ${keyData.keyId}`);
           deletePrivateKey(keyData.keyId);
         }
-        Logger.error('[BAD_KEY] Failed to restore backup. Key is invalid!');
+        throw new Error(
+          'Backup restoration failed: Invalid key. The recovery phrase may be incorrect.',
+        );
+      } else if (e.errcode === 'M_NOT_FOUND') {
+        Logger.warn(
+          'Backup not found on server - this may be expected for new setups',
+        );
+      } else if (e.errcode === 'M_FORBIDDEN') {
+        throw new Error(
+          'Backup restoration failed: Access denied. Check user permissions.',
+        );
       } else {
-        Logger.error(`[UNKNOWN] Failed to restore backup. ${e.errcode}`, error);
+        throw new Error(
+          `Backup restoration failed: ${e.errcode || 'Unknown error'}`,
+        );
       }
     }
   }
@@ -302,52 +377,119 @@ export class CrossSigningManager {
    * @throws Error if setup or verification fails after multiple attempts
    */
   public async ensureCrossSigningIsSetup(): Promise<void> {
-    let isCSEnabled = this.hasCrossSigningAccountData();
+    try {
+      // Step 1: Check if cross-signing is already set up
+      let isCSEnabled = this.hasCrossSigningAccountData();
 
-    if (!isCSEnabled) {
-      Logger.info('Setting up cross-signing');
-      await this.setupCrossSigning();
-      isCSEnabled = this.hasCrossSigningAccountData();
       if (!isCSEnabled) {
-        throw new Error('Cross-signing setup failed');
-      }
-    } else {
-      Logger.info('Cross-signing already enabled');
-      let keyData = await this.accessSecretStorage();
-      Logger.info(`keyData:`, { keyData });
-      if (keyData) {
-        Logger.info('Restoring backup with recovery phrase');
-        await this.restoreBackup(keyData);
-      }
-      keyData = await this.accessSecretStorage();
+        Logger.info('Cross-signing not found, setting up...');
+        await this.setupCrossSigning();
 
-      if (!keyData) {
-        throw new Error('Failed to restore backup with recovery phrase');
+        // Verify setup was successful
+        isCSEnabled = this.hasCrossSigningAccountData();
+        if (!isCSEnabled) {
+          throw new Error(
+            'Cross-signing setup failed - no account data found after setup',
+          );
+        }
+        Logger.info('Cross-signing setup completed successfully');
+      } else {
+        Logger.info(
+          'Cross-signing already enabled, checking secret storage access...',
+        );
+
+        // Try to access secret storage
+        let keyData = await this.accessSecretStorage();
+
+        if (!keyData) {
+          Logger.error(
+            'Cannot access secret storage with current recovery phrase',
+          );
+          throw new Error(
+            'Failed to access secret storage - recovery phrase may be incorrect',
+          );
+        }
+
+        Logger.info(
+          'Secret storage access confirmed, attempting backup restoration...',
+        );
+
+        // Attempt to restore backup
+        try {
+          await this.restoreBackup(keyData);
+          Logger.info('Backup restoration completed');
+        } catch (error) {
+          Logger.warn(
+            'Backup restoration failed, continuing with verification:',
+            error,
+          );
+          // Don't throw here - backup restoration failure isn't always fatal
+        }
+
+        // Re-verify secret storage access after backup restoration
+        keyData = await this.accessSecretStorage();
+        if (!keyData) {
+          throw new Error(
+            'Secret storage access lost after backup restoration',
+          );
+        }
       }
+
+      // Step 2: Verify device cross-signing status
+      await this.ensureDeviceIsVerified();
+
+      Logger.info(
+        'Cross-signing setup and verification completed successfully',
+      );
+    } catch (error) {
+      Logger.error('Failed to ensure cross-signing setup:', error);
+      throw error;
     }
+  }
 
+  /**
+   * Ensures the current device is verified with exponential backoff retry logic.
+   * @throws Error if verification fails after multiple attempts
+   */
+  private async ensureDeviceIsVerified(): Promise<void> {
     let isDeviceCrossVerified = await this.isCrossVerified();
 
-    if (!isDeviceCrossVerified) {
-      // First try manual verification
+    if (isDeviceCrossVerified) {
+      Logger.info('Device is already cross-verified');
+      return;
+    }
+
+    Logger.info('Device is not cross-verified, attempting verification...');
+
+    // First attempt: try manual verification
+    try {
       await this.verifyDevice();
       await sleep(1000); // Give some time for verification to propagate
+    } catch (error) {
+      Logger.warn('Manual verification attempt failed:', error);
+      // Continue with retry logic
+    }
 
-      // Then retry with exponential backoff
-      for (let attempts = 0; attempts < 5; attempts++) {
-        Logger.info(`Verification attempt ${attempts + 1}`);
-        // eslint-disable-next-line no-await-in-loop -- for loop
-        isDeviceCrossVerified = await this.isCrossVerified();
-        if (isDeviceCrossVerified) {
-          break;
-        }
-        // eslint-disable-next-line no-await-in-loop -- for loop
-        await sleep(Math.pow(2, attempts) * 1000); // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+    // Retry with exponential backoff
+    const maxAttempts = 5;
+    for (let attempts = 0; attempts < maxAttempts; attempts++) {
+      Logger.info(`Verification check attempt ${attempts + 1}/${maxAttempts}`);
+
+      isDeviceCrossVerified = await this.isCrossVerified();
+      if (isDeviceCrossVerified) {
+        Logger.info(
+          `Device verification succeeded after ${attempts + 1} attempts`,
+        );
+        return;
       }
 
-      if (!isDeviceCrossVerified) {
-        throw new Error('Device verification failed after multiple attempts');
+      if (attempts < maxAttempts - 1) {
+        const sleepTime = Math.pow(2, attempts) * 1000; // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+        Logger.info(`Waiting ${sleepTime}ms before next attempt...`);
+        await sleep(sleepTime);
       }
     }
+
+    throw new Error(`Device verification failed after ${maxAttempts} attempts`);
   }
 }

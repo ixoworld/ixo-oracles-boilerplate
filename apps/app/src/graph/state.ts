@@ -21,6 +21,19 @@ export const CustomerSupportGraphState = Annotation.Root({
     default: () => [],
   }),
 
+  accounts: Annotation<
+    {
+      did: string;
+      name: string;
+      email: string;
+      phone: string;
+      address: string;
+    }[]
+  >({
+    default: () => [],
+    reducer: (prev, curr) => [...prev, ...curr],
+  }),
+
   browserTools: Annotation<BrowserToolCallDto[] | undefined>({
     default: () => [],
     // always override the tool list

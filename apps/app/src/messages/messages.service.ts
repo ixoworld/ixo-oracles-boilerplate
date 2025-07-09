@@ -3,32 +3,195 @@ import {
   SessionManagerService,
   transformGraphStateMessageToListMessageResponse,
 } from '@ixo/common';
-import { type IRunnableConfigWithRequiredFields } from '@ixo/matrix';
+import {
+  type IRunnableConfigWithRequiredFields,
+  type MatrixEvent,
+  type Room,
+} from '@ixo/matrix';
 import { ToolCallEvent } from '@ixo/oracles-events';
 import { type AIMessageChunk } from '@langchain/core/messages';
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
+  type OnModuleDestroy,
+  type OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { type Response } from 'express';
 import * as crypto from 'node:crypto';
 import { CustomerSupportGraph } from 'src/graph';
 import { type TCustomerSupportGraphState } from 'src/graph/state';
+import { MemoryQueueService } from 'src/queue/services/memory-queue.service';
 import { SseService } from 'src/sse/sse.service';
 import { type ENV } from 'src/types';
+import { normalizeDid } from 'src/utils/header.utils';
 import { type ListMessagesDto } from './dto/list-messages.dto';
 import { type SendMessagePayload } from './dto/send-message.dto';
 
 @Injectable()
-export class MessagesService {
+export class MessagesService implements OnModuleInit, OnModuleDestroy {
+  private cleanUpMatrixListener: () => void;
+  private threadRootCache = new Map<string, string>(); // eventId → rootEventId
+
   constructor(
     private readonly customerSupportGraph: CustomerSupportGraph,
     private readonly sessionManagerService: SessionManagerService,
     private readonly config: ConfigService<ENV>,
     private readonly sseService: SseService,
+    private readonly memoryQueueService: MemoryQueueService,
   ) {}
+
+  public onModuleDestroy(): void {
+    this.cleanUpMatrixListener();
+  }
+
+  private getThreadRoot(event: MatrixEvent, room: Room): string | undefined {
+    const eventId = event.event.event_id;
+    if (!eventId) {
+      return undefined;
+    }
+    const inReplyTo =
+      event.getContent()['m.relates_to']?.['m.in_reply_to']?.event_id;
+
+    if (!inReplyTo) {
+      // This event IS the root
+      this.threadRootCache.set(eventId, eventId);
+      return eventId;
+    }
+
+    // Check if we already know the parent's root
+    if (this.threadRootCache.has(inReplyTo)) {
+      const rootEventId = this.threadRootCache.get(inReplyTo);
+      if (!rootEventId) {
+        return undefined;
+      }
+
+      // Cache this event too while we're at it
+      this.threadRootCache.set(eventId, rootEventId);
+
+      Logger.log(`Cache hit for event ${eventId} with root ${rootEventId}`);
+      return rootEventId;
+    }
+
+    // Need to walk up the chain
+    const pathToCache: string[] = [eventId]; // Track events we visit
+    let currentEventId = inReplyTo;
+    const visited = new Set<string>();
+
+    while (currentEventId && !visited.has(currentEventId)) {
+      visited.add(currentEventId);
+      pathToCache.push(currentEventId);
+
+      // Check cache before doing expensive lookup
+      if (this.threadRootCache.has(currentEventId)) {
+        const rootEventId = this.threadRootCache.get(currentEventId);
+        if (!rootEventId) {
+          return undefined;
+        }
+        // Cache entire path we just discovered
+        pathToCache.forEach((id) => this.threadRootCache.set(id, rootEventId));
+        Logger.log(
+          `Cache hit for event ${currentEventId} with root ${rootEventId}`,
+        );
+        return rootEventId;
+      }
+
+      const parentEvent = room.findEventById(currentEventId);
+      if (!parentEvent) break;
+
+      const parentInReplyTo =
+        parentEvent.getContent()['m.relates_to']?.['m.in_reply_to']?.event_id;
+      if (!parentInReplyTo) {
+        // Found the root!
+        // eslint-disable-next-line @typescript-eslint/no-loop-func -- this is a loop function
+        pathToCache.forEach((id) => {
+          this.threadRootCache.set(id, currentEventId);
+        });
+        return currentEventId;
+      }
+
+      currentEventId = parentInReplyTo;
+    }
+
+    // Fallback
+    const fallbackRoot = currentEventId || eventId;
+    pathToCache.forEach((id) => this.threadRootCache.set(id, fallbackRoot));
+    return fallbackRoot;
+  }
+
+  private async handleMessage(event: MatrixEvent, room: Room) {
+    const roomId = room.roomId;
+
+    const content = event.getContent();
+    const userId = event.sender?.userId;
+    const isBot = userId?.includes('bot');
+    if (isBot) {
+      return;
+    }
+
+    if (
+      content.msgtype === 'm.text' &&
+      'body' in content &&
+      typeof content.body === 'string' &&
+      !content.INTERNAL
+    ) {
+      const did = normalizeDid(event.sender?.userId ?? '');
+      const text = content.body;
+      const threadId = this.getThreadRoot(event, room);
+
+      Logger.log({
+        threadId,
+      });
+      if (!threadId) {
+        return;
+      }
+
+      const aiMessage = await this.sendMessage({
+        message: text,
+        did,
+        sessionId: threadId,
+        msgFromMatrixRoom: true,
+      });
+      if (!aiMessage) {
+        return;
+      }
+
+      // Send AI response to Matrix
+      await this.sessionManagerService.matrixManger.sendMessage({
+        message: `${event.sender?.userId}: ${aiMessage.message.content}`,
+        roomId,
+        threadId,
+        isOracleAdmin: true,
+      });
+
+      // Queue the conversation for memory saving
+      // try {
+      //   await this.memoryQueueService.queueConversation({
+      //     humanMessage: text,
+      //     aiMessage: aiMessage.message.content,
+      //     userName: event.sender?.userId || 'Unknown User',
+      //     aiName: 'Oracle Assistant',
+      //     roomId,
+      //     userDid: did,
+      //     sessionId: threadId,
+      //   });
+      // } catch (error) {
+      //   Logger.error('Failed to queue conversation for memory saving:', error);
+      //   // Don't throw - memory saving failure shouldn't break the conversation
+      // }
+    }
+  }
+
+  public async onModuleInit(): Promise<void> {
+    this.cleanUpMatrixListener =
+      await this.sessionManagerService.matrixManger.onMessage((event, room) => {
+        this.handleMessage(event, room).catch((err) => {
+          Logger.error(err);
+        });
+      });
+  }
   public async listMessages(
     params: ListMessagesDto & {
       did: string;
@@ -76,6 +239,7 @@ export class MessagesService {
   public async sendMessage(
     params: SendMessagePayload & {
       res?: Response;
+      msgFromMatrixRoom?: boolean;
     },
   ): Promise<
     | undefined
@@ -109,6 +273,7 @@ export class MessagesService {
         params.message,
         runnableConfig,
         params.tools ?? [],
+        params.msgFromMatrixRoom,
       );
 
       if (params.sessionId) {
@@ -182,6 +347,7 @@ export class MessagesService {
       params.message,
       runnableConfig,
       params.tools ?? [],
+      params.msgFromMatrixRoom,
     );
     const lastMessage = result.messages.at(-1);
     if (!lastMessage) {
@@ -208,7 +374,9 @@ export class MessagesService {
       };
     };
   }> {
-    const accessToken = payload.matrixAccessToken;
+    const accessToken = this.config.getOrThrow<string>(
+      'MATRIX_ORACLE_ADMIN_ACCESS_TOKEN',
+    );
     const did = payload.did;
     const sessionId = payload.sessionId || crypto.randomUUID();
     const requestId =

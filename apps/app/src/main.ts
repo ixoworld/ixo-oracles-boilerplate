@@ -5,10 +5,9 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
-import { migrate } from './knowledge/migrations/migrate';
 
 async function bootstrap(): Promise<void> {
-  await migrate();
+  // await migrate();
 
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
