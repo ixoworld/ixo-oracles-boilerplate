@@ -14,7 +14,7 @@ import { AppService } from './app.service';
 import { EnvSchema } from './config';
 import { MessagesModule } from './messages/messages.module';
 import { AuthHeaderMiddleware } from './middleware/auth-header.middleware';
-import { QueueModule } from './queue/queue.module';
+// import { QueueModule } from './queue/queue.module';
 import { SessionsModule } from './sessions/sessions.module';
 import { SlackModule } from './slack/slack.module';
 import { SseModule } from './sse/sse.module';
@@ -51,7 +51,7 @@ import { WsModule } from './ws/ws.module';
     // ChromaDbModule.forRoot(),
     SessionsModule,
     MessagesModule,
-    QueueModule,
+    // QueueModule,
     // KnowledgeModule,
     SseModule,
     ScheduleModule.forRoot(),
