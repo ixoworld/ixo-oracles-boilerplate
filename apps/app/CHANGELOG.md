@@ -1,5 +1,11 @@
 # app
 
+## 0.1.8
+
+### Patch Changes
+
+- [#7](https://github.com/ixoworld/companion/pull/7) [`3c6d704`](https://github.com/ixoworld/companion/commit/3c6d704eb2d6f9e68d90dd13891afb8f0fec5c07) Thanks [@youssefhany-ixo](https://github.com/youssefhany-ixo)! - remvoe redis
+
 ## 0.1.7
 
 ### Patch Changes
