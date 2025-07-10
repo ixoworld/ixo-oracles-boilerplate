@@ -2,4 +2,4 @@
 'app': patch
 ---
 
-init
+remvoe redis
