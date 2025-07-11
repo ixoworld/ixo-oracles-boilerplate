@@ -23,7 +23,6 @@ import { type Response } from 'express';
 import * as crypto from 'node:crypto';
 import { CustomerSupportGraph } from 'src/graph';
 import { type TCustomerSupportGraphState } from 'src/graph/state';
-import { MemoryQueueService } from 'src/queue/services/memory-queue.service';
 import { SseService } from 'src/sse/sse.service';
 import { type ENV } from 'src/types';
 import { normalizeDid } from 'src/utils/header.utils';
@@ -40,7 +39,6 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     private readonly sessionManagerService: SessionManagerService,
     private readonly config: ConfigService<ENV>,
     private readonly sseService: SseService,
-    private readonly memoryQueueService: MemoryQueueService,
   ) {}
 
   public onModuleDestroy(): void {
