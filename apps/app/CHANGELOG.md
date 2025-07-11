@@ -1,5 +1,11 @@
 # app
 
+## 0.1.9
+
+### Patch Changes
+
+- [#10](https://github.com/ixoworld/companion/pull/10) [`71ba646`](https://github.com/ixoworld/companion/commit/71ba6468d43903f7b8e0eed1ce7d85a8f42c920b) Thanks [@youssefhany-ixo](https://github.com/youssefhany-ixo)! - remove queue
+
 ## 0.1.8
 
 ### Patch Changes
