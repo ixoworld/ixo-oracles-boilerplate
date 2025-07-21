@@ -77,6 +77,24 @@ class MatrixClient {
 
     return this.joinSpaceOrRoom({ roomId: response.roomId });
   }
+
+  public async inviteUser(roomId: string, userId: string): Promise<void> {
+    const url = `${this.params.homeserverUrl}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/invite`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.params.userAccessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ user_id: userId }),
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(
+        `Failed to invite ${userId} to ${roomId}: ${res.status} ${errText}`,
+      );
+    }
+  }
 }
 
 export default MatrixClient;

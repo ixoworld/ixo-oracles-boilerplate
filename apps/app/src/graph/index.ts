@@ -59,7 +59,7 @@ const workflow = new StateGraph(CustomerSupportGraphState)
   .addEdge(GraphNodes.Tools, GraphNodes.Chat);
 
 const compiledGraph = workflow.compile({
-  checkpointer: new MatrixCheckpointSaver(oracleName),
+  checkpointer: new MatrixCheckpointSaver(),
 });
 
 export class CustomerSupportGraph {

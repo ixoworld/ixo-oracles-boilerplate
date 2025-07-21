@@ -30,7 +30,7 @@ describe('MatrixStateManager', () => {
       scrollback: jest.fn(),
     } as unknown as jest.Mocked<sdk.MatrixClient>;
 
-    matrixStateManager = new MatrixStateManager(mockMatrixClient);
+    matrixStateManager = MatrixStateManager.getInstance(mockMatrixClient);
   });
 
   afterEach(() => {
@@ -63,7 +63,6 @@ describe('MatrixStateManager', () => {
 
     it('should throw an error if the state key is not valid', async () => {
       await expect(
-        //@ts-expect-error - we want to test the error
         matrixStateManager.getState(validRoomId, 'invalidStateKey'),
       ).rejects.toThrow('Invalid state key: invalidStateKey');
     });
@@ -190,9 +189,8 @@ describe('MatrixStateManager', () => {
       mockTimeline.getEvents.mockReturnValue([mockEvent]);
       mockEvent.getContent.mockReturnValue({ data: stringifiedEventData });
 
-      const result = await matrixStateManager.listStateEvents(
-        mockRoom as unknown as sdk.Room,
-      );
+      const result =
+        await matrixStateManager.listStateEvents('!room:localhost');
 
       expect(mockMatrixClient.scrollback).toHaveBeenCalledWith(mockRoom, 100);
       expect(result).toEqual([eventData]);
@@ -215,9 +213,8 @@ describe('MatrixStateManager', () => {
       mockTimeline.getEvents.mockReturnValue([mockEvent]);
       mockEvent.getContent.mockReturnValue({ data: 'invalid json' });
 
-      const result = await matrixStateManager.listStateEvents(
-        mockRoom as unknown as sdk.Room,
-      );
+      const result =
+        await matrixStateManager.listStateEvents('!room:localhost');
 
       expect(result).toEqual([]);
     });

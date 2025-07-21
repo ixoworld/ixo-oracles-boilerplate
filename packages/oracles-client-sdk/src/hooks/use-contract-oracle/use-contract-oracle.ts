@@ -128,6 +128,11 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
     },
   });
 
+  const { mutateAsync: inviteUser, isPending: isInvitingUser } = useMutation({
+    mutationFn: async (payload: { roomId: string; userId: string }) => {
+      await matrixClientRef.inviteUser(payload.roomId, payload.userId);
+    },
+  });
   return {
     contractOracle,
     isContractingOracle,
@@ -137,6 +142,8 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
     pricingList,
     isLoadingAuthzConfig,
     authzConfig,
+    inviteUser,
+    isInvitingUser,
   };
 };
 

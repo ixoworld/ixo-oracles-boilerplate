@@ -4,7 +4,7 @@ import * as sdk from 'matrix-js-sdk';
 import { logger } from 'matrix-js-sdk/lib/logger';
 import { promisify } from 'node:util';
 import { CrossSigningManager } from './crypto/cross-signing';
-import { MatrixStateManager } from './matrix-state-manager';
+import { MatrixStateManager, matrixStateManager } from './matrix-state-manager';
 import { type IMessageOptions } from './types/matrix';
 import { Cache } from './utils/cache';
 import { createOracleAdminClient } from './utils/create-oracle-admin-client';
@@ -68,7 +68,6 @@ global.Olm = olm;
  */
 export class MatrixManager {
   private adminClient: sdk.MatrixClient | undefined;
-  public stateManager: MatrixStateManager | undefined;
 
   // Singleton instance management
   private static instance: MatrixManager | undefined;
@@ -82,7 +81,9 @@ export class MatrixManager {
   private homeserverName: string;
   private roomCache: Cache;
 
-  private constructor() {
+  private constructor(
+    public stateManager: MatrixStateManager = matrixStateManager,
+  ) {
     // Private constructor to prevent direct instantiation
     const url = new URL(process.env.MATRIX_BASE_URL ?? '');
     this.homeserverName = process.env.MATRIX_HOMESERVER_NAME ?? url.hostname;
@@ -178,7 +179,7 @@ export class MatrixManager {
       Logger.info('Starting MatrixManager initialization...');
 
       this.adminClient = await createOracleAdminClient();
-      this.stateManager = new MatrixStateManager(this.adminClient);
+      this.stateManager = MatrixStateManager.getInstance();
 
       await this.initializeClient(this.adminClient);
 
@@ -200,7 +201,6 @@ export class MatrixManager {
         }
         this.adminClient = undefined;
       }
-      this.stateManager = undefined;
 
       throw new sdk.MatrixError({
         error:
@@ -245,7 +245,6 @@ export class MatrixManager {
         this.adminClient = undefined;
       }
 
-      this.stateManager = undefined;
       this.isInitialized = false;
       this.initializationPromise = null;
       this.initializationLock = false;
@@ -436,24 +435,16 @@ export class MatrixManager {
     }
 
     // action event
-    await Promise.all([
-      this.adminClient.sendEvent(
-        roomId,
-        threadId ?? null,
-        'ixo.agent.action' as keyof sdk.TimelineEvents,
-        {
-          action,
-          ts: Date.now(),
-        } as unknown as sdk.TimelineEvents[keyof sdk.TimelineEvents],
-        txId,
-      ),
-      this.sendMessage({
-        roomId,
-        message: `The Oracle has performed the following action: ${JSON.stringify(action, null, 2)}`,
-        threadId,
-        isOracleAdmin: true,
-      }),
-    ]);
+    await this.adminClient.sendEvent(
+      roomId,
+      threadId ?? null,
+      'ixo.agent.action' as keyof sdk.TimelineEvents,
+      {
+        action,
+        ts: Date.now(),
+      } as unknown as sdk.TimelineEvents[keyof sdk.TimelineEvents],
+      txId,
+    );
   }
 
   public async getLoginResponse(
@@ -508,6 +499,8 @@ export class MatrixManager {
           });
       }
     });
+    // join invited rooms on startup
+    await this.joinInvitedRooms();
   }
 
   private async setupClientCrypto(client: sdk.MatrixClient): Promise<void> {
@@ -551,6 +544,20 @@ export class MatrixManager {
     }
 
     client.setGlobalErrorOnUnknownDevices(false);
+  }
+
+  private async joinInvitedRooms() {
+    if (!this.adminClient) {
+      throw new sdk.MatrixError({ error: 'Admin client not initialized' });
+    }
+    const invitedRooms = this.adminClient
+      .getRooms()
+      .filter((room) => room.getMyMembership() === 'invite');
+    Logger.info(`Joining ${invitedRooms.length} invited rooms...`);
+    for await (const room of invitedRooms) {
+      await this.adminClient.joinRoom(room.roomId);
+      Logger.info(`Joined room: ${room.roomId}`);
+    }
   }
 }
 
