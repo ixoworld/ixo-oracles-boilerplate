@@ -1,5 +1,8 @@
 import { getOpenAiClient, jsonToYaml, zodResponseFormat } from '@ixo/common';
-import { type IRunnableConfigWithRequiredFields } from '@ixo/matrix';
+import {
+  MatrixManager,
+  type IRunnableConfigWithRequiredFields,
+} from '@ixo/matrix';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { type RunnableConfig } from '@langchain/core/runnables';
 import { Logger } from '@nestjs/common';
@@ -9,6 +12,8 @@ import { queryMemories } from '../tools-node/matrix-memory';
 import { UserContextSchema } from './type';
 
 // const openAI = getOpenAiClient({})
+
+const matrixManager = MatrixManager.getInstance();
 
 export const contextGatherNode = async (
   state: TCustomerSupportGraphState,
@@ -20,15 +25,23 @@ export const contextGatherNode = async (
       userContext: state.userContext,
     };
   }
+
+  const userDid = (config as IRunnableConfigWithRequiredFields).configurable
+    .configs?.user.did;
+
+  if (!userDid) {
+    throw new Error('User DID is required for context gathering');
+  }
+
+  const userDisplayName = await getUserDisplayName(userDid);
+
   const memorySearchResults = await queryMemories({
     query: 'user overview and communication style and habits',
     strategy: 'precise',
     roomId:
       (config as IRunnableConfigWithRequiredFields).configurable.configs?.matrix
         .roomId ?? '',
-    userDid:
-      (config as IRunnableConfigWithRequiredFields).configurable.configs?.user
-        .did ?? '',
+    userDid,
   });
 
   const llm = getOpenAiClient({
@@ -58,6 +71,9 @@ export const contextGatherNode = async (
         "recentSummary": "string",
         "extraInfo": "string"
       }
+
+      Also this is the user's display name in matrix you can use it as fallback if the name is not found in the memory search results but of course if it is valid name not a did or random uuid it should be a real name
+      ${userDisplayName}
     `,
       ],
       [
@@ -87,4 +103,25 @@ export const contextGatherNode = async (
   return {
     userContext: parsedResult,
   };
+};
+
+const getUserDisplayName = async (userDid: string) => {
+  try {
+    // Get the Matrix base URL from environment and extract the hostname
+    const matrixBaseUrl = process.env.MATRIX_BASE_URL;
+    if (!matrixBaseUrl) {
+      throw new Error('MATRIX_BASE_URL environment variable is required');
+    }
+
+    const homeserverName = new URL(matrixBaseUrl).hostname;
+    // Format the DID by replacing colons with hyphens for Matrix username
+    const formattedUserDid = userDid.replace(/:/g, '-');
+    const userId = `@${formattedUserDid}:${homeserverName}`;
+
+    const userDisplayName = await matrixManager.getUserDisplayName(userId);
+    console.log('🚀 ~ getUserDisplayName ~ userDisplayName:', userDisplayName);
+    return userDisplayName;
+  } catch (error) {
+    return null;
+  }
 };

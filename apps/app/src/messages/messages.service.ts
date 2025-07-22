@@ -419,19 +419,24 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
 
     let shouldTriggerMemoryAnalysis = false;
 
+    Logger.log(
+      `messages.length: ${messages.length}, targetSession?.lastProcessedCount: ${targetSession?.lastProcessedCount}`,
+    );
     if (messages.length - (targetSession?.lastProcessedCount ?? 0) > 30) {
-      try {
-        shouldTriggerMemoryAnalysis = true;
-        Logger.log('Triggering memory analysis workflow');
-        await triggerMemoryAnalysisWorkflow({
-          userDid: did,
-          sessionId,
-          oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
-          roomId,
+      shouldTriggerMemoryAnalysis = true;
+      Logger.log('Triggering memory analysis workflow');
+      triggerMemoryAnalysisWorkflow({
+        userDid: did,
+        sessionId,
+        oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
+        roomId,
+      })
+        .then(() => {
+          Logger.log('Memory analysis workflow triggered');
+        })
+        .catch((error) => {
+          Logger.error('Failed to trigger memory analysis workflow:', error);
         });
-      } catch (error) {
-        Logger.error('Failed to trigger memory analysis workflow:', error);
-      }
     }
 
     await this.sessionManagerService.syncSessionSet({

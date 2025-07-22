@@ -346,6 +346,11 @@ export class MatrixManager {
     );
   }
 
+  public async getUserDisplayName(userId: string): Promise<string> {
+    const user = await this.adminClient?.getProfileInfo(userId);
+    return user?.displayname ?? userId;
+  }
+
   public listenToMatrixEvent<T extends sdk.EmittedEvents>(
     eventType: T,
     callback: sdk.ClientEventHandlerMap[T],

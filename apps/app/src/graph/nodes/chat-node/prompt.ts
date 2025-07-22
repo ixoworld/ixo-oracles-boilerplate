@@ -91,11 +91,22 @@ Immediately save facts like:
 - Preferences, styles, and goals
 - Challenges, deadlines, emotional cues
 - Communication styles or personality insights
+- new activities or interests
+- new goals or challenges
+- new preferences or habits
+- new emotional states or triggers
+- new relationships or connections
+- new information or knowledge
+- new experiences or memories
+- new thoughts or ideas
+- new feelings or emotions
+- new opinions or beliefs
+- new habits or routines
+- new goals or aspirations
+- new challenges or obstacles
+- new opportunities or possibilities
+- updates the user told you about
 
-Examples:
-- \`\"User prefers evening check-ins.\"\`
-- \`\"User just launched their new app.\"\`
-- \`\"User dislikes long technical docs.\"\`
 
 ---
 
