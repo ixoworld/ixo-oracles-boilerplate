@@ -1,5 +1,11 @@
 # app
 
+## 0.1.10
+
+### Patch Changes
+
+- [#15](https://github.com/ixoworld/companion/pull/15) [`9addc39`](https://github.com/ixoworld/companion/commit/9addc39944d2c962d72c1dcda77dba64e069c7c4) Thanks [@youssefhany-ixo](https://github.com/youssefhany-ixo)! - Companion
+
 ## 0.1.9
 
 ### Patch Changes
