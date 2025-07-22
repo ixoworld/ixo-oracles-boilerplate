@@ -132,10 +132,10 @@ importers:
         version: 5.6.1
       langchain:
         specifier: ^0.3.29
-        version: 0.3.29(@langchain/core@0.3.62(openai@5.8.2(ws@8.18.2)(zod@3.25.75)))(axios@1.10.0)(openai@5.8.2(ws@8.18.2)(zod@3.25.75))(typeorm@0.3.25(better-sqlite3@11.10.0)(ioredis@5.6.1)(pg@8.16.3)(reflect-metadata@0.2.2)(ts-node@10.9.2(@swc/core@1.12.9)(@types/node@22.16.0)(typescript@5.8.3)))(ws@8.18.2)
+        version: 0.3.29(@langchain/core@0.3.62(openai@5.8.2(ws@8.18.2)(zod@3.25.75)))(axios@1.10.0(debug@4.4.1))(openai@5.8.2(ws@8.18.2)(zod@3.25.75))(typeorm@0.3.25(better-sqlite3@11.10.0)(ioredis@5.6.1)(pg@8.16.3)(reflect-metadata@0.2.2)(ts-node@10.9.2(@swc/core@1.12.9)(@types/node@22.16.0)(typescript@5.8.3)))(ws@8.18.2)
       langfuse-langchain:
         specifier: ^3.37.2
-        version: 3.38.2(langchain@0.3.29(@langchain/core@0.3.62(openai@5.8.2(ws@8.18.2)(zod@3.25.75)))(axios@1.10.0)(openai@5.8.2(ws@8.18.2)(zod@3.25.75))(typeorm@0.3.25(better-sqlite3@11.10.0)(ioredis@5.6.1)(pg@8.16.3)(reflect-metadata@0.2.2)(ts-node@10.9.2(@swc/core@1.12.9)(@types/node@22.16.0)(typescript@5.8.3)))(ws@8.18.2))
+        version: 3.38.2(langchain@0.3.29(@langchain/core@0.3.62(openai@5.8.2(ws@8.18.2)(zod@3.25.75)))(axios@1.10.0(debug@4.4.1))(openai@5.8.2(ws@8.18.2)(zod@3.25.75))(typeorm@0.3.25(better-sqlite3@11.10.0)(ioredis@5.6.1)(pg@8.16.3)(reflect-metadata@0.2.2)(ts-node@10.9.2(@swc/core@1.12.9)(@types/node@22.16.0)(typescript@5.8.3)))(ws@8.18.2))
       pg:
         specifier: ^8.15.5
         version: 8.16.3
@@ -842,7 +842,7 @@ importers:
         specifier: ^8.0.2
         version: 8.3.5(@swc/core@1.12.9)(jiti@2.4.2)(postcss@8.4.49)(typescript@5.8.3)(yaml@2.8.0)
       typescript:
-        specifier: ^5.4.5
+        specifier: ^5.3.3
         version: 5.8.3
 
   packages/slack:
@@ -14386,7 +14386,7 @@ snapshots:
       flat: 5.0.2
       ibm-cloud-sdk-core: 5.4.0
       js-yaml: 4.1.0
-      langchain: 0.3.29(@langchain/core@0.3.62(openai@5.8.2(ws@8.18.2)(zod@3.25.75)))(axios@1.10.0)(openai@5.8.2(ws@8.18.2)(zod@3.25.75))(typeorm@0.3.25(better-sqlite3@11.10.0)(ioredis@5.6.1)(pg@8.16.3)(reflect-metadata@0.2.2)(ts-node@10.9.2(@swc/core@1.12.9)(@types/node@22.16.0)(typescript@5.8.3)))(ws@8.18.2)
+      langchain: 0.3.29(@langchain/core@0.3.62(openai@5.8.2(ws@8.18.2)(zod@3.25.75)))(axios@1.10.0(debug@4.4.1))(openai@5.8.2(ws@8.18.2)(zod@3.25.75))(typeorm@0.3.25(better-sqlite3@11.10.0)(ioredis@5.6.1)(pg@8.16.3)(reflect-metadata@0.2.2)(ts-node@10.9.2(@swc/core@1.12.9)(@types/node@22.16.0)(typescript@5.8.3)))(ws@8.18.2)
       langsmith: 0.3.39(openai@5.8.2(ws@8.18.2)(zod@3.25.75))
       openai: 5.8.2(ws@8.18.2)(zod@3.25.75)
       uuid: 10.0.0
@@ -20049,7 +20049,7 @@ snapshots:
       isstream: 0.1.2
       jsonwebtoken: 9.0.2
       mime-types: 2.1.35
-      retry-axios: 2.6.0(axios@1.10.0)
+      retry-axios: 2.6.0(axios@1.10.0(debug@4.4.1))
       tough-cookie: 4.1.4
     transitivePeerDependencies:
       - supports-color
@@ -21193,7 +21193,7 @@ snapshots:
       - openai
       - ws
 
-  langchain@0.3.29(@langchain/core@0.3.62(openai@5.8.2(ws@8.18.2)(zod@3.25.75)))(axios@1.10.0)(openai@5.8.2(ws@8.18.2)(zod@3.25.75))(typeorm@0.3.25(better-sqlite3@11.10.0)(ioredis@5.6.1)(pg@8.16.3)(reflect-metadata@0.2.2)(ts-node@10.9.2(@swc/core@1.12.9)(@types/node@22.16.0)(typescript@5.8.3)))(ws@8.18.2):
+  langchain@0.3.29(@langchain/core@0.3.62(openai@5.8.2(ws@8.18.2)(zod@3.25.75)))(axios@1.10.0(debug@4.4.1))(openai@5.8.2(ws@8.18.2)(zod@3.25.75))(typeorm@0.3.25(better-sqlite3@11.10.0)(ioredis@5.6.1)(pg@8.16.3)(reflect-metadata@0.2.2)(ts-node@10.9.2(@swc/core@1.12.9)(@types/node@22.16.0)(typescript@5.8.3)))(ws@8.18.2):
     dependencies:
       '@langchain/core': 0.3.62(openai@5.8.2(ws@8.18.2)(zod@3.25.75))
       '@langchain/openai': 0.5.18(@langchain/core@0.3.62(openai@5.8.2(ws@8.18.2)(zod@3.25.75)))(ws@8.18.2)
@@ -21221,9 +21221,9 @@ snapshots:
     dependencies:
       mustache: 4.2.0
 
-  langfuse-langchain@3.38.2(langchain@0.3.29(@langchain/core@0.3.62(openai@5.8.2(ws@8.18.2)(zod@3.25.75)))(axios@1.10.0)(openai@5.8.2(ws@8.18.2)(zod@3.25.75))(typeorm@0.3.25(better-sqlite3@11.10.0)(ioredis@5.6.1)(pg@8.16.3)(reflect-metadata@0.2.2)(ts-node@10.9.2(@swc/core@1.12.9)(@types/node@22.16.0)(typescript@5.8.3)))(ws@8.18.2)):
+  langfuse-langchain@3.38.2(langchain@0.3.29(@langchain/core@0.3.62(openai@5.8.2(ws@8.18.2)(zod@3.25.75)))(axios@1.10.0(debug@4.4.1))(openai@5.8.2(ws@8.18.2)(zod@3.25.75))(typeorm@0.3.25(better-sqlite3@11.10.0)(ioredis@5.6.1)(pg@8.16.3)(reflect-metadata@0.2.2)(ts-node@10.9.2(@swc/core@1.12.9)(@types/node@22.16.0)(typescript@5.8.3)))(ws@8.18.2)):
     dependencies:
-      langchain: 0.3.29(@langchain/core@0.3.62(openai@5.8.2(ws@8.18.2)(zod@3.25.75)))(axios@1.10.0)(openai@5.8.2(ws@8.18.2)(zod@3.25.75))(typeorm@0.3.25(better-sqlite3@11.10.0)(ioredis@5.6.1)(pg@8.16.3)(reflect-metadata@0.2.2)(ts-node@10.9.2(@swc/core@1.12.9)(@types/node@22.16.0)(typescript@5.8.3)))(ws@8.18.2)
+      langchain: 0.3.29(@langchain/core@0.3.62(openai@5.8.2(ws@8.18.2)(zod@3.25.75)))(axios@1.10.0(debug@4.4.1))(openai@5.8.2(ws@8.18.2)(zod@3.25.75))(typeorm@0.3.25(better-sqlite3@11.10.0)(ioredis@5.6.1)(pg@8.16.3)(reflect-metadata@0.2.2)(ts-node@10.9.2(@swc/core@1.12.9)(@types/node@22.16.0)(typescript@5.8.3)))(ws@8.18.2)
       langfuse: 3.38.2
       langfuse-core: 3.38.2
 
@@ -23202,7 +23202,7 @@ snapshots:
       onetime: 5.1.2
       signal-exit: 3.0.7
 
-  retry-axios@2.6.0(axios@1.10.0):
+  retry-axios@2.6.0(axios@1.10.0(debug@4.4.1)):
     dependencies:
       axios: 1.10.0(debug@4.4.1)
 
