@@ -1,16 +1,56 @@
-import { Logger } from '@ixo/logger';
-import * as sdk from 'matrix-js-sdk';
+import 'dotenv/config';
+import { deflateSync, inflateSync } from 'node:zlib';
+
+import {
+  Direction,
+  MatrixClient,
+  MatrixError,
+  StateEvents,
+} from 'matrix-js-sdk';
 import { parse, stringify } from 'superjson';
-import { type OraclesNamesOnMatrix } from '../types';
+
+import { Logger } from '@ixo/logger';
+import { logger } from 'matrix-js-sdk/lib/logger.js';
+
+(logger as any)?.setLevel('ERROR');
 
 interface IStatePayload<C> {
   roomId: string;
-  stateKey: `${OraclesNamesOnMatrix}_${string}`;
+  stateKey: string;
   data: C;
 }
 
 export class MatrixStateManager {
-  constructor(private readonly client: sdk.MatrixClient) {}
+  private readonly client: MatrixClient;
+  private static instance: MatrixStateManager;
+  private constructor(client?: MatrixClient) {
+    if (
+      !process.env.MATRIX_BASE_URL ||
+      !process.env.MATRIX_ORACLE_ADMIN_ACCESS_TOKEN
+    ) {
+      throw new Error(
+        'MATRIX_BASE_URL and MATRIX_ORACLE_ADMIN_ACCESS_TOKEN must be set',
+      );
+    }
+    this.client =
+      client ??
+      new MatrixClient({
+        baseUrl: process.env.MATRIX_BASE_URL,
+        accessToken: process.env.MATRIX_ORACLE_ADMIN_ACCESS_TOKEN,
+      });
+  }
+
+  async listRooms(): Promise<string[]> {
+    const rooms = await this.client.getJoinedRooms();
+    return rooms.joined_rooms;
+  }
+
+  public static getInstance(client?: MatrixClient): MatrixStateManager {
+    if (!MatrixStateManager.instance) {
+      MatrixStateManager.instance = new MatrixStateManager(client);
+    }
+    return MatrixStateManager.instance;
+  }
 
   private validateRoom(roomId: string): void {
     const roomRegex =
@@ -21,69 +61,171 @@ export class MatrixStateManager {
     }
   }
 
-  async getState<C>(
+  public async parseContent<C>(
+    content: string,
     roomId: string,
-    stateKey: `${OraclesNamesOnMatrix}_${string}`,
+    stateKey: string,
   ): Promise<C> {
-    this.validateRoom(roomId);
-
-    const stateEvent = await this.client.getStateEvent(
-      roomId,
-      'ixo.room.state',
-      stateKey,
-    );
-
-    const content = stateEvent.data as unknown;
-
-    if (typeof content !== 'string') {
-      throw new Error(`Invalid content type: ${typeof content}`);
-    }
-
+    // Try new format first (zlib compressed)
     try {
-      const v = parse(content);
-      return v as C;
+      const compressed = Buffer.from(content, 'base64');
+      const jsonBuf = inflateSync(compressed);
+      const str = jsonBuf.toString('utf8');
+      const data = parse(str);
+      return data as C;
+    } catch (zlibError) {
+      const zlibErrorMsg =
+        zlibError instanceof Error ? zlibError.message : String(zlibError);
+      Logger.info(
+        `Failed to parse with zlib compression for ${stateKey} in room ${roomId}, attempting legacy format migration`,
+      );
+
+      // Try old format (uncompressed superjson)
+      try {
+        const legacyData = parse(content);
+        Logger.warn(
+          `Successfully parsed legacy format for ${stateKey} in room ${roomId}, migrating to new format`,
+        );
+
+        // Migrate to new format
+        // await this.migrateToNewFormat(roomId, stateKey, legacyData);
+
+        return legacyData as C;
+      } catch (legacyError) {
+        const legacyErrorMsg =
+          legacyError instanceof Error
+            ? legacyError.message
+            : String(legacyError);
+        Logger.error(
+          `Failed to parse content in both new and legacy formats for ${stateKey} in room ${roomId}`,
+          {
+            zlibError: zlibErrorMsg,
+            legacyError: legacyErrorMsg,
+            contentPreview: content.substring(0, 100),
+          },
+        );
+        throw new Error(
+          `Unable to parse state content in any supported format: ${legacyErrorMsg}`,
+        );
+      }
+    }
+  }
+
+  private async migrateToNewFormat<C>(
+    roomId: string,
+    stateKey: string,
+    data: C,
+  ): Promise<void> {
+    try {
+      Logger.info(
+        `Starting migration to new format for ${stateKey} in room ${roomId}`,
+      );
+
+      // Re-save using new compressed format
+      await this.setState({
+        roomId,
+        stateKey,
+        data,
+      });
+
+      Logger.info(
+        `Successfully migrated ${stateKey} in room ${roomId} to new zlib format`,
+      );
     } catch (error) {
-      Logger.error('Error parsing content', error);
+      Logger.error(
+        `Failed to migrate ${stateKey} in room ${roomId} to new format`,
+        error,
+      );
+      // Don't throw here - migration failure shouldn't break the read operation
+    }
+  }
+
+  async getState<C>(roomId: string, stateKey: string): Promise<C> {
+    try {
+      this.validateRoom(roomId);
+
+      const stateEvent = await this.client.getStateEvent(
+        roomId,
+        'ixo.room.state' as keyof StateEvents,
+        stateKey,
+      );
+
+      const content = stateEvent.data as unknown;
+
+      if (typeof content !== 'string') {
+        throw new Error(`Invalid content type: ${typeof content}`);
+      }
+
+      return this.parseContent<C>(content, roomId, stateKey);
+    } catch (error) {
+      if (error instanceof MatrixError) {
+        const isRateLimited = error.errcode === 'M_LIMIT_EXCEEDED';
+        if (isRateLimited) {
+          Logger.warn('Rate limited, retrying in 10 seconds');
+          await new Promise((resolve) => setTimeout(resolve, 10000));
+          return this.getState<C>(roomId, stateKey);
+        }
+      }
+
       throw error;
     }
   }
 
   async setState<C>(payload: IStatePayload<C>): Promise<void> {
     try {
+      const str = stringify(payload.data);
+      const compressed = deflateSync(Buffer.from(str, 'utf8'));
+      const b64 = compressed.toString('base64');
+
+      Logger.debug(
+        `Setting state for ${payload.stateKey} in room ${payload.roomId} (compressed: ${str.length} -> ${b64.length} chars)`,
+      );
+
       await this.client.sendStateEvent(
         payload.roomId,
-        'ixo.room.state' as keyof sdk.StateEvents,
-        {
-          data: stringify(payload.data),
-        } as sdk.StateEvents[keyof sdk.StateEvents],
+        'ixo.room.state' as keyof StateEvents,
+        { data: b64 } as StateEvents[keyof StateEvents],
         payload.stateKey,
       );
     } catch (error) {
       Logger.error('Error setting state', error);
+
+      if (error instanceof MatrixError) {
+        const isRateLimited = error.errcode === 'M_LIMIT_EXCEEDED';
+        if (isRateLimited) {
+          Logger.warn('Rate limited, retrying in 10 seconds');
+          await new Promise((resolve) => setTimeout(resolve, 10000));
+          await this.setState(payload);
+        }
+      }
+
       throw error;
     }
   }
 
-  async updateState<C>(payload: IStatePayload<C>): Promise<C> {
+  async updateState<C extends Record<string, unknown> | undefined>(
+    payload: IStatePayload<C>,
+  ): Promise<C> {
     let oldState: C | undefined;
     try {
       oldState = await this.getState<C>(payload.roomId, payload.stateKey);
-    } catch (error) {
+    } catch {
       oldState = undefined;
     }
 
     const newState = oldState ? { ...oldState, ...payload.data } : payload.data;
-
-    await this.setState({
-      ...payload,
-      data: newState,
-    });
-
+    await this.setState({ ...payload, data: newState });
     return newState;
   }
 
-  async listStateEvents<D>(room: sdk.Room): Promise<D[]> {
+  async listStateEvents<D>(roomId: string): Promise<D[]> {
     const data: D[] = [];
+    let migratedCount = 0;
+    let totalProcessed = 0;
+
+    const room = await this.client.peekInRoom(roomId);
+
+    Logger.info(`Starting to list state events for room ${room.roomId}`);
 
     // Start paginating backward.
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition, no-constant-condition -- we need to paginate the timeline
@@ -94,27 +236,59 @@ export class MatrixStateManager {
 
       // After the scrollback, check if we're at the start of the timeline.
       const timeline = room.getLiveTimeline();
-      if (!timeline.getPaginationToken(sdk.Direction.Backward)) {
-        break;
-      }
+      if (!timeline.getPaginationToken(Direction.Backward)) break;
 
-      // Iterate through the timeline and handle each event as needed.
-      const events = timeline.getEvents();
-      for (const event of events) {
-        const content = event.getContent<{
-          data: string;
-        }>().data;
+      for (const event of timeline.getEvents()) {
+        const content = event.getContent<{ data: string }>().data;
         if (content) {
+          totalProcessed++;
           try {
-            const parsedContent = parse(content);
-            data.push(parsedContent as D);
-          } catch (error) {
-            Logger.error('Error parsing content', error);
+            // Try new format first
+            try {
+              const compressed = Buffer.from(content, 'base64');
+              const jsonBuf = inflateSync(compressed);
+              const str = jsonBuf.toString('utf8');
+              data.push(parse(str));
+            } catch (zlibError) {
+              Logger.warn(
+                `Failed to parse with zlib compression for ${event.getId()} in room ${room.roomId}, attempting legacy format migration`,
+                {
+                  zlibError:
+                    zlibError instanceof Error
+                      ? zlibError.message
+                      : String(zlibError),
+                },
+              );
+              // Try legacy format
+              Logger.info(
+                `Event ${event.getId()} in room ${room.roomId} uses legacy format, migrating`,
+              );
+              const legacyData = parse(content);
+              data.push(legacyData as D);
+              migratedCount++;
+
+              // Note: We can't easily re-save timeline events as they're historical
+              // This migration only applies to state events via getState()
+            }
+          } catch (err) {
+            Logger.error(
+              `Error parsing event ${event.getId()} in room ${room.roomId}`,
+              err,
+            );
           }
         }
       }
     }
 
+    Logger.info(
+      `Completed listing state events for room ${room.roomId}: ${totalProcessed} processed, ${migratedCount} legacy format detected`,
+    );
+    Logger.info(`Started migrating ${migratedCount} events to new format`);
+    await this.migrateToNewFormat(room.roomId, 'ixo.room.state', data);
+    Logger.info(`Completed migrating ${migratedCount} events to new format`);
+
     return data;
   }
 }
+
+export const matrixStateManager = MatrixStateManager.getInstance();

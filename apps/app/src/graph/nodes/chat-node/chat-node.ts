@@ -19,14 +19,29 @@ export async function chatNode(
 
   Logger.log(`msgFromMatrixRoom: ${msgFromMatrixRoom}`);
   const llm = getChatOpenAiModel({
-    modelName: 'gpt-4.1-nano',
+    model: 'qwen/qwen3-14b', //qwen3-30b-a3b
+    temperature: 0.8,
+    apiKey: process.env.OPEN_ROUTER_API_KEY,
+    // reasoningEffort: 'medium',
+    timeout: 20 * 1000 * 60, // 20 minutes
+    modelKwargs: {
+      reasoning: {
+        effort: 'medium',
+        exclude: false, // Use reasoning but don't include it in the response
+        enabled: true, // Default: inferred from `effort` or `max_tokens`
+      },
+      require_parameters: true,
+    },
+    configuration: {
+      baseURL: 'https://openrouter.ai/api/v1',
+    },
   });
   const systemPrompt = await AI_COMPANION_PROMPT.format({
     APP_NAME: 'IXO Personal AI Companion | IXO Portal',
-    APP_MAIN_FEATURES: 'Help user with their personal and professional goals',
-    APP_PURPOSE: 'help user with their personal and professional goals',
-    APP_TARGET_USERS: 'users of the IXO Portal',
-    APP_UNIQUE_SELLING_POINTS: 'the best personal ai companion',
+    USERNAME: state.userContext.name,
+    COMMUNICATION_STYLE: state.userContext.communicationStyle,
+    RECENT_SUMMARY: state.userContext.recentSummary,
+    EXTRA_INFO: state.userContext.extraInfo,
   });
   const browserTools = state.browserTools?.map((tool) =>
     parserBrowserTool({
@@ -36,10 +51,16 @@ export async function chatNode(
     }),
   );
 
-  const chain = ChatPromptTemplate.fromMessages([
-    ['system', systemPrompt],
-    new MessagesPlaceholder('msgs'),
-  ]).pipe(llm.bindTools([...tools, ...(browserTools ?? [])]));
+  const chain = ChatPromptTemplate.fromMessages(
+    [['system', systemPrompt], new MessagesPlaceholder('msgs')],
+    {
+      templateFormat: 'mustache',
+    },
+  )
+    .pipe(llm.bindTools([...tools, ...(browserTools ?? [])]))
+    .withConfig({
+      tags: ['chat_node'],
+    });
 
   const result = await chain.invoke(
     {
@@ -49,6 +70,7 @@ export async function chatNode(
   );
 
   result.additional_kwargs.msgFromMatrixRoom = msgFromMatrixRoom;
+  result.additional_kwargs.timestamp = new Date().toISOString();
 
   return {
     messages: [result],

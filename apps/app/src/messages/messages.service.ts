@@ -22,6 +22,7 @@ import { ConfigService } from '@nestjs/config';
 import { type Response } from 'express';
 import * as crypto from 'node:crypto';
 import { CustomerSupportGraph } from 'src/graph';
+import { triggerMemoryAnalysisWorkflow } from 'src/graph/nodes/tools-node/matrix-memory';
 import { type TCustomerSupportGraphState } from 'src/graph/state';
 import { SseService } from 'src/sse/sse.service';
 import { type ENV } from 'src/types';
@@ -123,8 +124,8 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     const roomId = room.roomId;
 
     const content = event.getContent();
-    const userId = event.sender?.userId;
-    const isBot = userId?.includes('bot');
+    const did = normalizeDid(event.sender?.userId ?? '');
+    const isBot = did === this.config.getOrThrow('ORACLE_DID');
     if (isBot) {
       return;
     }
@@ -135,13 +136,9 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       typeof content.body === 'string' &&
       !content.INTERNAL
     ) {
-      const did = normalizeDid(event.sender?.userId ?? '');
       const text = content.body;
       const threadId = this.getThreadRoot(event, room);
 
-      Logger.log({
-        threadId,
-      });
       if (!threadId) {
         return;
       }
@@ -227,6 +224,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       },
       sessionId,
     };
+
     const state = await this.customerSupportGraph.getGraphState(config);
     if (!state || (state.config.did && state.config.did !== did)) {
       return transformGraphStateMessageToListMessageResponse([]);
@@ -250,7 +248,19 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         sessionId: string;
       }
   > {
-    const { runnableConfig, sessionId } = await this.prepareForQuery(params);
+    const { runnableConfig, sessionId, roomId } =
+      await this.prepareForQuery(params);
+
+    this.sessionManagerService.matrixManger
+      .sendMessage({
+        message: params.message,
+        roomId,
+        threadId: sessionId,
+        isOracleAdmin: false,
+      })
+      .catch((err) => {
+        Logger.error('Failed to replay API message to matrix room', err);
+      });
 
     if (params.stream && params.res) {
       // SET the headers
@@ -274,6 +284,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         params.msgFromMatrixRoom,
       );
 
+      let fullContent = '';
       if (params.sessionId) {
         const toolCallEvent = new ToolCallEvent({
           requestId: runnableConfig.configurable.requestId ?? '',
@@ -281,12 +292,8 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
           toolName: 'toolName',
           args: 'args',
         });
-        // const thinkingEvent = new ThinkingEvent({
-        //   message: '',
-        //   requestId: runnableConfig.configurable.requestId ?? '',
-        //   sessionId,
-        // });
-        for await (const { data, event } of stream) {
+        for await (const { data, event, tags } of stream) {
+          const isChatNode = tags?.includes('chat_node');
           if (event === 'on_chat_model_stream') {
             const content = (data.chunk as AIMessageChunk).content;
 
@@ -302,39 +309,30 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
             if (!content) {
               continue;
             }
-            params.res.write(content.toString());
-            // // append content to fullContent
-            // fullContent += content.toString();
-
-            // filter.processChunk(
-            //   content.toString(),
-            //   (filteredContent) => {
-            //     process.stdout.write(filteredContent);
-            //     params.res?.write(filteredContent);
-            //   },
-            //   (filteredThinking) => {
-            //     thinkingEvent.appendMessage(filteredThinking);
-            //     this.sseService.publishToSession(sessionId, thinkingEvent);
-            //   },
-            // );
+            if (isChatNode) {
+              fullContent += content.toString();
+              params.res.write(content.toString());
+            }
           }
         }
-        // filter.flush(
-        //   (filteredContent) => {
-        //     params.res?.write(filteredContent);
-        //   },
-        //   (filteredThinking) => {
-        //     thinkingEvent.appendMessage(filteredThinking);
-        //     this.sseService.publishToSession(sessionId, thinkingEvent);
-        //   },
-        // );
-        // if (!fullContent.includes('<answer>')) {
-        //   // send the full content as a message
-        //   params.res.write(fullContent);
-        // }
+
         if (!params.res.writableEnded) {
           params.res.end();
         }
+
+        this.sessionManagerService.matrixManger
+          .sendMessage({
+            message: fullContent,
+            roomId,
+            threadId: sessionId,
+            isOracleAdmin: true,
+          })
+          .catch((err) => {
+            Logger.error(
+              'Failed to replay API AI response message to matrix room',
+              err,
+            );
+          });
         return;
       }
 
@@ -351,6 +349,20 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     if (!lastMessage) {
       throw new BadRequestException('No message returned from the oracle');
     }
+
+    this.sessionManagerService.matrixManger
+      .sendMessage({
+        message: lastMessage.content.toString(),
+        roomId,
+        threadId: sessionId,
+        isOracleAdmin: true,
+      })
+      .catch((err) => {
+        Logger.error(
+          'Failed to replay API AI response message to matrix room',
+          err,
+        );
+      });
 
     return {
       message: {
@@ -395,12 +407,42 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       matrixAccessToken: accessToken,
       sessionId,
     });
+
+    const sessions = await this.sessionManagerService.listSessions({
+      did,
+      oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
+    });
+
+    const targetSession = sessions.sessions.find(
+      (session) => session.sessionId === sessionId,
+    );
+
+    let shouldTriggerMemoryAnalysis = false;
+
+    if (messages.length - (targetSession?.lastProcessedCount ?? 0) > 30) {
+      try {
+        shouldTriggerMemoryAnalysis = true;
+        Logger.log('Triggering memory analysis workflow');
+        await triggerMemoryAnalysisWorkflow({
+          userDid: did,
+          sessionId,
+          oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
+          roomId,
+        });
+      } catch (error) {
+        Logger.error('Failed to trigger memory analysis workflow:', error);
+      }
+    }
+
     await this.sessionManagerService.syncSessionSet({
       sessionId,
       oracleName: this.config.getOrThrow('ORACLE_NAME'),
       did,
       messages: messages.map((message) => message.content),
       oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
+      lastProcessedCount: shouldTriggerMemoryAnalysis
+        ? messages.length
+        : (targetSession?.lastProcessedCount ?? 0),
     });
 
     const config: TCustomerSupportGraphState['config'] = {

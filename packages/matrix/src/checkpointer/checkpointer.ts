@@ -1,5 +1,3 @@
-import { Logger } from '@ixo/logger';
-
 import {
   BaseCheckpointSaver,
   type ChannelVersions,
@@ -9,381 +7,229 @@ import {
   type CheckpointTuple,
   type PendingWrite,
   type SerializerProtocol,
+  TASKS,
 } from '@langchain/langgraph-checkpoint';
-import { MatrixManager } from '../matrix-manager';
-import {
-  type IMatrixManagerInitConfig,
-  type OraclesNamesOnMatrix,
-} from '../types';
-import {
-  type ICheckpointRow,
-  type IGraphStateWithRequiredFields,
-  type IRunnableConfigWithRequiredFields,
-  type IWritesRow,
-  type SaveStateParams,
-} from './types';
+
+import { matrixStateManager } from '../matrix-state-manager/matrix-state-manager.js';
+import type {
+  IGraphStateWithRequiredFields,
+  IRunnableConfigWithRequiredFields,
+} from './types.js';
+
+// Storage interfaces - simplified like SQL
+interface StoredCheckpoint {
+  thread_id: string;
+  checkpoint_id: string;
+  checkpoint_ns: string;
+  parent_checkpoint_id?: string;
+  type: string;
+  checkpoint: string; // serialized
+  metadata: string; // serialized
+}
+
+interface StoredWrite {
+  thread_id: string;
+  checkpoint_id: string;
+  checkpoint_ns: string;
+  task_id: string;
+  idx: number;
+  channel: string;
+  type: string;
+  value: string; // serialized
+}
 
 export class MatrixCheckpointSaver<
-  GraphState extends
+  _GraphState extends
     IGraphStateWithRequiredFields = IGraphStateWithRequiredFields,
 > extends BaseCheckpointSaver {
-  private matrixManager: MatrixManager | undefined;
-  public readonly oracleName: OraclesNamesOnMatrix;
+  private stateManager = matrixStateManager;
 
-  constructor(oracleName: OraclesNamesOnMatrix, serde?: SerializerProtocol) {
+  constructor(serde?: SerializerProtocol) {
     super(serde);
-    this.oracleName = oracleName;
   }
 
-  private setupMatrixManager = async (
-    matrixConfig: Pick<IMatrixManagerInitConfig, 'accessToken'> & {
-      roomId: string;
-    },
-  ): Promise<void> => {
-    if (this.matrixManager) {
-      return;
-    }
-    if (!matrixConfig.accessToken) {
-      throw new Error('Missing access token');
-    }
-    const matrixManager = MatrixManager.getInstance();
-    if (!matrixManager.getInitializationStatus().isInitialized) {
-      await matrixManager.init();
-    }
-
-    this.matrixManager = matrixManager;
-  };
-
-  private getState = async ({
-    stateKey,
-    roomId,
-    oracleDid,
-  }: {
-    stateKey: string;
-    roomId: string;
-    oracleDid: string;
-  }): Promise<ICheckpointRow<GraphState> | IWritesRow[] | undefined> => {
-    try {
-      if (!this.matrixManager?.stateManager) {
-        throw new Error('MatrixManager not initialized');
-      }
-
-      const state = await this.matrixManager.stateManager.getState<
-        ICheckpointRow<GraphState> | IWritesRow[]
-      >(roomId, `${oracleDid}_graph_${stateKey}`);
-      return state;
-    } catch (error) {
-      return undefined;
-    }
-  };
-
-  private async getCheckpoint({
-    threadId,
-    roomId,
-    checkpointId,
-    checkpointNamespace,
-    oracleDid,
-  }: {
-    threadId: string;
-    roomId: string;
-    checkpointId?: string;
-    checkpointNamespace?: string;
-    oracleDid: string;
-  }): Promise<ICheckpointRow<GraphState> | undefined> {
-    if (!this.matrixManager) {
-      throw new Error('MatrixManager not initialized');
-    }
-    if (!checkpointId) {
-      const room = this.matrixManager.getOracleRoom(roomId);
-
-      if (!room) {
-        throw new Error(`getCheckpoint: Room not found: ${roomId}`);
-      }
-
-      const latestCheckpointEvent = (await this.getState({
-        roomId,
-        oracleDid,
-        stateKey: `${threadId}_latest_checkpoint`,
-      })) as ICheckpointRow<GraphState> | undefined;
-
-      return latestCheckpointEvent;
-    }
-
-    const checkpointStateKey = `${threadId}_${checkpointNamespace}_${checkpointId}`;
-    const checkpointState = (await this.getState({
-      stateKey: checkpointStateKey,
-      roomId,
-      oracleDid,
-    })) as ICheckpointRow<GraphState>;
-    return checkpointState;
-  }
-  private async saveCheckpoint({
-    threadId,
-    roomId,
-    checkpointId,
-    checkpointNamespace,
-    checkpoint,
-    oracleDid,
-  }: {
-    threadId: string;
-    roomId: string;
-    checkpointId: string;
-    checkpointNamespace: string;
-    checkpoint: ICheckpointRow<GraphState>;
-    oracleDid: string;
-  }): Promise<void> {
-    const checkpointStateKey = `${threadId}_${checkpointNamespace}_${checkpointId}`;
-    if (!this.matrixManager?.stateManager) {
-      throw new Error('MatrixManager not initialized');
-    }
-    await this.matrixManager.stateManager.setState<ICheckpointRow<GraphState>>({
-      roomId,
-      stateKey: `${oracleDid}_graph_${checkpointStateKey}`,
-      data: checkpoint,
-    });
-
-    // save the latest checkpoint
-    const latestCheckpointStateKey = `${threadId}_latest_checkpoint`;
-    await this.matrixManager.stateManager.setState<ICheckpointRow<GraphState>>({
-      roomId,
-      stateKey: `${oracleDid}_graph_${latestCheckpointStateKey}`,
-      data: checkpoint,
-    });
-
-    if (!process.env.SKIP_LOGGING_CHAT_HISTORY_TO_MATRIX) {
-      this.sendMessageToMatrixInBackground({ ...checkpoint }, roomId);
-    }
+  // Storage keys - following SQL table pattern
+  private getCheckpointKey(
+    oracleDid: string,
+    threadId: string,
+    checkpointNs: string,
+    checkpointId: string,
+  ): string {
+    return `${oracleDid}_checkpoint_${threadId}_${checkpointNs}_${checkpointId}`;
   }
 
-  private async getWrites({
-    threadId,
-    roomId,
-    checkpointId,
-    checkpointNamespace,
-    oracleDid,
-  }: {
-    threadId: string;
-    roomId: string;
-    checkpointId?: string;
-    checkpointNamespace?: string;
-    oracleDid: string;
-  }): Promise<IWritesRow[] | undefined> {
-    const checkpointStateKey = `${threadId}_${checkpointNamespace}_${checkpointId}_w`;
-    const writes = (await this.getState({
-      roomId,
-      stateKey: checkpointStateKey,
-      oracleDid,
-    })) as IWritesRow[];
-    return writes;
+  private getWritesKey(
+    oracleDid: string,
+    threadId: string,
+    checkpointNs: string,
+    checkpointId: string,
+  ): string {
+    return `${oracleDid}_writes_${threadId}_${checkpointNs}_${checkpointId}`;
   }
 
-  private async saveWrites({
-    threadId,
-    roomId,
-    checkpointId,
-    checkpointNamespace,
-    writes,
-    oracleDid,
-  }: {
-    threadId: string;
-    roomId: string;
-    checkpointId: string;
-    checkpointNamespace: string;
-    writes: IWritesRow[];
-    oracleDid: string;
-  }): Promise<void> {
-    const checkpointStateKey = `${threadId}_${checkpointNamespace}_${checkpointId}_w`;
-    if (!this.matrixManager?.stateManager) {
-      throw new Error('MatrixManager not initialized');
-    }
-    const oldWrites =
-      (await this.getWrites({
-        threadId,
-        roomId,
-        checkpointId,
-        checkpointNamespace,
-        oracleDid,
-      })) ?? [];
-    await this.matrixManager.stateManager.setState<IWritesRow[]>({
-      roomId,
-      stateKey: `${oracleDid}_graph_${checkpointStateKey}`,
-      data: [...writes, ...oldWrites],
-    });
+  private getLatestCheckpointKey(
+    oracleDid: string,
+    threadId: string,
+    checkpointNs: string,
+  ): string {
+    return `${oracleDid}_latest_${threadId}_${checkpointNs}`;
   }
 
-  private jsonToArrayBuffer(data: object): Uint8Array {
-    if (typeof data === 'string') {
-      return data;
-    }
-    const jsonString = JSON.stringify(data);
-    // Step 2: Encode the string to UTF-8
-    const encoder = new TextEncoder();
-    const uint8Array = encoder.encode(jsonString);
-
-    return uint8Array;
-  }
-
-  private sendMessageToMatrixInBackground(
-    checkpointValue: ICheckpointRow<GraphState>,
+  // Store checkpoint (without pending_sends like SQL)
+  private async storeCheckpoint(
     roomId: string,
-  ): void {
-    if (!this.matrixManager) {
-      throw new Error('MatrixManager not initialized');
-    }
-    const msgs = checkpointValue.checkpoint.channel_values.messages ?? [];
-    const lastMessage = msgs.at(-1);
-
-    const msgFromMatrixRoom = Boolean(
-      lastMessage?.additional_kwargs.msgFromMatrixRoom,
+    oracleDid: string,
+    storedCheckpoint: StoredCheckpoint,
+  ): Promise<void> {
+    const key = this.getCheckpointKey(
+      oracleDid,
+      storedCheckpoint.thread_id,
+      storedCheckpoint.checkpoint_ns,
+      storedCheckpoint.checkpoint_id,
     );
 
-    if (
-      lastMessage &&
-      !lastMessage.additional_kwargs.sent &&
-      !msgFromMatrixRoom
-    ) {
-      const isOracleMessage = lastMessage.getType() === 'ai';
-      this.matrixManager
-        .sendMessage({
-          message: lastMessage.content.toString(),
+    await this.stateManager.setState({
+      roomId,
+      stateKey: key,
+      data: storedCheckpoint,
+    });
+
+    // Also store as latest checkpoint
+    const latestKey = this.getLatestCheckpointKey(
+      oracleDid,
+      storedCheckpoint.thread_id,
+      storedCheckpoint.checkpoint_ns,
+    );
+
+    await this.stateManager.setState({
+      roomId,
+      stateKey: latestKey,
+      data: storedCheckpoint,
+    });
+  }
+
+  // Store writes
+  private async storeWrites(
+    roomId: string,
+    oracleDid: string,
+    writes: StoredWrite[],
+  ): Promise<void> {
+    if (!writes || writes.length === 0 || !writes[0]) return;
+
+    const key = this.getWritesKey(
+      oracleDid,
+      writes[0].thread_id,
+      writes[0].checkpoint_ns,
+      writes[0].checkpoint_id,
+    );
+
+    // Get existing writes and append new ones
+    const existingWrites = await this.getStoredWrites(
+      roomId,
+      oracleDid,
+      writes[0].thread_id,
+      writes[0].checkpoint_ns,
+      writes[0].checkpoint_id,
+    );
+    const allWrites = [...existingWrites, ...writes];
+
+    await this.stateManager.setState({
+      roomId,
+      stateKey: key,
+      data: allWrites,
+    });
+  }
+
+  // Get stored checkpoint
+  private async getStoredCheckpoint(
+    roomId: string,
+    oracleDid: string,
+    threadId: string,
+    checkpointNs: string,
+    checkpointId?: string,
+  ): Promise<StoredCheckpoint | undefined> {
+    try {
+      if (!checkpointId) {
+        // Get latest checkpoint
+        const latestKey = this.getLatestCheckpointKey(
+          oracleDid,
+          threadId,
+          checkpointNs,
+        );
+        return await this.stateManager.getState<StoredCheckpoint>(
           roomId,
-          isOracleAdmin: isOracleMessage,
-          threadId: checkpointValue.thread_id,
-        })
-        .then(() => {
-          lastMessage.lc_kwargs.sent = true;
-        })
-        .catch((error) => {
-          Logger.error('Error sending message to matrix:', error);
-          throw error;
-        });
+          latestKey,
+        );
+      }
+
+      const key = this.getCheckpointKey(
+        oracleDid,
+        threadId,
+        checkpointNs,
+        checkpointId,
+      );
+      return await this.stateManager.getState<StoredCheckpoint>(roomId, key);
+    } catch {
+      return undefined;
     }
   }
-  private saveState = async ({
-    threadId,
-    value: checkpointValue,
-    writesValue,
-    config,
-  }: SaveStateParams<GraphState>): Promise<void> => {
-    const { matrix } = config;
-    if (!this.matrixManager) {
-      await this.setupMatrixManager(matrix);
-    }
 
-    if (!this.matrixManager) {
-      throw new Error('MatrixManager not initialized');
-    }
-
-    if (checkpointValue) {
-      await this.saveCheckpoint({
-        checkpointId: checkpointValue.checkpoint_id,
-        checkpoint: checkpointValue,
-        checkpointNamespace: checkpointValue.checkpoint_ns ?? '',
-        roomId: matrix.roomId,
+  // Get stored writes
+  private async getStoredWrites(
+    roomId: string,
+    oracleDid: string,
+    threadId: string,
+    checkpointNs: string,
+    checkpointId: string,
+  ): Promise<StoredWrite[]> {
+    try {
+      const key = this.getWritesKey(
+        oracleDid,
         threadId,
-        oracleDid: matrix.oracleDid,
-      });
-    } else if (writesValue) {
-      await this.saveWrites({
-        checkpointId: writesValue.checkpoint_id ?? '',
-        checkpointNamespace: writesValue.checkpoint_ns ?? '',
-        roomId: matrix.roomId,
-        threadId,
-        writes: [writesValue],
-        oracleDid: matrix.oracleDid,
-      });
-    } else {
-      throw new Error('Missing value');
-    }
-  };
-
-  private async getRow<T extends 'checkpoints' | 'writes'>({
-    threadId,
-    checkpointNamespace,
-    checkpointId,
-    table,
-    config,
-  }: {
-    table: T;
-    threadId: string;
-    checkpointNamespace?: string;
-    checkpointId?: string;
-    config: NonNullable<
-      IRunnableConfigWithRequiredFields['configurable']['configs']
-    >;
-  }): Promise<
-    | (T extends 'checkpoints' ? ICheckpointRow<GraphState> : IWritesRow[])
-    | undefined
-  > {
-    // check if ./state folder exists
-    const { matrix } = config;
-    if (!this.matrixManager) {
-      await this.setupMatrixManager(matrix);
-    }
-
-    if (table === 'checkpoints') {
-      const checkpointRow = await this.getCheckpoint({
-        roomId: matrix.roomId,
-        threadId,
+        checkpointNs,
         checkpointId,
-        checkpointNamespace,
-        oracleDid: matrix.oracleDid,
-      });
-      if (!checkpointRow) return undefined;
-      const checkpoint = (await this.serde.loadsTyped(
-        'json',
-        this.jsonToArrayBuffer({
-          ...checkpointRow.checkpoint,
-          pending_sends:
-            Array.isArray(checkpointRow.checkpoint.pending_sends) &&
-            checkpointRow.checkpoint.pending_sends.length > 0
-              ? checkpointRow.checkpoint.pending_sends
-              : [],
-        }),
-      )) as Checkpoint;
-      const metadata = (await this.serde.loadsTyped(
-        'json',
-        this.jsonToArrayBuffer(checkpointRow.metadata),
-      )) as CheckpointMetadata;
-      return {
-        ...checkpointRow,
-        checkpoint,
-        metadata,
-      } as unknown as T extends 'checkpoints'
-        ? ICheckpointRow<GraphState>
-        : IWritesRow[];
+      );
+      const writes = await this.stateManager.getState<StoredWrite[]>(
+        roomId,
+        key,
+      );
+      return writes || [];
+    } catch {
+      return [];
     }
+  }
 
-    const writesRows = await this.getWrites({
-      roomId: matrix.roomId,
+  // Reconstruct pending_sends from parent writes (like SQL subquery)
+  private async getPendingSends(
+    roomId: string,
+    oracleDid: string,
+    threadId: string,
+    checkpointNs: string,
+    parentCheckpointId?: string,
+  ): Promise<unknown[]> {
+    if (!parentCheckpointId) return [];
+
+    const parentWrites = await this.getStoredWrites(
+      roomId,
+      oracleDid,
       threadId,
-      checkpointId,
-      checkpointNamespace,
-      oracleDid: matrix.oracleDid,
-    });
-    if (!writesRows)
-      return [] as unknown as T extends 'checkpoints'
-        ? ICheckpointRow<GraphState>
-        : IWritesRow[];
+      checkpointNs,
+      parentCheckpointId,
+    );
 
-    return Promise.all(
-      writesRows.map(async (row) => {
-        const valueAsStr = row.value ?? '';
-        const type = row.type ?? 'json';
-        const value = (await this.serde.loadsTyped(
-          type,
-          typeof row.value === 'object'
-            ? this.jsonToArrayBuffer(row.value)
-            : valueAsStr,
-        )) as string;
-        return {
-          ...row,
-          value,
-        } as IWritesRow;
+    // Filter for TASKS channel and sort by idx (like SQL ORDER BY)
+    const taskWrites = parentWrites
+      .filter((write) => write.channel === TASKS)
+      .sort((a, b) => a.idx - b.idx);
+
+    // Deserialize task values
+    const pendingSends = await Promise.all(
+      taskWrites.map(async (write) => {
+        return await this.serde.loadsTyped(write.type, write.value);
       }),
-    ) as unknown as T extends 'checkpoints'
-      ? ICheckpointRow<GraphState>
-      : IWritesRow[];
+    );
+
+    return pendingSends;
   }
 
   async getTuple(
@@ -396,65 +242,89 @@ export class MatrixCheckpointSaver<
       configs,
     } = config.configurable;
 
-    if (!configs) {
-      throw TypeError('Missing configs in config');
-    }
-
-    const row = await this.getRow({
-      table: 'checkpoints',
-      threadId: threadId ?? '',
-      checkpointNamespace: checkpointNs,
-      config: configs,
-      checkpointId,
-    });
-
-    if (!row) {
+    if (!configs || !threadId) {
       return undefined;
     }
 
-    let finalConfig = config;
+    const { matrix } = configs;
 
-    if (!checkpointId) {
-      finalConfig = {
-        configurable: {
-          thread_id: row.thread_id,
-          checkpoint_ns: checkpointNs,
-          checkpoint_id: row.checkpoint_id,
-        },
-      };
-    }
-
-    if (
-      !finalConfig.configurable.thread_id ||
-      !finalConfig.configurable.checkpoint_id
-    ) {
-      throw new Error('Missing thread_id or checkpoint_id');
-    }
-
-    const pendingWritesRows = await this.getRow({
-      table: 'writes',
-      threadId: threadId ?? '',
-      checkpointNamespace: checkpointNs,
+    // Get stored checkpoint
+    const storedCheckpoint = await this.getStoredCheckpoint(
+      matrix.roomId,
+      matrix.oracleDid,
+      threadId,
+      checkpointNs,
       checkpointId,
-      config: configs,
-    });
-    const pendingWrites = pendingWritesRows?.map((r) => {
-      return [r.task_id, r.channel, r.value];
-    });
+    );
+
+    if (!storedCheckpoint) {
+      return undefined;
+    }
+
+    // Deserialize checkpoint and metadata
+    const checkpoint = (await this.serde.loadsTyped(
+      storedCheckpoint.type,
+      storedCheckpoint.checkpoint,
+    )) as Checkpoint;
+
+    const metadata = (await this.serde.loadsTyped(
+      storedCheckpoint.type,
+      storedCheckpoint.metadata,
+    )) as CheckpointMetadata;
+
+    // Get pending writes for current checkpoint
+    const storedWrites = await this.getStoredWrites(
+      matrix.roomId,
+      matrix.oracleDid,
+      storedCheckpoint.thread_id,
+      storedCheckpoint.checkpoint_ns,
+      storedCheckpoint.checkpoint_id,
+    );
+
+    const pendingWrites: [string, string, unknown][] = await Promise.all(
+      storedWrites.map(async (write): Promise<[string, string, unknown]> => {
+        const value = await this.serde.loadsTyped(write.type, write.value);
+        return [write.task_id, write.channel, value];
+      }),
+    );
+
+    // Reconstruct pending_sends from parent checkpoint (like SQL)
+    const pendingSends = await this.getPendingSends(
+      matrix.roomId,
+      matrix.oracleDid,
+      storedCheckpoint.thread_id,
+      storedCheckpoint.checkpoint_ns,
+      storedCheckpoint.parent_checkpoint_id,
+    );
+
+    // Reconstruct checkpoint with pending_sends
+    const reconstructedCheckpoint: Checkpoint = {
+      ...checkpoint,
+      pending_sends: pendingSends as any[], // Will be properly typed by LangGraph
+    };
+
+    const finalConfig = {
+      configurable: {
+        thread_id: storedCheckpoint.thread_id,
+        checkpoint_ns: storedCheckpoint.checkpoint_ns,
+        checkpoint_id: storedCheckpoint.checkpoint_id,
+      },
+    };
+
     return {
       config: finalConfig,
-      checkpoint: row.checkpoint,
-      metadata: row.metadata,
-      parentConfig: row.parent_checkpoint_id
+      checkpoint: reconstructedCheckpoint,
+      metadata,
+      parentConfig: storedCheckpoint.parent_checkpoint_id
         ? {
             configurable: {
-              thread_id: row.thread_id,
-              checkpoint_ns: row.checkpoint_ns,
-              checkpoint_id: row.parent_checkpoint_id,
+              thread_id: storedCheckpoint.thread_id,
+              checkpoint_ns: storedCheckpoint.checkpoint_ns,
+              checkpoint_id: storedCheckpoint.parent_checkpoint_id,
             },
           }
         : undefined,
-      pendingWrites: pendingWrites as [string, string, unknown][],
+      pendingWrites,
     };
   }
 
@@ -464,60 +334,66 @@ export class MatrixCheckpointSaver<
   ): AsyncGenerator<CheckpointTuple> {
     const { thread_id: threadId, configs } = config.configurable;
 
-    if (!configs) {
-      throw TypeError('Missing configs in config');
+    if (!configs || !threadId) {
+      return;
     }
 
-    if (!this.matrixManager) {
-      await this.setupMatrixManager(configs.matrix);
-    }
+    const { matrix } = configs;
 
-    if (!this.matrixManager?.stateManager) {
-      throw new Error('MatrixManager not initialized');
-    }
+    // Get all state events and filter for checkpoints
+    const stateEvents =
+      await this.stateManager.listStateEvents<StoredCheckpoint>(matrix.roomId);
 
-    const room = this.matrixManager.getOracleRoom(configs.matrix.roomId);
-    if (!room) {
-      throw new Error('Room not found');
-    }
+    const checkpoints = stateEvents
+      .filter(
+        (event) =>
+          event &&
+          'thread_id' in event &&
+          event.thread_id === threadId &&
+          'checkpoint_id' in event,
+      )
+      .reverse(); // Most recent first
 
-    const stateEvents = await this.matrixManager.stateManager.listStateEvents<
-      ICheckpointRow<GraphState> | IWritesRow
-    >(room);
+    for (const storedCheckpoint of checkpoints) {
+      if (!storedCheckpoint) continue;
 
-    const rows = stateEvents.reduce<(ICheckpointRow<GraphState> | undefined)[]>(
-      (acc, event) => {
-        if (event.thread_id === threadId && 'checkpoint' in event) {
-          acc.push(event);
-        }
-        return acc;
-      },
-      [],
-    );
+      try {
+        // Deserialize checkpoint and metadata
+        const checkpoint = (await this.serde.loadsTyped(
+          storedCheckpoint.type,
+          storedCheckpoint.checkpoint,
+        )) as Checkpoint;
 
-    const orderedRows = rows.reverse();
-    for (const row of orderedRows) {
-      if (!row) continue;
-      yield {
-        config: {
-          configurable: {
-            thread_id: row.thread_id,
-            checkpoint_ns: row.checkpoint_ns,
-            checkpoint_id: row.checkpoint_id,
+        const metadata = (await this.serde.loadsTyped(
+          storedCheckpoint.type,
+          storedCheckpoint.metadata,
+        )) as CheckpointMetadata;
+
+        yield {
+          config: {
+            configurable: {
+              thread_id: storedCheckpoint.thread_id,
+              checkpoint_ns: storedCheckpoint.checkpoint_ns,
+              checkpoint_id: storedCheckpoint.checkpoint_id,
+            },
           },
-        },
-        checkpoint: row.checkpoint,
-        metadata: row.metadata,
-        parentConfig: row.parent_checkpoint_id
-          ? {
-              configurable: {
-                thread_id: row.thread_id,
-                checkpoint_ns: row.checkpoint_ns,
-                checkpoint_id: row.parent_checkpoint_id,
-              },
-            }
-          : undefined,
-      };
+          checkpoint,
+          metadata,
+          parentConfig: storedCheckpoint.parent_checkpoint_id
+            ? {
+                configurable: {
+                  thread_id: storedCheckpoint.thread_id,
+                  checkpoint_ns: storedCheckpoint.checkpoint_ns,
+                  checkpoint_id: storedCheckpoint.parent_checkpoint_id,
+                },
+              }
+            : undefined,
+        };
+      } catch (error) {
+        // Skip corrupted checkpoints
+        console.warn('Skipping corrupted checkpoint:', error);
+        continue;
+      }
     }
   }
 
@@ -533,38 +409,43 @@ export class MatrixCheckpointSaver<
       checkpoint_id: string;
     };
   }> {
-    if (!config.configurable.thread_id) {
-      throw new Error('Missing thread_id in config.');
-    }
-
     const {
       configs,
       thread_id: threadId,
-      checkpoint_ns: checkpointNs,
+      checkpoint_ns: checkpointNs = '',
       checkpoint_id: parentCheckpointId,
     } = config.configurable;
 
-    if (!configs) {
-      throw TypeError('Missing configs in config');
+    if (!configs || !threadId) {
+      throw new Error('Missing configs or thread_id in config');
     }
 
-    const row: ICheckpointRow<GraphState> = {
+    const { matrix } = configs;
+
+    // Remove pending_sends before storing (like SQL)
+    const { pending_sends: _pending_sends, ...checkpointToStore } = checkpoint;
+
+    // Serialize checkpoint and metadata with same type (like SQL)
+    const [serializationType, serializedCheckpoint] =
+      this.serde.dumpsTyped(checkpointToStore);
+    const [, serializedMetadata] = this.serde.dumpsTyped(metadata);
+
+    const storedCheckpoint: StoredCheckpoint = {
       thread_id: threadId,
-      checkpoint_ns: checkpointNs,
       checkpoint_id: checkpoint.id,
+      checkpoint_ns: checkpointNs,
       parent_checkpoint_id: parentCheckpointId,
-      type: 'json',
-      checkpoint: checkpoint as ICheckpointRow<GraphState>['checkpoint'],
-      metadata,
+      type: serializationType, // Single type for both checkpoint and metadata
+      checkpoint: new TextDecoder().decode(serializedCheckpoint),
+      metadata: new TextDecoder().decode(serializedMetadata),
     };
 
-    await this.saveState({
-      threadId,
-      checkpointNamespace: checkpointNs,
-      checkpointId: checkpoint.id,
-      value: row,
-      config: configs,
-    });
+    await this.storeCheckpoint(
+      matrix.roomId,
+      matrix.oracleDid,
+      storedCheckpoint,
+    );
+
     return {
       configurable: {
         thread_id: threadId,
@@ -582,39 +463,30 @@ export class MatrixCheckpointSaver<
     const {
       configs,
       thread_id: threadId,
-      checkpoint_ns: checkpointNs,
-      checkpoint_id: parentCheckpointId,
+      checkpoint_ns: checkpointNs = '',
+      checkpoint_id: checkpointId,
     } = config.configurable;
 
-    if (!threadId) {
-      throw new Error('Missing thread_id in config');
+    if (!configs || !threadId || !checkpointId) {
+      throw new Error('Missing configs, thread_id, or checkpoint_id in config');
     }
-    if (!configs) {
-      throw TypeError('Missing configs in config');
-    }
-    const rows: IWritesRow[] = writes.map(([channel, writeValue], idx) => {
-      const [type] = this.serde.dumpsTyped(writeValue);
+
+    const { matrix } = configs;
+
+    const storedWrites: StoredWrite[] = writes.map(([channel, value], idx) => {
+      const [type, serializedValue] = this.serde.dumpsTyped(value);
       return {
         thread_id: threadId,
+        checkpoint_id: checkpointId,
         checkpoint_ns: checkpointNs,
-        checkpoint_id: parentCheckpointId,
         task_id: taskId,
         idx,
         channel,
         type,
-        value: writeValue as string,
+        value: new TextDecoder().decode(serializedValue),
       };
     });
-    await Promise.all(
-      rows.map(async (row) => {
-        await this.saveState({
-          threadId: row.thread_id,
-          checkpointNamespace: row.checkpoint_ns,
-          checkpointId: row.checkpoint_id,
-          writesValue: row,
-          config: configs,
-        });
-      }),
-    );
+
+    await this.storeWrites(matrix.roomId, matrix.oracleDid, storedWrites);
   }
 }
