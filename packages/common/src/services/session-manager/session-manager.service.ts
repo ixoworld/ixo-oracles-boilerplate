@@ -25,7 +25,15 @@ export class SessionManagerService {
     if (messages.length === 0) {
       return 'Untitled';
     }
-    const llm = getChatOpenAiModel();
+    const llm = getChatOpenAiModel({
+      model: 'qwen/qwen-2.5-7b-instruct',
+      temperature: 0.3,
+      apiKey: process.env.OPEN_ROUTER_API_KEY,
+      timeout: 20 * 1000 * 60, // 20 minutes
+      configuration: {
+        baseURL: 'https://openrouter.ai/api/v1',
+      },
+    });
     const response = await llm.invoke(
       `Based on this messages messages, Add a title for this convo and only based on the messages? MAKE SURE TO ONLY RESPOND WITH THE TITLE. <messages>\n\n${messages.join('\n\n')}</messages>
       
@@ -46,6 +54,7 @@ export class SessionManagerService {
     oracleDid,
     oracleName,
     roomId: _roomId,
+    lastProcessedCount,
   }: {
     sessionId: string;
     did: string;
@@ -53,6 +62,7 @@ export class SessionManagerService {
     oracleDid: string;
     oracleName: string;
     roomId?: string;
+    lastProcessedCount?: number;
   }): Promise<ChatSession> {
     const matrixManager = MatrixManager.getInstance();
     await matrixManager.init();
@@ -115,6 +125,7 @@ export class SessionManagerService {
     if (!roomId) {
       throw new Error('Room ID not found');
     }
+    const lastUpdatedAt = new Date().toISOString();
     await this.matrixManger.stateManager.setState<ChatSession[]>({
       roomId,
       stateKey: this.getSessionsStateKey(oracleDid),
@@ -123,7 +134,8 @@ export class SessionManagerService {
           ? {
               ...session,
               title,
-              lastUpdateAt: new Date().toISOString(),
+              lastUpdatedAt,
+              lastProcessedCount,
             }
           : session,
       ),
@@ -132,7 +144,8 @@ export class SessionManagerService {
     return {
       ...selectedSession,
       title,
-      lastUpdatedAt: new Date().toISOString(),
+      lastUpdatedAt,
+      lastProcessedCount,
     };
   }
 
@@ -180,11 +193,13 @@ export class SessionManagerService {
     if (!roomId) {
       throw new Error('Room ID not found');
     }
-    const { event_id } = await this.matrixManger.sendMessage({
+    const { event_id } = (await this.matrixManger.sendMatrixEvent(
       roomId,
-      message: 'New session created',
-      isOracleAdmin: true,
-    });
+      'ixo.oracle.session.created',
+      {},
+    )) ?? {
+      event_id: crypto.randomUUID(),
+    };
 
     const session = await this.syncSessionSet({
       sessionId: event_id,

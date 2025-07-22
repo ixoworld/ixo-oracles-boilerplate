@@ -10,11 +10,9 @@ import { Logger } from '@nestjs/common';
 import 'dotenv/config';
 import CallbackHandler from 'langfuse-langchain';
 import { type BrowserToolCallDto } from 'src/messages/dto/send-message.dto';
-import { agentWithChainOfThoughtsNode } from './nodes/agent-with-chain-of-thoughts/agent-with-chain-of-thoughts';
 import { chatNode } from './nodes/chat-node/chat-node';
-import { evaluationNode } from './nodes/evaluation-node/evaluation-node';
+import { contextGatherNode } from './nodes/context-gather/context-gather';
 import { toolNode } from './nodes/tools-node';
-import { intentRouter } from './router/intent.router';
 import toolsChatRouter from './router/tools.router';
 import {
   CustomerSupportGraphState,
@@ -36,20 +34,13 @@ if (!oracleName) {
 const workflow = new StateGraph(CustomerSupportGraphState)
 
   // Nodes
+  .addNode(GraphNodes.ContextGather, contextGatherNode)
   .addNode(GraphNodes.Chat, chatNode)
-  .addNode(GraphNodes.AgentWithChainOfThoughts, agentWithChainOfThoughtsNode)
-  .addNode(GraphNodes.Evaluation, evaluationNode)
   .addNode(GraphNodes.Tools, toolNode)
 
   // Routes
-  .addConditionalEdges(START, intentRouter)
-
-  // .addConditionalEdges(GraphNodes.AgentWithChainOfThoughts, toolsChatRouter, {
-  //   [GraphNodes.Tools]: GraphNodes.Tools,
-  //   [GraphNodes.Evaluation]: GraphNodes.Evaluation,
-  //   [END]: END,
-  // })
-  // .addEdge(GraphNodes.Tools, GraphNodes.AgentWithChainOfThoughts);
+  .addEdge(START, GraphNodes.ContextGather)
+  .addEdge(GraphNodes.ContextGather, GraphNodes.Chat)
 
   .addConditionalEdges(GraphNodes.Chat, toolsChatRouter, {
     [GraphNodes.Tools]: GraphNodes.Tools,
@@ -59,7 +50,7 @@ const workflow = new StateGraph(CustomerSupportGraphState)
   .addEdge(GraphNodes.Tools, GraphNodes.Chat);
 
 const compiledGraph = workflow.compile({
-  checkpointer: new MatrixCheckpointSaver(oracleName),
+  checkpointer: new MatrixCheckpointSaver(),
 });
 
 export class CustomerSupportGraph {
@@ -87,6 +78,7 @@ export class CustomerSupportGraph {
             // this is to prevent the matrix manager to log this message as this message is from the matrix room itself not from the REST api
             additional_kwargs: {
               msgFromMatrixRoom,
+              timestamp: new Date().toISOString(),
             },
           }),
         ],
@@ -125,9 +117,13 @@ export class CustomerSupportGraph {
     const stream = this.graph.streamEvents(
       {
         messages: [
-          new HumanMessage(input, {
+          new HumanMessage({
+            content: input,
             // this is to prevent the matrix manager to log this message as this message is from the matrix room itself not from the REST api
-            msgFromMatrixRoom,
+            additional_kwargs: {
+              msgFromMatrixRoom,
+              timestamp: new Date().toISOString(),
+            },
           }),
         ],
         browserTools,
@@ -136,6 +132,7 @@ export class CustomerSupportGraph {
       {
         version: 'v2',
         ...runnableConfig,
+        streamMode: 'messages',
         recursionLimit: 15,
         configurable: {
           ...runnableConfig.configurable,

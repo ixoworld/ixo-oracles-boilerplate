@@ -51,7 +51,8 @@
     "SLACK_APP_TOKEN",
     "MATRIX_CRYPTO_STORE_PATH",
     "MATRIX_STORE_PATH",
-    "DATABASE_USE_SSL"
+    "DATABASE_USE_SSL",
+    "OPEN_ROUTER_API_KEY"
   ],
 
   "tasks": {
