@@ -28,6 +28,7 @@ export function useChat({
   uiComponents?: Partial<UIComponents>;
   overrides?: {
     baseUrl?: string;
+    wsUrl?: string;
   };
 }) {
   const uiComponents = useMemo(() => props.uiComponents, [props.uiComponents]);
