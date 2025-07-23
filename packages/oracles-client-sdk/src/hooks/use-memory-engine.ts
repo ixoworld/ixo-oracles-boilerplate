@@ -1,4 +1,4 @@
-import { Authz } from '@ixo/oracles-chain-client';
+import { Authz } from '@ixo/oracles-chain-client/react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import MatrixClient from '../matrix/matrix-client.js';
