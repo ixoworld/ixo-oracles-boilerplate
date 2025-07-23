@@ -5,14 +5,14 @@ import {
   Direction,
   MatrixClient,
   MatrixError,
-  StateEvents,
+  type StateEvents,
 } from 'matrix-js-sdk';
 import { parse, stringify } from 'superjson';
 
 import { Logger } from '@ixo/logger';
 import { logger } from 'matrix-js-sdk/lib/logger.js';
 
-(logger as any)?.setLevel('ERROR');
+logger.setLevel('ERROR');
 
 interface IStatePayload<C> {
   roomId: string;
