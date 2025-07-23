@@ -48,6 +48,7 @@
     "@ixo/logger": "workspace:*",
     "@langchain/langgraph-checkpoint": "0.0.10",
     "@matrix-org/olm": "3.2.15",
+    "dotenv": "^17.2.0",
     "matrix-js-sdk": "32.4.0",
     "superjson": "1.13.3"
   }
