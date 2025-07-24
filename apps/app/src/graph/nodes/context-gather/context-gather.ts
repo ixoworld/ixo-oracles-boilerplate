@@ -118,8 +118,7 @@ const getUserDisplayName = async (userDid: string) => {
     const formattedUserDid = userDid.replace(/:/g, '-');
     const userId = `@${formattedUserDid}:${homeserverName}`;
 
-    const userDisplayName = await matrixManager.getUserDisplayName(userId);
-    console.log('🚀 ~ getUserDisplayName ~ userDisplayName:', userDisplayName);
+    const userDisplayName = await matrixManager.getDisplayName(userId);
     return userDisplayName;
   } catch (error) {
     return null;
