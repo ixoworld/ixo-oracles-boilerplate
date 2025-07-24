@@ -15,4 +15,4 @@ export type OraclesNamesOnMatrix = LiteralUnion<
   string
 >;
 
-export * from 'matrix-js-sdk';
+export * from 'matrix-bot-sdk';

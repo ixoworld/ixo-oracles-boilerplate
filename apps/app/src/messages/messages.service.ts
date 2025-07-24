@@ -5,8 +5,9 @@ import {
 } from '@ixo/common';
 import {
   type IRunnableConfigWithRequiredFields,
-  type MatrixEvent,
-  type Room,
+  type MatrixManager,
+  type MessageEvent,
+  type MessageEventContent,
 } from '@ixo/matrix';
 import { ToolCallEvent } from '@ixo/oracles-events';
 import { type AIMessageChunk } from '@langchain/core/messages';
@@ -35,24 +36,39 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
   private cleanUpMatrixListener: () => void;
   private threadRootCache = new Map<string, string>(); // eventId → rootEventId
 
+  matrixManager: MatrixManager;
+
   constructor(
     private readonly customerSupportGraph: CustomerSupportGraph,
     private readonly sessionManagerService: SessionManagerService,
     private readonly config: ConfigService<ENV>,
     private readonly sseService: SseService,
-  ) {}
+  ) {
+    this.matrixManager = this.sessionManagerService.matrixManger;
+  }
 
   public onModuleDestroy(): void {
     this.cleanUpMatrixListener();
   }
 
-  private getThreadRoot(event: MatrixEvent, room: Room): string | undefined {
-    const eventId = event.event.event_id;
+  private async getThreadRoot(
+    event: MessageEvent<
+      MessageEventContent & {
+        'm.relates_to'?: {
+          'm.in_reply_to'?: {
+            event_id: string;
+          };
+        };
+      }
+    >,
+    roomId: string,
+  ): Promise<string | undefined> {
+    const eventId = event.eventId;
     if (!eventId) {
       return undefined;
     }
     const inReplyTo =
-      event.getContent()['m.relates_to']?.['m.in_reply_to']?.event_id;
+      event.content['m.relates_to']?.['m.in_reply_to']?.event_id;
 
     if (!inReplyTo) {
       // This event IS the root
@@ -97,11 +113,17 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         return rootEventId;
       }
 
-      const parentEvent = room.findEventById(currentEventId);
-      if (!parentEvent) break;
+      // eslint-disable-next-line no-await-in-loop -- this is a loop function
+      const parentEvent = await this.matrixManager.getEventById<{
+        'm.relates_to'?: {
+          'm.in_reply_to'?: {
+            event_id: string;
+          };
+        };
+      }>(roomId, currentEventId);
 
       const parentInReplyTo =
-        parentEvent.getContent()['m.relates_to']?.['m.in_reply_to']?.event_id;
+        parentEvent.content['m.relates_to']?.['m.in_reply_to']?.event_id;
       if (!parentInReplyTo) {
         // Found the root!
         // eslint-disable-next-line @typescript-eslint/no-loop-func -- this is a loop function
@@ -120,69 +142,65 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     return fallbackRoot;
   }
 
-  private async handleMessage(event: MatrixEvent, room: Room) {
-    const roomId = room.roomId;
-
-    const content = event.getContent();
-    const did = normalizeDid(event.sender?.userId ?? '');
+  private async handleMessage(
+    event: MessageEvent<MessageEventContent>,
+    roomId: string,
+  ): Promise<void> {
+    const did = normalizeDid(event.sender);
     const isBot = did === this.config.getOrThrow('ORACLE_DID');
     if (isBot) {
       return;
     }
 
     if (
-      content.msgtype === 'm.text' &&
-      'body' in content &&
-      typeof content.body === 'string' &&
-      !content.INTERNAL
+      event.content.msgtype === 'm.text' &&
+      'body' in event.content &&
+      typeof event.content.body === 'string' &&
+      !('INTERNAL' in event.content)
     ) {
-      const text = content.body;
-      const threadId = this.getThreadRoot(event, room);
+      const text = event.content.body;
+      Logger.log(`Received message: ${text}`);
+
+      const threadId = await this.getThreadRoot(event, roomId);
 
       if (!threadId) {
         return;
       }
 
-      const aiMessage = await this.sendMessage({
-        message: text,
-        did,
-        sessionId: threadId,
-        msgFromMatrixRoom: true,
-      });
-      if (!aiMessage) {
-        return;
+      try {
+        const aiMessage = await this.sendMessage({
+          message: text,
+          did,
+          sessionId: threadId,
+          msgFromMatrixRoom: true,
+        });
+        if (!aiMessage) {
+          return;
+        }
+
+        // Send AI response to Matrix
+        await this.sessionManagerService.matrixManger.sendMessage({
+          message: `${event.sender}: ${aiMessage.message.content}`,
+          roomId,
+          threadId,
+          isOracleAdmin: true,
+        });
+      } catch (error) {
+        Logger.error('Failed to send message', error);
+        await this.sessionManagerService.matrixManger.sendMessage({
+          message: `sorry, I'm having trouble processing your message. Please try again later.`,
+          roomId,
+          threadId,
+          isOracleAdmin: true,
+        });
       }
-
-      // Send AI response to Matrix
-      await this.sessionManagerService.matrixManger.sendMessage({
-        message: `${event.sender?.userId}: ${aiMessage.message.content}`,
-        roomId,
-        threadId,
-        isOracleAdmin: true,
-      });
-
-      // Queue the conversation for memory saving
-      // try {
-      //   await this.memoryQueueService.queueConversation({
-      //     humanMessage: text,
-      //     aiMessage: aiMessage.message.content,
-      //     userName: event.sender?.userId || 'Unknown User',
-      //     aiName: 'Oracle Assistant',
-      //     roomId,
-      //     userDid: did,
-      //     sessionId: threadId,
-      //   });
-      // } catch (error) {
-      //   Logger.error('Failed to queue conversation for memory saving:', error);
-      //   // Don't throw - memory saving failure shouldn't break the conversation
-      // }
     }
   }
 
   public async onModuleInit(): Promise<void> {
     this.cleanUpMatrixListener =
-      await this.sessionManagerService.matrixManger.onMessage((event, room) => {
-        this.handleMessage(event, room).catch((err) => {
+      this.sessionManagerService.matrixManger.onMessage((roomId, event) => {
+        this.handleMessage(event, roomId).catch((err) => {
           Logger.error(err);
         });
       });
@@ -251,17 +269,18 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     const { runnableConfig, sessionId, roomId } =
       await this.prepareForQuery(params);
 
-    this.sessionManagerService.matrixManger
-      .sendMessage({
-        message: params.message,
-        roomId,
-        threadId: sessionId,
-        isOracleAdmin: false,
-      })
-      .catch((err) => {
-        Logger.error('Failed to replay API message to matrix room', err);
-      });
-
+    if (!params.msgFromMatrixRoom) {
+      this.sessionManagerService.matrixManger
+        .sendMessage({
+          message: params.message,
+          roomId,
+          threadId: sessionId,
+          isOracleAdmin: false,
+        })
+        .catch((err) => {
+          Logger.error('Failed to replay API message to matrix room', err);
+        });
+    }
     if (params.stream && params.res) {
       // SET the headers
 
@@ -277,66 +296,71 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
 
       params.res.flushHeaders();
 
-      const stream = await this.customerSupportGraph.streamMessage(
-        params.message,
-        runnableConfig,
-        params.tools ?? [],
-        params.msgFromMatrixRoom,
-      );
+      try {
+        const stream = await this.customerSupportGraph.streamMessage(
+          params.message,
+          runnableConfig,
+          params.tools ?? [],
+          params.msgFromMatrixRoom,
+        );
 
-      let fullContent = '';
-      if (params.sessionId) {
-        const toolCallEvent = new ToolCallEvent({
-          requestId: runnableConfig.configurable.requestId ?? '',
-          sessionId,
-          toolName: 'toolName',
-          args: 'args',
-        });
-        for await (const { data, event, tags } of stream) {
-          const isChatNode = tags?.includes('chat_node');
-          if (event === 'on_chat_model_stream') {
-            const content = (data.chunk as AIMessageChunk).content;
+        let fullContent = '';
+        if (params.sessionId) {
+          const toolCallEvent = new ToolCallEvent({
+            requestId: runnableConfig.configurable.requestId ?? '',
+            sessionId,
+            toolName: 'toolName',
+            args: 'args',
+          });
+          for await (const { data, event, tags } of stream) {
+            const isChatNode = tags?.includes('chat_node');
+            if (event === 'on_chat_model_stream') {
+              const content = (data.chunk as AIMessageChunk).content;
 
-            const toolCall = (data.chunk as AIMessageChunk).tool_calls;
+              const toolCall = (data.chunk as AIMessageChunk).tool_calls;
 
-            toolCall?.forEach((tool) => {
-              // update toolCallEvent with toolCall
-              toolCallEvent.payload.toolName = tool.name;
-              toolCallEvent.payload.args = tool.args;
-              this.sseService.publishToSession(sessionId, toolCallEvent);
-            });
+              toolCall?.forEach((tool) => {
+                // update toolCallEvent with toolCall
+                toolCallEvent.payload.toolName = tool.name;
+                toolCallEvent.payload.args = tool.args;
+                this.sseService.publishToSession(sessionId, toolCallEvent);
+              });
 
-            if (!content) {
-              continue;
-            }
-            if (isChatNode) {
-              fullContent += content.toString();
-              params.res.write(content.toString());
+              if (!content) {
+                continue;
+              }
+              if (isChatNode) {
+                fullContent += content.toString();
+                params.res.write(content.toString());
+              }
             }
           }
+
+          this.sessionManagerService.matrixManger
+            .sendMessage({
+              message: fullContent,
+              roomId,
+              threadId: sessionId,
+              isOracleAdmin: true,
+            })
+            .catch((err) => {
+              Logger.error(
+                'Failed to replay API AI response message to matrix room',
+                err,
+              );
+            });
+          return;
         }
 
+        return;
+      } catch (error) {
+        Logger.error('Failed to stream message', error);
+        params.res.write('Something went wrong');
+      } finally {
         if (!params.res.writableEnded) {
           params.res.end();
         }
-
-        this.sessionManagerService.matrixManger
-          .sendMessage({
-            message: fullContent,
-            roomId,
-            threadId: sessionId,
-            isOracleAdmin: true,
-          })
-          .catch((err) => {
-            Logger.error(
-              'Failed to replay API AI response message to matrix room',
-              err,
-            );
-          });
-        return;
       }
-
-      return;
     }
 
     const result = await this.customerSupportGraph.sendMessage(
@@ -350,19 +374,21 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('No message returned from the oracle');
     }
 
-    this.sessionManagerService.matrixManger
-      .sendMessage({
-        message: lastMessage.content.toString(),
-        roomId,
-        threadId: sessionId,
-        isOracleAdmin: true,
-      })
-      .catch((err) => {
-        Logger.error(
-          'Failed to replay API AI response message to matrix room',
-          err,
-        );
-      });
+    if (!params.msgFromMatrixRoom) {
+      this.sessionManagerService.matrixManger
+        .sendMessage({
+          message: lastMessage.content.toString(),
+          roomId,
+          threadId: sessionId,
+          isOracleAdmin: true,
+        })
+        .catch((err) => {
+          Logger.error(
+            'Failed to replay API AI response message to matrix room',
+            err,
+          );
+        });
+    }
 
     return {
       message: {
