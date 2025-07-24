@@ -4,7 +4,7 @@ import {
   type Checkpoint,
   type CheckpointMetadata,
 } from '@langchain/langgraph-checkpoint';
-import { type IMatrixManagerInitConfig } from 'src/types';
+import { type IMatrixManagerInitConfig } from 'src/types.js';
 
 interface IGraphStateWithRequiredFields {
   messages?: BaseMessage[];

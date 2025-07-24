@@ -5,14 +5,14 @@ import {
   Direction,
   MatrixClient,
   MatrixError,
-  type StateEvents,
+  StateEvents,
 } from 'matrix-js-sdk';
 import { parse, stringify } from 'superjson';
 
 import { Logger } from '@ixo/logger';
 import { logger } from 'matrix-js-sdk/lib/logger.js';
 
-logger.setLevel('ERROR');
+(logger as any)?.setLevel('ERROR');
 
 interface IStatePayload<C> {
   roomId: string;
@@ -45,9 +45,9 @@ export class MatrixStateManager {
     return rooms.joined_rooms;
   }
 
-  public static getInstance(client?: MatrixClient): MatrixStateManager {
+  public static getInstance(): MatrixStateManager {
     if (!MatrixStateManager.instance) {
-      MatrixStateManager.instance = new MatrixStateManager(client);
+      MatrixStateManager.instance = new MatrixStateManager();
     }
     return MatrixStateManager.instance;
   }

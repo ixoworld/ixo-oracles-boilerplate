@@ -193,16 +193,16 @@ export class SessionManagerService {
     if (!roomId) {
       throw new Error('Room ID not found');
     }
-    const { event_id } = (await this.matrixManger.sendMatrixEvent(
+    const eventId = (await this.matrixManger.sendMatrixEvent(
       roomId,
       'ixo.oracle.session.created',
       {},
     )) ?? {
-      event_id: crypto.randomUUID(),
+      eventId: crypto.randomUUID(),
     };
 
     const session = await this.syncSessionSet({
-      sessionId: event_id,
+      sessionId: eventId,
       oracleName: createSessionDto.oracleName,
       did: createSessionDto.did,
       oracleDid: createSessionDto.oracleDid,

@@ -1,1 +1,1 @@
-export * from './matrix-state-manager';
+export * from './matrix-state-manager.js';

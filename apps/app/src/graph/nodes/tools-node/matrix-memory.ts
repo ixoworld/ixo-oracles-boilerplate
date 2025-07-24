@@ -1,11 +1,6 @@
 // ========== TYPES ==========
 
-import {
-  type ClientEventHandlerMap,
-  MatrixEventEvent,
-  MatrixManager,
-  RoomEvent,
-} from '@ixo/matrix';
+import { MatrixManager } from '@ixo/matrix';
 import { Logger } from '@nestjs/common';
 
 const matrixClient = MatrixManager.getInstance();
@@ -149,72 +144,52 @@ export async function queryMemories({
 
   Logger.log('Querying memories', queryEvent.content);
   try {
-    const result = await new Promise((resolve, reject) => {
-      // eslint-disable-next-line prefer-const -- f
-      let cleanup: (() => void) | undefined;
+    let cleanup: () => void;
+    const result = await new Promise<IQueryResultsEvent['content']['results']>(
+      (resolve, reject) => {
+        const timeout = setTimeout(
+          () => {
+            cleanup();
+            reject(
+              new Error(
+                'Query timeout - no response received within 30 seconds',
+              ),
+            );
+          },
+          60 * 1000 * 0.5, // 30 seconds timeout
+        );
 
-      const timeout = setTimeout(
-        () => {
-          cleanup?.();
-          reject(
-            new Error('Query timeout - no response received within 30 seconds'),
-          );
-        },
-        60 * 1000 * 0.5, // 30 seconds timeout
-      ); // 2 minutes timeout
+        cleanup = matrixClient.onRoomEvent<IQueryResultsEvent['content']>(
+          roomId,
+          'ixo.memory.results',
+          (event) => {
+            const content = event.content;
+            if (content.request_event_id === requestEventId) {
+              // Clean up
+              clearTimeout(timeout);
 
-      // Event listener for the response
-      const eventListener: ClientEventHandlerMap[RoomEvent.Timeline] = (
-        event,
-        room,
-        _,
-        removed,
-      ) => {
-        // Only process events from our target room
-        if (room?.roomId !== roomId) return;
-
-        if (event.getType() === 'm.room.encrypted' && !removed) {
-          event.once(MatrixEventEvent.Decrypted, (ev) => {
-            // Check if this is our query results event
-            if (ev.getType() === 'ixo.memory.results') {
-              const content = ev.getContent<IQueryResultsEvent['content']>();
-
-              // Match the request ID to ensure this is our response
-              if (content.request_event_id === requestEventId) {
-                // Clean up
-                clearTimeout(timeout);
-                cleanup?.();
-
-                Logger.log(
-                  `Query completed: found ${content.results.facts.length} results`,
-                );
-                resolve(content.results);
-              }
+              Logger.log(
+                `Query completed: found ${content.results.facts.length} results`,
+              );
+              resolve(content.results);
             }
+          },
+        );
+
+        // send the query event
+        matrixClient
+          .sendMatrixEvent(roomId, queryEvent.type, queryEvent.content)
+          .then((eventId) => {
+            requestEventId = eventId;
+          })
+          .catch((error) => {
+            cleanup();
+            clearTimeout(timeout);
+            reject(error);
           });
-        }
-      };
-
-      // Set up the listener before sending the query
-      cleanup = matrixClient.listenToMatrixEvent(
-        RoomEvent.Timeline,
-        eventListener,
-      );
-
-      // Send the query event
-      matrixClient
-        .sendMatrixEvent(roomId, queryEvent.type, queryEvent.content)
-        .then((ev) => {
-          requestEventId = ev?.event_id;
-        })
-        .catch((error) => {
-          // Clean up on send failure
-          clearTimeout(timeout);
-          cleanup?.();
-          reject(error);
-        });
-    });
-    return result as IQueryResultsEvent['content']['results'];
+      },
+    );
+    return result;
   } catch (error) {
     Logger.error('Failed to send query event:', error);
     return {
@@ -232,6 +207,9 @@ export async function triggerMemoryAnalysisWorkflow(params: {
   oracleDid: string;
   roomId: string;
 }): Promise<void> {
+  let requestEventId: string | undefined;
+  await matrixClient.init();
+
   const task = {
     type: 'extract_memory_from_chat',
     payload: {
@@ -241,67 +219,50 @@ export async function triggerMemoryAnalysisWorkflow(params: {
       roomId: params.roomId,
     },
   };
+
   Logger.log('Triggering memory analysis workflow', task);
-  const taskEvent = await matrixClient.sendMatrixEvent(
-    params.roomId,
-    'ixo.memory.task',
-    task,
-  );
+  let cleanup: () => void;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(
+        () => {
+          cleanup();
+          reject(
+            new Error('Task timeout - no response received within 30 seconds'),
+          );
+        },
+        60 * 1000 * 0.5, // 30 seconds timeout
+      );
 
-  return new Promise((resolve, reject) => {
-    // eslint-disable-next-line prefer-const -- f
-    let cleanup: (() => void) | undefined;
-
-    const timeout = setTimeout(
-      () => {
-        cleanup?.();
-        reject(
-          new Error('Task timeout - no response received within 30 seconds'),
-        );
-      },
-      60 * 1000 * 2,
-    ); // 2 minutes timeout
-
-    // Event listener for the response
-    const eventListener: ClientEventHandlerMap[RoomEvent.Timeline] = (
-      event,
-      room,
-      _,
-      removed,
-    ) => {
-      // Only process events from our target room
-      if (room?.roomId !== params.roomId) return;
-
-      if (event.getType() === 'm.room.encrypted' && !removed) {
-        event.once(MatrixEventEvent.Decrypted, (ev) => {
-          if (ev.getType() === 'ixo.memory.task.error') {
-            const content = ev.getContent<{ error: string }>();
-            Logger.error(`Task error: ${content.error}`);
-            reject(new Error(content.error));
+      // Listen for acknowledgement event
+      cleanup = matrixClient.onRoomEvent<{ eventId: string }>(
+        params.roomId,
+        'ixo.memory.task.acknowledgement',
+        (event) => {
+          const content = event.content;
+          if (content.eventId === requestEventId) {
+            // Clean up
+            clearTimeout(timeout);
+            Logger.log('Task completed');
+            resolve();
           }
+        },
+      );
 
-          // Check if this is our query results event
-          if (ev.getType() === 'ixo.memory.task.acknowledgement') {
-            const content = ev.getContent<{ eventId: string }>();
-
-            // Match the request ID to ensure this is our response
-            if (content.eventId === taskEvent?.event_id) {
-              // Clean up
-              clearTimeout(timeout);
-              cleanup?.();
-
-              Logger.log(`Task completed`);
-              resolve();
-            }
-          }
+      // Send the task event
+      matrixClient
+        .sendMatrixEvent(params.roomId, 'ixo.memory.task', task)
+        .then((eventId) => {
+          requestEventId = eventId;
+        })
+        .catch((error) => {
+          cleanup();
+          clearTimeout(timeout);
+          reject(error);
         });
-      }
-    };
-
-    // Set up the listener before sending the query
-    cleanup = matrixClient.listenToMatrixEvent(
-      RoomEvent.Timeline,
-      eventListener,
-    );
-  });
+    });
+  } catch (error) {
+    Logger.error('Failed to trigger memory analysis workflow:', error);
+    throw error;
+  }
 }
