@@ -1,12 +1,13 @@
 ARG NODE_VERSION=22.11.0
 
-# Alpine image
-FROM --platform=linux/amd64 node:${NODE_VERSION}-alpine AS alpine
-RUN apk update
-RUN apk add --no-cache libc6-compat python3 make g++ gcc
+# Debian-based image (glibc) instead of Alpine (musl)
+FROM --platform=linux/amd64 node:${NODE_VERSION}-bookworm-slim AS debian-base
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 make g++ git ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 
 # Setup pnpm and turbo on the alpine base
-FROM --platform=linux/amd64 alpine as base
+FROM --platform=linux/amd64 debian-base as base
 RUN npm install pnpm@9.15.9 turbo --global
 RUN pnpm config set store-dir ~/.pnpm-store
 
@@ -40,8 +41,12 @@ RUN --mount=type=cache,id=pnpm,target=~/.pnpm-store pnpm prune --prod --no-optio
 RUN rm -rf ./**/*/src
 
 # Final image
-FROM --platform=linux/amd64 alpine AS runner
+FROM --platform=linux/amd64 debian-base AS runner
 ARG PROJECT
+
+# Clean up build dependencies in the final image
+RUN apt-get purge -y make g++ git \
+ && apt-get autoremove -y && apt-get clean
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nodejs
