@@ -118,6 +118,7 @@ describe('RetrieverTool', () => {
       { id: '1', content: 'test content', metadata: { source: 'test' } },
     ];
     mockStore.queryWithSimilarity.mockResolvedValue(mockDocs);
+
     // Mock the relevance checker to throw an error
     jest
       .requireMock('../../utils/doc-relevance-checker')

@@ -7,7 +7,7 @@ import { type RunnableConfig } from '@langchain/core/runnables';
 import { Logger } from '@nestjs/common';
 import { type TCustomerSupportGraphState } from '../../state';
 import { tools } from '../tools-node';
-import { AI_COMPANION_PROMPT } from './prompt';
+import { AI_ASSISTANT_PROMPT } from './prompt';
 
 export async function chatNode(
   state: TCustomerSupportGraphState,
@@ -36,8 +36,8 @@ export async function chatNode(
       baseURL: 'https://openrouter.ai/api/v1',
     },
   });
-  const systemPrompt = await AI_COMPANION_PROMPT.format({
-    APP_NAME: 'IXO Personal AI Companion | IXO Portal',
+  const systemPrompt = await AI_ASSISTANT_PROMPT.format({
+    APP_NAME: 'IXO | IXO Portal',
     USERNAME: state.userContext.name,
     COMMUNICATION_STYLE: state.userContext.communicationStyle,
     RECENT_SUMMARY: state.userContext.recentSummary,
