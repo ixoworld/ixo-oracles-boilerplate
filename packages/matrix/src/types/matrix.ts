@@ -17,3 +17,11 @@ export interface ICreateRoomAndJoinOptions {
   oracleName: string;
   userAccessToken: string;
 }
+
+export interface IAction {
+  name: string;
+  args: Record<string, any>;
+  result: any;
+  error?: string;
+  success: boolean;
+}

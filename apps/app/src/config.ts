@@ -1,4 +1,4 @@
-import * as z from 'zod/v3';
+import { z } from 'zod';
 
 export const oracleConfig = {
   appName: '',
@@ -58,6 +58,9 @@ export const EnvSchema = z.object({
 
   // OpenAI - used by @ixo/common package
   OPENAI_API_KEY: z.string().optional(),
+
+  // OpenRouter
+  OPEN_ROUTER_API_KEY: z.string(),
 
   SUBSCRIPTION_ORACLE_MCP_URL: z.string().url().optional(),
   DATABASE_USE_SSL: z.string().default('false'),

@@ -1,6 +1,6 @@
-# IXO Oracles Base Repository
+# Agentic Oracles Base Repository
 
-Welcome to our comprehensive, modular framework for building and deploying AI-driven oracles. This repo consolidates essential modules (data storage, vector search, knowledge management, authentication, client SDK, real-time events, etc.) into a single, well-structured codebase. Whether you're creating a new oracle from scratch or extending existing solutions, this repository provides the tooling and best practices to streamline development.
+Welcome to our comprehensive, modular framework for building and deploying AI-driven Agentic Oracle services. This repo consolidates essential modules (data storage, vector search, knowledge management, authentication, client SDK, real-time events, etc.) into a single, well-structured codebase. Whether you're creating a new oracle from scratch or extending existing solutions, this repository provides the tooling and best practices to streamline development.
 
 ---
 

@@ -17,40 +17,9 @@ type CreateAndJoinOracleRoomPayload = {
   userDID: string;
 };
 
-type MatrixRoomMember = {
-  type: string;
-  room_id: string;
-  sender: string;
-  content: {
-    displayname?: string;
-    membership: 'join' | 'leave' | 'invite' | 'ban';
-  };
-  state_key: string;
-  origin_server_ts: number;
-  unsigned?: {
-    replaces_state?: string;
-    age?: number;
-  };
-  event_id: string;
-  user_id: string;
-  age?: number;
-  replaces_state?: string;
-};
-
-type MatrixRoomMembersResponse = {
-  chunk: MatrixRoomMember[];
-};
-
-type MatrixPowerLevels = {
-  users: Record<string, number>;
-};
-
 export type {
-  CreateAndJoinOracleRoomPayload,
-  JoinSpaceOrRoomPayload,
   MatrixClientConstructorParams,
-  MatrixPowerLevels,
-  MatrixRoomMember,
-  MatrixRoomMembersResponse,
   SourceSpacePayload,
+  JoinSpaceOrRoomPayload,
+  CreateAndJoinOracleRoomPayload,
 };

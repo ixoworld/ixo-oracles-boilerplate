@@ -92,7 +92,7 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
             claimCollectionId: params.userClaimCollectionId,
             oracleAddress: config.granteeAddress,
             oracleName: config.oracleName,
-            accountAddress: wallet.address,
+            accountAddress: wallet.address ?? '',
             agentQuota: params.agentQuota ?? 1,
             maxAmount: params.maxAmount
               ? [

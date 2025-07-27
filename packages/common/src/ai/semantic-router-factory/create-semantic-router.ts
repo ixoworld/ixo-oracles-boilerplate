@@ -5,7 +5,7 @@ import { OpenAI } from 'openai';
 import { type APIPromise } from 'openai/core.mjs';
 import { zodResponseFormat } from 'openai/helpers/zod';
 import { type ParsedChatCompletion } from 'openai/resources/beta/chat/completions.mjs';
-import * as z from 'zod/v3';
+import { z } from 'zod';
 import { type EnsureKeys } from '../types.js';
 import { jsonToYaml } from '../utils/index.js';
 import { semanticRouterPrompt } from './semantic-router-prompt.js';

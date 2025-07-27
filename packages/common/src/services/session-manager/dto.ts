@@ -1,4 +1,10 @@
-import { IsArray, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import {
+  IsArray,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class UserAuthDto {
   @IsString()
@@ -56,6 +62,10 @@ export class ChatSession {
   @IsString()
   @IsNotEmpty()
   oracleDid: string;
+
+  @IsNumber()
+  @IsNotEmpty()
+  lastProcessedCount?: number;
 }
 
 export class ListChatSessionsResponseDto {

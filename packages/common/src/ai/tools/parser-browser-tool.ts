@@ -31,7 +31,7 @@ export function parserBrowserTool(params: IParserBrowserToolParams) {
         logActionToMatrix(
           {
             name: toolName,
-            args: input as Record<string, any>,
+            args: input,
             result,
             success: true,
           },

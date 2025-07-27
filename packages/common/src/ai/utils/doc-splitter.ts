@@ -1,7 +1,7 @@
 import { type Document } from '@langchain/core/documents';
-import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
+import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 
-import * as z from 'zod/v3';
+import { z } from 'zod';
 
 const splitter = new RecursiveCharacterTextSplitter();
 

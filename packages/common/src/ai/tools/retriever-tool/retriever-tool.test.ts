@@ -30,7 +30,7 @@ jest
 
 describe('RetrieverTool', () => {
   let mockStore: jest.Mocked<VectorDBDataStore>;
-  let mockModel: FakeChatModel | null = null;
+  let mockModel: FakeChatModel;
 
   beforeEach(() => {
     mockStore = {
@@ -100,9 +100,6 @@ describe('RetrieverTool', () => {
       { id: '1', content: 'test content', metadata: { source: 'test' } },
     ];
     mockStore.queryWithSimilarity.mockResolvedValue(mockDocs);
-    if (!mockModel) {
-      throw new Error('Mock model is not set');
-    }
 
     const tool = retrieverToolFactory({
       store: mockStore,
@@ -121,9 +118,6 @@ describe('RetrieverTool', () => {
       { id: '1', content: 'test content', metadata: { source: 'test' } },
     ];
     mockStore.queryWithSimilarity.mockResolvedValue(mockDocs);
-    if (!mockModel) {
-      throw new Error('Mock model is not set');
-    }
     // Mock the relevance checker to throw an error
     jest
       .requireMock('../../utils/doc-relevance-checker')

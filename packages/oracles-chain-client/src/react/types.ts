@@ -1,4 +1,4 @@
-import * as z from 'zod/v3';
+import { z } from 'zod';
 
 export type TOraclePricingListSchemaResponse = z.infer<
   typeof OraclePricingListSchemaResponse

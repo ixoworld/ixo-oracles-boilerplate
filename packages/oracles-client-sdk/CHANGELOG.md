@@ -1,11 +1,5 @@
 # @ixo/oracles-client-sdk
 
-## 0.1.19
-
-### Patch Changes
-
-- [#48](https://github.com/ixoworld/ixo-oracles-boilerplate/pull/48) [`0664938`](https://github.com/ixoworld/ixo-oracles-boilerplate/commit/06649385d7a4d9f3640fb21a316f18c61f94e185) Thanks [@youssefhany-ixo](https://github.com/youssefhany-ixo)! - Add support for overriding WS url and support to invite user to mx room
-
 ## 0.1.16
 
 ### Patch Changes

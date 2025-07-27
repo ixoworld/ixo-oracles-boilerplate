@@ -1,5 +1,29 @@
 # app
 
+## 0.1.10
+
+### Patch Changes
+
+- [#15](https://github.com/ixoworld/companion/pull/15) [`9addc39`](https://github.com/ixoworld/companion/commit/9addc39944d2c962d72c1dcda77dba64e069c7c4) Thanks [@youssefhany-ixo](https://github.com/youssefhany-ixo)! - Companion
+
+## 0.1.9
+
+### Patch Changes
+
+- [#10](https://github.com/ixoworld/companion/pull/10) [`71ba646`](https://github.com/ixoworld/companion/commit/71ba6468d43903f7b8e0eed1ce7d85a8f42c920b) Thanks [@youssefhany-ixo](https://github.com/youssefhany-ixo)! - remove queue
+
+## 0.1.8
+
+### Patch Changes
+
+- [#7](https://github.com/ixoworld/companion/pull/7) [`3c6d704`](https://github.com/ixoworld/companion/commit/3c6d704eb2d6f9e68d90dd13891afb8f0fec5c07) Thanks [@youssefhany-ixo](https://github.com/youssefhany-ixo)! - remvoe redis
+
+## 0.1.7
+
+### Patch Changes
+
+- [#5](https://github.com/ixoworld/companion/pull/5) [`47f961d`](https://github.com/ixoworld/companion/commit/47f961d9d88cfc88af03a67a56f326040e519680) Thanks [@LukePetzer-ixo](https://github.com/LukePetzer-ixo)! - init
+
 ## 0.1.6
 
 ### Patch Changes

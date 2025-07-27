@@ -5,10 +5,12 @@ import { type BaseMessage } from '@langchain/core/messages';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { type RunnableConfig } from '@langchain/core/runnables';
 import 'dotenv/config';
-import * as z from 'zod/v3';
-import { getChatOpenAiModel } from '../../models/index.js';
-import { retrieverToolFactory } from '../../tools/index.js';
-import { SELF_QUERY_RAG_PROMPT } from './find-docs.prompt.js';
+import { z } from 'zod';
+import {
+  getChatOpenAiModel,
+  retrieverToolFactory,
+  SELF_QUERY_RAG_PROMPT,
+} from '../../index.js';
 
 interface IFindDocsNodeRequiredState {
   question: string;

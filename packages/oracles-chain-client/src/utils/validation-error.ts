@@ -1,4 +1,4 @@
-import { ZodError } from 'zod/v3';
+import { ZodError } from 'zod';
 
 export class ValidationError extends Error {
   public readonly errors?: ZodError;
