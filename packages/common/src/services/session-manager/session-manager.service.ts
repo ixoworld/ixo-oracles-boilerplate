@@ -193,11 +193,11 @@ export class SessionManagerService {
     if (!roomId) {
       throw new Error('Room ID not found');
     }
-    const eventId = (await this.matrixManger.sendMatrixEvent(
+    const eventId = (await this.matrixManger.sendMessage({
+      message: '',
       roomId,
-      'ixo.oracle.session.created',
-      {},
-    )) ?? {
+      isOracleAdmin: true,
+    })) ?? {
       eventId: crypto.randomUUID(),
     };
 
