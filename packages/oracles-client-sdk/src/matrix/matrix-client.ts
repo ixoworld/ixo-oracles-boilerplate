@@ -3,9 +3,14 @@ import {
   type CreateAndJoinOracleRoomPayload,
   type JoinSpaceOrRoomPayload,
   type MatrixClientConstructorParams,
+  type MatrixPowerLevels,
+  type MatrixRoomMembersResponse,
   type SourceSpacePayload,
 } from './types.js';
 
+function getEntityRoomAliasFromDid(did: string) {
+  return did.replace(/:/g, '-');
+}
 class MatrixClient {
   constructor(private readonly params: MatrixClientConstructorParams) {
     this.params.appServiceBotUrl =
@@ -76,6 +81,113 @@ class MatrixClient {
     });
 
     return this.joinSpaceOrRoom({ roomId: response.roomId });
+  }
+
+  public async inviteUser(roomId: string, userId: string): Promise<void> {
+    const url = `${this.params.homeserverUrl}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/invite`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.params.userAccessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ user_id: userId }),
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(
+        `Failed to invite ${userId} to ${roomId}: ${res.status} ${errText}`,
+      );
+    }
+  }
+
+  public async setPowerLevel(
+    roomId: string,
+    userId: string,
+    powerLevel: number,
+  ): Promise<void> {
+    // 1. Fetch current power levels
+    const getUrl = `${this.params.homeserverUrl}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/state/m.room.power_levels`;
+    let res = await fetch(getUrl, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${this.params.userAccessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Failed to fetch power levels: ${res.status} ${errText}`);
+    }
+    const plEvent = (await res.json()) as MatrixPowerLevels;
+
+    // 2. Update only the specific user's power level
+    plEvent.users = plEvent.users || {};
+    plEvent.users[userId] = powerLevel;
+
+    // 3. Publish updated power levels
+    const putUrl = `${this.params.homeserverUrl}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/state/m.room.power_levels`;
+    res = await fetch(putUrl, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${this.params.userAccessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(plEvent),
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Failed to set power level: ${res.status} ${errText}`);
+    }
+  }
+
+  public async getOracleRoomId({
+    userDid,
+    oracleDid,
+  }: {
+    userDid: string;
+    oracleDid: string;
+  }): Promise<string> {
+    if (!this.params.homeserverUrl) {
+      throw new Error('Homeserver URL not found');
+    }
+    const hostname = new URL(this.params.homeserverUrl).hostname;
+    const oracleRoomAlias = `${getEntityRoomAliasFromDid(userDid)}_${getEntityRoomAliasFromDid(oracleDid)}`;
+    const oracleRoomFullAlias = `#${oracleRoomAlias}:${hostname}`;
+
+    const url = `${this.params.homeserverUrl}/_matrix/client/v3/directory/room/${encodeURIComponent(oracleRoomFullAlias)}`;
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${this.params.userAccessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Failed to get oracle room id: ${res.status} ${errText}`);
+    }
+
+    const data = (await res.json()) as { room_id: string; servers: string[] };
+    return data.room_id;
+  }
+  // list room members
+  public async listRoomMembers(roomId: string): Promise<string[]> {
+    const url = `${this.params.homeserverUrl}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/members`;
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${this.params.userAccessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Failed to list room members: ${res.status} ${errText}`);
+    }
+    const data = (await res.json()) as MatrixRoomMembersResponse;
+    return data.chunk.map((member) => member.user_id);
   }
 }
 

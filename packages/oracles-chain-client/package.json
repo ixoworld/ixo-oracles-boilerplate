@@ -28,7 +28,7 @@
     }
   },
   "scripts": {
-    "build": "tsc && tsc-alias",
+    "build": "rimraf dist && tsc && tsc-alias",
     "generate": "graphql-codegen --config codegen.yml",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest",
     "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch",
@@ -52,7 +52,8 @@
     "tsc-alias": "^1.8.11",
     "tsconfig-paths": "^4.2.0",
     "tsup": "8.3.5",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "rimraf": "^6.0.1"
   },
   "dependencies": {
     "@cosmjs/crypto": "0.32.4",
