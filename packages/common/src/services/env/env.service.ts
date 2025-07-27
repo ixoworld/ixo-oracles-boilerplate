@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return  -- f*/
 import { Logger } from '@ixo/logger';
 import { config } from 'dotenv';
-import * as z from 'zod/v3';
+import { z } from 'zod';
 
 config();
 

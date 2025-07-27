@@ -4,7 +4,7 @@ import { tool, type StructuredTool } from '@langchain/core/tools';
 import { Logger } from '@nestjs/common';
 import 'dotenv/config';
 import { SlackService } from 'src/slack/slack.service';
-import * as z from 'zod/v3';
+import { z } from 'zod';
 import { ChromaClientSingleton } from '../../../chroma/chroma-client.singleton';
 import { queryMemories, sendBulkSave } from './matrix-memory';
 
@@ -137,93 +137,98 @@ function getPriorityEmoji(priority: 'Low' | 'Medium' | 'High'): string {
 }
 
 const searchMemoryTool = tool(
-  async ({ query, maxResults = 10 }, _config) => {
+  async ({ query, SearchStrategy = 'balanced', centerNodeUuid }, _config) => {
     const config = _config as IRunnableConfigWithRequiredFields;
+
     try {
-      // Get user context from the runnable config
       const userDid = config.configurable.configs?.user.did;
       const roomId = config.configurable.configs?.matrix.roomId;
 
       if (!userDid || !roomId) {
-        throw new Error('User DID or Room ID not found in configuration');
+        throw new Error('Missing user DID or memory group ID');
       }
+
       Logger.log(
-        `Searching Matrix Memory for ${query} in ${roomId} and userDid ${userDid}`,
+        `🔍 Searching Graphiti memory using strategy="${SearchStrategy}" for query="${query}" in groupId="${userDid}"`,
       );
-      // Query the memory engine
-      const memories = await queryMemories({
+
+      // Validate contextual strategy
+      if (SearchStrategy === 'contextual' && !centerNodeUuid) {
+        throw new Error(
+          'centerNodeUuid is required for contextual search strategy.',
+        );
+      }
+
+      const results = await queryMemories({
         query,
-        maxResults,
+        strategy: SearchStrategy,
         roomId,
         userDid,
+        centerNodeUuid: centerNodeUuid ?? undefined,
       });
-
-      if (memories.facts.length === 0) {
-        return {
-          success: true,
-          message: `No memories found for query: "${query}"`,
-          results: [],
-          totalFound: 0,
-        };
-      }
-
-      // Format results for AI consumption
 
       return {
         success: true,
-        message: `Found  relevant memories for "${query}"`,
-        results: memories,
+        results,
+        message: `✅ Found results using "${SearchStrategy}" strategy for: "${query}"`,
       };
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error occurred';
-
       return {
         success: false,
-        error: `Failed to search memory engine: ${errorMessage}`,
+        error: `❌ Memory search failed: ${errorMessage}`,
         results: [],
         totalFound: 0,
         troubleshooting:
-          'Check if the memory engine is accessible and the user has proper permissions.',
+          'Ensure user DID and group ID are set and search strategy is valid.',
       };
     }
   },
   {
-    name: 'searchConversationMemory',
-    description: `Search through the conversation memory engine to find relevant past interactions, facts, and context.
+    name: 'searchMemoryEngine',
+    description: `Search Graphiti memory for personalized user context, preferences, and facts using advanced strategies.
 
-This tool helps you:
-- Find previous conversations with this user
-- Recall important facts, preferences, or decisions mentioned earlier  
-- Understand the user's history and context
-- Provide personalized responses based on past interactions
-- Reference specific details from previous conversations
+Use this tool to:
+- Recall user preferences, routines, decisions, relationships, and timelines
+- Support contextual follow-ups using 'recent_memory' or 'contextual' strategies
+- Provide continuity across sessions by referencing stored facts or episodes
 
-Use this when:
-- User references something from a previous conversation
-- You need context about their preferences, projects, or situation
-- User asks "remember when..." or "what did I tell you about..."
-- You want to provide more personalized and context-aware responses
-- Building on previous discussions or decisions
+Strategies:
+- 'balanced' (default): General purpose, fast, and relevant
+- 'recent_memory': Pull recent episodes, ideal for ongoing conversations
+- 'contextual': Target related info using a center node (e.g. specific person or topic)
+- 'precise': For accurate factual answers
+- 'entities_only', 'topics_only': For traits or topic exploration
 
-The search returns memories ranked by relevance, including who said what and when.`,
+Always prefer searching memory before responding when prior context may help.`,
     schema: z.object({
       query: z.string({
-        description: `What to search for in the conversation memory. Examples:
+        description: `Query to search in the memory graph. Example queries:
 - "user's project preferences"
-- "what the user said about their goals"
-- "previous discussion about API integration"  
-- "user's company or role"
-- "decisions made in past conversations"
-- "user's technical requirements"
-Be specific to get better results.`,
+- "goals for 2024"
+- "discussion about React Native"
+- "user's role or title"
+- "who user mentioned in past conversations"
+`,
       }),
-      maxResults: z
-        .number()
+      SearchStrategy: z
+        .enum([
+          'balanced',
+          'recent_memory',
+          'contextual',
+          'precise',
+          'entities_only',
+          'topics_only',
+        ])
         .optional()
-        .default(10)
+        .default('balanced'),
+      centerNodeUuid: z
+        .string()
+        .uuid()
+        .nullable()
         .describe(
-          'Maximum number of memory results to return (1-20). Default is 10. Use fewer (3-5) for focused searches, more (15-20) for broad context gathering.',
+          'Used only with "contextual" strategy to focus on a specific node (e.g., user, person, or project) or if you need to search around a specific node',
         ),
     }),
   },
@@ -243,9 +248,9 @@ const saveMemoryTool = tool(
 
       // Convert string memories to proper format
       const formattedMemories = memories.map((memory) => ({
-        content: memory,
+        content: memory.content,
         role_type: 'assistant' as const,
-        name: 'AI Assistant',
+        name: memory.username,
         timestamp: new Date().toISOString(),
       }));
 
@@ -256,11 +261,7 @@ const saveMemoryTool = tool(
         userDid,
       });
 
-      return {
-        success: true,
-        message: `Successfully saved ${memories.length} memories`,
-        savedCount: memories.length,
-      };
+      return `Successfully saved ${memories.length} memories`;
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error occurred';
@@ -273,11 +274,16 @@ const saveMemoryTool = tool(
     }
   },
   {
-    name: 'saveConversationMemory',
+    name: 'saveConversationMemoryTool',
     description: `Save important facts from the conversation to memory for future reference. Use when user shares personal info, preferences, goals, or important details.`,
     schema: z.object({
       memories: z
-        .array(z.string())
+        .array(
+          z.object({
+            content: z.string().describe('The content of the memory'),
+            username: z.string().describe('The username of the memory'),
+          }),
+        )
         .min(1)
         .describe(
           'Array of important facts to remember. Examples: "User is a React developer", "User prefers morning meetings", "User has deadline next Friday"',

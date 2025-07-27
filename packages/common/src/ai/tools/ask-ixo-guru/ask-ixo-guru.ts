@@ -1,5 +1,5 @@
 import { tool } from '@langchain/core/tools';
-import * as z from 'zod/v3';
+import { z } from 'zod';
 import { jsonToYaml } from '../../utils/json-to-yaml.js';
 
 export type RequestPayload = {

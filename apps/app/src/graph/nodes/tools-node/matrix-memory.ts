@@ -1,27 +1,22 @@
 // ========== TYPES ==========
 
-import {
-  type ClientEventHandlerMap,
-  MatrixEventEvent,
-  MatrixManager,
-  RoomEvent,
-} from '@ixo/matrix';
+import { MatrixManager } from '@ixo/matrix';
 import { Logger } from '@nestjs/common';
 
 const matrixClient = MatrixManager.getInstance();
 
-export interface MemoryMessage {
+export interface IMemoryMessage {
   content: string;
   role_type: 'user' | 'assistant' | 'system';
   name: string;
   timestamp?: string;
 }
 
-export interface BulkSaveEvent {
+export interface IBulkSaveEvent {
   type: 'ixo.memory.bulk_save';
-  sender: string;
   content: {
-    memories: MemoryMessage[];
+    memories: IMemoryMessage[];
+    userDid: string;
   };
 }
 interface IEnhancedSearchResults {
@@ -57,18 +52,18 @@ interface IEnhancedSearchResults {
   }>;
 }
 
-export interface QueryEvent {
+export interface IQueryEvent {
   type: 'ixo.memory.query';
-  sender: string;
   content: {
     query: string;
-    max_results?: number;
+    userDid: string;
+    strategy: string;
+    centerNodeUuid?: string;
   };
 }
 
-export interface QueryResultsEvent {
+export interface IQueryResultsEvent {
   type: 'ixo.memory.query_results';
-  sender: string;
   content: {
     request_event_id: string;
     results: IEnhancedSearchResults;
@@ -82,15 +77,15 @@ export async function sendBulkSave({
   roomId,
   userDid,
 }: {
-  memories: MemoryMessage[];
+  memories: IMemoryMessage[];
   roomId: string;
   userDid: string;
 }): Promise<void> {
-  const event: BulkSaveEvent = {
+  const event: IBulkSaveEvent = {
     type: 'ixo.memory.bulk_save',
-    sender: userDid,
     content: {
       memories,
+      userDid,
     },
   };
 
@@ -116,88 +111,158 @@ export async function sendBulkSave({
  */
 export async function queryMemories({
   query,
-  maxResults = 10,
   roomId,
   userDid,
+  strategy,
+  centerNodeUuid,
 }: {
   query: string;
   maxResults?: number;
   roomId: string;
   userDid: string;
-}): Promise<QueryResultsEvent['content']['results']> {
+  strategy:
+    | 'balanced'
+    | 'recent_memory'
+    | 'contextual'
+    | 'precise'
+    | 'entities_only'
+    | 'topics_only';
+  centerNodeUuid?: string;
+}): Promise<IQueryResultsEvent['content']['results']> {
   let requestEventId: string | undefined;
   await matrixClient.init();
 
-  const queryEvent: QueryEvent = {
+  const queryEvent: IQueryEvent = {
     type: 'ixo.memory.query',
-    sender: userDid,
     content: {
       query,
-      max_results: maxResults,
+      userDid,
+      strategy,
+      centerNodeUuid,
     },
   };
 
-  return new Promise((resolve, reject) => {
-    // eslint-disable-next-line prefer-const -- f
-    let cleanup: (() => void) | undefined;
+  Logger.log('Querying memories', queryEvent.content);
+  try {
+    let cleanup: () => void;
+    const result = await new Promise<IQueryResultsEvent['content']['results']>(
+      (resolve, reject) => {
+        const timeout = setTimeout(
+          () => {
+            cleanup();
+            reject(
+              new Error(
+                'Query timeout - no response received within 30 seconds',
+              ),
+            );
+          },
+          60 * 1000 * 0.5, // 30 seconds timeout
+        );
 
-    const timeout = setTimeout(() => {
-      cleanup?.();
-      reject(
-        new Error('Query timeout - no response received within 30 seconds'),
-      );
-    }, 30000); // 30 second timeout
-
-    // Event listener for the response
-    const eventListener: ClientEventHandlerMap[RoomEvent.Timeline] = (
-      event,
-      room,
-      _,
-      removed,
-    ) => {
-      // Only process events from our target room
-      if (room?.roomId !== roomId) return;
-
-      if (event.getType() === 'm.room.encrypted' && !removed) {
-        event.once(MatrixEventEvent.Decrypted, (ev) => {
-          Logger.log(ev);
-          // Check if this is our query results event
-          if (ev.getType() === 'ixo.memory.results') {
-            const content = ev.getContent<QueryResultsEvent['content']>();
-
-            // Match the request ID to ensure this is our response
+        cleanup = matrixClient.onRoomEvent<IQueryResultsEvent['content']>(
+          roomId,
+          'ixo.memory.results',
+          (event) => {
+            const content = event.content;
             if (content.request_event_id === requestEventId) {
               // Clean up
               clearTimeout(timeout);
-              cleanup?.();
 
               Logger.log(
                 `Query completed: found ${content.results.facts.length} results`,
               );
               resolve(content.results);
             }
-          }
-        });
-      }
-    };
+          },
+        );
 
-    // Set up the listener before sending the query
-    cleanup = matrixClient.listenToMatrixEvent(
-      RoomEvent.Timeline,
-      eventListener,
+        // send the query event
+        matrixClient
+          .sendMatrixEvent(roomId, queryEvent.type, queryEvent.content)
+          .then((eventId) => {
+            requestEventId = eventId;
+          })
+          .catch((error) => {
+            cleanup();
+            clearTimeout(timeout);
+            reject(error);
+          });
+      },
     );
+    return result;
+  } catch (error) {
+    Logger.error('Failed to send query event:', error);
+    return {
+      facts: [],
+      entities: [],
+      episodes: [],
+      communities: [],
+    };
+  }
+}
 
-    // Send the query event
-    matrixClient
-      .sendMatrixEvent(roomId, queryEvent.type, queryEvent.content)
-      .then((ev) => {
-        requestEventId = ev?.event_id;
-      })
-      .catch((error) => {
-        // Clean up on send failure
-        clearTimeout(timeout);
-        cleanup?.();
-        reject(error);
-      });
-  });
+export async function triggerMemoryAnalysisWorkflow(params: {
+  userDid: string;
+  sessionId: string;
+  oracleDid: string;
+  roomId: string;
+}): Promise<void> {
+  let requestEventId: string | undefined;
+  await matrixClient.init();
+
+  const task = {
+    type: 'extract_memory_from_chat',
+    payload: {
+      userDid: params.userDid,
+      sessionId: params.sessionId,
+      oracleDid: params.oracleDid,
+      roomId: params.roomId,
+    },
+  };
+
+  Logger.log('Triggering memory analysis workflow', task);
+  let cleanup: () => void;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(
+        () => {
+          cleanup();
+          reject(
+            new Error('Task timeout - no response received within 30 seconds'),
+          );
+        },
+        60 * 1000 * 0.5, // 30 seconds timeout
+      );
+
+      // Listen for acknowledgement event
+      cleanup = matrixClient.onRoomEvent<{ eventId: string }>(
+        params.roomId,
+        'ixo.memory.task.acknowledgement',
+        (event) => {
+          const content = event.content;
+          if (content.eventId === requestEventId) {
+            // Clean up
+            clearTimeout(timeout);
+            Logger.log('Task completed');
+            resolve();
+          }
+        },
+      );
+
+      // Send the task event
+      matrixClient
+        .sendMatrixEvent(params.roomId, 'ixo.memory.task', task)
+        .then((eventId) => {
+          requestEventId = eventId;
+        })
+        .catch((error) => {
+          cleanup();
+          clearTimeout(timeout);
+          reject(error);
+        });
+    });
+  } catch (error) {
+    Logger.error('Failed to trigger memory analysis workflow:', error);
+    throw error;
+  }
 }

@@ -4,7 +4,7 @@ import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Command, END } from '@langchain/langgraph';
 import { type TCustomerSupportGraphState } from 'src/graph/state';
 import { GraphNodes } from 'src/graph/types';
-import * as z from 'zod/v3';
+import { z } from 'zod';
 import { evaluationPrompt } from './prompt';
 
 export const evaluationNode = async (state: TCustomerSupportGraphState) => {

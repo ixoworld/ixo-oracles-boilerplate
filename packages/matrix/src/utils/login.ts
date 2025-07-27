@@ -14,4 +14,4 @@ export async function login(
   return loginResponse;
 }
 
-login('http://localhost:8008', '@m_bot:localhost:8408', 'bot');
+login('https://devmx.ixo.earth', '@k.ixo.earth', 'k');
