@@ -9,7 +9,9 @@ import {
   SimpleFsStorageProvider,
   UserID,
 } from 'matrix-bot-sdk';
+import * as sdk from 'matrix-js-sdk';
 import * as path from 'node:path';
+import { createMatrixClient } from './mx.js';
 
 export interface ISimpleMatrixClientConfig {
   baseUrl: string;
@@ -114,8 +116,15 @@ export class SimpleMatrixClient {
     try {
       Logger.info('🚀 Starting matrix-bot-sdk client...');
 
+      // Setup cross-signing for device verification
+
       await this.prepareProfile();
       await this.mxClient.start();
+
+      await this.setupCrossSigning({
+        mxUserId: await this.mxClient.getUserId(),
+        deviceId: this.mxClient.crypto.clientDeviceId,
+      });
 
       this.isStarted = true;
       Logger.info('✅ Matrix client started successfully!');
@@ -282,6 +291,137 @@ export class SimpleMatrixClient {
     callback: (...args: any[]) => void,
   ): void {
     this.mxClient.removeListener(event, callback);
+  }
+
+  /**
+   * Setup cross-signing for device verification using matrix-js-sdk
+   * Based on proven implementation pattern
+   */
+  private async setupCrossSigning({
+    mxUserId,
+    deviceId,
+  }: {
+    mxUserId: string;
+    deviceId: string;
+  }): Promise<void> {
+    try {
+      Logger.info('🔐 Setting up cross-signing for device verification...');
+
+      // Create temporary matrix-js-sdk client using same credentials
+      const jsClient = await createMatrixClient({
+        homeServerUrl: this.config.baseUrl,
+        accessToken: this.config.accessToken,
+        userId: mxUserId,
+        deviceId,
+      });
+
+      const mxCrypto = jsClient.getCrypto();
+      if (!mxCrypto) {
+        Logger.warn('❌ Crypto not available in matrix-js-sdk client');
+        jsClient.stopClient();
+        jsClient.removeAllListeners();
+        return;
+      }
+
+      // Check if cross-signing is already set up
+      const hasCrossSigning = this.hasCrossSigningAccountData(jsClient);
+      if (hasCrossSigning) {
+        Logger.info('✅ Cross-signing already configured');
+        jsClient.stopClient();
+        jsClient.removeAllListeners();
+        return;
+      }
+
+      Logger.info('🔑 Setting up cross-signing from scratch...');
+
+      const securityPhrase = process.env.MATRIX_RECOVERY_PHRASE ?? 'secret';
+      const password = process.env.MATRIX_ORACLE_ADMIN_PASSWORD;
+
+      if (!password) {
+        throw new Error(
+          'MATRIX_ORACLE_ADMIN_PASSWORD required for cross-signing setup',
+        );
+      }
+
+      // Step 1: Setup secret storage with recovery phrase
+      Logger.info('🔐 Setting up secret storage...');
+      const recoveryKey =
+        await mxCrypto.createRecoveryKeyFromPassphrase(securityPhrase);
+
+      await mxCrypto.bootstrapSecretStorage({
+        createSecretStorageKey: async () => recoveryKey,
+        setupNewSecretStorage: true,
+      });
+
+      // Step 2: Bootstrap cross-signing
+      Logger.info('🔑 Bootstrapping cross-signing keys...');
+      const userId = jsClient.getUserId()!;
+
+      await mxCrypto.bootstrapCrossSigning({
+        authUploadDeviceSigningKeys: async (makeRequest) => {
+          return await makeRequest(this.getAuthId({ userId, password }));
+        },
+        setupNewCrossSigning: true,
+      });
+
+      // Step 3: Reset key backup
+      Logger.info('🔄 Resetting key backup...');
+      await mxCrypto.resetKeyBackup();
+
+      // Step 4: Wait for propagation
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Step 5: Verify cross-signing was set up
+      const success = !!jsClient.getAccountData('m.cross_signing.master');
+
+      if (success) {
+        Logger.info('✅ Cross-signing setup completed successfully!');
+      } else {
+        Logger.warn('⚠️ Cross-signing setup may not have completed properly');
+      }
+
+      // Clean up temporary client
+      jsClient.stopClient();
+      jsClient.removeAllListeners();
+    } catch (error) {
+      Logger.warn(
+        '⚠️ Cross-signing setup failed (bot will still work):',
+        error,
+      );
+      // Don't throw - cross-signing failure shouldn't break the bot
+    }
+  }
+
+  /**
+   * Check if cross-signing account data exists
+   */
+  private hasCrossSigningAccountData(client: sdk.MatrixClient): boolean {
+    try {
+      return !!client.getAccountData('m.cross_signing.master');
+    } catch (error) {
+      Logger.warn('⚠️ Could not check cross-signing account data:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Create authentication object for password-based auth
+   */
+  private getAuthId({
+    userId,
+    password,
+  }: {
+    userId: string;
+    password: string;
+  }) {
+    return {
+      type: 'm.login.password',
+      identifier: {
+        type: 'm.id.user',
+        user: userId,
+      },
+      password: password,
+    };
   }
 }
 
