@@ -114,23 +114,22 @@ export function useWebSocketEvents(
     }
 
     // Listen for all events from the server
-    newSocket.onAny((eventName: string, payload: any) => {
-      // Skip browser_tool_call events as they're handled above
-      if (eventName === 'browser_tool_call') {
+    newSocket.onAny((_, ev: unknown) => {
+      const event = isWebSocketEvent(ev) ? ev : null;
+      if (!event) {
         return;
       }
-
-      const event: WebSocketEvent = {
-        eventName,
-        payload,
-      };
+      // Skip browser_tool_call events as they're handled above
+      if (event.eventName === 'browser_tool_call') {
+        return;
+      }
 
       setEvents((prev) => [...prev, event]);
       setLastActivity(new Date().toISOString());
 
       // Handle cache invalidation using ref
       if (
-        eventName === 'message_cache_invalidation' &&
+        event.eventName === 'message_cache_invalidation' &&
         handleInvalidateCacheRef.current
       ) {
         handleInvalidateCacheRef.current();
@@ -163,3 +162,16 @@ export const evNames = {
   RouterUpdate: 'router_update',
   BrowserToolCall: 'browser_tool_call',
 } as const;
+
+const isWebSocketEvent = (event: unknown): event is WebSocketEvent => {
+  return (
+    typeof event === 'object' &&
+    event !== null &&
+    'eventName' in event &&
+    'payload' in event &&
+    typeof event.payload === 'object' &&
+    event.payload !== null &&
+    'sessionId' in event.payload &&
+    'requestId' in event.payload
+  );
+};

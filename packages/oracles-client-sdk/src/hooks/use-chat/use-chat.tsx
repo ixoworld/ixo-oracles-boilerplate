@@ -105,6 +105,7 @@ export function useChat({
     if (events.length === 0 || !uiComponents || webSocketEvents.length === 0)
       return;
     if (liveEventsError) {
+      console.error('~ useChat ~ liveEventsError:', liveEventsError);
       return;
     }
     const eventsToHandle = [

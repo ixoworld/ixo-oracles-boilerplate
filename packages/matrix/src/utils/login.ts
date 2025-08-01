@@ -14,4 +14,8 @@ export async function login(
   return loginResponse;
 }
 
-login('https://devmx.ixo.earth', '@k.ixo.earth', 'k');
+login(
+  'https://devmx.ixo.earth',
+  '@did-ixo-ixo100qnkvpjlw9t63t3kvdxn6yczhmdphghvf4j3g:devmx.ixo.earth',
+  'ZDg0NDczMWE1ZWYxOGRlYjNi',
+);

@@ -48,13 +48,12 @@ ARG PROJECT
 RUN apt-get purge -y make g++ git \
  && apt-get autoremove -y && apt-get clean
 
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nodejs
-USER nodejs
-
 WORKDIR /app
-COPY --from=builder --chown=nodejs:nodejs /app .
+COPY --from=builder /app .
 WORKDIR /app/apps/${PROJECT}
+
+# Create matrix storage directory
+RUN mkdir -p matrix-storage
 
 # ARG PORT=3000
 # ENV PORT=${PORT}

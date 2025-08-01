@@ -76,6 +76,9 @@ export const useLiveEvents = (props: {
         typeof event.data === 'string' ? JSON.parse(event.data) : event.data,
       ]);
     };
+    eventSource.onmessage = (event) => {
+      handleEvent(event);
+    };
     eventSource.addEventListener(evNames.ToolCall, handleEvent);
     eventSource.addEventListener(evNames.RenderComponent, handleEvent);
 

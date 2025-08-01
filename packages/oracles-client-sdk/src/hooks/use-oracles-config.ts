@@ -40,7 +40,8 @@ export const useOraclesConfig = (
     if (!data?.service) return null;
     if (Array.isArray(data.service)) {
       const url = data.service.find(
-        (service: Service) => service.type === 'oracleService',
+        (service: Service) =>
+          service.type === 'oracleService' || service.id === '{id}#api',
       ) as Service | undefined;
       if (!url) {
         if (overrides?.baseUrl) {
@@ -66,7 +67,7 @@ export const useOraclesConfig = (
     if (!data?.service) return null;
     if (Array.isArray(data.service)) {
       const service = data.service.find(
-        (s: Service) => s.type === 'wsService',
+        (s: Service) => s.type === 'wsService' || s.id === '{id}#ws',
       ) as Service | undefined;
       if (!service) return null;
       try {
