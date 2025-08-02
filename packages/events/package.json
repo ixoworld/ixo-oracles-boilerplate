@@ -1,10 +1,17 @@
 {
   "name": "@ixo/oracles-events",
   "version": "1.0.0",
+  "description": "Events for the IXO Oracles",
   "private": false,
   "main": "./dist/server.js",
   "types": "./dist/server.d.ts",
   "module": "./dist/server.js",
+  "files": [
+    "dist"
+  ],
+   "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc",
     "test": "jest"
