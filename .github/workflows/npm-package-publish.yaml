@@ -23,7 +23,7 @@ jobs:
       - name: Install dependencies pnpm
         run: pnpm install --frozen-lockfile
       - name: Build packages
-        run: pnpm build --filter=@ixo/oracles-chain-client --filter=@ixo/oracles-client-sdk
-      - run: pnpm publish --filter=@ixo/oracles-chain-client --filter=@ixo/oracles-client-sdk
+        run: pnpm build --filter=@ixo/oracles-chain-client --filter=@ixo/oracles-client-sdk --filter=@ixo/oracles-events
+      - run: pnpm publish --filter=@ixo/oracles-chain-client --filter=@ixo/oracles-client-sdk --filter=@ixo/oracles-events
         env:
           NODE_AUTH_TOKEN: ${{secrets.npm_token}}

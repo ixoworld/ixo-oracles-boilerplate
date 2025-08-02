@@ -1,4 +1,4 @@
-import { Logger } from '@ixo/logger';
+
 import { type DefaultEventsMap, type Server } from 'socket.io';
 import { rootEventEmitter } from '../../root-event-emitter/root-event-emitter';
 
@@ -59,7 +59,7 @@ export abstract class BaseEvent<P> {
   ): void {
     rootEventEmitter.on(this.eventName, (data) => {
       const payload = shouldHaveSessionId(data);
-      Logger.info(
+      console.log(
         `Emitting WS event: ${this.eventName} with payload:`,
         payload,
       );
@@ -82,7 +82,7 @@ export abstract class BaseEvent<P> {
     if (!this.payload.sessionId) {
       throw new Error('Session ID must be provided.');
     }
-    Logger.info(
+    console.log(
       `Emitting event: ${this.eventName} with payload:`,
       this.payload,
     );
@@ -101,4 +101,10 @@ export type WithRequiredEventProps<P> = P & {
    * Each message in a chat conversation has a unique request ID
    */
   readonly requestId: string;
+
+  /**
+   * The event ID associated with the chat
+   * Each event in a chat conversation has a unique event ID
+   */
+  readonly eventId?: string;
 };

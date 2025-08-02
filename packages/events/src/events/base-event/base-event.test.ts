@@ -1,4 +1,3 @@
-import { Logger } from '@ixo/logger';
 import { Server } from 'socket.io';
 import { rootEventEmitter } from '../../root-event-emitter/root-event-emitter';
 import {
@@ -68,7 +67,7 @@ describe('BaseEvent', () => {
       to: jest.fn().mockReturnThis(),
       emit: jest.fn(),
     } as unknown as Server;
-    const logSpy = jest.spyOn(Logger, 'info');
+    const logSpy = jest.spyOn(console, 'log');
     TestEvent.registerEventHandlers(server);
     rootEventEmitter.emit(TestEvent.eventName, payload);
     expect(logSpy).toHaveBeenCalled();

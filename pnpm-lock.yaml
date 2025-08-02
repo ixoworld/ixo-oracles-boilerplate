@@ -132,10 +132,10 @@ importers:
         version: 5.6.1
       langchain:
         specifier: ^0.3.2
-        version: 0.3.13(@langchain/core@0.3.36(openai@4.80.1(ws@8.18.2)(zod@3.24.1)))(axios@1.9.0)(openai@4.80.1(ws@8.18.2)(zod@3.24.1))(typeorm@0.3.20(better-sqlite3@11.8.1)(ioredis@5.6.1)(pg@8.15.5)(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.13.13)(typescript@5.8.2)))(ws@8.18.2)
+        version: 0.3.13(@langchain/core@0.3.36(openai@4.80.1(ws@8.18.2)(zod@3.24.1)))(axios@1.9.0(debug@4.4.1))(openai@4.80.1(ws@8.18.2)(zod@3.24.1))(typeorm@0.3.20(better-sqlite3@11.8.1)(ioredis@5.6.1)(pg@8.15.5)(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.13.13)(typescript@5.8.2)))(ws@8.18.2)
       langfuse-langchain:
         specifier: ^3.37.2
-        version: 3.37.2(langchain@0.3.13(@langchain/core@0.3.36(openai@4.80.1(ws@8.18.2)(zod@3.24.1)))(axios@1.9.0)(openai@4.80.1(ws@8.18.2)(zod@3.24.1))(typeorm@0.3.20(better-sqlite3@11.8.1)(ioredis@5.6.1)(pg@8.15.5)(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.13.13)(typescript@5.8.2)))(ws@8.18.2))
+        version: 3.37.2(langchain@0.3.13(@langchain/core@0.3.36(openai@4.80.1(ws@8.18.2)(zod@3.24.1)))(axios@1.9.0(debug@4.4.1))(openai@4.80.1(ws@8.18.2)(zod@3.24.1))(typeorm@0.3.20(better-sqlite3@11.8.1)(ioredis@5.6.1)(pg@8.15.5)(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.13.13)(typescript@5.8.2)))(ws@8.18.2))
       pg:
         specifier: ^8.15.5
         version: 8.15.5
@@ -491,9 +491,6 @@ importers:
 
   packages/events:
     dependencies:
-      '@ixo/logger':
-        specifier: workspace:*
-        version: link:../logger
       eventemitter2:
         specifier: 6.4.9
         version: 6.4.9
@@ -16291,6 +16288,41 @@ snapshots:
       jest-util: 29.7.0
       slash: 3.0.0
 
+  '@jest/core@29.7.0':
+    dependencies:
+      '@jest/console': 29.7.0
+      '@jest/reporters': 29.7.0
+      '@jest/test-result': 29.7.0
+      '@jest/transform': 29.7.0
+      '@jest/types': 29.6.3
+      '@types/node': 22.13.13
+      ansi-escapes: 4.3.2
+      chalk: 4.1.2
+      ci-info: 3.9.0
+      exit: 0.1.2
+      graceful-fs: 4.2.11
+      jest-changed-files: 29.7.0
+      jest-config: 29.7.0(@types/node@22.13.13)(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.13.13)(typescript@5.8.2))
+      jest-haste-map: 29.7.0
+      jest-message-util: 29.7.0
+      jest-regex-util: 29.6.3
+      jest-resolve: 29.7.0
+      jest-resolve-dependencies: 29.7.0
+      jest-runner: 29.7.0
+      jest-runtime: 29.7.0
+      jest-snapshot: 29.7.0
+      jest-util: 29.7.0
+      jest-validate: 29.7.0
+      jest-watcher: 29.7.0
+      micromatch: 4.0.8
+      pretty-format: 29.7.0
+      slash: 3.0.0
+      strip-ansi: 6.0.1
+    transitivePeerDependencies:
+      - babel-plugin-macros
+      - supports-color
+      - ts-node
+
   '@jest/core@29.7.0(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.10.0)(typescript@5.5.4))':
     dependencies:
       '@jest/console': 29.7.0
@@ -16658,7 +16690,7 @@ snapshots:
       flat: 5.0.2
       ibm-cloud-sdk-core: 5.3.2
       js-yaml: 4.1.0
-      langchain: 0.3.13(@langchain/core@0.3.36(openai@4.80.1(ws@8.18.2)(zod@3.24.1)))(axios@1.9.0)(openai@4.80.1(ws@8.18.2)(zod@3.24.1))(typeorm@0.3.20(better-sqlite3@11.8.1)(ioredis@5.6.1)(pg@8.15.5)(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.13.13)(typescript@5.8.2)))(ws@8.18.2)
+      langchain: 0.3.13(@langchain/core@0.3.36(openai@4.80.1(ws@8.18.2)(zod@3.24.1)))(axios@1.9.0(debug@4.4.1))(openai@4.80.1(ws@8.18.2)(zod@3.24.1))(typeorm@0.3.20(better-sqlite3@11.8.1)(ioredis@5.6.1)(pg@8.15.5)(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.13.13)(typescript@5.8.2)))(ws@8.18.2)
       langsmith: 0.3.3(openai@4.80.1(ws@8.18.2)(zod@3.24.1))
       openai: 4.80.1(ws@8.18.2)(zod@3.24.1)
       uuid: 10.0.0
@@ -20742,6 +20774,21 @@ snapshots:
       safe-buffer: 5.2.1
       sha.js: 2.4.11
 
+  create-jest@29.7.0:
+    dependencies:
+      '@jest/types': 29.6.3
+      chalk: 4.1.2
+      exit: 0.1.2
+      graceful-fs: 4.2.11
+      jest-config: 29.7.0(@types/node@22.10.0)(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.10.0)(typescript@5.5.4))
+      jest-util: 29.7.0
+      prompts: 2.4.2
+    transitivePeerDependencies:
+      - '@types/node'
+      - babel-plugin-macros
+      - supports-color
+      - ts-node
+
   create-jest@29.7.0(@types/node@22.10.0)(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.10.0)(typescript@5.5.4)):
     dependencies:
       '@jest/types': 29.6.3
@@ -20749,6 +20796,21 @@ snapshots:
       exit: 0.1.2
       graceful-fs: 4.2.11
       jest-config: 29.7.0(@types/node@22.10.0)(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.10.0)(typescript@5.5.4))
+      jest-util: 29.7.0
+      prompts: 2.4.2
+    transitivePeerDependencies:
+      - '@types/node'
+      - babel-plugin-macros
+      - supports-color
+      - ts-node
+
+  create-jest@29.7.0(@types/node@22.10.5):
+    dependencies:
+      '@jest/types': 29.6.3
+      chalk: 4.1.2
+      exit: 0.1.2
+      graceful-fs: 4.2.11
+      jest-config: 29.7.0(@types/node@22.10.5)(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.10.5)(typescript@5.5.4))
       jest-util: 29.7.0
       prompts: 2.4.2
     transitivePeerDependencies:
@@ -22884,7 +22946,7 @@ snapshots:
       isstream: 0.1.2
       jsonwebtoken: 9.0.2
       mime-types: 2.1.35
-      retry-axios: 2.6.0(axios@1.9.0)
+      retry-axios: 2.6.0(axios@1.9.0(debug@4.4.1))
       tough-cookie: 4.1.4
     transitivePeerDependencies:
       - supports-color
@@ -23419,11 +23481,11 @@ snapshots:
 
   jest-cli@29.7.0:
     dependencies:
-      '@jest/core': 29.7.0(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.13.13)(typescript@5.8.2))
+      '@jest/core': 29.7.0
       '@jest/test-result': 29.7.0
       '@jest/types': 29.6.3
       chalk: 4.1.2
-      create-jest: 29.7.0(@types/node@22.10.0)(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.10.0)(typescript@5.5.4))
+      create-jest: 29.7.0
       exit: 0.1.2
       import-local: 3.2.0
       jest-config: 29.7.0(@types/node@22.10.0)(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.10.0)(typescript@5.5.4))
@@ -23457,11 +23519,11 @@ snapshots:
 
   jest-cli@29.7.0(@types/node@22.10.5):
     dependencies:
-      '@jest/core': 29.7.0(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.13.13)(typescript@5.8.2))
+      '@jest/core': 29.7.0
       '@jest/test-result': 29.7.0
       '@jest/types': 29.6.3
       chalk: 4.1.2
-      create-jest: 29.7.0(@types/node@22.10.5)(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.10.5)(typescript@5.5.4))
+      create-jest: 29.7.0(@types/node@22.10.5)
       exit: 0.1.2
       import-local: 3.2.0
       jest-config: 29.7.0(@types/node@22.10.5)(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.10.5)(typescript@5.5.4))
@@ -23986,7 +24048,7 @@ snapshots:
 
   jest@29.7.0:
     dependencies:
-      '@jest/core': 29.7.0(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.13.13)(typescript@5.8.2))
+      '@jest/core': 29.7.0
       '@jest/types': 29.6.3
       import-local: 3.2.0
       jest-cli: 29.7.0
@@ -24010,7 +24072,7 @@ snapshots:
 
   jest@29.7.0(@types/node@22.10.5):
     dependencies:
-      '@jest/core': 29.7.0(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.13.13)(typescript@5.8.2))
+      '@jest/core': 29.7.0
       '@jest/types': 29.6.3
       import-local: 3.2.0
       jest-cli: 29.7.0(@types/node@22.10.5)
@@ -24348,6 +24410,29 @@ snapshots:
       - openai
       - ws
 
+  langchain@0.3.13(@langchain/core@0.3.36(openai@4.80.1(ws@8.18.2)(zod@3.24.1)))(axios@1.9.0(debug@4.4.1))(openai@4.80.1(ws@8.18.2)(zod@3.24.1))(typeorm@0.3.20(better-sqlite3@11.8.1)(ioredis@5.6.1)(pg@8.15.5)(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.13.13)(typescript@5.8.2)))(ws@8.18.2):
+    dependencies:
+      '@langchain/core': 0.3.36(openai@4.80.1(ws@8.18.2)(zod@3.24.1))
+      '@langchain/openai': 0.3.17(@langchain/core@0.3.36(openai@4.80.1(ws@8.18.2)(zod@3.24.1)))(ws@8.18.2)
+      '@langchain/textsplitters': 0.1.0(@langchain/core@0.3.36(openai@4.80.1(ws@8.18.2)(zod@3.24.1)))
+      js-tiktoken: 1.0.16
+      js-yaml: 4.1.0
+      jsonpointer: 5.0.1
+      langsmith: 0.3.3(openai@4.80.1(ws@8.18.2)(zod@3.24.1))
+      openapi-types: 12.1.3
+      p-retry: 4.6.2
+      uuid: 10.0.0
+      yaml: 2.7.0
+      zod: 3.24.1
+      zod-to-json-schema: 3.24.5(zod@3.24.1)
+    optionalDependencies:
+      axios: 1.9.0(debug@4.4.1)
+      typeorm: 0.3.20(better-sqlite3@11.8.1)(ioredis@5.6.1)(pg@8.15.5)(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.13.13)(typescript@5.8.2))
+    transitivePeerDependencies:
+      - encoding
+      - openai
+      - ws
+
   langchain@0.3.13(@langchain/core@0.3.36(openai@4.80.1(ws@8.18.2)(zod@3.24.1)))(axios@1.9.0)(openai@4.80.1(ws@8.18.2)(zod@3.24.1))(typeorm@0.3.20(better-sqlite3@11.8.1)(ioredis@5.6.1)(pg@8.15.5)(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.10.5)(typescript@5.5.4)))(ws@8.18.2):
     dependencies:
       '@langchain/core': 0.3.36(openai@4.80.1(ws@8.18.2)(zod@3.24.1))
@@ -24371,36 +24456,13 @@ snapshots:
       - openai
       - ws
 
-  langchain@0.3.13(@langchain/core@0.3.36(openai@4.80.1(ws@8.18.2)(zod@3.24.1)))(axios@1.9.0)(openai@4.80.1(ws@8.18.2)(zod@3.24.1))(typeorm@0.3.20(better-sqlite3@11.8.1)(ioredis@5.6.1)(pg@8.15.5)(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.13.13)(typescript@5.8.2)))(ws@8.18.2):
-    dependencies:
-      '@langchain/core': 0.3.36(openai@4.80.1(ws@8.18.2)(zod@3.24.1))
-      '@langchain/openai': 0.3.17(@langchain/core@0.3.36(openai@4.80.1(ws@8.18.2)(zod@3.24.1)))(ws@8.18.2)
-      '@langchain/textsplitters': 0.1.0(@langchain/core@0.3.36(openai@4.80.1(ws@8.18.2)(zod@3.24.1)))
-      js-tiktoken: 1.0.16
-      js-yaml: 4.1.0
-      jsonpointer: 5.0.1
-      langsmith: 0.3.3(openai@4.80.1(ws@8.18.2)(zod@3.24.1))
-      openapi-types: 12.1.3
-      p-retry: 4.6.2
-      uuid: 10.0.0
-      yaml: 2.7.0
-      zod: 3.24.1
-      zod-to-json-schema: 3.24.5(zod@3.24.1)
-    optionalDependencies:
-      axios: 1.9.0(debug@4.4.1)
-      typeorm: 0.3.20(better-sqlite3@11.8.1)(ioredis@5.6.1)(pg@8.15.5)(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.13.13)(typescript@5.8.2))
-    transitivePeerDependencies:
-      - encoding
-      - openai
-      - ws
-
   langfuse-core@3.37.2:
     dependencies:
       mustache: 4.2.0
 
-  langfuse-langchain@3.37.2(langchain@0.3.13(@langchain/core@0.3.36(openai@4.80.1(ws@8.18.2)(zod@3.24.1)))(axios@1.9.0)(openai@4.80.1(ws@8.18.2)(zod@3.24.1))(typeorm@0.3.20(better-sqlite3@11.8.1)(ioredis@5.6.1)(pg@8.15.5)(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.13.13)(typescript@5.8.2)))(ws@8.18.2)):
+  langfuse-langchain@3.37.2(langchain@0.3.13(@langchain/core@0.3.36(openai@4.80.1(ws@8.18.2)(zod@3.24.1)))(axios@1.9.0(debug@4.4.1))(openai@4.80.1(ws@8.18.2)(zod@3.24.1))(typeorm@0.3.20(better-sqlite3@11.8.1)(ioredis@5.6.1)(pg@8.15.5)(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.13.13)(typescript@5.8.2)))(ws@8.18.2)):
     dependencies:
-      langchain: 0.3.13(@langchain/core@0.3.36(openai@4.80.1(ws@8.18.2)(zod@3.24.1)))(axios@1.9.0)(openai@4.80.1(ws@8.18.2)(zod@3.24.1))(typeorm@0.3.20(better-sqlite3@11.8.1)(ioredis@5.6.1)(pg@8.15.5)(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.13.13)(typescript@5.8.2)))(ws@8.18.2)
+      langchain: 0.3.13(@langchain/core@0.3.36(openai@4.80.1(ws@8.18.2)(zod@3.24.1)))(axios@1.9.0(debug@4.4.1))(openai@4.80.1(ws@8.18.2)(zod@3.24.1))(typeorm@0.3.20(better-sqlite3@11.8.1)(ioredis@5.6.1)(pg@8.15.5)(ts-node@10.9.2(@swc/core@1.10.11(@swc/helpers@0.5.2))(@types/node@22.13.13)(typescript@5.8.2)))(ws@8.18.2)
       langfuse: 3.37.2
       langfuse-core: 3.37.2
 
@@ -26626,7 +26688,7 @@ snapshots:
       onetime: 5.1.2
       signal-exit: 3.0.7
 
-  retry-axios@2.6.0(axios@1.9.0):
+  retry-axios@2.6.0(axios@1.9.0(debug@4.4.1)):
     dependencies:
       axios: 1.9.0(debug@4.4.1)
 

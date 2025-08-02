@@ -1,7 +1,7 @@
 {
   "name": "@ixo/oracles-events",
-  "version": "0.0.1",
-  "private": true,
+  "version": "1.0.0",
+  "private": false,
   "main": "./dist/server.js",
   "types": "./dist/server.d.ts",
   "module": "./dist/server.js",
@@ -37,7 +37,6 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@ixo/logger": "workspace:*",
     "eventemitter2": "6.4.9"
   }
 }
