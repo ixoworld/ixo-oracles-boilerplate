@@ -1,6 +1,6 @@
 'use client';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useOraclesContext } from '../../providers/oracles-provider/oracles-context.js';
 import { type IBrowserTools } from '../../types/browser-tool.type.js';
 import { useLiveEvents } from '../use-live-events/use-live-events.hook.js';
@@ -31,6 +31,7 @@ export function useChat({
     wsUrl?: string;
   };
 }) {
+  const [messagesMap, setMessagesMap] = useState<MessagesMap>({});
   const uiComponents = useMemo(() => props.uiComponents, [props.uiComponents]);
   const {
     isSending,
@@ -42,119 +43,108 @@ export function useChat({
     overrides,
     onPaymentRequiredError,
     browserTools: props.browserTools,
+    setMessagesMap,
   });
   const { config } = useOraclesConfig(oracleDid);
   const { authedRequest } = useOraclesContext();
   const { apiUrl: baseUrl } = config;
   const { baseUrl: overridesUrl } = overrides ?? {};
   const apiUrl = overridesUrl ?? baseUrl;
-  const queryClient = useQueryClient();
 
-  const {
-    data: messagesMap,
-    isLoading,
-    error,
-    isRefetching,
-    refetch,
-  } = useQuery({
+  const { isLoading, error, refetch, status, data } = useQuery({
     queryKey: [oracleDid, 'messages', sessionId],
     queryFn: async () => {
       const result = await authedRequest<{
         messages: IMessage[];
       }>(`${apiUrl}/messages/${sessionId}`, 'GET');
 
-      return transformToMessagesMap({
+      const transformedMessages = transformToMessagesMap({
         messages: result.messages,
         uiComponents,
       });
+
+      // Populate the message store with initial data
+
+      return transformedMessages;
     },
     enabled: Boolean(sessionId),
     retry: false,
   });
 
-  // Convert MessagesMap to array using useMemo for better performance
-  const messages = useMemo(() => {
-    if (!messagesMap) return [];
-    return Object.values(messagesMap);
-  }, [messagesMap]);
+  // const {
+  //   events,
+  //   isConnected,
+  //   error: liveEventsError,
+  // } = useLiveEvents({
+  //   oracleDid,
+  //   sessionId,
+  //   handleInvalidateCache: () => {
+  //     void revalidate();
+  //   },
+  //   overrides,
+  // });
+
+  // const { events: webSocketEvents, isConnected: isWebSocketConnected } =
+  //   useWebSocketEvents({
+  //     oracleDid,
+  //     sessionId,
+  //     overrides,
+  //     handleInvalidateCache: () => {
+  //       void revalidate();
+  //     },
+  //     browserTools: props.browserTools,
+  //   });
+
+  useEffect(() => {
+    if (status === 'success') {
+      console.log('🚀 ~ useEffect ~ data:');
+      setMessagesMap(data);
+    }
+  }, [status, data]);
+
   const revalidate = useCallback(async () => {
     await refetch();
   }, [refetch]);
 
-  const {
-    events,
-    isConnected,
-    error: liveEventsError,
-  } = useLiveEvents({
-    oracleDid,
-    sessionId,
-    handleInvalidateCache: revalidate,
-    overrides,
-  });
+  // useEffect(() => {
+  //   const allEvents = [...events, ...webSocketEvents];
+  //   if (!uiComponents || allEvents.length === 0) return;
+  //   if (liveEventsError) {
+  //     return;
+  //   }
+  //   for (const event of allEvents) {
+  //     const isRelated = event.payload.sessionId === sessionId;
 
-  const { events: webSocketEvents, isConnected: isWebSocketConnected } =
-    useWebSocketEvents({
-      oracleDid,
-      sessionId,
-      overrides,
-      handleInvalidateCache: revalidate,
-      browserTools: props.browserTools,
-    });
+  //     if (!isRelated) {
+  //       continue;
+  //     }
 
-  useEffect(() => {
-    if (events.length === 0 || !uiComponents || webSocketEvents.length === 0)
-      return;
-    if (liveEventsError) {
-      console.error('~ useChat ~ liveEventsError:', liveEventsError);
-      return;
-    }
-    const eventsToHandle = [
-      events[events.length - 1],
-      webSocketEvents[webSocketEvents.length - 1],
-    ];
-    for (const event of eventsToHandle) {
-      if (!event) return;
+  //     const messagePayload: IMessage = {
+  //       id: `${event.payload.requestId}-${event.eventName}`,
+  //       type: 'ai',
+  //       content: resolveContent(event, uiComponents),
+  //       toolCalls:
+  //         'toolName' in event.payload
+  //           ? [
+  //               {
+  //                 id: event.payload.requestId,
+  //                 args: event.payload.args as Record<string, unknown>,
+  //                 name: event.payload.toolName as string,
+  //                 status: event.payload.status as 'isRunning' | 'done',
+  //               },
+  //             ]
+  //           : undefined,
+  //     };
 
-      const isRelated = event.payload.sessionId === sessionId;
+  //     // Update the message store directly
+  //     setMessagesMap((prev) => ({
+  //       ...prev,
+  //       [messagePayload.id]: messagePayload,
+  //     }));
+  //   }
+  // }, [events, webSocketEvents, sessionId, uiComponents, liveEventsError]);
 
-      if (!isRelated) return;
-
-      const messagePayload: IMessage = {
-        id: `${event.payload.requestId}-${event.eventName}`,
-        type: 'ai',
-        content: resolveContent(event, uiComponents),
-        toolCalls:
-          'toolName' in event.payload
-            ? [
-                {
-                  id: event.payload.requestId,
-                  args: event.payload.args,
-                  name: event.payload.toolName,
-                  status: event.payload.status,
-                },
-              ]
-            : undefined,
-      };
-
-      queryClient.setQueryData(
-        [oracleDid, 'messages', sessionId],
-        (old: MessagesMap = {}): MessagesMap => {
-          return {
-            ...old,
-            [messagePayload.id]: messagePayload,
-          };
-        },
-      );
-    }
-  }, [
-    events,
-    isRefetching,
-    queryClient,
-    sessionId,
-    uiComponents,
-    oracleDid,
-    liveEventsError,
-  ]);
+  const messages = useMemo(() => Object.values(messagesMap), [messagesMap]);
 
   return {
     messages,
@@ -163,6 +153,6 @@ export function useChat({
     isSending,
     sendMessage,
     sendMessageError,
-    isRealTimeConnected: isConnected && isWebSocketConnected,
+    // isRealTimeConnected: isConnected && isWebSocketConnected,
   };
 }

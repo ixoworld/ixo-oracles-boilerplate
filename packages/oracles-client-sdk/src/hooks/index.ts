@@ -6,3 +6,13 @@ export {
 } from './use-oracle-sessions/index.js';
 
 export { useMemoryEngine } from './use-memory-engine.js';
+
+export * as chatV2 from './use-chat/v2/index.js';
+
+export type {
+  AnyEvent,
+  BrowserToolCallEvent,
+  RenderComponentEvent,
+  ToolCallEvent,
+  UIComponentProps,
+} from './use-chat/v2/types.js';

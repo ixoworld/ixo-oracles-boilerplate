@@ -1,7 +1,7 @@
 import {
-  type ListOracleMessagesResponse,
   SessionManagerService,
   transformGraphStateMessageToListMessageResponse,
+  type ListOracleMessagesResponse,
 } from '@ixo/common';
 import {
   type IRunnableConfigWithRequiredFields,
@@ -10,7 +10,10 @@ import {
   type MessageEventContent,
 } from '@ixo/matrix';
 import { ToolCallEvent } from '@ixo/oracles-events';
-import { type AIMessageChunk } from '@langchain/core/messages';
+import {
+  type AIMessageChunk,
+  type ToolMessage,
+} from '@langchain/core/messages';
 import {
   BadRequestException,
   Injectable,
@@ -244,6 +247,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     };
 
     const state = await this.customerSupportGraph.getGraphState(config);
+
     if (!state || (state.config.did && state.config.did !== did)) {
       return transformGraphStateMessageToListMessageResponse([]);
     }
@@ -309,20 +313,42 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
           const toolCallEvent = new ToolCallEvent({
             requestId: runnableConfig.configurable.requestId ?? '',
             sessionId,
-            toolName: 'toolName',
-            args: 'args',
+            toolName: 'toolCall',
+            args: '{}',
+            status: 'isRunning',
           });
           for await (const { data, event, tags } of stream) {
             const isChatNode = tags?.includes('chat_node');
+
+            if (event === 'on_tool_end') {
+              console.log('🚀 ~ MessagesService ~ sendMessage ~ data:', data);
+              const toolMessage = data.output as ToolMessage;
+              toolCallEvent.payload.args =
+                typeof toolCallEvent.payload.args === 'object'
+                  ? {
+                      ...toolCallEvent.payload.args,
+                      output: toolMessage.content,
+                    }
+                  : toolCallEvent.payload.args;
+              toolCallEvent.payload.status = 'done';
+              toolCallEvent.payload.eventId = toolMessage.tool_call_id;
+              this.sseService.publishToSession(sessionId, toolCallEvent);
+            }
+
             if (event === 'on_chat_model_stream') {
               const content = (data.chunk as AIMessageChunk).content;
 
               const toolCall = (data.chunk as AIMessageChunk).tool_calls;
 
               toolCall?.forEach((tool) => {
+                console.log('🚀 ~ MessagesService ~ sendMessage ~ tool:', tool);
                 // update toolCallEvent with toolCall
-                toolCallEvent.payload.toolName = tool.name;
+                // toolCallEvent.payload.toolName = tool.name;
                 toolCallEvent.payload.args = tool.args;
+                (
+                  toolCallEvent.payload.args as Record<string, unknown>
+                ).toolName = tool.name;
+                toolCallEvent.payload.eventId = tool.id;
                 this.sseService.publishToSession(sessionId, toolCallEvent);
               });
 

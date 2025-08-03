@@ -18,11 +18,12 @@
     "clean": "rm -rf dist node_modules"
   },
   "dependencies": {
-    "@ixo/oracles-chain-client": "workspace:^",
+    "@ixo/oracles-chain-client": "file:../oracles-chain-client",
     "@tanstack/react-query": "^5.29.0",
     "eventsource": "^3.0.6",
     "socket.io-client": "^4.8.1",
-    "zod-to-json-schema": "^3.24.5"
+    "zod-to-json-schema": "^3.24.5",
+    "@ixo/oracles-events": "file:../events"
   },
   "peerDependencies": {
     "react": ">=18.0.0"
@@ -30,7 +31,6 @@
   "devDependencies": {
     "@ixo/eslint-config": "workspace:*",
     "@ixo/jest-config": "workspace:*",
-    "@ixo/oracles-events": "workspace:^",
     "@ixo/typescript-config": "workspace:*",
     "@testing-library/react": "^14.2.1",
     "@testing-library/react-hooks": "^8.0.1",

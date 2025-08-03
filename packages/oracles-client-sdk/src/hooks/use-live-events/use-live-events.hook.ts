@@ -24,11 +24,11 @@ export const useLiveEvents = (props: {
   oracleDid: string;
   sessionId: string;
   handleInvalidateCache: () => void;
+  handleNewEvent: (event: Event) => void;
   overrides?: {
     baseUrl?: string;
   };
 }) => {
-  const [events, setEvents] = useState<Event[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<ErrorEvent | null>(null);
   const { config } = useOraclesConfig(props.oracleDid);
@@ -71,14 +71,16 @@ export const useLiveEvents = (props: {
 
     // event listener for events
     const handleEvent = (event: MessageEvent<AllEvents>) => {
-      setEvents((prev) => [
-        ...prev,
-        typeof event.data === 'string' ? JSON.parse(event.data) : event.data,
-      ]);
+      console.log('🚀 ~ handleEvent ~ event:', event);
+      const ev = (
+        typeof event.data === 'string' ? JSON.parse(event.data) : event.data
+      ) as Event;
+
+      props.handleNewEvent(ev); // Forward immediately
     };
-    eventSource.onmessage = (event) => {
-      handleEvent(event);
-    };
+
+    eventSource.addEventListener('message', handleEvent);
+
     eventSource.addEventListener(evNames.ToolCall, handleEvent);
     eventSource.addEventListener(evNames.RenderComponent, handleEvent);
 
@@ -98,5 +100,5 @@ export const useLiveEvents = (props: {
     };
   }, [apiUrl, props.oracleDid, props.sessionId, wallet]);
 
-  return { events, isConnected, error };
+  return { isConnected, error };
 };

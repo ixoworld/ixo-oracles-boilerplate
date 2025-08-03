@@ -1,4 +1,10 @@
-import { type ComponentProps } from 'react';
+import {
+  type RenderComponentEventPayload,
+  type ToolCallEventPayload,
+} from '@ixo/oracles-events';
+import { createElement, type ComponentProps } from 'react';
+import { type Event } from '../use-live-events/use-live-events.hook.js';
+import { type ToolCallEvent, type UIComponentProps } from './v2/types.js';
 
 export type UIComponents = Record<string, React.FC<any>>;
 
@@ -11,6 +17,9 @@ export const resolveUIComponent = (
       args: unknown;
       status?: 'isRunning' | 'done';
       output?: string;
+      event?: Event;
+      payload?: ToolCallEventPayload | RenderComponentEventPayload;
+      isToolCall?: boolean;
     };
   },
 ): React.ReactElement | undefined => {
@@ -26,37 +35,33 @@ export const resolveUIComponent = (
   }
 
   const isRunning = component.props.status === 'isRunning';
-  const isComponentCanHandleLoading = checkIfComponentCanHandleLoading(
-    Component.prototype,
-  );
-  if (isRunning && !isComponentCanHandleLoading) {
-    const showArgs = Object.keys(component.props.args).length > 0;
-    return (
-      <div
-        key={`${component.name}${component.props.id}`}
-        className="rounded-xl border bg-card text-card-foreground shadow animate-pulse"
-      >
-        <div className="flex flex-col space-y-1.5 p-6">
-          <h3 className="font-semibold leading-none tracking-tight">
-            {component.name} is running
-          </h3>
-          {showArgs && (
-            <code>
-              <pre>{JSON.stringify(component.props.args, null, 2)}</pre>
-            </code>
-          )}
-        </div>
-      </div>
-    );
-  }
 
-  return (
-    <Component
-      key={`${component.name}${component.props.id}`}
-      {...component.props.args}
-      output={component.props.output}
-      isLoading={isRunning && isComponentCanHandleLoading}
-    />
+  const toolCallComponentProps: UIComponentProps<ToolCallEvent> & {
+    key: string;
+  } = {
+    id: component.props.id,
+    args: component.props.args,
+    status: component.props.status,
+    output: component.props.output,
+    isLoading: isRunning,
+    requestId: component.props.payload?.requestId ?? '',
+    sessionId: component.props.payload?.sessionId ?? '',
+    toolName: component.name,
+    eventId: component.props.payload?.eventId ?? '',
+    key: `${component.name}${component.props.id}`,
+  };
+
+  return createElement(
+    Component,
+    component.props.isToolCall
+      ? toolCallComponentProps
+      : {
+          key: `${component.name}${component.props.id}`,
+          id: component.props.id,
+          ...component.props.args,
+          status: component.props.status, // Override args status with fresh status
+          isLoading: isRunning,
+        },
   );
 };
 
@@ -65,12 +70,3 @@ const isValidProps = (
 ): props is ComponentProps<UIComponents[keyof UIComponents]> => {
   return typeof props === 'object' && props !== null;
 };
-
-const checkIfComponentCanHandleLoading = (prototype: unknown): boolean =>
-  Boolean(
-    prototype &&
-      typeof prototype === 'object' &&
-      'canHandleLoadingState' in prototype &&
-      typeof prototype.canHandleLoadingState === 'boolean' &&
-      prototype.canHandleLoadingState,
-  );

@@ -16,7 +16,6 @@ export function useWebSocketEvents(
   const { config } = useOraclesConfig(props.oracleDid);
   const { wallet } = useOraclesContext();
 
-  const [events, setEvents] = useState<WebSocketEvent[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [connectionStatus, setConnectionStatus] =
@@ -77,7 +76,7 @@ export function useWebSocketEvents(
     });
 
     const handleEvent = (event: AllEvents) => {
-      setEvents((prev) => [...prev, event]);
+      props.handleNewEvent?.(event);
     };
 
     newSocket.on(evNames.ToolCall, handleEvent);
@@ -124,7 +123,7 @@ export function useWebSocketEvents(
         return;
       }
 
-      setEvents((prev) => [...prev, event]);
+      props.handleNewEvent?.(event);
       setLastActivity(new Date().toISOString());
 
       // Handle cache invalidation using ref
@@ -146,7 +145,6 @@ export function useWebSocketEvents(
   }, [sessionId, wallet, apiUrl]); // Removed handleInvalidateCache from dependencies
 
   return {
-    events,
     isConnected,
     error,
     connectionStatus,
