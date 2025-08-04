@@ -88,7 +88,7 @@ export const contextGatherNode = async (
     },
   ).format({});
 
-  const result = await llm.beta.chat.completions.parse({
+  const result = await llm.chat.completions.parse({
     model: 'meta-llama/llama-3.1-8b-instruct',
     messages: [{ role: 'user', content: prompt }],
     temperature: 0.3,

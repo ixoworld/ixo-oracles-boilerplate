@@ -44,7 +44,6 @@ const workflow = new StateGraph(CustomerSupportGraphState)
 
   .addConditionalEdges(GraphNodes.Chat, toolsChatRouter, {
     [GraphNodes.Tools]: GraphNodes.Tools,
-    [GraphNodes.Evaluation]: END,
     [END]: END,
   })
   .addEdge(GraphNodes.Tools, GraphNodes.Chat);

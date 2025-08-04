@@ -12,8 +12,7 @@ export class ValidationError extends Error {
   }
 
   static fromZodError(error: ZodError) {
-    const message = error.errors.map((e) => e.message).join('\n');
-    return new ValidationError(message, error);
+    return new ValidationError(error.message, error);
   }
 
   static isValidationError(error: unknown): error is ValidationError {

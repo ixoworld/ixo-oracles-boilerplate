@@ -312,7 +312,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         if (params.sessionId) {
           const toolCallMap = new Map<string, ToolCallEvent>();
           for await (const { data, event, tags } of stream) {
-            const isChatNode = true;
+            const isChatNode = tags?.includes('chat_node');
 
             if (event === 'on_tool_end') {
               const toolMessage = data.output as ToolMessage;

@@ -62,8 +62,8 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "socket.io": "4.8.0",
-    "zod": "^3.23.8",
-    "zod-to-json-schema": "^3.24.5"
+    "zod": "^4.0.14",
+    "zod-to-json-schema": "^3.24.6"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^2.1.4",

@@ -5,7 +5,7 @@ import { type BaseMessage } from '@langchain/core/messages';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { type RunnableConfig } from '@langchain/core/runnables';
 import 'dotenv/config';
-import { z } from 'zod';
+import z from 'zod';
 import {
   getChatOpenAiModel,
   retrieverToolFactory,
@@ -37,11 +37,7 @@ export const findDocsNode =
       const model = getChatOpenAiModel();
       const modelWithTools = model.withStructuredOutput(
         z.object({
-          questions: z.array(
-            z.string({
-              description: 'Generated Queries',
-            }),
-          ),
+          questions: z.array(z.string('Generated Queries')),
         }),
       );
 

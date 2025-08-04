@@ -4,7 +4,6 @@ import {
   type Checkpoint,
   type CheckpointMetadata,
 } from '@langchain/langgraph-checkpoint';
-import { type IMatrixManagerInitConfig } from 'src/types.js';
 
 interface IGraphStateWithRequiredFields {
   messages?: BaseMessage[];
@@ -15,7 +14,7 @@ interface IGraphStateWithRequiredFields {
 interface IRunnableConfigWithRequiredFields extends RunnableConfig {
   configurable: {
     configs?: {
-      matrix: Pick<IMatrixManagerInitConfig, 'accessToken'> & {
+      matrix: {
         roomId: string;
         oracleDid: string;
       };

@@ -1,5 +1,5 @@
 import { tool } from '@langchain/core/tools';
-import { z } from 'zod';
+import  z from 'zod';
 import { jsonToYaml } from '../../utils/json-to-yaml.js';
 
 export type RequestPayload = {
@@ -67,16 +67,9 @@ export const askIXOGuruTool = tool(callGuruApi, {
   description:
     'Ask the IXO Guru AI a question - IXO guru has access to internal knowledge base of IXO organization this tool will return the answer and the session ID to use for chat history if you want to continue a conversation within the same session send the same session ID otherwise a new session ID',
   schema: z.object({
-    question: z.string({
-      description: 'The question to ask the IXO Guru AI',
-    }),
+    question: z.string( 'The question to ask the IXO Guru AI',),
     sessionId: z
-      .string({
-        description:
-          'The session ID to use for chat history if you want to continue a conversation within the same session send the same session ID otherwise a new session ID',
-      })
-      .uuid({
-        message: 'Session ID must be a valid UUID',
-      }),
+      .string( 'The session ID to use for chat history if you want to continue a conversation within the same session send the same session ID otherwise a new session ID',)
+      .uuid( 'Session ID must be a valid UUID',),
   }),
 });

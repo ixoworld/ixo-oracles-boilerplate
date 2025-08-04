@@ -27,16 +27,30 @@
     "turbo": "^2.3.3",
     "typescript": "5.5.4"
   },
-  "packageManager": "pnpm@9.15.9",
+  "packageManager": "pnpm@10.0.0",
   "engines": {
     "node": ">=22",
-    "pnpm": ">=9.0.0"
+    "pnpm": ">=10.0.0"
   },
   "pnpm": {
     "overrides": {
       "@typescript-eslint/eslint-plugin": "6.17.0",
       "@typescript-eslint/parser": "6.17.0",
       "ws": "8.18.2"
-    }
+    },
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "@matrix-org/matrix-sdk-crypto-nodejs",
+      "@scarf/scarf",
+      "@swc/core",
+      "better-sqlite3",
+      "cpu-features",
+      "esbuild",
+      "msgpackr-extract",
+      "protobufjs",
+      "secp256k1",
+      "sharp",
+      "ssh2"
+    ]
   }
 }
