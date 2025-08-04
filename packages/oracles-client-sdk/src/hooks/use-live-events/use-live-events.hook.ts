@@ -74,28 +74,18 @@ export const useLiveEvents = (props: {
       const ev = (
         typeof event.data === 'string' ? JSON.parse(event.data) : event.data
       ) as Event;
-
-      props.handleNewEvent(ev); // Forward immediately
+      if (ev.eventName === evNames.MessageCacheInvalidation) {
+        props.handleInvalidateCache();
+      } else {
+        props.handleNewEvent(ev); // Forward immediately
+      }
     };
 
     eventSource.addEventListener('message', handleEvent);
 
-    eventSource.addEventListener(evNames.ToolCall, handleEvent);
-    eventSource.addEventListener(evNames.RenderComponent, handleEvent);
-
-    // invalidate cache
-    eventSource.addEventListener(
-      evNames.MessageCacheInvalidation,
-      props.handleInvalidateCache,
-    );
     return () => {
-      eventSource.removeEventListener(evNames.ToolCall, handleEvent);
-      eventSource.removeEventListener(evNames.RenderComponent, handleEvent);
-      eventSource.removeEventListener(
-        evNames.MessageCacheInvalidation,
-        props.handleInvalidateCache,
-      );
       eventSource.close();
+      eventSource.removeEventListener('message', handleEvent);
     };
   }, [apiUrl, props.oracleDid, props.sessionId, wallet]);
 
