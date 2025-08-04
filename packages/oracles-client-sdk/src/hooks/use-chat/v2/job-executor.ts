@@ -4,7 +4,6 @@ export class JobExecutor {
 
   async run<T>(job: () => Promise<T>): Promise<T> {
     return new Promise((resolve, reject) => {
-      console.log('Add job to queue \n total jobs', this.queue.length);
 
       this.queue.push(async () => {
         try {

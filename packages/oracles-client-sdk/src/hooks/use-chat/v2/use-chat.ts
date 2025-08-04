@@ -37,14 +37,9 @@ export function useChat({
   if (!chatRef.current || chatRef.current.id !== sessionId) {
     // Cleanup old instance to prevent memory leaks
     if (chatRef.current) {
-      console.log(
-        '🧹 Cleaning up old OracleChat instance:',
-        chatRef.current.id,
-      );
       chatRef.current.cleanup();
     }
 
-    console.log('🔧 Creating new OracleChat instance for session:', sessionId);
     chatRef.current = new OracleChat({
       oracleDid,
       sessionId,
@@ -90,12 +85,10 @@ export function useChat({
   } = useQuery({
     queryKey: [oracleDid, 'messages', sessionId],
     queryFn: async () => {
-      console.log('📡 Fetching messages from API - queryFn called');
       const result = await authedRequest<{
         messages: IMessage[];
       }>(`${apiUrl}/messages/${sessionId}`, 'GET');
 
-      console.log('📦 Received messages:', result.messages.length);
       const transformedMessages = transformToMessagesMap({
         messages: result.messages,
         uiComponents,
@@ -112,16 +105,12 @@ export function useChat({
   });
 
   const revalidate = useCallback(async () => {
-    console.log('🔄 Revalidating messages query');
-    console.log('🔍 Query status before refetch:', queryStatus);
     await refetch();
-    console.log('✅ Messages query refetched');
   }, [refetch, queryStatus]);
 
   // Sync React Query data with OracleChat state when data changes
   useEffect(() => {
     if (data && chatRef.current && queryStatus === 'success') {
-      console.log('🔄 Syncing React Query data with OracleChat state');
       const messagesArray = Object.values(data);
       void chatRef.current.setInitialMessages(messagesArray);
     }
@@ -199,10 +188,6 @@ export function useChat({
   useEffect(() => {
     return () => {
       if (chatRef.current) {
-        console.log(
-          '🧹 Cleaning up OracleChat on unmount:',
-          chatRef.current.id,
-        );
         chatRef.current.cleanup();
         chatRef.current = null;
       }
@@ -210,7 +195,7 @@ export function useChat({
   }, []);
 
   return {
-    messages,
+    messages: messages ?? [],
     isLoading,
     error: error || queryError,
     isSending: isSending || status === 'streaming',

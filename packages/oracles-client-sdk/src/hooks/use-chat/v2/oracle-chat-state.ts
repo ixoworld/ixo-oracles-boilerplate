@@ -123,7 +123,6 @@ export class OracleChatState implements IChatState {
 
   // Cleanup method to prevent memory leaks
   cleanup = (): void => {
-    console.log('🧹 OracleChatState cleanup - clearing callbacks and messages');
     this.#callbacks.clear(); // Critical: Clear all callbacks to prevent leaks
     this.#messages = [];
     this.#error = undefined;

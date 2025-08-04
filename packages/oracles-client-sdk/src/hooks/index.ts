@@ -1,4 +1,3 @@
-export { useChat } from './use-chat/index.js';
 export { useContractOracle } from './use-contract-oracle/index.js';
 export {
   useOracleSessions,
@@ -7,7 +6,7 @@ export {
 
 export { useMemoryEngine } from './use-memory-engine.js';
 
-export * as chatV2 from './use-chat/v2/index.js';
+export * from './use-chat/v2/index.js';
 
 export type {
   AnyEvent,

@@ -246,7 +246,6 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     };
 
     const state = await this.customerSupportGraph.getGraphState(config);
-    console.log('🚀 ~ MessagesService ~ listMessages ~ state:', state);
 
     if (!state || (state.config.did && state.config.did !== did)) {
       return transformGraphStateMessageToListMessageResponse([]);
@@ -318,10 +317,6 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
               const toolMessage = data.output as ToolMessage;
               const toolCallEvent = toolCallMap.get(toolMessage.tool_call_id);
               if (!toolCallEvent) {
-                console.log(
-                  '🚀 ~ MessagesService ~ sendMessage ~ Map:',
-                  toolCallMap,
-                );
                 return;
               }
               toolCallEvent.payload.output = toolMessage.content as string;
@@ -355,10 +350,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
                   toolCallEvent.payload.args as Record<string, unknown>
                 ).toolName = tool.name;
                 toolCallEvent.payload.eventId = tool.id;
-                console.log(
-                  '🚀 ~ MessagesService ~ sendMessage ~ toolCallEvent:',
-                  toolCallEvent,
-                );
+
                 this.sseService.publishToSession(sessionId, toolCallEvent);
                 toolCallMap.set(tool.id, toolCallEvent);
               });

@@ -160,7 +160,6 @@ export class OracleChat {
 
   // Cleanup method to prevent memory leaks
   cleanup = (): void => {
-    console.log('🧹 OracleChat cleanup for session:', this.id);
     // Use the state's cleanup method which clears callbacks too
     this.#state.cleanup();
   };

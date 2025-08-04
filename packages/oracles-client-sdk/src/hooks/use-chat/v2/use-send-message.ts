@@ -43,7 +43,7 @@ export function useSendMessage({
         requestId: string;
       }) => {
         // Use the optimized chat API
-        await chatRef.current.upsertAIMessage(requestId, message);
+        await chatRef?.current.upsertAIMessage(requestId, message);
       },
       [chatRef],
     ),
@@ -69,7 +69,7 @@ export function useSendMessage({
       }
 
       // Set status to streaming
-      chatRef.current.setStatus('submitted');
+      chatRef?.current.setStatus('submitted');
 
       try {
         // 1. Add optimistic user message immediately
@@ -78,10 +78,10 @@ export function useSendMessage({
           content: message,
           type: 'human',
         };
-        await chatRef.current.addUserMessage(userMessage);
+        await chatRef?.current.addUserMessage(userMessage);
 
         // 2. Stream AI response
-        chatRef.current.setStatus('streaming');
+        chatRef?.current.setStatus('streaming');
 
         const { requestId } = await askOracleStream({
           apiURL: apiUrl,
@@ -100,24 +100,21 @@ export function useSendMessage({
             : undefined,
         });
 
-        chatRef.current.setStatus('ready');
+        chatRef?.current.setStatus('ready');
 
         return { requestId };
       } catch (err) {
         if (RequestError.isRequestError(err) && err.claims) {
           onPaymentRequiredError(err.claims as string[]);
-          chatRef.current.setStatus('ready');
+          chatRef?.current.setStatus('ready');
           return;
         }
-        chatRef.current.setStatus(
+        chatRef?.current.setStatus(
           'error',
           err instanceof Error ? err : new Error('Unknown error'),
         );
         throw err;
       } finally {
-        console.log('🔄 Invalidating queries after message send');
-        console.log('📋 Query key:', [oracleDid, 'messages', sessionId]);
-
         await Promise.all([
           queryClient.invalidateQueries({
             queryKey: [oracleDid, 'messages', sessionId],
@@ -128,8 +125,6 @@ export function useSendMessage({
             refetchType: 'all',
           }),
         ]);
-
-        console.log('✅ Queries invalidated successfully');
       }
     },
   });

@@ -71,7 +71,6 @@ export const useLiveEvents = (props: {
 
     // event listener for events
     const handleEvent = (event: MessageEvent<AllEvents>) => {
-      console.log('🚀 ~ handleEvent ~ event:', event);
       const ev = (
         typeof event.data === 'string' ? JSON.parse(event.data) : event.data
       ) as Event;

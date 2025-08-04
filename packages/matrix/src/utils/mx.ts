@@ -15,31 +15,16 @@ export async function createMatrixClient({
   userId: string;
   deviceId: string;
 }) {
-  console.log('createMatrixClient::', {
-    homeServerUrl,
-    accessToken,
-    userId,
-    deviceId,
-  });
-
   if (!homeServerUrl || !accessToken || !userId || !deviceId) {
     throw new Error(
       'Login to Matrix account before trying to instantiate Matrix client.',
     );
   }
 
-  // const indexedDBStore = new IndexedDBStore({
-  //   indexedDB: global.indexedDB,
-  //   dbName: 'matrix-sync-store',
-  // });
-  // const legacyCryptoStore = new IndexedDBCryptoStore()
-
   const mxClient = createClient({
     baseUrl: homeServerUrl,
     accessToken,
     userId,
-    // store: indexedDBStore,
-    // cryptoStore: legacyCryptoStore,
     deviceId,
     timelineSupport: true,
     cryptoCallbacks: {
@@ -48,31 +33,11 @@ export async function createMatrixClient({
     },
     verificationMethods: ['m.sas.v1'],
   });
-  // await indexedDBStore.startup();
   await mxClient.initRustCrypto({
     useIndexedDB: false,
   });
   // mxClient.setGlobalErrorOnUnknownDevices(false);
   mxClient.setMaxListeners(20);
-  // const filter = new Filter(userId);
-  // filter.setDefinition({
-  //   room: {
-  //     state: {
-  //       lazy_load_members: true,
-  //       types: [],
-  //     },
-  //     timeline: {
-  //       types: [],
-  //     },
-  //   },
-  //   // Disable unnecessary features
-  //   presence: {
-  //     types: [], // No presence updates needed
-  //   },
-  //   account_data: {
-  //     types: ['m.cross_signing.master'], // No account data needed
-  //   },
-  // });
   await mxClient.startClient({
     lazyLoadMembers: true,
     // initialSyncLimit: 1,
