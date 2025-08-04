@@ -53,7 +53,6 @@
     "@langchain/langgraph-checkpoint-sqlite": "^0.2.0",
     "@langchain/openai": "^0.6.3",
     "@tavily/core": "0.0.2",
-    "@veramo/core": "^6.0.0",
     "axios": "^1.7.9",
     "axios-retry": "^4.5.0",
     "class-transformer": "^0.5.1",
