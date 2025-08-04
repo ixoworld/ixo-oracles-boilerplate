@@ -8,8 +8,6 @@ export function throttle<T extends (...args: any[]) => void>(
     );
   }
 
-  // TODO: Add `wait` validation too in the next major version.
-
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   let lastCallTime = 0;
 
