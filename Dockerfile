@@ -8,7 +8,7 @@ RUN apt-get update \
 
 # Setup pnpm and turbo on the alpine base
 FROM --platform=linux/amd64 debian-base as base
-RUN npm install pnpm@9.15.9 turbo --global
+RUN npm install pnpm@10.0.0 turbo --global
 RUN pnpm config set store-dir ~/.pnpm-store
 
 # Prune projects

@@ -15,10 +15,10 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: 9.0
+          version: 10.0
       - uses: actions/setup-node@v3
         with:
-          node-version: 22.11.0
+          node-version: 22.17.0
           registry-url: https://registry.npmjs.org/
       - name: Install dependencies pnpm
         run: pnpm install --frozen-lockfile
