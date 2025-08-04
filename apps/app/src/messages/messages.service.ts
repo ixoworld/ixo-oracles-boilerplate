@@ -234,7 +234,6 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         thread_id: sessionId,
         configs: {
           matrix: {
-            accessToken: matrixAccessToken,
             roomId,
             oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
           },
@@ -247,6 +246,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     };
 
     const state = await this.customerSupportGraph.getGraphState(config);
+    console.log('🚀 ~ MessagesService ~ listMessages ~ state:', state);
 
     if (!state || (state.config.did && state.config.did !== did)) {
       return transformGraphStateMessageToListMessageResponse([]);
@@ -310,29 +310,27 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
 
         let fullContent = '';
         if (params.sessionId) {
-          const toolCallEvent = new ToolCallEvent({
-            requestId: runnableConfig.configurable.requestId ?? '',
-            sessionId,
-            toolName: 'toolCall',
-            args: '{}',
-            status: 'isRunning',
-          });
+          const toolCallMap = new Map<string, ToolCallEvent>();
           for await (const { data, event, tags } of stream) {
-            const isChatNode = tags?.includes('chat_node');
+            const isChatNode = true;
 
             if (event === 'on_tool_end') {
-              console.log('🚀 ~ MessagesService ~ sendMessage ~ data:', data);
               const toolMessage = data.output as ToolMessage;
-              toolCallEvent.payload.args =
-                typeof toolCallEvent.payload.args === 'object'
-                  ? {
-                      ...toolCallEvent.payload.args,
-                      output: toolMessage.content,
-                    }
-                  : toolCallEvent.payload.args;
+              const toolCallEvent = toolCallMap.get(toolMessage.tool_call_id);
+              if (!toolCallEvent) {
+                console.log(
+                  '🚀 ~ MessagesService ~ sendMessage ~ Map:',
+                  toolCallMap,
+                );
+                return;
+              }
+              toolCallEvent.payload.output = toolMessage.content as string;
               toolCallEvent.payload.status = 'done';
+              (toolCallEvent.payload.args as Record<string, unknown>).toolName =
+                toolMessage.name;
               toolCallEvent.payload.eventId = toolMessage.tool_call_id;
               this.sseService.publishToSession(sessionId, toolCallEvent);
+              toolCallMap.delete(toolMessage.tool_call_id);
             }
 
             if (event === 'on_chat_model_stream') {
@@ -341,15 +339,28 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
               const toolCall = (data.chunk as AIMessageChunk).tool_calls;
 
               toolCall?.forEach((tool) => {
-                console.log('🚀 ~ MessagesService ~ sendMessage ~ tool:', tool);
                 // update toolCallEvent with toolCall
-                // toolCallEvent.payload.toolName = tool.name;
+                if (!tool.name.trim() || !tool.id) {
+                  return;
+                }
+                const toolCallEvent = new ToolCallEvent({
+                  requestId: runnableConfig.configurable.requestId ?? '',
+                  sessionId,
+                  toolName: 'toolCall',
+                  args: {},
+                  status: 'isRunning',
+                });
                 toolCallEvent.payload.args = tool.args;
                 (
                   toolCallEvent.payload.args as Record<string, unknown>
                 ).toolName = tool.name;
                 toolCallEvent.payload.eventId = tool.id;
+                console.log(
+                  '🚀 ~ MessagesService ~ sendMessage ~ toolCallEvent:',
+                  toolCallEvent,
+                );
                 this.sseService.publishToSession(sessionId, toolCallEvent);
+                toolCallMap.set(tool.id, toolCallEvent);
               });
 
               if (!content) {
@@ -516,7 +527,6 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         sessionId,
         configs: {
           matrix: {
-            accessToken,
             roomId,
             oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
           },

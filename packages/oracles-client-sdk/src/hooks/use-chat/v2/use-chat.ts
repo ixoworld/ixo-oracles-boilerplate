@@ -82,13 +82,15 @@ export function useChat({
 
   // React Query for initial data fetch
   const {
+    data,
     isLoading,
     error: queryError,
+    status: queryStatus,
     refetch,
   } = useQuery({
     queryKey: [oracleDid, 'messages', sessionId],
     queryFn: async () => {
-      console.log('📡 Fetching messages from API');
+      console.log('📡 Fetching messages from API - queryFn called');
       const result = await authedRequest<{
         messages: IMessage[];
       }>(`${apiUrl}/messages/${sessionId}`, 'GET');
@@ -111,9 +113,19 @@ export function useChat({
 
   const revalidate = useCallback(async () => {
     console.log('🔄 Revalidating messages query');
+    console.log('🔍 Query status before refetch:', queryStatus);
     await refetch();
     console.log('✅ Messages query refetched');
-  }, [refetch]);
+  }, [refetch, queryStatus]);
+
+  // Sync React Query data with OracleChat state when data changes
+  useEffect(() => {
+    if (data && chatRef.current && queryStatus === 'success') {
+      console.log('🔄 Syncing React Query data with OracleChat state');
+      const messagesArray = Object.values(data);
+      void chatRef.current.setInitialMessages(messagesArray);
+    }
+  }, [data, queryStatus]);
 
   // Send message functionality
   const {

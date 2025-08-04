@@ -43,12 +43,11 @@ export function useSendMessage({
         requestId: string;
       }) => {
         // Use the optimized chat API
-        console.log('addAIResponse', requestId, message);
         await chatRef.current.upsertAIMessage(requestId, message);
       },
       [chatRef],
     ),
-    50,
+    100,
   );
 
   const { mutateAsync, isPending, error } = useMutation({
@@ -116,6 +115,9 @@ export function useSendMessage({
         );
         throw err;
       } finally {
+        console.log('🔄 Invalidating queries after message send');
+        console.log('📋 Query key:', [oracleDid, 'messages', sessionId]);
+
         await Promise.all([
           queryClient.invalidateQueries({
             queryKey: [oracleDid, 'messages', sessionId],
@@ -126,6 +128,8 @@ export function useSendMessage({
             refetchType: 'all',
           }),
         ]);
+
+        console.log('✅ Queries invalidated successfully');
       }
     },
   });
