@@ -2,7 +2,7 @@ import {
   type CreateChatSessionResponseDto,
   type ListChatSessionsResponseDto,
   SessionManagerService,
-} from '@ixo/common'; // Assuming this path is correct
+} from '@ixo/common';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { type ENV } from 'src/types';

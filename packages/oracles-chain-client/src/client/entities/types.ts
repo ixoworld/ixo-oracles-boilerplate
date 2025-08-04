@@ -1,16 +1,13 @@
-import { z } from 'zod';
+import z from 'zod';
 
 export type TGetSurveyJsDomainSchema = z.infer<typeof GetSurveyJsDomainSchema>;
 export const GetSurveyJsDomainSchema = z.object(
   {
-    protocolDid: z.string({
-      description:
-        'The DID of the protocol that will be used to create the domain(Entity, project, asset, protocol/*)',
-    }),
+    protocolDid: z.string(
+      'The DID of the protocol that will be used to create the domain(Entity, project, asset, protocol/*)',
+    ),
   },
-  {
-    description: 'Get the Domain creation Form for a given protocol DID',
-  },
+  'Get the Domain creation Form for a given protocol DID',
 );
 export type TGetSettingsResourceSchema =
   | (z.infer<typeof GetSettingsResourceSchema> & {

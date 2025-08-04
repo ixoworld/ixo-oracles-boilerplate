@@ -6,7 +6,7 @@ export const generateQuestionsFromChunks = async (
   chunks: Document[],
 ): Promise<QuestionGeneratorOutput['json_output']> => {
   const openai = getOpenAiClient();
-  const response = await openai.beta.chat.completions.parse({
+  const response = await openai.chat.completions.parse({
     model: 'gpt-4o-mini',
     messages: [
       {

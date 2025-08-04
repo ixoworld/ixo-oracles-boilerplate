@@ -1,10 +1,15 @@
 import { type AllEvents } from '@ixo/oracles-events';
-import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  type OnModuleDestroy,
+  type OnModuleInit,
+} from '@nestjs/common';
 import { Subject, type Observable } from 'rxjs';
 import { SSE_SERVICE_EVENT_NAME, sseEmitter } from './emitter';
 
 @Injectable()
-export class SseService implements OnModuleDestroy {
+export class SseService implements OnModuleDestroy, OnModuleInit {
   private readonly logger = new Logger(SseService.name);
   private readonly clientSubjects = new Map<string, Subject<AllEvents>>();
 

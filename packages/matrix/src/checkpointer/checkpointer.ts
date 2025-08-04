@@ -1,20 +1,20 @@
+import type { RunnableConfig } from '@langchain/core/runnables';
 import {
   BaseCheckpointSaver,
-  type ChannelVersions,
   type Checkpoint,
   type CheckpointListOptions,
   type CheckpointMetadata,
+  type CheckpointPendingWrite,
   type CheckpointTuple,
   type PendingWrite,
   type SerializerProtocol,
   TASKS,
+  copyCheckpoint,
+  maxChannelVersion,
 } from '@langchain/langgraph-checkpoint';
 
 import { matrixStateManager } from '../matrix-state-manager/matrix-state-manager.js';
-import type {
-  IGraphStateWithRequiredFields,
-  IRunnableConfigWithRequiredFields,
-} from './types.js';
+import type { IGraphStateWithRequiredFields } from './types.js';
 
 // Storage interfaces - simplified like SQL
 interface StoredCheckpoint {
@@ -46,6 +46,10 @@ export class MatrixCheckpointSaver<
 
   constructor(serde?: SerializerProtocol) {
     super(serde);
+  }
+
+  public async deleteThread(threadId: string): Promise<void> {
+    throw new Error('Not implemented' + threadId);
   }
 
   // Storage keys - following SQL table pattern
@@ -199,16 +203,16 @@ export class MatrixCheckpointSaver<
     }
   }
 
-  // Reconstruct pending_sends from parent writes (like SQL subquery)
-  private async getPendingSends(
+  // Migrate pending_sends for v < 4 checkpoints (follows SQL pattern)
+  private async migratePendingSends(
+    mutableCheckpoint: Checkpoint,
     roomId: string,
     oracleDid: string,
     threadId: string,
     checkpointNs: string,
-    parentCheckpointId?: string,
-  ): Promise<unknown[]> {
-    if (!parentCheckpointId) return [];
-
+    parentCheckpointId: string,
+  ): Promise<void> {
+    // Get writes from parent checkpoint
     const parentWrites = await this.getStoredWrites(
       roomId,
       oracleDid,
@@ -217,7 +221,7 @@ export class MatrixCheckpointSaver<
       parentCheckpointId,
     );
 
-    // Filter for TASKS channel and sort by idx (like SQL ORDER BY)
+    // Filter for TASKS channel and sort by idx
     const taskWrites = parentWrites
       .filter((write) => write.channel === TASKS)
       .sort((a, b) => a.idx - b.idx);
@@ -229,21 +233,35 @@ export class MatrixCheckpointSaver<
       }),
     );
 
-    return pendingSends;
+    // Add to checkpoint.channel_values[TASKS]
+    mutableCheckpoint.channel_values ??= {};
+    mutableCheckpoint.channel_values[TASKS] = pendingSends;
+
+    // Update channel versions
+    mutableCheckpoint.channel_versions ??= {};
+    mutableCheckpoint.channel_versions[TASKS] =
+      Object.keys(mutableCheckpoint.channel_versions).length > 0
+        ? maxChannelVersion(
+            ...Object.values(mutableCheckpoint.channel_versions),
+          )
+        : this.getNextVersion(undefined);
   }
 
-  async getTuple(
-    config: IRunnableConfigWithRequiredFields,
-  ): Promise<CheckpointTuple | undefined> {
+  async getTuple(config: RunnableConfig): Promise<CheckpointTuple | undefined> {
     const {
       thread_id: threadId,
       checkpoint_ns: checkpointNs = '',
       checkpoint_id: checkpointId,
-      configs,
-    } = config.configurable;
+    } = config.configurable ?? {};
 
-    if (!configs || !threadId) {
+    if (!threadId) {
       return undefined;
+    }
+
+    // Extract Matrix configs (Matrix-specific)
+    const configs = (config.configurable as any)?.configs;
+    if (!configs) {
+      throw new Error('Missing Matrix configs in configurable');
     }
 
     const { matrix } = configs;
@@ -272,6 +290,18 @@ export class MatrixCheckpointSaver<
       storedCheckpoint.metadata,
     )) as CheckpointMetadata;
 
+    // NEW: Migration check for v < 4 checkpoints
+    if (checkpoint.v < 4 && storedCheckpoint.parent_checkpoint_id != null) {
+      await this.migratePendingSends(
+        checkpoint,
+        matrix.roomId,
+        matrix.oracleDid,
+        storedCheckpoint.thread_id,
+        storedCheckpoint.checkpoint_ns,
+        storedCheckpoint.parent_checkpoint_id,
+      );
+    }
+
     // Get pending writes for current checkpoint
     const storedWrites = await this.getStoredWrites(
       matrix.roomId,
@@ -281,27 +311,13 @@ export class MatrixCheckpointSaver<
       storedCheckpoint.checkpoint_id,
     );
 
-    const pendingWrites: [string, string, unknown][] = await Promise.all(
-      storedWrites.map(async (write): Promise<[string, string, unknown]> => {
+    // NEW: Use CheckpointPendingWrite[] type
+    const pendingWrites: CheckpointPendingWrite[] = await Promise.all(
+      storedWrites.map(async (write): Promise<CheckpointPendingWrite> => {
         const value = await this.serde.loadsTyped(write.type, write.value);
         return [write.task_id, write.channel, value];
       }),
     );
-
-    // Reconstruct pending_sends from parent checkpoint (like SQL)
-    const pendingSends = await this.getPendingSends(
-      matrix.roomId,
-      matrix.oracleDid,
-      storedCheckpoint.thread_id,
-      storedCheckpoint.checkpoint_ns,
-      storedCheckpoint.parent_checkpoint_id,
-    );
-
-    // Reconstruct checkpoint with pending_sends
-    const reconstructedCheckpoint: Checkpoint = {
-      ...checkpoint,
-      pending_sends: pendingSends as any[], // Will be properly typed by LangGraph
-    };
 
     const finalConfig = {
       configurable: {
@@ -313,7 +329,7 @@ export class MatrixCheckpointSaver<
 
     return {
       config: finalConfig,
-      checkpoint: reconstructedCheckpoint,
+      checkpoint, // NEW: No more manual pending_sends injection
       metadata,
       parentConfig: storedCheckpoint.parent_checkpoint_id
         ? {
@@ -329,12 +345,18 @@ export class MatrixCheckpointSaver<
   }
 
   async *list(
-    config: IRunnableConfigWithRequiredFields,
+    config: RunnableConfig,
     _options?: CheckpointListOptions,
   ): AsyncGenerator<CheckpointTuple> {
-    const { thread_id: threadId, configs } = config.configurable;
+    const { thread_id: threadId } = config.configurable ?? {};
 
-    if (!configs || !threadId) {
+    if (!threadId) {
+      return;
+    }
+
+    // Extract Matrix configs (Matrix-specific)
+    const configs = (config.configurable as any)?.configs;
+    if (!configs) {
       return;
     }
 
@@ -369,6 +391,18 @@ export class MatrixCheckpointSaver<
           storedCheckpoint.metadata,
         )) as CheckpointMetadata;
 
+        // NEW: Migration check for v < 4 checkpoints
+        if (checkpoint.v < 4 && storedCheckpoint.parent_checkpoint_id != null) {
+          await this.migratePendingSends(
+            checkpoint,
+            matrix.roomId,
+            matrix.oracleDid,
+            storedCheckpoint.thread_id,
+            storedCheckpoint.checkpoint_ns,
+            storedCheckpoint.parent_checkpoint_id,
+          );
+        }
+
         yield {
           config: {
             configurable: {
@@ -398,44 +432,42 @@ export class MatrixCheckpointSaver<
   }
 
   async put(
-    config: IRunnableConfigWithRequiredFields,
+    config: RunnableConfig,
     checkpoint: Checkpoint,
     metadata: CheckpointMetadata,
-    _newVersions: ChannelVersions,
-  ): Promise<{
-    configurable: {
-      thread_id: string;
-      checkpoint_ns?: string;
-      checkpoint_id: string;
-    };
-  }> {
+  ): Promise<RunnableConfig> {
     const {
-      configs,
       thread_id: threadId,
       checkpoint_ns: checkpointNs = '',
       checkpoint_id: parentCheckpointId,
-    } = config.configurable;
+    } = config.configurable ?? {};
 
-    if (!configs || !threadId) {
-      throw new Error('Missing configs or thread_id in config');
+    if (!threadId) {
+      throw new Error('Missing thread_id in config.configurable');
+    }
+
+    // Extract Matrix configs (Matrix-specific)
+    const configs = (config.configurable as any)?.configs;
+    if (!configs) {
+      throw new Error('Missing Matrix configs in configurable');
     }
 
     const { matrix } = configs;
 
-    // Remove pending_sends before storing (like SQL)
-    const { pending_sends: _pending_sends, ...checkpointToStore } = checkpoint;
+    // NEW: Use copyCheckpoint to prepare checkpoint
+    const preparedCheckpoint: Partial<Checkpoint> = copyCheckpoint(checkpoint);
 
-    // Serialize checkpoint and metadata with same type (like SQL)
+    // Serialize checkpoint and metadata
     const [serializationType, serializedCheckpoint] =
-      this.serde.dumpsTyped(checkpointToStore);
-    const [, serializedMetadata] = this.serde.dumpsTyped(metadata);
+      await this.serde.dumpsTyped(preparedCheckpoint);
+    const [, serializedMetadata] = await this.serde.dumpsTyped(metadata);
 
     const storedCheckpoint: StoredCheckpoint = {
       thread_id: threadId,
       checkpoint_id: checkpoint.id,
       checkpoint_ns: checkpointNs,
       parent_checkpoint_id: parentCheckpointId,
-      type: serializationType, // Single type for both checkpoint and metadata
+      type: serializationType,
       checkpoint: new TextDecoder().decode(serializedCheckpoint),
       metadata: new TextDecoder().decode(serializedMetadata),
     };
@@ -446,6 +478,7 @@ export class MatrixCheckpointSaver<
       storedCheckpoint,
     );
 
+    // NEW: Return standard RunnableConfig
     return {
       configurable: {
         thread_id: threadId,
@@ -456,36 +489,45 @@ export class MatrixCheckpointSaver<
   }
 
   async putWrites(
-    config: IRunnableConfigWithRequiredFields,
+    config: RunnableConfig,
     writes: PendingWrite[],
     taskId: string,
   ): Promise<void> {
     const {
-      configs,
       thread_id: threadId,
       checkpoint_ns: checkpointNs = '',
       checkpoint_id: checkpointId,
-    } = config.configurable;
+    } = config.configurable ?? {};
 
-    if (!configs || !threadId || !checkpointId) {
-      throw new Error('Missing configs, thread_id, or checkpoint_id in config');
+    if (!threadId || !checkpointId) {
+      throw new Error(
+        'Missing thread_id or checkpoint_id in config.configurable',
+      );
+    }
+
+    // Extract Matrix configs (Matrix-specific)
+    const configs = (config.configurable as any)?.configs;
+    if (!configs) {
+      throw new Error('Missing Matrix configs in configurable');
     }
 
     const { matrix } = configs;
 
-    const storedWrites: StoredWrite[] = writes.map(([channel, value], idx) => {
-      const [type, serializedValue] = this.serde.dumpsTyped(value);
-      return {
-        thread_id: threadId,
-        checkpoint_id: checkpointId,
-        checkpoint_ns: checkpointNs,
-        task_id: taskId,
-        idx,
-        channel,
-        type,
-        value: new TextDecoder().decode(serializedValue),
-      };
-    });
+    const storedWrites: StoredWrite[] = await Promise.all(
+      writes.map(async ([channel, value], idx) => {
+        const [type, serializedValue] = await this.serde.dumpsTyped(value);
+        return {
+          thread_id: threadId,
+          checkpoint_id: checkpointId,
+          checkpoint_ns: checkpointNs,
+          task_id: taskId,
+          idx,
+          channel,
+          type,
+          value: new TextDecoder().decode(serializedValue),
+        };
+      }),
+    );
 
     await this.storeWrites(matrix.roomId, matrix.oracleDid, storedWrites);
   }

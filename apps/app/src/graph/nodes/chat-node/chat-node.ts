@@ -1,4 +1,4 @@
-import { getChatOpenAiModel, parserBrowserTool } from '@ixo/common';
+import { getOpenRouterChatModel, parserBrowserTool } from '@ixo/common';
 import {
   ChatPromptTemplate,
   MessagesPlaceholder,
@@ -18,22 +18,10 @@ export async function chatNode(
   );
 
   Logger.log(`msgFromMatrixRoom: ${msgFromMatrixRoom}`);
-  const llm = getChatOpenAiModel({
-    model: 'qwen/qwen3-14b', //qwen3-30b-a3b
-    temperature: 0.8,
-    apiKey: process.env.OPEN_ROUTER_API_KEY,
-    // reasoningEffort: 'medium',
-    timeout: 20 * 1000 * 60, // 20 minutes
+  const llm = getOpenRouterChatModel({
+    model: 'qwen/qwen3-14b',
     modelKwargs: {
-      reasoning: {
-        effort: 'medium',
-        exclude: false, // Use reasoning but don't include it in the response
-        enabled: true, // Default: inferred from `effort` or `max_tokens`
-      },
       require_parameters: true,
-    },
-    configuration: {
-      baseURL: 'https://openrouter.ai/api/v1',
     },
   });
   const systemPrompt = await AI_ASSISTANT_PROMPT.format({

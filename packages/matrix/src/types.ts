@@ -1,9 +1,3 @@
-export interface IMatrixManagerInitConfig {
-  baseUrl: string;
-  accessToken: string;
-  userId: string;
-  deviceId: string;
-}
 export const supportedOracles = ['guru', 'giza', 'oracleSessions'];
 
 type LiteralUnion<LiteralType extends BaseType, BaseType extends string> =

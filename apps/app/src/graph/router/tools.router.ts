@@ -12,7 +12,7 @@ const toolsChatRouter = (state: TCustomerSupportGraphState): string => {
   ) {
     return GraphNodes.Tools;
   }
-  return GraphNodes.Evaluation;
+  return END;
 };
 
 export default toolsChatRouter;

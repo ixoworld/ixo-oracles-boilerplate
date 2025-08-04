@@ -51,6 +51,7 @@ export function transformGraphStateMessageToListMessageResponse(
         const messageWithToolCallIdIdx = acc.findIndex((m) =>
           m.toolCalls?.find((t) => t.id === toolCallId),
         );
+
         // if the message with the tool call id exits then update the tool Call to add the output
         const el =
           messageWithToolCallIdIdx !== -1
@@ -59,7 +60,11 @@ export function transformGraphStateMessageToListMessageResponse(
         if (el) {
           el.toolCalls = el.toolCalls?.map((t) =>
             t.id === toolCallId
-              ? { ...t, output: toolMsg.content.toString() }
+              ? {
+                  ...t,
+                  output: JSON.stringify(toolMsg.content),
+                  status: 'done',
+                }
               : t,
           );
           acc[messageWithToolCallIdIdx] = el;

@@ -2,6 +2,8 @@
   "extends": "@ixo/typescript-config/base.json",
   "compilerOptions": {
     "outDir": "dist",
+    "declaration": true,
+    "emitDeclarationOnly": true,
     "rootDir": "src",
     "jsx": "react-jsx"
   },

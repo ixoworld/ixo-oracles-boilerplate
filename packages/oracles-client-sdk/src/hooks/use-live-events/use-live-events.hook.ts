@@ -24,11 +24,11 @@ export const useLiveEvents = (props: {
   oracleDid: string;
   sessionId: string;
   handleInvalidateCache: () => void;
+  handleNewEvent: (event: Event) => void;
   overrides?: {
     baseUrl?: string;
   };
 }) => {
-  const [events, setEvents] = useState<Event[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<ErrorEvent | null>(null);
   const { config } = useOraclesConfig(props.oracleDid);
@@ -71,32 +71,23 @@ export const useLiveEvents = (props: {
 
     // event listener for events
     const handleEvent = (event: MessageEvent<AllEvents>) => {
-      setEvents((prev) => [
-        ...prev,
-        typeof event.data === 'string' ? JSON.parse(event.data) : event.data,
-      ]);
+      const ev = (
+        typeof event.data === 'string' ? JSON.parse(event.data) : event.data
+      ) as Event;
+      if (ev.eventName === evNames.MessageCacheInvalidation) {
+        props.handleInvalidateCache();
+      } else {
+        props.handleNewEvent(ev); // Forward immediately
+      }
     };
-    eventSource.onmessage = (event) => {
-      handleEvent(event);
-    };
-    eventSource.addEventListener(evNames.ToolCall, handleEvent);
-    eventSource.addEventListener(evNames.RenderComponent, handleEvent);
 
-    // invalidate cache
-    eventSource.addEventListener(
-      evNames.MessageCacheInvalidation,
-      props.handleInvalidateCache,
-    );
+    eventSource.addEventListener('message', handleEvent);
+
     return () => {
-      eventSource.removeEventListener(evNames.ToolCall, handleEvent);
-      eventSource.removeEventListener(evNames.RenderComponent, handleEvent);
-      eventSource.removeEventListener(
-        evNames.MessageCacheInvalidation,
-        props.handleInvalidateCache,
-      );
       eventSource.close();
+      eventSource.removeEventListener('message', handleEvent);
     };
   }, [apiUrl, props.oracleDid, props.sessionId, wallet]);
 
-  return { events, isConnected, error };
+  return { isConnected, error };
 };

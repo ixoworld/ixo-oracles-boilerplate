@@ -1,20 +1,19 @@
 import {
-  evNames,
+  type RenderComponentEventPayload,
+  type ToolCallEventPayload,
+} from '@ixo/oracles-events/types';
+import {
   type Event,
+  evNames,
 } from '../use-live-events/use-live-events.hook.js';
 import {
   resolveUIComponent,
   type UIComponents,
 } from './resolve-ui-component.js';
 
-type RenderComponentEventOrToolCallEvent = Event<{
-  componentName?: string;
-  toolName?: string;
-  args?: unknown;
-
-  status?: 'isRunning' | 'done';
-  eventId?: string;
-}>;
+type RenderComponentEventOrToolCallEvent =
+  | Event<ToolCallEventPayload>
+  | Event<RenderComponentEventPayload>;
 
 export const resolveContent = (
   event: Event | null,
@@ -25,11 +24,15 @@ export const resolveContent = (
     event.eventName === evNames.RenderComponent ||
     event.eventName === evNames.ToolCall;
 
+  const isToolCall = event.eventName === evNames.ToolCall;
+
   if (shouldRenderComponent) {
     const payload =
       event.payload as RenderComponentEventOrToolCallEvent['payload'];
 
-    const toolName = payload.toolName || payload.componentName;
+    const toolName =
+      (payload as ToolCallEventPayload).toolName ||
+      (payload as RenderComponentEventPayload).componentName;
     if (!toolName) return null;
 
     return resolveUIComponent(uiComponents, {
@@ -38,6 +41,9 @@ export const resolveContent = (
         args: payload.args,
         id: payload.eventId ?? payload.requestId,
         status: payload.status,
+        output: (payload as ToolCallEventPayload).output,
+        payload,
+        isToolCall,
       },
     });
   }

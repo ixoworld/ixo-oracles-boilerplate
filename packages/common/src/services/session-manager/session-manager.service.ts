@@ -157,7 +157,6 @@ export class SessionManagerService {
       userDid: listSessionsDto.did,
       oracleDid: listSessionsDto.oracleDid,
     });
-    console.log('roomId', roomId);
     if (!roomId) {
       throw new Error('Room ID not found');
     }

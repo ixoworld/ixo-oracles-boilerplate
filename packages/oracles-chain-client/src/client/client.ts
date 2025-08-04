@@ -135,7 +135,6 @@ export class Client {
       throw new Error('No address found in wallet');
     }
     client.address = accounts[0]?.address;
-    console.log('🚀 ~ createCustomClient ~ client:', client.address);
     return client;
   }
 }

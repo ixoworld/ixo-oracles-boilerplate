@@ -67,7 +67,6 @@ export const OraclesProvider = ({
   );
 
   const queryClient = new QueryClient();
-
   return (
     <OraclesContext.Provider value={value}>
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>

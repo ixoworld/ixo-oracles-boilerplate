@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return  -- f*/
 import { Logger } from '@ixo/logger';
 import { config } from 'dotenv';
-import { z } from 'zod';
+import z from 'zod';
 
 config();
 
@@ -19,7 +19,7 @@ export class EnvService<T extends z.ZodType> {
           onError(error);
           return;
         }
-        Logger.error('Environment validation failed:', error.errors);
+        Logger.error('Environment validation failed:' + error.message);
       }
       throw error;
     }

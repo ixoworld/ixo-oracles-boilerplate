@@ -1,29 +1,18 @@
 'use client';
-import {
-  useMutation,
-  useQueryClient,
-  type UseMutateAsyncFunction,
-} from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import { useOraclesContext } from '../../providers/oracles-provider/oracles-context.js';
-import { type IBrowserTools } from '../../types/browser-tool.type.js';
-import { RequestError } from '../../utils/request.js';
-import { useOraclesConfig } from '../use-oracles-config.js';
-import {
-  type IMessage,
-  type MessagesMap,
-} from './transform-to-messages-map.js';
+import { useOraclesContext } from '../../../providers/oracles-provider/oracles-context.js';
+import { RequestError } from '../../../utils/request.js';
+import { useOraclesConfig } from '../../use-oracles-config.js';
+import { type IMessage, type ISendMessageOptions } from './types.js';
+import { asyncDebounce } from './utils.js';
 
 interface IUseSendMessageReturn {
-  sendMessage: UseMutateAsyncFunction<
-    void,
-    Error,
-    { message: string; sId: string; metadata?: Record<string, unknown> },
-    {
-      previousValue: unknown;
-    }
-  >;
+  sendMessage: (
+    message: string,
+    metadata?: Record<string, unknown>,
+  ) => Promise<void>;
   isSending: boolean;
   error?: Error | null;
 }
@@ -34,15 +23,8 @@ export function useSendMessage({
   overrides,
   onPaymentRequiredError,
   browserTools,
-}: {
-  oracleDid: string;
-  sessionId: string;
-  overrides?: {
-    baseUrl?: string;
-  };
-  onPaymentRequiredError: (claimIds: string[]) => void;
-  browserTools?: IBrowserTools;
-}): IUseSendMessageReturn {
+  chatRef,
+}: ISendMessageOptions): IUseSendMessageReturn {
   const queryClient = useQueryClient();
   const { config } = useOraclesConfig(oracleDid);
   const { apiUrl: baseUrl } = config;
@@ -50,54 +32,32 @@ export function useSendMessage({
   const apiUrl = overridesUrl ?? baseUrl;
   const { wallet } = useOraclesContext();
 
-  const addAIResponse = useCallback(
-    async ({ message, requestId }: { message: string; requestId: string }) => {
-      queryClient.setQueryData(
-        [oracleDid, 'messages', sessionId],
-        (old: MessagesMap = {}): MessagesMap => {
-          // Get existing message or create new one
-          const existingMessage = old[requestId] || {
-            id: requestId,
-            content: '',
-            type: 'ai',
-          };
-
-          // Append new chunk to existing content
-          const updatedMessage: IMessage = {
-            ...existingMessage,
-            content:
-              typeof existingMessage.content === 'string' ? (
-                existingMessage.content + message
-              ) : (
-                <>
-                  {existingMessage.content}\n
-                  {message}
-                </>
-              ),
-          };
-          return {
-            ...old,
-            [updatedMessage.id]: updatedMessage,
-          };
-        },
-      );
-    },
-    [queryClient, sessionId],
+  // Streaming callback for AI responses
+  const addAIResponse = asyncDebounce(
+    useCallback(
+      async ({
+        message,
+        requestId,
+      }: {
+        message: string;
+        requestId: string;
+      }) => {
+        // Use the optimized chat API
+        await chatRef?.current.upsertAIMessage(requestId, message);
+      },
+      [chatRef],
+    ),
+    100,
   );
 
   const { mutateAsync, isPending, error } = useMutation({
     mutationFn: async ({
       message,
-      sId,
       metadata,
     }: {
       message: string;
-      sId: string;
       metadata?: Record<string, unknown>;
     }) => {
-      await queryClient.cancelQueries({
-        queryKey: [oracleDid, 'messages', sId],
-      });
       if (!apiUrl) {
         throw new Error('API URL is required');
       }
@@ -107,13 +67,28 @@ export function useSendMessage({
       if (!wallet.matrix.accessToken) {
         throw new Error('Matrix access token is required');
       }
+
+      // Set status to streaming
+      chatRef?.current.setStatus('submitted');
+
       try {
-        await askOracleStream({
+        // 1. Add optimistic user message immediately
+        const userMessage: IMessage = {
+          id: window.crypto.randomUUID(),
+          content: message,
+          type: 'human',
+        };
+        await chatRef?.current.addUserMessage(userMessage);
+
+        // 2. Stream AI response
+        chatRef?.current.setStatus('streaming');
+
+        const { requestId } = await askOracleStream({
           apiURL: apiUrl,
           did: wallet.did,
           message,
           matrixAccessToken: wallet.matrix.accessToken,
-          sessionId: sId,
+          sessionId,
           metadata,
           cb: addAIResponse,
           browserTools: browserTools
@@ -124,69 +99,51 @@ export function useSendMessage({
               }))
             : undefined,
         });
+
+        chatRef?.current.setStatus('ready');
+
+        return { requestId };
       } catch (err) {
         if (RequestError.isRequestError(err) && err.claims) {
           onPaymentRequiredError(err.claims as string[]);
+          chatRef?.current.setStatus('ready');
           return;
         }
+        chatRef?.current.setStatus(
+          'error',
+          err instanceof Error ? err : new Error('Unknown error'),
+        );
         throw err;
+      } finally {
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: [oracleDid, 'messages', sessionId],
+            refetchType: 'all',
+          }),
+          queryClient.invalidateQueries({
+            queryKey: ['oracle-sessions', oracleDid],
+            refetchType: 'all',
+          }),
+        ]);
       }
-    },
-
-    async onMutate({ message, sId }: { message: string; sId: string }) {
-      if (!sId) {
-        throw new Error('Session ID is required');
-      }
-      await queryClient.cancelQueries({
-        queryKey: [oracleDid, 'messages', sId],
-      });
-      const previousValue = queryClient.getQueryData<MessagesMap>([
-        oracleDid,
-        'messages',
-        sId,
-      ]);
-      const messagePayload: IMessage = {
-        id: window.crypto.randomUUID(),
-        content: message,
-        type: 'human',
-      };
-      queryClient.setQueryData(
-        [oracleDid, 'messages', sId],
-        (old: MessagesMap = {}): MessagesMap => {
-          return {
-            ...old,
-            [messagePayload.id]: messagePayload,
-          };
-        },
-      );
-      return { previousValue };
-    },
-    onError(_, __, context) {
-      queryClient.setQueryData(
-        [oracleDid, 'messages', sessionId],
-        context?.previousValue,
-      );
-    },
-    async onSettled() {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: [oracleDid, 'messages', sessionId],
-          refetchType: 'all',
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ['oracle-sessions', oracleDid],
-          refetchType: 'all',
-        }),
-      ]);
     },
   });
+
+  const sendMessage = useCallback(
+    async (message: string, metadata?: Record<string, unknown>) => {
+      await mutateAsync({ message, metadata });
+    },
+    [mutateAsync],
+  );
+
   return {
-    sendMessage: mutateAsync,
+    sendMessage,
     isSending: isPending,
     error,
   };
 }
 
+// Keep your existing askOracleStream function
 const askOracleStream = async (props: {
   apiURL: string;
   did: string;
@@ -226,6 +183,7 @@ const askOracleStream = async (props: {
     const err = (await response.json()) as { message: string };
     throw new RequestError(err.message, err);
   }
+
   const requestId = response.headers.get('X-Request-Id');
   if (!requestId) {
     throw new Error('Did not receive a request ID');

@@ -16,6 +16,7 @@ export interface IWebSocketConfig {
   oracleDid: string;
   sessionId: string;
   handleInvalidateCache?: () => void;
+  handleNewEvent: (event: WebSocketEvent) => void;
   browserTools?: IBrowserTools;
   overrides?: {
     baseUrl?: string;
@@ -24,7 +25,6 @@ export interface IWebSocketConfig {
 }
 
 export interface IUseWebSocketEventsReturn {
-  events: WebSocketEvent[];
   isConnected: boolean;
   error: Error | null;
   connectionStatus: ConnectionStatus;
