@@ -15,6 +15,7 @@ import { EnvSchema } from './config';
 import { MessagesModule } from './messages/messages.module';
 import { AuthHeaderMiddleware } from './middleware/auth-header.middleware';
 // import { QueueModule } from './queue/queue.module';
+import { SubscriptionMiddleware } from './middleware/subscription.middleware';
 import { SessionsModule } from './sessions/sessions.module';
 import { SlackModule } from './slack/slack.module';
 import { SseModule } from './sse/sse.module';
@@ -69,7 +70,7 @@ import { WsModule } from './ws/ws.module';
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
-      .apply(AuthHeaderMiddleware)
+      .apply(AuthHeaderMiddleware, SubscriptionMiddleware)
       .exclude(
         { path: '/', method: RequestMethod.ALL },
         { path: '/health', method: RequestMethod.ALL },

@@ -59,7 +59,7 @@ export const getUserSubscription = async ({
     if (!data) {
       return null;
     }
-    return data;
+    return data as GetMySubscriptionsResponseDto;
   } catch (error) {
     console.error('Error fetching user subscription:', error);
     return null;

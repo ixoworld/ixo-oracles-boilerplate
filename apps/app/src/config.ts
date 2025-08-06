@@ -62,7 +62,8 @@ export const EnvSchema = z.object({
   // OpenRouter
   OPEN_ROUTER_API_KEY: z.string(),
 
-  SUBSCRIPTION_ORACLE_MCP_URL: z.string().url().optional(),
+  SUBSCRIPTION_ORACLE_MCP_URL: z.url().optional(),
+  NETWORK: z.enum(['mainnet', 'testnet', 'devnet']).default('devnet'),
   DATABASE_USE_SSL: z.string().default('false'),
 });
 
