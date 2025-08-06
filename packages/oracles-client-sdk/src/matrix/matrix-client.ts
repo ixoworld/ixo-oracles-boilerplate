@@ -1,5 +1,6 @@
 import { request } from '../utils/request.js';
 import {
+  IOpenIDToken,
   type CreateAndJoinOracleRoomPayload,
   type JoinSpaceOrRoomPayload,
   type MatrixClientConstructorParams,
@@ -188,6 +189,115 @@ class MatrixClient {
     }
     const data = (await res.json()) as MatrixRoomMembersResponse;
     return data.chunk.map((member) => member.user_id);
+  }
+
+  public async getOpenIdToken(
+    userId: string,
+    forceNewToken: boolean = false,
+  ): Promise<IOpenIDToken> {
+    try {
+      if (!this.params.userAccessToken) {
+        throw new Error('User access token not found');
+      }
+
+      if (!this.params.homeserverUrl) {
+        throw new Error('Homeserver URL not found');
+      }
+
+      if (!userId) {
+        throw new Error('User ID not found');
+      }
+
+      // If not forcing a new token, try to get from cookie first
+      if (!forceNewToken) {
+        const cachedToken = this.getCachedToken(userId);
+        if (cachedToken) {
+          console.debug('Using cached OpenID token for user:', userId);
+          return cachedToken;
+        }
+      }
+
+      // Generate new token from Matrix server
+      console.debug('Generating new OpenID token for user:', userId);
+      const response = await fetch(
+        `${this.params.homeserverUrl}/_matrix/client/v3/user/${encodeURIComponent(userId)}/openid/request_token`,
+        {
+          method: 'POST',
+          body: JSON.stringify({}),
+          headers: {
+            Authorization: `Bearer ${this.params.userAccessToken}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      if (response.ok) {
+        const openIdToken = (await response.json()) as IOpenIDToken;
+
+        // Store token in cookie with browser-managed expiration
+        this.setCachedToken(userId, openIdToken);
+        console.debug('OpenID token generated and cached for user:', userId);
+
+        return openIdToken;
+      } else {
+        const errText = await response.text();
+        throw new Error(
+          `Failed to get OpenID token: ${response.status} ${response.statusText} ${errText}`,
+        );
+      }
+    } catch (error) {
+      console.error('Failed to get OpenID token:', error);
+      throw error;
+    }
+  }
+
+  // Simple cookie helpers
+  private getCachedToken(userId: string): IOpenIDToken | null {
+    if (typeof document === 'undefined') return null;
+
+    const cookieName = `matrix_openid_${userId.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${cookieName}=`);
+
+    if (parts.length === 2) {
+      const tokenData = parts.pop()?.split(';').shift();
+      if (tokenData) {
+        try {
+          return JSON.parse(atob(tokenData));
+        } catch (error) {
+          console.warn('Failed to parse cached token:', error);
+          this.clearCachedToken(userId);
+        }
+      }
+    }
+
+    return null;
+  }
+
+  private setCachedToken(userId: string, token: IOpenIDToken): void {
+    if (typeof document === 'undefined') return;
+
+    const cookieName = `matrix_openid_${userId.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const tokenData = btoa(JSON.stringify(token));
+
+    // Let browser handle expiration based on token.expires_in
+    const maxAge = token.expires_in;
+    document.cookie = `${cookieName}=${tokenData}; Max-Age=${maxAge}; Path=/; SameSite=Lax`;
+  }
+
+  private clearCachedToken(userId: string): void {
+    if (typeof document === 'undefined') return;
+
+    const cookieName = `matrix_openid_${userId.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    document.cookie = `${cookieName}=; Max-Age=0; Path=/`;
+  }
+
+  /**
+   * Clear the cached OpenID token for a user
+   */
+  public clearCachedOpenIdToken(userId: string): void {
+    this.clearCachedToken(userId);
+    console.debug('Cleared cached OpenID token for user:', userId);
   }
 }
 
