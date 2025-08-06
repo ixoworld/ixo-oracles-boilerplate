@@ -1,6 +1,6 @@
 {
   "name": "@ixo/oracles-events",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Events for the IXO Oracles",
   "private": false,
   "main": "./dist/server.js",
@@ -9,7 +9,7 @@
   "files": [
     "dist"
   ],
-   "publishConfig": {
+  "publishConfig": {
     "access": "public"
   },
   "scripts": {

@@ -1,5 +1,18 @@
 # app
 
+## 0.1.14
+
+### Patch Changes
+
+- [#53](https://github.com/ixoworld/ixo-oracles-boilerplate/pull/53) [`0a4a5a8`](https://github.com/ixoworld/ixo-oracles-boilerplate/commit/0a4a5a84194acb851e3824e0b74eea54f60c8257) Thanks [@youssefhany-ixo](https://github.com/youssefhany-ixo)! - Upgrade packages and publish events package and preformance upgrades
+
+- Updated dependencies [[`b723472`](https://github.com/ixoworld/ixo-oracles-boilerplate/commit/b72347286054e037436a8be3da3cf840f75223ca), [`0a4a5a8`](https://github.com/ixoworld/ixo-oracles-boilerplate/commit/0a4a5a84194acb851e3824e0b74eea54f60c8257)]:
+  - @ixo/matrix@1.0.2
+  - @ixo/oracles-chain-client@1.0.15
+  - @ixo/data-store@1.0.1
+  - @ixo/common@1.0.2
+  - @ixo/oracles-events@1.0.1
+
 ## 0.1.10
 
 ### Patch Changes
