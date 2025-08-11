@@ -1,6 +1,6 @@
 import { Authz } from '@ixo/oracles-chain-client/react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import MatrixClient from '../matrix/matrix-client.js';
 import { useOraclesContext } from '../providers/oracles-provider/oracles-context.js';
 
@@ -41,7 +41,11 @@ export const useMemoryEngine = (oracleDid: string) => {
   });
 
   // list members in a room
-  const { data: members, isLoading: isLoadingMembers } = useQuery({
+  const {
+    data: members,
+    isLoading: isLoadingMembers,
+    refetch: refetchMembers,
+  } = useQuery({
     queryKey: ['members', authzConfig?.granteeAddress],
     queryFn: async () => {
       if (!oracleRoomId) {
@@ -53,28 +57,48 @@ export const useMemoryEngine = (oracleDid: string) => {
     enabled: Boolean(oracleRoomId),
   });
 
-  const { mutateAsync: inviteUser, isPending: isInvitingUser } = useMutation({
-    mutationFn: async (userId: string) => {
-      if (!oracleRoomId) {
+  const inviteUserFn = useCallback(
+    async (userId: string) => {
+      const roomId =
+        oracleRoomId ??
+        (await matrixClientRef.getOracleRoomId({
+          userDid: wallet?.did ?? '',
+          oracleDid: `did:ixo:${authzConfig?.granteeAddress}`,
+        }));
+      if (!roomId) {
         throw new Error('Oracle room id not found');
       }
-      await matrixClientRef.inviteUser(oracleRoomId, userId);
+      await matrixClientRef.inviteUser(roomId, userId);
+      await refetchMembers();
     },
+    [oracleRoomId, authzConfig?.granteeAddress, wallet?.did],
+  );
+
+  const { mutateAsync: inviteUser, isPending: isInvitingUser } = useMutation({
+    mutationFn: inviteUserFn,
   });
+
+  const enableMemoryEngineFn = useCallback(
+    async (memoryEngineUserId: string) => {
+      const roomId =
+        oracleRoomId ??
+        (await matrixClientRef.getOracleRoomId({
+          userDid: wallet?.did ?? '',
+          oracleDid: `did:ixo:${authzConfig?.granteeAddress}`,
+        }));
+      if (!roomId) {
+        throw new Error('Oracle room id not found');
+      }
+      await matrixClientRef.inviteUser(roomId, memoryEngineUserId);
+      await matrixClientRef.setPowerLevel(roomId, memoryEngineUserId, 50);
+      await refetchMembers();
+    },
+    [oracleRoomId, authzConfig?.granteeAddress, wallet?.did],
+  );
 
   const { mutateAsync: enableMemoryEngine, isPending: isLoadingMemoryEngine } =
     useMutation({
-      mutationFn: async (memoryEngineUserId: string) => {
-        if (!oracleRoomId) {
-          throw new Error('Oracle room id not found');
-        }
-        await matrixClientRef.inviteUser(oracleRoomId, memoryEngineUserId);
-        await matrixClientRef.setPowerLevel(
-          oracleRoomId,
-          memoryEngineUserId,
-          50,
-        );
-      },
+      mutationFn: enableMemoryEngineFn,
     });
 
   return {
