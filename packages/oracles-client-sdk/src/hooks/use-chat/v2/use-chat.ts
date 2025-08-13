@@ -12,6 +12,7 @@ import {
   type Event,
   useLiveEvents,
 } from '../../use-live-events/use-live-events.hook.js';
+import { useOracleSessions } from '../../use-oracle-sessions/use-oracle-sessions.js';
 import { useOraclesConfig } from '../../use-oracles-config.js';
 import { useWebSocketEvents } from '../../use-websocket-events/use-websocket-events.js';
 import { resolveContent } from '../resolve-content.js';
@@ -69,6 +70,10 @@ export function useChat({
     () => undefined,
   );
 
+  const { refetch: refetchOracleSessions } = useOracleSessions(
+    oracleDid,
+    overrides,
+  );
   const { config } = useOraclesConfig(oracleDid);
   const { authedRequest } = useOraclesContext();
   const { apiUrl: baseUrl } = config;
@@ -81,7 +86,7 @@ export function useChat({
     isLoading,
     error: queryError,
     status: queryStatus,
-    refetch,
+    refetch: refetchMessages,
   } = useQuery({
     queryKey: [oracleDid, 'messages', sessionId],
     queryFn: async () => {
@@ -105,8 +110,8 @@ export function useChat({
   });
 
   const revalidate = useCallback(async () => {
-    await refetch();
-  }, [refetch, queryStatus]);
+    await Promise.all([refetchMessages(), refetchOracleSessions()]);
+  }, [refetchMessages, refetchOracleSessions]);
 
   // Sync React Query data with OracleChat state when data changes
   useEffect(() => {
@@ -128,6 +133,7 @@ export function useChat({
     onPaymentRequiredError,
     browserTools,
     chatRef: chatRef as MutableRefObject<OracleChat>,
+    refetchQueries: revalidate,
   });
 
   // WebSocket events handling (keep your existing logic)

@@ -58,6 +58,7 @@ export interface ISendMessageOptions {
   onPaymentRequiredError: (claimIds: string[]) => void;
   browserTools?: IBrowserTools;
   chatRef?: React.MutableRefObject<OracleChat>;
+  refetchQueries?: () => Promise<void>;
 }
 
 interface IUIComponentProps {

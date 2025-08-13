@@ -42,6 +42,8 @@ export const contextGatherNode = async (
       (config as IRunnableConfigWithRequiredFields).configurable.configs?.matrix
         .roomId ?? '',
     userDid,
+    oracleDid: (config as IRunnableConfigWithRequiredFields).configurable
+      .configs?.matrix.oracleDid ?? '',
   });
 
   const llm = getOpenAiClient({

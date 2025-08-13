@@ -61,6 +61,9 @@ const searchMemoryTool = tool(
         roomId,
         userDid,
         centerNodeUuid: centerNodeUuid ?? undefined,
+        oracleDid:
+          (config as IRunnableConfigWithRequiredFields).configurable.configs
+            ?.matrix.oracleDid ?? '',
       });
 
       return {

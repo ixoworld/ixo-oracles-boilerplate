@@ -57,8 +57,15 @@ export interface IQueryEvent {
   content: {
     query: string;
     userDid: string;
-    strategy: string;
+    strategy?:
+      | 'balanced'
+      | 'recent_memory'
+      | 'contextual'
+      | 'precise'
+      | 'entities_only'
+      | 'topics_only';
     centerNodeUuid?: string;
+    oracleDids: string[];
   };
 }
 
@@ -112,6 +119,7 @@ export async function sendBulkSave({
 export async function queryMemories({
   query,
   roomId,
+  oracleDid,
   userDid,
   strategy,
   centerNodeUuid,
@@ -119,6 +127,7 @@ export async function queryMemories({
   query: string;
   maxResults?: number;
   roomId: string;
+  oracleDid: string;
   userDid: string;
   strategy:
     | 'balanced'
@@ -139,6 +148,7 @@ export async function queryMemories({
       userDid,
       strategy,
       centerNodeUuid,
+      oracleDids: [oracleDid],
     },
   };
 

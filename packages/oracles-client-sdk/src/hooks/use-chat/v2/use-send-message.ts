@@ -1,5 +1,5 @@
 'use client';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { useOraclesContext } from '../../../providers/oracles-provider/oracles-context.js';
@@ -24,8 +24,8 @@ export function useSendMessage({
   onPaymentRequiredError,
   browserTools,
   chatRef,
+  refetchQueries,
 }: ISendMessageOptions): IUseSendMessageReturn {
-  const queryClient = useQueryClient();
   const { config } = useOraclesConfig(oracleDid);
   const { apiUrl: baseUrl } = config;
   const { baseUrl: overridesUrl } = overrides ?? {};
@@ -47,7 +47,7 @@ export function useSendMessage({
       },
       [chatRef],
     ),
-    100,
+    50,
   );
 
   const { mutateAsync, isPending, error } = useMutation({
@@ -115,16 +115,7 @@ export function useSendMessage({
         );
         throw err;
       } finally {
-        await Promise.all([
-          queryClient.invalidateQueries({
-            queryKey: [oracleDid, 'messages', sessionId],
-            refetchType: 'all',
-          }),
-          queryClient.invalidateQueries({
-            queryKey: ['oracle-sessions', oracleDid],
-            refetchType: 'all',
-          }),
-        ]);
+        await refetchQueries?.();
       }
     },
   });
