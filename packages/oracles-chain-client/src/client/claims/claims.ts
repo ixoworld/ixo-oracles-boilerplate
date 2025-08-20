@@ -2,12 +2,12 @@ import { Coin } from '@cosmjs/proto-signing';
 import { cosmos, ixo, utils } from '@ixo/impactxclient-sdk';
 import { gqlClient } from '../../gql/index.js';
 import { ValidationError } from '../../utils/validation-error.js';
-import Client from '../client.js';
+import { walletClient } from '../client.js';
 import { Entities } from '../entities/entity.js';
 
 export class Claims {
   private static instance: Claims;
-  constructor(private readonly client = Client) {}
+  constructor(private readonly client = walletClient) {}
 
   public static getInstance(): Claims {
     if (!Claims.instance) {
@@ -133,4 +133,4 @@ export class Claims {
   }
 }
 
-export default Claims.getInstance();
+export const claimsClient = Claims.getInstance();

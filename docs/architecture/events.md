@@ -16,7 +16,7 @@ The `@ixo/oracles-events` package is the real-time communication backbone of the
 
 For complete documentation, usage examples, implementation guides, and technical details, please refer to:
 
-**👉 [`@ixo/oracles-events` Package Documentation](../packages/events/README.md)**
+**👉 [`@ixo/oracles-events` Package Documentation](../../packages/events/README.md)**
 
 The package README contains:
 

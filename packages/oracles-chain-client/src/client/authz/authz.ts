@@ -104,7 +104,7 @@ export class Authz {
     );
     return tx;
   }
-  public async checkPermissions(userClaimCollectionId: string) {
+  public async getUserGrants(userClaimCollectionId: string) {
     if (!userClaimCollectionId) {
       throw new ValidationError('User has no oracles claim collection');
     }
@@ -253,7 +253,7 @@ export class Authz {
     if (!userClaimCollectionId) {
       throw new ValidationError('User has no oracles claim collection');
     }
-    const permissions = await this.checkPermissions(userClaimCollectionId);
+    const permissions = await this.getUserGrants(userClaimCollectionId);
     const permissionsToCheck = Array.isArray(msgTypeUrl)
       ? msgTypeUrl
       : [msgTypeUrl];
@@ -311,6 +311,7 @@ export class Authz {
   ) {
     await this.grantClaimSubmitAuthorization(params, sign);
   }
+
   public async grantAllPermissions(sign: TransactionFn) {
     await this.grant(sign);
   }

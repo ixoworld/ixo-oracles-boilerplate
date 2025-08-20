@@ -60,8 +60,6 @@ export class Client {
     this.queryClient = await createQueryClient(this.rpcUrl);
     const accounts = await this.wallet.getAccounts();
     this.address = accounts[0]?.address ?? '';
-
-    
   }
 
   public static getInstance(
@@ -139,4 +137,4 @@ export class Client {
   }
 }
 
-export default Client.getInstance();
+export const walletClient = Client.getInstance();

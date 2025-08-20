@@ -7,8 +7,8 @@ import { gqlClient } from '../../gql/index.js';
 import { getSettingsResource } from '../../utils/get-settings-resouce.js';
 import { ValidationError } from '../../utils/validation-error.js';
 import { TransactionFn } from '../authz/types.js';
-import Claims from '../claims/claims.js';
-import Client from '../client.js';
+import { claimsClient } from '../claims/claims.js';
+import { walletClient } from '../client.js';
 import {
   InitialPaymentParams as InitialPaymentRequestParams,
   IntentStatus,
@@ -26,7 +26,7 @@ export class Payments {
     },
   ) {
     const { amount, granteeAddress, userClaimCollection } = params;
-    return Claims.sendClaimIntent({
+    return claimsClient.sendClaimIntent({
       amount: [amount],
       userClaimCollection,
       granteeAddress,
@@ -36,11 +36,11 @@ export class Payments {
   async checkForActiveIntent(
     params: Omit<InitialPaymentRequestParams, 'amount'>,
   ) {
-    await Client.init();
+    await walletClient.init();
 
     // get all intents
     const activeIntents =
-      await Client.queryClient.ixo.claims.v1beta1.intentList({});
+      await walletClient.queryClient.ixo.claims.v1beta1.intentList({});
 
     const intent = activeIntents.intents.find(
       (intent) =>
@@ -63,7 +63,7 @@ export class Payments {
   ) {
     const { userAddress, granteeAddress, userClaimCollection } = params;
 
-    return Claims.submitClaim({
+    return claimsClient.submitClaim({
       granteeAddress,
       userAddress,
       claimId,
@@ -143,7 +143,7 @@ export class Payments {
     oracleAddress: string;
     userClaimCollection: string;
   }): Promise<string[] | undefined> {
-    const claims = await Claims.listClaims({
+    const claims = await claimsClient.listClaims({
       oracleAddress: params.oracleAddress,
       userAddress: params.userAddress,
       collectionId: params.userClaimCollection,
@@ -178,5 +178,3 @@ export class Payments {
     return pricingList;
   }
 }
-
-export default Payments;

@@ -1,4 +1,4 @@
-import Client from './client.js';
+import { Client } from './client.js';
 import { Entities } from './entities/entity.js';
 
 // Create a singleton client instance

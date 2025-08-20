@@ -1,5 +1,5 @@
 import { cosmos, ixo, utils } from '@ixo/impactxclient-sdk';
-import Claims from '../claims/claims.js';
+import { claimsClient } from '../claims/claims.js';
 import { Client } from '../client.js';
 import { Authz } from './authz.js';
 const client = Client.getInstance();
@@ -7,7 +7,7 @@ const client = Client.getInstance();
 const userAddress = 'ixo1xpww6379u29ydvh54vmn6na2eyxyp8rk7fsrr0';
 const oracleAddress = 'ixo1qlmum93dly86yhlm9hundtz2kw5l2spgeuslzj';
 
-const claims = Claims;
+const claims = claimsClient;
 
 describe('Authz', () => {
   let authz: Authz;

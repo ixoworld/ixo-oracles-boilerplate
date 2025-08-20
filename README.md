@@ -1,6 +1,6 @@
 # IXO Oracles Framework
 
-A powerful framework for building and deploying AI-driven oracles on the IXO network. Built on **LangGraph**, **Matrix**, and **NestJS**, this framework enables developers to create intelligent oracles with secure communication, complex conversation flows, and automatic marketplace integration.
+A powerful framework for building and deploying **Agentic Oracles** on the IXO network. Built on **LangGraph**, **Matrix**, and **NestJS**, this framework enables developers to create intelligent oracles with secure communication, complex conversation flows, and automatic marketplace integration.
 
 ## What Makes This Special?
 
@@ -53,7 +53,7 @@ pnpm start:dev
 
 This framework creates a seamless bridge between **React applications**, **AI conversation flows**, and the **IXO blockchain**. Each oracle becomes a verified, living entity with its own **Matrix account** and **IXO account** that are registered on the blockchain entity. This allows users to verify oracle authenticity while maintaining complete **data ownership** - all conversation data belongs to the user, stored in their private, encrypted Matrix rooms.
 
-**Optional Memory Engine Integration**: Oracles can optionally integrate with the **IXO Memory Engine** (Neo4j-based) to provide personalized AI experiences by analyzing user patterns, storing key moments, and adapting response styles based on user preferences and conversation history.
+**Optional Memory Engine Integration**: Agentic oracles can optionally integrate with the **IXO Memory Engine** (Neo4j-based) to provide personalized AI experiences by analyzing user patterns, storing key moments, and adapting response styles based on user preferences and conversation history.
 
 **Knowledge Management**: The framework includes a comprehensive knowledge management system that provides AI oracles with access to structured and unstructured data sources. This enables context-aware conversations through semantic search, document storage, and dynamic knowledge retrieval. See [Knowledge Management Architecture](./docs/architecture/knowledge.md) for detailed information.
 
@@ -151,7 +151,7 @@ When you deploy an oracle built with this framework:
 
 1. **Blockchain Registration**: Oracle entity registered on IXO with configs (via CLI)
 2. **Oracle Identity**: Each oracle gets **Matrix account** + **IXO account** linked to blockchain entity
-3. **Verifiable Oracles**: Users can verify oracle authenticity through blockchain records
+3. **Verifiable Agentic Oracles**: Users can verify oracle authenticity through blockchain records
 4. **Instant SDK Access**: Any React app can connect using `@ixo/oracles-client-sdk`
 5. **User Data Ownership**: Private Matrix rooms belong to users - **you own your data**
 6. **LangGraph Ready**: Your conversation flows run immediately
@@ -189,7 +189,15 @@ When you deploy an oracle built with this framework:
 - **Type-safe API** - generated from your oracle's schema
 - **Real-time updates** - live conversation sync
 
-#### **Memory Engine: Personalized Intelligence**
+#### **IXO Chain Client: Blockchain Operations**
+
+- **Complete Oracle Toolkit** - Authorization, claims, payments, and entities
+- **Smart Fee Management** - Automatic gas estimation with intelligent fallbacks
+- **Payment Workflows** - Escrow-based payment system for oracle services
+- **React Ready** - Built-in hooks and components for frontend integration
+- **Production Tested** - Battle-tested blockchain client for oracle operations
+
+#### **IXO Memory Engine: Personalized Intelligence**
 
 - **Neo4j Graph Database** - Built on top of Neo4j for complex relationship mapping
 - **Key Moments Storage** - Captures and stores important conversation highlights
@@ -213,12 +221,12 @@ When you deploy an oracle built with this framework:
 
 ### Supporting Packages
 
-| Package                     | Purpose                                |
-| --------------------------- | -------------------------------------- |
-| `@ixo/slack`                | Slack client for the framework         |
-| `@ixo/oracles-chain-client` | Oracles chain client for the framework |
-| `@ixo/api-keys-manager`     | Api keys manager for the framework     |
-| `@ixo/logger`               | Logger for the framework               |
+| Package                     | Purpose                                                                       |
+| --------------------------- | ----------------------------------------------------------------------------- |
+| `@ixo/slack`                | Slack client for the framework                                                |
+| `@ixo/oracles-chain-client` | **IXO blockchain client** - Complete toolkit for oracle blockchain operations |
+| `@ixo/api-keys-manager`     | Api keys manager for the framework                                            |
+| `@ixo/logger`               | Logger for the framework                                                      |
 
 ### External IXO Components
 
