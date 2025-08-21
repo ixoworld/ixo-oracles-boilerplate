@@ -1,5 +1,7 @@
 # IXO Oracles Framework
 
+![IXO Oracles Framework](./cover.jpg)
+
 A powerful framework for building and deploying **Agentic Oracles** on the IXO network. Built on **LangGraph**, **Matrix**, and **NestJS**, this framework enables developers to create intelligent oracles with secure communication, complex conversation flows, and automatic marketplace integration.
 
 ## What Makes This Special?
