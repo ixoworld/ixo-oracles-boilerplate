@@ -283,7 +283,7 @@ For manual setup (advanced users only), refer to the [Knowledge Management Archi
 
 - [Getting Started Guide](./docs/getting-started.md)
 - [SDK Integration Guide](./docs/sdk-integration.md) - React client integration
-- [Architecture Deep Dive](./docs/architecture/index.md)
+- [Architecture Deep Dive](./docs/architecture/README.md)
 - [Examples](./apps/app)
 
 1. Fork the repository
