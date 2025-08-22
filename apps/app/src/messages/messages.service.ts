@@ -162,8 +162,6 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       !('INTERNAL' in event.content)
     ) {
       const text = event.content.body;
-      Logger.log(`Received message: ${text}`);
-
       const threadId = await this.getThreadRoot(event, roomId);
 
       if (!threadId) {
