@@ -297,3 +297,7 @@ For manual setup (advanced users only), refer to the [Knowledge Management Archi
 - **Issues**: [GitHub Issues](https://github.com/ixoworld/ixo-oracles-boilerplate/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/ixoworld/ixo-oracles-boilerplate/discussions)
 - **Documentation**: [Full docs](./docs/)
+
+## License
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](./LICENSE.txt) file for details.
