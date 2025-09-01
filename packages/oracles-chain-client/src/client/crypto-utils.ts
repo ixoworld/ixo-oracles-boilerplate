@@ -1,3 +1,4 @@
+import { fromHex, toHex } from '@cosmjs/encoding';
 import { decrypt, encrypt } from 'eciesjs';
 import z from 'zod';
 
@@ -12,21 +13,52 @@ import z from 'zod';
  * const decryptedDataTyped = CryptoUtils.decryptTyped(encryptedData, privateKeyHex, zodSchema);
  */
 export class CryptoUtils {
-  static encrypt(data: string, publicKeyHex: string): Buffer {
-    return encrypt(publicKeyHex, Buffer.from(data));
+  /**
+   * Encrypt the data with the public key hex
+   * @param data - The data to encrypt
+   * @param publicKeyHex - The public key to encrypt the data with
+   * @returns The encrypted data
+   */
+  static encrypt(data: string, publicKeyHex: string): string {
+    const encryptedBuffer = encrypt(publicKeyHex, Buffer.from(data));
+    return toHex(encryptedBuffer); // Convert to hex string
   }
 
-  static decrypt(encryptedData: Buffer, privateKeyHex: string): string {
-    return decrypt(privateKeyHex, encryptedData).toString();
+  /**
+   * Decrypt the encrypted data with the private key hex
+   * @param encryptedData - The encrypted data
+   * @param privateKey - The private key
+   * @returns The decrypted data
+   */
+  static decrypt(encryptedData: string, privateKey: Uint8Array): string {
+    const encryptedBuffer = fromHex(encryptedData); // Convert back to buffer
+    return decrypt(privateKey, encryptedBuffer).toString();
   }
 
-  static decryptTyped<S extends z.ZodSchema>(
-    encryptedData: Buffer,
-    privateKeyHex: string,
+  /**
+   * Decrypt the encrypted data with the private key hex and parse it with the zod schema
+   * @param encryptedData - The encrypted data
+   * @param privateKey - The private key
+   * @param zodSchema - The zod schema to parse the data with
+   * @returns The decrypted data
+   */
+  static decryptTyped<S extends z.ZodType>(
+    encryptedData: string,
+    privateKey: Uint8Array,
     zodSchema: S,
   ): z.infer<S> {
-    return zodSchema.parse(
-      JSON.parse(this.decrypt(encryptedData, privateKeyHex)),
-    );
+    const jsonParsableTypes: z.ZodType['def']['type'][] = [
+      'object',
+      'array',
+      'record',
+      'tuple',
+    ];
+    const isObject = jsonParsableTypes.includes(zodSchema.def.type);
+    if (isObject) {
+      return zodSchema.parse(
+        JSON.parse(this.decrypt(encryptedData, privateKey)),
+      );
+    }
+    return zodSchema.parse(this.decrypt(encryptedData, privateKey));
   }
 }

@@ -11,6 +11,7 @@ Provides high-level abstractions for IXO blockchain interactions:
 - **Claims**: Claim submission workflows and payment intents
 - **Entities**: Entity creation, querying, and configuration management
 - **Payments**: Oracle payment workflows with escrow functionality
+- **Crypto**: ECIES encryption/decryption utilities for secure data handling
 - **React**: React-specific utilities and hooks for frontend integration
 
 ## Key Features
@@ -75,6 +76,7 @@ const entities = await gqlClient.GetEntitiesByOwnerAddress({
 - **[Claims](./docs/claims.md)**: Claim submission and intent workflows
 - **[Entities](./docs/entities.md)**: Entity creation and management
 - **[Payments](./docs/payments.md)**: Oracle payment and escrow workflows
+- **[Crypto](./docs/crypto.md)**: ECIES encryption/decryption utilities
 
 ### React Integration
 
@@ -101,6 +103,7 @@ Complete documentation for all modules:
 - **[Claims](./docs/claims.md)** - Claim operations and intents
 - **[Entities](./docs/entities.md)** - Entity management and queries
 - **[Payments](./docs/payments.md)** - Payment workflows and pricing
+- **[Crypto](./docs/crypto.md)** - ECIES encryption and secure data handling
 
 ## Development
 

@@ -4,6 +4,8 @@
 
 import { Slip10, Slip10Curve, stringToPath } from '@cosmjs/crypto';
 import { toHex } from '@cosmjs/encoding';
+import base58 from 'bs58';
+
 import {
   DirectSecp256k1HdWallet,
   DirectSecp256k1Wallet,
@@ -15,6 +17,7 @@ export interface ServerWallet {
   privateKey: Uint8Array; // Keep as raw bytes for efficiency
   privateKeyHex: string; // Also provide hex for logging/debugging
   publicKeyHex: string;
+  publicKeyBase58: string;
   mnemonic: string;
   did: string;
 }
@@ -61,6 +64,7 @@ export async function generateServerWallet(
     privateKey: privkey,
     privateKeyHex: toHex(privkey),
     publicKeyHex: toHex(account.pubkey),
+    publicKeyBase58: base58.encode(account.pubkey),
     mnemonic: walletMnemonic,
     did: utils.did.generateSecpDid(account.address),
   };

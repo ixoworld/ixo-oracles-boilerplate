@@ -196,6 +196,7 @@ When you deploy an oracle built with this framework:
 - **Complete Oracle Toolkit** - Authorization, claims, payments, and entities
 - **Smart Fee Management** - Automatic gas estimation with intelligent fallbacks
 - **Payment Workflows** - Escrow-based payment system for oracle services
+- **Secure Encryption** - ECIES-based encryption utilities for sensitive data handling
 - **React Ready** - Built-in hooks and components for frontend integration
 - **Production Tested** - Battle-tested blockchain client for oracle operations
 
