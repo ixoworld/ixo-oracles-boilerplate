@@ -157,29 +157,29 @@ const saveMemoryTool = tool(
   },
 );
 
-const client = new MultiServerMCPClient({
-  useStandardContentBlocks: true,
-  mcpServers: {
-    'memory-engine': {
-      transport: 'sse', // or just omit transport field
-      url: 'http://localhost:8988/mcp',
-      // Optional: Add auth headers if needed
-      headers: {
-        Authorization: 'Bearer your-token-here', // if you add auth later
-        'User-Agent': 'LangChain-MCP-Client/1.0',
-      },
-      // Automatic reconnection
-      reconnect: {
-        enabled: true,
-        maxAttempts: 3,
-        delayMs: 2000,
-      },
-    },
-  },
-});
+// const client = new MultiServerMCPClient({
+//   useStandardContentBlocks: true,
+//   mcpServers: {
+//     'memory-engine': {
+//       transport: 'sse', // or just omit transport field
+//       url: 'http://localhost:8988/mcp',
+//       // Optional: Add auth headers if needed
+//       headers: {
+//         Authorization: 'Bearer your-token-here', // if you add auth later
+//         'User-Agent': 'LangChain-MCP-Client/1.0',
+//       },
+//       // Automatic reconnection
+//       reconnect: {
+//         enabled: true,
+//         maxAttempts: 3,
+//         delayMs: 2000,
+//       },
+//     },
+//   },
+// });
 
 const getMcpTools = async () => {
-  return await client.getTools();
+  return []
 };
 
 const tools: StructuredTool[] = [searchMemoryTool, saveMemoryTool];

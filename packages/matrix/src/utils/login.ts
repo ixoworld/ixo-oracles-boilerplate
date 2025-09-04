@@ -13,8 +13,3 @@ export async function login(
   console.log('loginResponse', loginResponse);
   return loginResponse;
 }
-login(
-  'https://devmx.ixo.earth',
-  '@did-ixo-ixo1nurj2fl232hjz5gr0atrhas3tzmfn0rlnsg3rk:devmx.ixo.earth',
-  'M2FmM2FhNWM5YjJhZDA4NTFi',
-);

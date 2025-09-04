@@ -1,13 +1,14 @@
+import type { OraclesCallMatrixEvent } from '@ixo/matrix';
 import { CryptoUtils } from '@ixo/oracles-chain-client/react';
 import type { MatrixClient, TimelineEvents } from 'matrix-js-sdk';
 import { getPublicKeyBase58 } from './get-public-ket.js';
-
 interface CreateCallMxEventParams {
   oracleAccountDid: string;
   mxClient: MatrixClient;
   roomId: string;
   callType: 'audio' | 'video';
   sessionId: string;
+  userDid: string;
 }
 
 /**
@@ -43,17 +44,24 @@ const createCallMxEvent = async (
     publicKeyBase58,
   );
 
-  const event = await params.mxClient.sendEvent(
-    params.roomId,
-    'm.ixo.oracles_call' as keyof TimelineEvents,
-    {
+  const callEvent: OraclesCallMatrixEvent = {
+    type: 'm.ixo.oracles_call',
+    content: {
       callType: params.callType,
       callStatus: 'pending',
       callStartedAt: new Date().toISOString(),
       callEndedAt: undefined,
       encryptionKey: encryptedEncryptionKey,
       sessionId: params.sessionId,
-    } as any,
+      oracleDid: params.oracleAccountDid,
+      userDid: params.userDid,
+    },
+  };
+
+  const event = await params.mxClient.sendEvent(
+    params.roomId,
+    callEvent.type as keyof TimelineEvents,
+    callEvent.content as any,
   );
   return { callId: `${event.event_id}@${params.roomId}`, encryptionKey };
 };

@@ -6,7 +6,10 @@ import {
 } from 'livekit-client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { useMutation } from '@tanstack/react-query';
 import { IOpenIDToken } from 'matrix-js-sdk';
+import { useOraclesConfig } from '../../../hooks/use-oracles-config.js';
+import { useOraclesContext } from '../../../providers/oracles-provider/oracles-context.js';
 import useConnectionDetails from './use-connection-details.js';
 
 export type ToastFn = ({
@@ -22,12 +25,14 @@ const fakeToast: ToastFn = ({ title, description }) => {
 
 export function useLiveKitAgent(
   idToken: IOpenIDToken,
+  oracleDid: string,
   toastAlert: ToastFn = fakeToast,
 ) {
   const [sessionStarted, setSessionStarted] = useState(false);
   const [sessionViewVisible, setSessionViewVisible] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
-
+  const { authedRequest } = useOraclesContext();
+  const { config } = useOraclesConfig(oracleDid);
   // Use ref to store current call info without causing re-renders
   const currentCallRef = useRef<{
     callId: string;
@@ -102,7 +107,37 @@ export function useLiveKitAgent(
       room.off(RoomEvent.Connected, onConnected);
     };
   }, [room, refreshConnectionDetails, idToken, toastAlert]);
+  const { mutateAsync: updateCall, isPending: isUpdating } = useMutation({
+    mutationFn: async ({
+      callId,
+      callStatus,
+      callStartedAt,
+      callEndedAt,
+    }: {
+      callId: string;
+      callStatus?: 'active' | 'ended';
+      callStartedAt?: string;
+      callEndedAt?: string;
+    }) => {
+      if (!callId) {
+        throw new Error('Call ID is required');
+      }
 
+      const response = await authedRequest(
+        `${config.apiUrl}/calls/${callId}/update`,
+        'PATCH',
+        {
+          body: JSON.stringify({
+            callStatus,
+            callStartedAt,
+            callEndedAt,
+          }),
+        },
+      );
+
+      return response;
+    },
+  });
   // Public API
   const startCall = useCallback(
     async ({
@@ -166,6 +201,11 @@ export function useLiveKitAgent(
         } catch (error) {
           console.error('Error setting up microphone:', error);
         }
+        await updateCall({
+          callId,
+          callStatus: 'active',
+          callStartedAt: new Date().toISOString(),
+        });
 
         return;
       } catch (error) {
@@ -196,16 +236,25 @@ export function useLiveKitAgent(
       existingOrRefreshConnectionDetails,
       idToken,
       toastAlert,
+      config.apiUrl,
+      authedRequest,
     ],
   );
 
-  const endCall = useCallback(() => {
+  const endCall = useCallback(async () => {
     setSessionStarted(false);
     setSessionViewVisible(false);
     setIsConnecting(false);
-    currentCallRef.current = null;
     room.disconnect();
-  }, [room]);
+    if (currentCallRef.current?.callId) {
+      await updateCall({
+        callId: currentCallRef.current?.callId ?? '',
+        callStatus: 'ended',
+        callEndedAt: new Date().toISOString(),
+      });
+    }
+    currentCallRef.current = null;
+  }, [room, updateCall, currentCallRef]);
 
   return {
     room,

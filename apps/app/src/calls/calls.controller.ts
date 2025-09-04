@@ -1,5 +1,4 @@
 import {
-  Body,
   Controller,
   Get,
   Headers,
@@ -16,6 +15,7 @@ import {
 } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { CallsService } from './calls.service';
+import { StrictBody } from './decorators/strict-body.decorator';
 import { ListCallResponse } from './dto/list-call';
 import { SyncCallResponse } from './dto/sync-call';
 import { CallId } from './dto/types';
@@ -68,7 +68,7 @@ export class CallsController {
   })
   updateCall(
     @Param('callId') callId: CallId,
-    @Body() body: UpdateCallDto,
+    @StrictBody(UpdateCallDto) body: UpdateCallDto,
     @Req() req: Request,
   ) {
     return this.callsService.updateCall({
@@ -105,7 +105,6 @@ export class CallsController {
     @Req() req: Request,
   ) {
     return this.callsService.getEncryptionKey({
-      userDid: req.authData.did,
       callId,
       apiKey,
     });

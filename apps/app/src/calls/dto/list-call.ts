@@ -35,7 +35,7 @@ export class ListCallResponse {
   calls: OraclesCallMatrixEventContent[];
 }
 
-export const MATRIX_STATE_KEY_ORACLES_CALLS = 'oracles_calls_list';
+export const MATRIX_STATE_KEY_ORACLES_CALLS = '_oracles_calls_list';
 /**
  * The state of the oracles calls list
  * ids list of the oracles calls encrypted events

@@ -16,7 +16,7 @@ export interface IOraclesContextProps {
   transactSignX: TransactionFn;
   authedRequest: <T>(
     url: string,
-    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
     options?: RequestInit & { openIdToken?: string },
   ) => Promise<T>;
 }

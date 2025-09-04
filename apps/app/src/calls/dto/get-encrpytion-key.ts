@@ -18,7 +18,6 @@ export class GetEncryptionKeyResponse {
     example: 'did:ixo:1234567890',
   })
   userDid: string;
-  
 }
 
 export class GetEncryptionKeyDTO {
@@ -34,10 +33,4 @@ export class GetEncryptionKeyDTO {
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
   apiKey: string;
-
-  @ApiProperty({
-    description: 'User did',
-    example: 'did:ixo:1234567890',
-  })
-  userDid: string;
 }

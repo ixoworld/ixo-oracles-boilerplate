@@ -32,6 +32,7 @@
   },
   "devDependencies": {
     "@ixo/eslint-config": "workspace:*",
+    "@ixo/matrix": "workspace:*",
     "@ixo/jest-config": "workspace:*",
     "@ixo/typescript-config": "workspace:*",
     "@testing-library/react": "^14.2.1",

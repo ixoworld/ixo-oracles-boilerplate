@@ -329,7 +329,7 @@ export class SimpleMatrixClient {
         Logger.info('✅ Cross-signing already configured');
         jsClient.stopClient();
         jsClient.removeAllListeners();
-        return;
+        // return;
       }
 
       Logger.info('🔑 Setting up cross-signing from scratch...');
@@ -350,7 +350,8 @@ export class SimpleMatrixClient {
 
       await mxCrypto.bootstrapSecretStorage({
         createSecretStorageKey: async () => recoveryKey,
-        setupNewSecretStorage: true,
+        setupNewSecretStorage: false,
+
       });
 
       // Step 2: Bootstrap cross-signing
@@ -361,7 +362,7 @@ export class SimpleMatrixClient {
         authUploadDeviceSigningKeys: async (makeRequest) => {
           return await makeRequest(this.getAuthId({ userId, password }));
         },
-        setupNewCrossSigning: true,
+        setupNewCrossSigning: false,
       });
 
       // Step 3: Reset key backup

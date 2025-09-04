@@ -54,22 +54,29 @@ export const useLiveAgent = (
 
   const { startCall, ...liveKitAgent } = useLiveKitAgent(
     openIdToken,
+    oracleDid,
     toastAlert,
   );
   const { mutateAsync: callAgent, isPending: isCalling } = useMutation({
     mutationFn: async ({
       callType,
       sessionId,
+      userDid,
     }: {
       callType: 'audio' | 'video';
       sessionId: string;
+      userDid: string;
     }) => {
+      if (!oracleRoomId || !userDid) {
+        throw new Error('Oracle room ID or user DID not found');
+      }
       const { callId, encryptionKey } = await createCallMxEvent({
         oracleAccountDid: `did:ixo:${authzConfig?.granteeAddress}`,
         mxClient: mxClient,
-        roomId: oracleRoomId ?? '',
+        roomId: oracleRoomId,
         callType,
         sessionId,
+        userDid,
       });
 
       await authedRequest(`${config.apiUrl}/calls/${callId}/sync`, 'POST', {

@@ -38,7 +38,7 @@ export const OraclesProvider = ({
   const authedRequest = useCallback(
     (
       url: string,
-      method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+      method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
       options?: RequestInit & { openIdToken?: string },
     ) =>
       request(url, method, {
@@ -61,7 +61,7 @@ export const OraclesProvider = ({
       apiKey,
       authedRequest: authedRequest as <T>(
         url: string,
-        method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+        method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
         options?: RequestInit & { openIdToken?: string },
       ) => Promise<T>,
     }),

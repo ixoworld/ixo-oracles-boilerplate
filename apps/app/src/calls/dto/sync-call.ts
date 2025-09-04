@@ -1,7 +1,12 @@
+import { OraclesCallMatrixEvent } from '@ixo/matrix';
 import { ApiProperty } from '@nestjs/swagger';
 import { CallId } from './types';
 
-export class OraclesCallMatrixEventContent {
+type TOraclesCallMatrixEventContent = OraclesCallMatrixEvent['content'];
+
+export class OraclesCallMatrixEventContent
+  implements TOraclesCallMatrixEventContent
+{
   @ApiProperty({
     description: 'Matrix event type identifier',
     example: 'm.ixo.oracles_call',
@@ -15,6 +20,18 @@ export class OraclesCallMatrixEventContent {
     readOnly: true,
   })
   sessionId: string;
+
+  @ApiProperty({
+    description: 'User did',
+    example: 'did:ixo:1234567890',
+  })
+  userDid: string;
+
+  @ApiProperty({
+    description: 'Oracle did',
+    example: 'did:ixo:1234567890',
+  })
+  oracleDid: string;
 
   @ApiProperty({
     description: 'Type of the call',

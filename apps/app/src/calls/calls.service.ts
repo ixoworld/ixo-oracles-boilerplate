@@ -1,4 +1,4 @@
-import { MatrixManager } from '@ixo/matrix';
+import { EncryptedRoomEvent, MatrixManager } from '@ixo/matrix';
 import {
   BadRequestException,
   ConflictException,
@@ -107,7 +107,7 @@ export class CallsService {
     return {
       encryptionKey: callEvent.content.encryptionKey,
       oracleDid: this.configService.getOrThrow('ORACLE_DID'),
-      userDid: dto.userDid,
+      userDid: callEvent.content.userDid,
     };
   }
 
@@ -168,6 +168,8 @@ export class CallsService {
           MATRIX_STATE_KEY_ORACLES_CALLS,
         );
 
+      const mxClient = this.matrixManager.getClient()?.mxClient;
+      const crypto = mxClient?.crypto;
       const events = await Promise.all(
         callsState.calls.map(async (call) => {
           const [callEventId] = call.callId.split('@');
@@ -185,8 +187,40 @@ export class CallsService {
               `Call event with ID '${call.callId}' not found`,
             );
           }
+          const relations = await this.matrixManager
+            .getClient()
+            ?.mxClient.getRelationsForEvent(roomId, callEventId);
+          if (relations?.chunk.length === 0) {
+            return {
+              ...callEvent.content,
+              id: call.callId as CallId,
+            };
+          }
+
+          // Sort the chunk array by origin_server_ts descending and get the most recent chunk
+          let latestRelation = undefined;
+          if (
+            relations &&
+            Array.isArray(relations.chunk) &&
+            relations.chunk.length > 0
+          ) {
+            const sortedChunks = relations.chunk.sort(
+              (a, b) => b.origin_server_ts - a.origin_server_ts,
+            );
+            latestRelation = sortedChunks[0];
+          }
+          const encryptedEvent = new EncryptedRoomEvent(latestRelation);
+          const decryptedEvent = await crypto?.decryptRoomEvent(
+            encryptedEvent,
+            roomId,
+          );
+          const newContent = decryptedEvent?.content?.[
+            'm.new_content'
+          ] as OraclesCallMatrixEventContent;
           return {
             ...callEvent.content,
+            ...newContent,
+
             id: call.callId as CallId,
           };
         }),
@@ -241,6 +275,7 @@ export class CallsService {
     const currentContent = callEvent.content;
     const currentStatus = currentContent.callStatus;
     const newStatus = updateCallDto.callStatus;
+    console.log('🚀 ~ CallsService ~ updateCall ~ newStatus:', newStatus);
 
     // Validate state transitions
     if (newStatus) {
@@ -342,10 +377,17 @@ export class CallsService {
       }
       updatedContent.callEndedAt = updateDto.callEndedAt;
     }
+    console.log(
+      '🚀 ~ CallsService ~ buildUpdatedCallContent ~ updatedContent:',
+      updatedContent,
+    );
 
     // Validate timestamp logic
     this.validateTimestamps(updatedContent);
-
+    console.log(
+      '🚀 ~ CallsService ~ buildUpdatedCallContent ~ updatedContent:',
+      updatedContent,
+    );
     return updatedContent;
   }
 
@@ -377,15 +419,6 @@ export class CallsService {
       if (endTime <= startTime) {
         throw new BadRequestException(
           'callEndedAt must be after callStartedAt',
-        );
-      }
-    }
-
-    // Validate that pending calls don't have timestamps
-    if (callStatus === 'pending') {
-      if (callStartedAt || callEndedAt) {
-        throw new BadRequestException(
-          'Pending calls should not have start or end timestamps',
         );
       }
     }
