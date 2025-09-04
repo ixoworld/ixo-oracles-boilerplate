@@ -18,10 +18,12 @@
     "clean": "rm -rf dist node_modules"
   },
   "dependencies": {
-    "@ixo/oracles-chain-client": "workspace:*",
-    "@ixo/oracles-events": "workspace:*",
+    "@ixo/oracles-chain-client": "file:../oracles-chain-client",
+    "@ixo/oracles-events": "file:../events",
     "@tanstack/react-query": "^5.29.0",
     "eventsource": "^3.0.6",
+    "jose": "^6.1.0",
+    "livekit-client": "^2.15.6",
     "socket.io-client": "^4.8.1",
     "zod-to-json-schema": "^3.24.5"
   },
@@ -39,6 +41,7 @@
     "eslint": "^8.57.0",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
+    "matrix-js-sdk": "^37.11.0",
     "react": "^18.2.0",
     "ts-jest": "^29.1.2",
     "tsup": "^8.0.2",

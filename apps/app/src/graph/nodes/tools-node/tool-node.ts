@@ -8,7 +8,7 @@ import { type RunnableConfig } from '@langchain/core/runnables';
 import { ToolNode } from '@langchain/langgraph/prebuilt';
 import { Logger } from '@nestjs/common';
 import { type TCustomerSupportGraphState } from 'src/graph/state';
-import { tools } from './tools';
+import { getMcpTools, tools } from './tools';
 
 const mx = MatrixManager.getInstance();
 
@@ -27,7 +27,9 @@ async function toolNode(
     }),
   );
 
-  const tn = new ToolNode([...tools, ...(browserTools ?? [])]);
+  const mcpTools = await getMcpTools();
+
+  const tn = new ToolNode([...tools, ...(browserTools ?? []), ...mcpTools]);
 
   const toolMsg: ToolMessage = await tn.invoke(state.messages);
 

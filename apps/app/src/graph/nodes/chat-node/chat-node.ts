@@ -6,7 +6,7 @@ import {
 import { type RunnableConfig } from '@langchain/core/runnables';
 import { Logger } from '@nestjs/common';
 import { type TCustomerSupportGraphState } from '../../state';
-import { tools } from '../tools-node';
+import { getMcpTools, tools } from '../tools-node';
 import { AI_ASSISTANT_PROMPT } from './prompt';
 
 export async function chatNode(
@@ -19,7 +19,7 @@ export async function chatNode(
 
   Logger.log(`msgFromMatrixRoom: ${msgFromMatrixRoom}`);
   const llm = getOpenRouterChatModel({
-    model: 'qwen/qwen3-14b',
+    model: 'openai/gpt-5-mini',
     modelKwargs: {
       require_parameters: true,
     },
@@ -39,13 +39,14 @@ export async function chatNode(
     }),
   );
 
+  const mcpTools = await getMcpTools();
   const chain = ChatPromptTemplate.fromMessages(
     [['system', systemPrompt], new MessagesPlaceholder('msgs')],
     {
       templateFormat: 'mustache',
     },
   )
-    .pipe(llm.bindTools([...tools, ...(browserTools ?? [])]))
+    .pipe(llm.bindTools([...tools, ...(browserTools ?? []), ...mcpTools]))
     .withConfig({
       tags: ['chat_node'],
     });

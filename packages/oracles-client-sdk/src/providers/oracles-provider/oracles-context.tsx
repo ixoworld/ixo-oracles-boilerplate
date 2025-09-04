@@ -39,14 +39,16 @@ export const OraclesProvider = ({
     (
       url: string,
       method: 'GET' | 'POST' | 'PUT' | 'DELETE',
-      options?: RequestInit,
+      options?: RequestInit & { openIdToken?: string },
     ) =>
       request(url, method, {
         ...options,
         headers: {
           ...options?.headers,
           'x-did': initialWallet.did,
-          'x-matrix-access-token': initialWallet.matrix.accessToken,
+          'x-matrix-access-token': options?.openIdToken
+            ? options.openIdToken
+            : initialWallet.matrix.accessToken,
         },
       }),
     [initialWallet],
@@ -60,7 +62,7 @@ export const OraclesProvider = ({
       authedRequest: authedRequest as <T>(
         url: string,
         method: 'GET' | 'POST' | 'PUT' | 'DELETE',
-        options?: RequestInit,
+        options?: RequestInit & { openIdToken?: string },
       ) => Promise<T>,
     }),
     [initialWallet, transactSignX, apiKey, authedRequest],

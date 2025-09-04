@@ -43,6 +43,8 @@ async function bootstrap(): Promise<void> {
   const config = new DocumentBuilder()
     .setTitle('API Boilerplate')
     .setDescription('The API description for the boilerplate')
+    // set json docs link
+    .setExternalDoc('OpenAPI JSON', '/docs/json')
     .setVersion('1.0')
     // Define the Matrix access token header as an API key security scheme
     .addApiKey(
@@ -88,5 +90,6 @@ async function bootstrap(): Promise<void> {
   await app.listen(port);
   Logger.log(`Application is running on: ${await app.getUrl()}`);
   Logger.log(`Swagger UI available at: ${await app.getUrl()}/docs`);
+  Logger.log(`Oracle: ${matrixManager.getClient()?.userId}`);
 }
 void bootstrap();

@@ -32,7 +32,7 @@ const mnemonic = 'your mnemonic phrase here...';
 const wallet = await generateServerWallet(mnemonic);
 
 // Encrypt simple string
-const encryptedData = CryptoUtils.encrypt('Hello, world!', wallet.publicKeyHex);
+const encryptedData = CryptoUtils.encrypt('Hello, world!', wallet.publicKeyBase58);
 console.log(encryptedData); // Base64 encoded string
 ```
 
@@ -65,7 +65,7 @@ const userData = {
 
 const encryptedUserData = CryptoUtils.encrypt(
   JSON.stringify(userData),
-  wallet.publicKeyHex,
+  wallet.publicKeyBase58,
 );
 
 // Decrypt with type safety
@@ -81,14 +81,14 @@ console.log(decryptedUser.age); // TypeScript knows this is a number
 
 ## API Reference
 
-### `CryptoUtils.encrypt(data, publicKeyHex)`
+### `CryptoUtils.encrypt(data, publicKeyBase58)`
 
 Encrypts data using ECIES with the provided public key.
 
 **Parameters:**
 
 - `data: string` - The data to encrypt
-- `publicKeyHex: string` - Hex-encoded public key for encryption
+- `publicKeyBase58: string` - Base58-encoded public key for encryption
 
 **Returns:** `string` - Base64-encoded encrypted data
 
@@ -129,7 +129,7 @@ const sessionData = {
 
 const encrypted = CryptoUtils.encrypt(
   JSON.stringify(sessionData),
-  oracle.publicKeyHex,
+  oracle.publicKeyBase58,
 );
 
 // Store in database
@@ -151,7 +151,7 @@ const sensitiveResponse = {
 
 const encryptedResponse = CryptoUtils.encrypt(
   JSON.stringify(sensitiveResponse),
-  clientPublicKey,
+  clientPublicKeyBase58,
 );
 
 // Send encrypted response
@@ -204,7 +204,7 @@ const oracleWallet = await generateServerWallet(mnemonic);
 const encryptUserData = (userData: any) => {
   return CryptoUtils.encrypt(
     JSON.stringify(userData),
-    oracleWallet.publicKeyHex,
+    oracleWallet.publicKeyBase58,
   );
 };
 

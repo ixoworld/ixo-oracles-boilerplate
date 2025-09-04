@@ -1,14 +1,14 @@
-import { fromHex, toHex } from '@cosmjs/encoding';
+import bs58 from 'bs58';
 import { decrypt, encrypt } from 'eciesjs';
 import z from 'zod';
 
 /**
  * Utility class for encrypting and decrypting data using ECIES with mnemonics
  * @param data - The data to encrypt
- * @param publicKeyHex - The public key to encrypt the data with
+ * @param publicKeyBase58 - The public key to encrypt the data with
  * @returns The encrypted data
  * @example
- * const encryptedData = CryptoUtils.encrypt('Hello, world!', publicKeyHex);
+ * const encryptedData = CryptoUtils.encrypt('Hello, world!', publicKeyBase58);
  * const decryptedData = CryptoUtils.decrypt(encryptedData, privateKeyHex);
  * const decryptedDataTyped = CryptoUtils.decryptTyped(encryptedData, privateKeyHex, zodSchema);
  */
@@ -16,12 +16,24 @@ export class CryptoUtils {
   /**
    * Encrypt the data with the public key hex
    * @param data - The data to encrypt
-   * @param publicKeyHex - The public key to encrypt the data with
+   * @param publicKeyBase58 - The public key to encrypt the data with
    * @returns The encrypted data
    */
-  static encrypt(data: string, publicKeyHex: string): string {
-    const encryptedBuffer = encrypt(publicKeyHex, Buffer.from(data));
-    return toHex(encryptedBuffer); // Convert to hex string
+  static encrypt(data: string, publicKeyBase58: string): string {
+    try {
+      // Browser-compatible buffer creation
+      const dataBuffer =
+        typeof Buffer !== 'undefined'
+          ? Buffer.from(data)
+          : new Uint8Array(new TextEncoder().encode(data));
+      const publicKeyBytes = bs58.decode(publicKeyBase58);
+
+      const encryptedBuffer = encrypt(publicKeyBytes, dataBuffer);
+      return bs58.encode(encryptedBuffer); // Convert to bs58 string
+    } catch (error) {
+      console.error('Error encrypting data:', error);
+      throw error;
+    }
   }
 
   /**
@@ -31,8 +43,20 @@ export class CryptoUtils {
    * @returns The decrypted data
    */
   static decrypt(encryptedData: string, privateKey: Uint8Array): string {
-    const encryptedBuffer = fromHex(encryptedData); // Convert back to buffer
-    return decrypt(privateKey, encryptedBuffer).toString();
+    try {
+      const encryptedBuffer = bs58.decode(encryptedData);
+      const decryptedBuffer = decrypt(privateKey, encryptedBuffer);
+
+      // Browser-compatible string conversion
+      if (typeof Buffer !== 'undefined') {
+        return decryptedBuffer.toString();
+      } else {
+        return new TextDecoder().decode(decryptedBuffer);
+      }
+    } catch (error) {
+      console.error('Error decrypting data:', error);
+      throw error;
+    }
   }
 
   /**

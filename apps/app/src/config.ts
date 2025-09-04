@@ -65,6 +65,9 @@ export const EnvSchema = z.object({
   SUBSCRIPTION_ORACLE_MCP_URL: z.url().optional(),
   NETWORK: z.enum(['mainnet', 'testnet', 'devnet']).default('devnet'),
   DATABASE_USE_SSL: z.string().default('false'),
+
+  SECP_MNEMONIC: z.string(),
+  LIVE_AGENT_AUTH_API_KEY: z.string(),
 });
 
 export type ENV = z.infer<typeof EnvSchema> & {

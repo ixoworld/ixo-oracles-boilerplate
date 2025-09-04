@@ -233,6 +233,7 @@ export class MatrixManager {
     this.mxClient.mxClient.on('room.event', fn);
 
     return () => {
+      Logger.info('Removing room event listener for roomId:', roomId);
       this.mxClient?.mxClient.removeListener('room.event', fn);
     };
   }

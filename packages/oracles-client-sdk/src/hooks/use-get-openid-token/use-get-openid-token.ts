@@ -3,10 +3,7 @@ import { useMemo } from 'react';
 import MatrixClient from '../../matrix/matrix-client.js';
 import { useOraclesContext } from '../../providers/oracles-provider/oracles-context.js';
 
-export const useGetOpenIdToken = (
-  userId: string,
-  forceNewToken: boolean = false,
-) => {
+export const useGetOpenIdToken = (forceNewToken: boolean = false) => {
   const { wallet } = useOraclesContext();
   const matrixClientRef = useMemo(
     () =>
@@ -15,14 +12,26 @@ export const useGetOpenIdToken = (
       }),
     [wallet?.matrix.accessToken],
   );
-
-  const { data: openIdToken } = useQuery({
-    queryKey: ['openIdToken', userId],
-    queryFn: () => matrixClientRef.getOpenIdToken(userId, forceNewToken),
-    enabled: !!userId,
+  const {
+    data: openIdToken,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ['openIdToken', wallet?.did],
+    queryFn: () => {
+      if (!wallet?.did) {
+        return;
+      }
+      return matrixClientRef.getOpenIdToken(
+        // `${wallet?.did.replace(':', '-')}@${new URL(matrixClientRef.params.homeserverUrl ?? '').hostname}`,
+        `@did-ixo-${wallet?.address}:${new URL(matrixClientRef.params.homeserverUrl ?? '').hostname}`,
+        forceNewToken,
+      );
+    },
+    enabled: !!wallet?.did && !!wallet?.matrix.accessToken,
     staleTime: forceNewToken ? 0 : 1000 * 60 * 5, // 5 minutes
     gcTime: forceNewToken ? 0 : 1000 * 60 * 5, // 5 minutes
   });
 
-  return openIdToken;
+  return { openIdToken, isLoading, error };
 };

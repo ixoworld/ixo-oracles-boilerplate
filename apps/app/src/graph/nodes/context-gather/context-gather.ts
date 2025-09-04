@@ -1,4 +1,4 @@
-import { getOpenAiClient, jsonToYaml, zodResponseFormat } from '@ixo/common';
+import { getOpenRouterChatModel, jsonToYaml } from '@ixo/common';
 import {
   MatrixManager,
   type IRunnableConfigWithRequiredFields,
@@ -42,16 +42,16 @@ export const contextGatherNode = async (
       (config as IRunnableConfigWithRequiredFields).configurable.configs?.matrix
         .roomId ?? '',
     userDid,
-    oracleDid: (config as IRunnableConfigWithRequiredFields).configurable
-      .configs?.matrix.oracleDid ?? '',
+    oracleDid:
+      (config as IRunnableConfigWithRequiredFields).configurable.configs?.matrix
+        .oracleDid ?? '',
   });
 
-  const llm = getOpenAiClient({
-    baseURL: 'https://openrouter.ai/api/v1',
-    apiKey: process.env.OPEN_ROUTER_API_KEY,
+  const llm = getOpenRouterChatModel({
+    model: 'mistralai/ministral-3b',
   });
 
-  const prompt = await ChatPromptTemplate.fromMessages(
+  const prompt = ChatPromptTemplate.fromMessages(
     [
       [
         'system',
@@ -88,16 +88,11 @@ export const contextGatherNode = async (
     {
       templateFormat: 'mustache',
     },
-  ).format({});
+  );
 
-  const result = await llm.chat.completions.parse({
-    model: 'meta-llama/llama-3.1-8b-instruct',
-    messages: [{ role: 'user', content: prompt }],
-    temperature: 0.3,
-    response_format: zodResponseFormat(UserContextSchema, 'userContext'),
-  });
+  const chain = prompt.pipe(llm.withStructuredOutput(UserContextSchema));
 
-  const parsedResult = result.choices.at(0)?.message.parsed;
+  const parsedResult = await chain.invoke(null);
 
   if (!parsedResult) {
     throw new Error('Failed to gather context');
