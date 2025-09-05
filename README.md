@@ -211,7 +211,7 @@ When you deploy an oracle built with this framework:
 - **Optional Integration** - Can be enabled/disabled from IXO portal
 - **Enhanced LLM Context** - Provides rich user insights to improve AI responses
 
-#### **LiveAgent: Ultra-Secure Voice & Video Calls** ([Read more](./docs/architecture/calls.md))
+#### **LiveAgent: Ultra-Secure Voice & Video Calls** ( [Read more](./docs/architecture/calls.md))
 
 - **Double Encryption** - Asymmetric key encryption + Matrix E2EE for maximum security
 - **Real-time Communication** - Voice and video calls with AI oracles via LiveKit
