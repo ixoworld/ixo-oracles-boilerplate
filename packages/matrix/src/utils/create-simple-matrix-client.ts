@@ -350,7 +350,7 @@ export class SimpleMatrixClient {
 
       await mxCrypto.bootstrapSecretStorage({
         createSecretStorageKey: async () => recoveryKey,
-        setupNewSecretStorage: false,
+        setupNewSecretStorage: true,
 
       });
 
@@ -362,7 +362,7 @@ export class SimpleMatrixClient {
         authUploadDeviceSigningKeys: async (makeRequest) => {
           return await makeRequest(this.getAuthId({ userId, password }));
         },
-        setupNewCrossSigning: false,
+        setupNewCrossSigning: true,
       });
 
       // Step 3: Reset key backup
