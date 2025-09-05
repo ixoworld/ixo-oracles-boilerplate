@@ -38,15 +38,17 @@ export const OraclesProvider = ({
   const authedRequest = useCallback(
     (
       url: string,
-      method: 'GET' | 'POST' | 'PUT' | 'DELETE',
-      options?: RequestInit,
+      method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
+      options?: RequestInit & { openIdToken?: string },
     ) =>
       request(url, method, {
         ...options,
         headers: {
           ...options?.headers,
           'x-did': initialWallet.did,
-          'x-matrix-access-token': initialWallet.matrix.accessToken,
+          'x-matrix-access-token': options?.openIdToken
+            ? options.openIdToken
+            : initialWallet.matrix.accessToken,
         },
       }),
     [initialWallet],
@@ -59,8 +61,8 @@ export const OraclesProvider = ({
       apiKey,
       authedRequest: authedRequest as <T>(
         url: string,
-        method: 'GET' | 'POST' | 'PUT' | 'DELETE',
-        options?: RequestInit,
+        method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
+        options?: RequestInit & { openIdToken?: string },
       ) => Promise<T>,
     }),
     [initialWallet, transactSignX, apiKey, authedRequest],

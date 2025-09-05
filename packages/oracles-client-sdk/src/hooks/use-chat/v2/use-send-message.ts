@@ -6,7 +6,6 @@ import { useOraclesContext } from '../../../providers/oracles-provider/oracles-c
 import { RequestError } from '../../../utils/request.js';
 import { useOraclesConfig } from '../../use-oracles-config.js';
 import { type IMessage, type ISendMessageOptions } from './types.js';
-import { asyncDebounce } from './utils.js';
 
 interface IUseSendMessageReturn {
   sendMessage: (
@@ -33,21 +32,12 @@ export function useSendMessage({
   const { wallet } = useOraclesContext();
 
   // Streaming callback for AI responses
-  const addAIResponse = asyncDebounce(
-    useCallback(
-      async ({
-        message,
-        requestId,
-      }: {
-        message: string;
-        requestId: string;
-      }) => {
-        // Use the optimized chat API
-        await chatRef?.current.upsertAIMessage(requestId, message);
-      },
-      [chatRef],
-    ),
-    50,
+  const addAIResponse = useCallback(
+    async ({ message, requestId }: { message: string; requestId: string }) => {
+      // Use the optimized chat API
+      await chatRef?.current.upsertAIMessage(requestId, message);
+    },
+    [chatRef],
   );
 
   const { mutateAsync, isPending, error } = useMutation({
