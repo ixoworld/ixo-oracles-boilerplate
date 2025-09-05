@@ -1,4 +1,5 @@
 import { getOpenRouterChatModel, parserBrowserTool } from '@ixo/common';
+import { IRunnableConfigWithRequiredFields } from '@ixo/matrix';
 import {
   ChatPromptTemplate,
   MessagesPlaceholder,
@@ -6,7 +7,7 @@ import {
 import { type RunnableConfig } from '@langchain/core/runnables';
 import { Logger } from '@nestjs/common';
 import { type TCustomerSupportGraphState } from '../../state';
-import { getMcpTools, tools } from '../tools-node';
+import { getMemoryEngineMcpTools, tools } from '../tools-node';
 import { AI_ASSISTANT_PROMPT } from './prompt';
 
 export async function chatNode(
@@ -16,14 +17,17 @@ export async function chatNode(
   const msgFromMatrixRoom = Boolean(
     state.messages.at(-1)?.additional_kwargs.msgFromMatrixRoom,
   );
-
+  const { matrix, user } =
+    (config as IRunnableConfigWithRequiredFields).configurable.configs ?? {};
   Logger.log(`msgFromMatrixRoom: ${msgFromMatrixRoom}`);
+
   const llm = getOpenRouterChatModel({
-    model: 'openai/gpt-5-mini',
+    model: 'meta-llama/llama-3.1-70b-instruct:nitro',
     modelKwargs: {
       require_parameters: true,
     },
   });
+
   const systemPrompt = await AI_ASSISTANT_PROMPT.format({
     APP_NAME: 'IXO | IXO Portal',
     USERNAME: state.userContext.name,
@@ -31,6 +35,7 @@ export async function chatNode(
     RECENT_SUMMARY: state.userContext.recentSummary,
     EXTRA_INFO: state.userContext.extraInfo,
   });
+
   const browserTools = state.browserTools?.map((tool) =>
     parserBrowserTool({
       description: tool.description,
@@ -39,7 +44,11 @@ export async function chatNode(
     }),
   );
 
-  const mcpTools = await getMcpTools();
+  const mcpTools = await getMemoryEngineMcpTools({
+    userDid: user?.did ?? '',
+    oracleDid: matrix?.oracleDid ?? '',
+    roomId: matrix?.roomId ?? '',
+  });
   const chain = ChatPromptTemplate.fromMessages(
     [['system', systemPrompt], new MessagesPlaceholder('msgs')],
     {
