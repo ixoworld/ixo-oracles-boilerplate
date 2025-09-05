@@ -203,6 +203,11 @@ export class MatrixStateManager {
     }
   }
 
+  /**
+   * @deprecated Use setState instead
+   * @param payload - The payload for updating the state
+   * @returns The updated state
+   */
   async updateState<C extends Record<string, unknown> | undefined>(
     payload: IStatePayload<C>,
   ): Promise<C> {

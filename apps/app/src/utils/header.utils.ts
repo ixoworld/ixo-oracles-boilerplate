@@ -1,14 +1,9 @@
 import { MatrixError, MatrixManager } from '@ixo/matrix';
-import {
-  BadRequestException,
-  ForbiddenException,
-  Logger,
-} from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { type IncomingHttpHeaders } from 'node:http';
 
 export async function getAuthHeaders(headers: IncomingHttpHeaders): Promise<{
   matrixAccessToken: string;
-  did: string;
 }> {
   const matrixAccessTokenHeader = headers['x-matrix-access-token'];
 
@@ -22,17 +17,10 @@ export async function getAuthHeaders(headers: IncomingHttpHeaders): Promise<{
         'Missing or invalid required authentication headers: x-matrix-access-token',
       );
     }
-    const loginResponse = await getLoginResponse(matrixAccessToken);
-    const did = normalizeDid(loginResponse.user_id);
-    Logger.debug(`Matrix access token: ${matrixAccessToken}`);
-    Logger.debug(`DID: ${did}`);
-    return { matrixAccessToken, did };
+    return { matrixAccessToken };
   }
 
-  const loginResponse = await getLoginResponse(matrixAccessTokenHeader);
-  const did = normalizeDid(loginResponse.user_id);
-
-  return { matrixAccessToken: matrixAccessTokenHeader, did };
+  return { matrixAccessToken: matrixAccessTokenHeader };
 }
 
 /**
@@ -54,7 +42,7 @@ export function normalizeDid(input: string): string {
   return `did:${namespace}:${identifier}`;
 }
 
-const getLoginResponse = async (matrixAccessToken: string) => {
+export const getLoginResponse = async (matrixAccessToken: string) => {
   try {
     const matrixManager = MatrixManager.getInstance();
     const loginResponse =

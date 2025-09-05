@@ -351,6 +351,7 @@ export class SimpleMatrixClient {
       await mxCrypto.bootstrapSecretStorage({
         createSecretStorageKey: async () => recoveryKey,
         setupNewSecretStorage: true,
+
       });
 
       // Step 2: Bootstrap cross-signing

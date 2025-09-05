@@ -196,6 +196,7 @@ When you deploy an oracle built with this framework:
 - **Complete Oracle Toolkit** - Authorization, claims, payments, and entities
 - **Smart Fee Management** - Automatic gas estimation with intelligent fallbacks
 - **Payment Workflows** - Escrow-based payment system for oracle services
+- **Secure Encryption** - ECIES-based encryption utilities for sensitive data handling
 - **React Ready** - Built-in hooks and components for frontend integration
 - **Production Tested** - Battle-tested blockchain client for oracle operations
 
@@ -209,6 +210,17 @@ When you deploy an oracle built with this framework:
 - **Recent Context** - Maintains awareness of recent memories and events
 - **Optional Integration** - Can be enabled/disabled from IXO portal
 - **Enhanced LLM Context** - Provides rich user insights to improve AI responses
+
+#### **LiveAgent: Ultra-Secure Voice & Video Calls** ( [Read more](./docs/architecture/calls.md))
+
+- **Double Encryption** - Asymmetric key encryption + Matrix E2EE for maximum security
+- **Real-time Communication** - Voice and video calls with AI oracles via LiveKit
+- **Frontend-Controlled Keys** - Users generate and control encryption keys (true E2EE)
+- **Zero-Trust Architecture** - Backend services cannot decrypt call content
+- **Per-Call Key Rotation** - Unique encryption key for each call session
+- **Matrix Event Coordination** - Call state managed through encrypted Matrix events
+- **LiveKit Integration** - Professional-grade WebRTC infrastructure
+- **Agent Authentication** - Secure API key-based access for oracle agents
 
 ## 📦 Packages
 

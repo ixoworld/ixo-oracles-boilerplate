@@ -5,10 +5,10 @@ import {
 } from '@ixo/matrix';
 import { type ToolMessage } from '@langchain/core/messages';
 import { type RunnableConfig } from '@langchain/core/runnables';
-import { ToolNode } from '@langchain/langgraph/prebuilt';
 import { Logger } from '@nestjs/common';
 import { type TCustomerSupportGraphState } from 'src/graph/state';
-import { tools } from './tools';
+import { getMemoryEngineMcpTools, tools } from './tools';
+import { ToolNode } from '@langchain/langgraph/prebuilt';
 
 const mx = MatrixManager.getInstance();
 
@@ -27,7 +27,13 @@ async function toolNode(
     }),
   );
 
-  const tn = new ToolNode([...tools, ...(browserTools ?? [])]);
+  const mcpTools = await getMemoryEngineMcpTools({
+    userDid: configs?.user.did ?? '',
+    oracleDid: configs?.matrix.oracleDid ?? '',
+    roomId: configs?.matrix.roomId ?? '',
+  });
+
+  const tn = new ToolNode([...tools, ...(browserTools ?? []), ...mcpTools]);
 
   const toolMsg: ToolMessage = await tn.invoke(state.messages);
 

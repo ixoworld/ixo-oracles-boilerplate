@@ -10,7 +10,9 @@ dotenv.config();
 const GRAPHQL_ENDPOINT =
   process.env.BLOCKSYNC_GRAPHQL_URL || process.env.NEXT_PUBLIC_GRAPHQL_URL;
 if (!GRAPHQL_ENDPOINT) {
-  throw new Error('BLOCKSYNC_GRAPHQL_URL or NEXT_PUBLIC_GRAPHQL_URL is not set');
+  throw new Error(
+    'BLOCKSYNC_GRAPHQL_URL or NEXT_PUBLIC_GRAPHQL_URL is not set',
+  );
 }
 
 /**

@@ -13,11 +13,11 @@ function getEntityRoomAliasFromDid(did: string) {
   return did.replace(/:/g, '-');
 }
 class MatrixClient {
-  constructor(private readonly params: MatrixClientConstructorParams) {
+  constructor(public readonly params: MatrixClientConstructorParams) {
     this.params.appServiceBotUrl =
-      this.params.appServiceBotUrl ?? MatrixRoomBotServerUrl[chainNetwork];
+      this.params.appServiceBotUrl ?? MatrixRoomBotServerUrl[chainNetwork ?? 'devnet'];
     this.params.homeserverUrl =
-      this.params.homeserverUrl ?? MatrixHomeServerUrl[chainNetwork];
+      this.params.homeserverUrl ?? MatrixHomeServerUrl[chainNetwork ?? 'devnet'];
 
     if (!this.params.appServiceBotUrl || !this.params.homeserverUrl) {
       throw new Error('Matrix client params are not valid');

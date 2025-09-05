@@ -2,80 +2,95 @@
 
 import { MatrixManager } from '@ixo/matrix';
 import { Logger } from '@nestjs/common';
+import {
+  MatrixMemoryBulkSaveEventContent,
+  MatrixMemoryEventType,
+  MatrixMemoryQueryEventContent,
+  MemoryEngineQueryResponse,
+  MessageDTO,
+  TaskErrorPayload,
+} from './types';
 
 const matrixClient = MatrixManager.getInstance();
 
-export interface IMemoryMessage {
-  content: string;
-  role_type: 'user' | 'assistant' | 'system';
-  name: string;
-  timestamp?: string;
-}
+const sendMXEventWithResponse = async <T>(
+  eventType: MatrixMemoryEventType,
+  listenForEventType: MatrixMemoryEventType,
+  content: any,
+  roomId: string,
+): Promise<T> => {
+  let requestEventId: string | undefined;
+  let cleanup: () => void = () => {};
+  let cleanup2: () => void = () => {};
+  let timeout: NodeJS.Timeout | undefined;
+  try {
+    const result = await new Promise<T>((resolve, reject) => {
+      cleanup2 = matrixClient.onRoomEvent(
+        roomId,
+        MatrixMemoryEventType.MEMORY_TASK_ERROR,
+        (event) => {
+          if (
+            event.type === MatrixMemoryEventType.MEMORY_TASK_ERROR &&
+            (event.content as TaskErrorPayload).eventId === requestEventId
+          ) {
+            reject(new Error((event.content as TaskErrorPayload).error));
+          }
+        },
+      );
+      timeout = setTimeout(
+        () => {
+          cleanup();
+          reject(
+            new Error('Query timeout - no response received within 30 seconds'),
+          );
+        },
+        60 * 1000 * 1, // 60 seconds timeout
+      );
 
-export interface IBulkSaveEvent {
-  type: 'ixo.memory.bulk_save';
-  content: {
-    memories: IMemoryMessage[];
-    userDid: string;
-  };
-}
-interface IEnhancedSearchResults {
-  facts: Array<{
-    uuid: string;
-    fact: string;
-    source_node_uuid: string;
-    target_node_uuid: string;
-    created_at: string;
-    valid_at: string;
-    invalid_at: string | null;
-  }>;
-  entities: Array<{
-    uuid: string;
-    name: string;
-    summary: string;
-    labels: string[];
-    group_id: string;
-    created_at: string;
-  }>;
-  episodes: Array<{
-    uuid: string;
-    name: string;
-    content: string;
-    created_at: string;
-    group_id: string;
-  }>;
-  communities: Array<{
-    uuid: string;
-    name: string;
-    summary: string;
-    created_at: string | null;
-  }>;
-}
+      cleanup = matrixClient.onRoomEvent(
+        roomId,
+        listenForEventType,
+        (event) => {
+          const content = event.content as any;
 
-export interface IQueryEvent {
-  type: 'ixo.memory.query';
-  content: {
-    query: string;
-    userDid: string;
-    strategy?:
-      | 'balanced'
-      | 'recent_memory'
-      | 'contextual'
-      | 'precise'
-      | 'entities_only'
-      | 'topics_only';
-    centerNodeUuid?: string;
-    oracleDids: string[];
-  };
-}
+          // success response
+          if (content.request_event_id === requestEventId) {
+            // Clean up
+            clearTimeout(timeout);
 
-export interface IQueryResultsEvent {
-  type: 'ixo.memory.query_results';
-  content: {
-    request_event_id: string;
-    results: IEnhancedSearchResults;
-  };
-}
+            Logger.debug(
+              'Received success response for event type',
+              eventType,
+              content,
+            );
+            resolve(content as T);
+          }
+        },
+      );
+
+      // send the query event
+      matrixClient
+        .sendMatrixEvent(roomId, eventType, content as any)
+        .then((eventId) => {
+          requestEventId = eventId;
+        })
+        .catch((error) => {
+          cleanup();
+          clearTimeout(timeout);
+          cleanup2();
+          reject(error);
+        });
+    });
+    return result;
+  } catch (error) {
+    Logger.error('Failed to send memory engine event:', error);
+    cleanup();
+    cleanup2();
+    clearTimeout(timeout);
+    throw error;
+  }
+};
+
 /**
  * Send bulk save event to save multiple memories
  */
@@ -83,29 +98,33 @@ export async function sendBulkSave({
   memories,
   roomId,
   userDid,
+  oracleDid,
 }: {
-  memories: IMemoryMessage[];
+  memories: MessageDTO[];
   roomId: string;
   userDid: string;
+  oracleDid: string;
 }): Promise<void> {
-  const event: IBulkSaveEvent = {
-    type: 'ixo.memory.bulk_save',
+  const event: {
+    type: MatrixMemoryEventType;
+    content: MatrixMemoryBulkSaveEventContent;
+  } = {
+    type: MatrixMemoryEventType.MEMORY_BULK_SAVE,
     content: {
       memories,
       userDid,
+      oracleDid: oracleDid,
     },
   };
 
   try {
-    const response = await matrixClient.sendMatrixEvent(
-      roomId,
+    const result = await sendMXEventWithResponse(
       event.type,
+      MatrixMemoryEventType.MEMORY_LOG,
       event.content,
+      roomId,
     );
-    Logger.log(
-      `Successfully sent ${memories.length} memories for bulk save`,
-      response,
-    );
+    Logger.debug('Bulk save event result:', result);
   } catch (error) {
     Logger.error('Failed to send bulk save event:', error);
     throw error;
@@ -137,12 +156,12 @@ export async function queryMemories({
     | 'entities_only'
     | 'topics_only';
   centerNodeUuid?: string;
-}): Promise<IQueryResultsEvent['content']['results']> {
-  let requestEventId: string | undefined;
-  await matrixClient.init();
-
-  const queryEvent: IQueryEvent = {
-    type: 'ixo.memory.query',
+}): Promise<MemoryEngineQueryResponse['results']> {
+  const queryEvent: {
+    type: MatrixMemoryEventType.MEMORY_QUERY;
+    content: MatrixMemoryQueryEventContent;
+  } = {
+    type: MatrixMemoryEventType.MEMORY_QUERY,
     content: {
       query,
       userDid,
@@ -154,52 +173,13 @@ export async function queryMemories({
 
   Logger.log('Querying memories', queryEvent.content);
   try {
-    let cleanup: () => void;
-    const result = await new Promise<IQueryResultsEvent['content']['results']>(
-      (resolve, reject) => {
-        const timeout = setTimeout(
-          () => {
-            cleanup();
-            reject(
-              new Error(
-                'Query timeout - no response received within 30 seconds',
-              ),
-            );
-          },
-          60 * 1000 * 0.5, // 30 seconds timeout
-        );
-
-        cleanup = matrixClient.onRoomEvent<IQueryResultsEvent['content']>(
-          roomId,
-          'ixo.memory.results',
-          (event) => {
-            const content = event.content;
-            if (content.request_event_id === requestEventId) {
-              // Clean up
-              clearTimeout(timeout);
-
-              Logger.log(
-                `Query completed: found ${content.results.facts.length} results`,
-              );
-              resolve(content.results);
-            }
-          },
-        );
-
-        // send the query event
-        matrixClient
-          .sendMatrixEvent(roomId, queryEvent.type, queryEvent.content)
-          .then((eventId) => {
-            requestEventId = eventId;
-          })
-          .catch((error) => {
-            cleanup();
-            clearTimeout(timeout);
-            reject(error);
-          });
-      },
+    const result = await sendMXEventWithResponse<MemoryEngineQueryResponse>(
+      queryEvent.type,
+      MatrixMemoryEventType.MEMORY_RESULTS,
+      queryEvent.content,
+      roomId,
     );
-    return result;
+    return result.results;
   } catch (error) {
     Logger.error('Failed to send query event:', error);
     return {
@@ -241,7 +221,7 @@ export async function triggerMemoryAnalysisWorkflow(params: {
             new Error('Task timeout - no response received within 30 seconds'),
           );
         },
-        60 * 1000 * 0.5, // 30 seconds timeout
+        60 * 1000 * 1, // 60 seconds timeout
       );
 
       // Listen for acknowledgement event

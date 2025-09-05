@@ -11,7 +11,7 @@ type RequestOptions = RequestInit & {
 
 export const request = async <T>(
   url: string,
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
   options: RequestOptions = {},
 ): Promise<T> => {
   const {
