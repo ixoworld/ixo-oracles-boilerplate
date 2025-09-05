@@ -329,7 +329,7 @@ export class SimpleMatrixClient {
         Logger.info('✅ Cross-signing already configured');
         jsClient.stopClient();
         jsClient.removeAllListeners();
-        // return;
+        return;
       }
 
       Logger.info('🔑 Setting up cross-signing from scratch...');
