@@ -67,7 +67,7 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
 
   const { mutateAsync: contractOracle, isPending: isContractingOracle } =
     useMutation({
-      mutationFn: async () => {
+      mutationFn: async ({ useAuthz = true }: { useAuthz?: boolean }) => {
         const config =
           authzConfig ??
           (await Authz.getOracleAuthZConfig({
@@ -99,31 +99,33 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
           oracleDID: `did:ixo:${config.granteeAddress}`,
           userDID: wallet.did,
         });
-
-        return authz.contractOracle(
-          {
-            adminAddress: params.adminAddress,
-            claimCollectionId: params.userClaimCollectionId,
-            oracleAddress: config.granteeAddress,
-            oracleName: config.oracleName,
-            accountAddress: wallet.address,
-            agentQuota: params.agentQuota ?? 1,
-            maxAmount: params.maxAmount
-              ? [
-                  {
-                    amount: params.maxAmount.amount.toString(),
-                    denom: params.maxAmount.denom,
-                  },
-                ]
-              : [
-                  {
-                    amount: pricingList?.[0]?.amount ?? '0',
-                    denom: pricingList?.[0]?.denom ?? 'uixo',
-                  },
-                ],
-          },
-          transactSignX,
-        );
+        void refetchOracleInRoom();
+        if (useAuthz) {
+          return authz.contractOracle(
+            {
+              adminAddress: params.adminAddress,
+              claimCollectionId: params.userClaimCollectionId,
+              oracleAddress: config.granteeAddress,
+              oracleName: config.oracleName,
+              accountAddress: wallet.address,
+              agentQuota: params.agentQuota ?? 1,
+              maxAmount: params.maxAmount
+                ? [
+                    {
+                      amount: params.maxAmount.amount.toString(),
+                      denom: params.maxAmount.denom,
+                    },
+                  ]
+                : [
+                    {
+                      amount: pricingList?.[0]?.amount ?? '0',
+                      denom: pricingList?.[0]?.denom ?? 'uixo',
+                    },
+                  ],
+            },
+            transactSignX,
+          );
+        }
       },
     });
 
@@ -157,10 +159,20 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
       if (!oracleRoomId) {
         return false;
       }
+      if (!authzConfig?.granteeAddress) {
+        return false;
+      }
       const members = await matrixClientRef.listRoomMembers(oracleRoomId);
-      return members.includes(params.oracleDid);
+      return members.includes(
+        `@did-ixo-${authzConfig?.granteeAddress}:${new URL(matrixClientRef.params.homeserverUrl ?? '').host}`,
+      );
     },
-    enabled: Boolean(wallet?.did && params.oracleDid && oracleRoomId),
+    enabled: Boolean(
+      wallet?.did &&
+        params.oracleDid &&
+        oracleRoomId &&
+        authzConfig?.granteeAddress,
+    ),
   });
 
   const { mutateAsync: inviteOracle, isPending: isInvitingOracle } =
