@@ -7,7 +7,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useMutation } from '@tanstack/react-query';
-import { IOpenIDToken } from 'matrix-js-sdk';
+import { type IOpenIDToken } from 'matrix-js-sdk';
 import { useOraclesConfig } from '../../../hooks/use-oracles-config.js';
 import { useOraclesContext } from '../../../providers/oracles-provider/oracles-context.js';
 import useConnectionDetails from './use-connection-details.js';
@@ -27,12 +27,17 @@ export function useLiveKitAgent(
   idToken: IOpenIDToken,
   oracleDid: string,
   toastAlert: ToastFn = fakeToast,
+  overrides?: {
+    baseUrl?: string;
+  },
 ) {
   const [sessionStarted, setSessionStarted] = useState(false);
   const [sessionViewVisible, setSessionViewVisible] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const { authedRequest } = useOraclesContext();
-  const { config } = useOraclesConfig(oracleDid);
+  const { config } = useOraclesConfig(oracleDid, {
+    baseUrl: overrides?.baseUrl,
+  });
   // Use ref to store current call info without causing re-renders
   const currentCallRef = useRef<{
     callId: string;
@@ -58,6 +63,15 @@ export function useLiveKitAgent(
 
   const room = useMemo(() => new Room(roomOptions), [roomOptions]);
 
+  // Cleanup worker on unmount
+  useEffect(() => {
+    return () => {
+      if (worker) {
+        worker.terminate();
+      }
+    };
+  }, [worker]);
+
   const { refreshConnectionDetails, existingOrRefreshConnectionDetails } =
     useConnectionDetails();
 
@@ -69,7 +83,7 @@ export function useLiveKitAgent(
       setIsConnecting(false);
       // Use the ref to get current call info
       if (currentCallRef.current?.callId) {
-        refreshConnectionDetails(currentCallRef.current.callId, idToken);
+        void refreshConnectionDetails(currentCallRef.current.callId, idToken);
       }
     };
 
@@ -206,8 +220,6 @@ export function useLiveKitAgent(
           callStatus: 'active',
           callStartedAt: new Date().toISOString(),
         });
-
-        return;
       } catch (error) {
         console.error('Start call error:', error);
         setIsConnecting(false);
@@ -245,10 +257,10 @@ export function useLiveKitAgent(
     setSessionStarted(false);
     setSessionViewVisible(false);
     setIsConnecting(false);
-    room.disconnect();
+    await room.disconnect();
     if (currentCallRef.current?.callId) {
       await updateCall({
-        callId: currentCallRef.current?.callId ?? '',
+        callId: currentCallRef.current.callId ?? '',
         callStatus: 'ended',
         callEndedAt: new Date().toISOString(),
       });
