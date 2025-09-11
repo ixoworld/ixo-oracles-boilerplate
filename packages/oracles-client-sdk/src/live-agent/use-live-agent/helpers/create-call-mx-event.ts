@@ -1,14 +1,21 @@
-import type { OraclesCallMatrixEvent } from '@ixo/matrix';
+import {
+  type LanguageCode,
+  type OraclesCallMatrixEvent,
+  type VoiceName,
+} from '@ixo/matrix';
 import { CryptoUtils } from '@ixo/oracles-chain-client/react';
 import type { MatrixClient, TimelineEvents } from 'matrix-js-sdk';
 import { getPublicKeyBase58 } from './get-public-ket.js';
-interface CreateCallMxEventParams {
+
+interface ICreateCallMxEventParams {
   oracleAccountDid: string;
   mxClient: MatrixClient;
   roomId: string;
   callType: 'audio' | 'video';
   sessionId: string;
   userDid: string;
+  agentVoice: VoiceName;
+  language: LanguageCode;
 }
 
 /**
@@ -17,12 +24,12 @@ interface CreateCallMxEventParams {
  * @returns The event ID
  */
 const createCallMxEvent = async (
-  params: CreateCallMxEventParams,
+  params: ICreateCallMxEventParams,
 ): Promise<{
   callId: string;
   encryptionKey: string;
 }> => {
-  if (!window.crypto || !window.crypto.getRandomValues) {
+  if (!window.crypto.getRandomValues) {
     throw new Error('Crypto is not supported in this browser');
   }
 
@@ -55,6 +62,8 @@ const createCallMxEvent = async (
       sessionId: params.sessionId,
       oracleDid: params.oracleAccountDid,
       userDid: params.userDid,
+      agentVoice: params.agentVoice,
+      language: params.language,
     },
   };
 

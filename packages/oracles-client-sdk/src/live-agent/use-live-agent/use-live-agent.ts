@@ -2,12 +2,13 @@ import { Authz } from '@ixo/oracles-chain-client/react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import MatrixReactSdkClient from '../../matrix/matrix-client.js';
 
-import { IOpenIDToken, MatrixClient } from 'matrix-js-sdk';
+import { type LanguageCode, type VoiceName } from '@ixo/matrix';
+import { type IOpenIDToken, type MatrixClient } from 'matrix-js-sdk';
 import { useMemo } from 'react';
 import { useOraclesConfig } from '../../hooks/use-oracles-config.js';
 import { useOraclesContext } from '../../providers/oracles-provider/oracles-context.js';
 import createCallMxEvent from './helpers/create-call-mx-event.js';
-import { ToastFn, useLiveKitAgent } from './livekit/use-livekit-agent.js';
+import { type ToastFn, useLiveKitAgent } from './livekit/use-livekit-agent.js';
 
 export const useLiveAgent = (
   oracleDid: string,
@@ -62,28 +63,34 @@ export const useLiveAgent = (
       callType,
       sessionId,
       userDid,
+      agentVoice,
+      language,
     }: {
       callType: 'audio' | 'video';
       sessionId: string;
       userDid: string;
+      agentVoice: VoiceName;
+      language: LanguageCode;
     }) => {
       if (!oracleRoomId || !userDid) {
         throw new Error('Oracle room ID or user DID not found');
       }
       const { callId, encryptionKey } = await createCallMxEvent({
         oracleAccountDid: `did:ixo:${authzConfig?.granteeAddress}`,
-        mxClient: mxClient,
+        mxClient,
         roomId: oracleRoomId,
         callType,
         sessionId,
         userDid,
+        agentVoice,
+        language,
       });
 
       await authedRequest(`${config.apiUrl}/calls/${callId}/sync`, 'POST', {
-        openIdToken: openIdToken?.access_token,
+        openIdToken: openIdToken.access_token,
       });
 
-      startCall({
+      await startCall({
         callId,
         encryptionKey,
       });
