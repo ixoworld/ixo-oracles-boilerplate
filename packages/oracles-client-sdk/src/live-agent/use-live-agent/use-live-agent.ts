@@ -2,6 +2,7 @@ import { Authz } from '@ixo/oracles-chain-client/react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import MatrixReactSdkClient from '../../matrix/matrix-client.js';
 
+import { type LanguageCode, type VoiceName } from '@ixo/matrix';
 import { type IOpenIDToken, type MatrixClient } from 'matrix-js-sdk';
 import { useMemo } from 'react';
 import { useOraclesConfig } from '../../hooks/use-oracles-config.js';
@@ -68,10 +69,14 @@ export const useLiveAgent = (
       callType,
       sessionId,
       userDid,
+      agentVoice,
+      language,
     }: {
       callType: 'audio' | 'video';
       sessionId: string;
       userDid: string;
+      agentVoice: VoiceName;
+      language: LanguageCode;
     }) => {
       if (!oracleRoomId || !userDid) {
         throw new Error('Oracle room ID or user DID not found');
@@ -83,7 +88,10 @@ export const useLiveAgent = (
         callType,
         sessionId,
         userDid,
+        agentVoice,
+        language,
       });
+
 
       await authedRequest(
         `${overrides?.baseUrl ?? config.apiUrl}/calls/${callId}/sync`,
