@@ -15,10 +15,15 @@ export const useLiveAgent = (
   mxClient: MatrixClient,
   openIdToken: IOpenIDToken,
   toastAlert?: ToastFn,
+  overrides?: {
+    baseUrl?: string;
+  },
 ) => {
   const { wallet, authedRequest } = useOraclesContext();
 
-  const { config } = useOraclesConfig(oracleDid);
+  const { config } = useOraclesConfig(oracleDid, {
+    baseUrl: overrides?.baseUrl,
+  });
   const matrixClientRef = useMemo(
     () =>
       new MatrixReactSdkClient({
@@ -57,6 +62,7 @@ export const useLiveAgent = (
     openIdToken,
     oracleDid,
     toastAlert,
+    overrides,
   );
   const { mutateAsync: callAgent, isPending: isCalling } = useMutation({
     mutationFn: async ({
@@ -86,9 +92,14 @@ export const useLiveAgent = (
         language,
       });
 
-      await authedRequest(`${config.apiUrl}/calls/${callId}/sync`, 'POST', {
-        openIdToken: openIdToken.access_token,
-      });
+
+      await authedRequest(
+        `${overrides?.baseUrl ?? config.apiUrl}/calls/${callId}/sync`,
+        'POST',
+        {
+          openIdToken: openIdToken.access_token,
+        },
+      );
 
       await startCall({
         callId,
