@@ -94,12 +94,6 @@ export function useSendMessage({
 
         chatRef?.current.setStatus('ready');
 
-        // Delay refetch to ensure backend has processed the message
-        // SSE/WebSocket will handle real-time updates during streaming
-        setTimeout(() => {
-          void refetchQueries?.();
-        }, 500);
-
         return { requestId };
       } catch (err) {
         if (RequestError.isRequestError(err) && err.claims) {
@@ -112,6 +106,11 @@ export function useSendMessage({
           err instanceof Error ? err : new Error('Unknown error'),
         );
         throw err;
+      } finally {
+        // Refetch queries regardless of success/error/early return
+        if (refetchQueries) {
+          await refetchQueries();
+        }
       }
     },
   });
