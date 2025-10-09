@@ -51,9 +51,7 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
       });
       return roomId;
     },
-    enabled: Boolean(
-      wallet?.did && params.oracleDid,
-    ),
+    enabled: Boolean(wallet?.did && params.oracleDid),
   });
 
   // Get pricing list
@@ -92,8 +90,16 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
         });
 
         await matrixClientRef.joinSpaceOrRoom({
-          roomId: mainSpaceId,
+          roomId: mainSpaceId.mainSpaceId,
         });
+
+        await Promise.all(
+          mainSpaceId.subSpaces.map(async (subSpaceId) => {
+            await matrixClientRef.joinSpaceOrRoom({
+              roomId: subSpaceId,
+            });
+          }),
+        );
 
         await matrixClientRef.createAndJoinOracleRoom({
           oracleEntityDid: params.oracleDid,

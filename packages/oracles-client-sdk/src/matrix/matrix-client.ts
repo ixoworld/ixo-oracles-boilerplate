@@ -1,6 +1,7 @@
 import { request } from '../utils/request.js';
 import {
   IOpenIDToken,
+  SourceSpaceResponse,
   type CreateAndJoinOracleRoomPayload,
   type JoinSpaceOrRoomPayload,
   type MatrixClientConstructorParams,
@@ -15,9 +16,11 @@ function getEntityRoomAliasFromDid(did: string) {
 class MatrixClient {
   constructor(public readonly params: MatrixClientConstructorParams) {
     this.params.appServiceBotUrl =
-      this.params.appServiceBotUrl ?? MatrixRoomBotServerUrl[chainNetwork ?? 'devnet'];
+      this.params.appServiceBotUrl ??
+      MatrixRoomBotServerUrl[chainNetwork ?? 'devnet'];
     this.params.homeserverUrl =
-      this.params.homeserverUrl ?? MatrixHomeServerUrl[chainNetwork ?? 'devnet'];
+      this.params.homeserverUrl ??
+      MatrixHomeServerUrl[chainNetwork ?? 'devnet'];
 
     if (!this.params.appServiceBotUrl || !this.params.homeserverUrl) {
       throw new Error('Matrix client params are not valid');
@@ -25,15 +28,31 @@ class MatrixClient {
   }
 
   // source space
-  public async sourceMainSpace(payload: SourceSpacePayload): Promise<string> {
+  public async sourceMainSpace(payload: SourceSpacePayload): Promise<{
+    mainSpaceId: string;
+    subSpaces: string[];
+  }> {
     const url = `${this.params.appServiceBotUrl}/spaces/source`;
-    const response = await request<{ space_id: string }>(url, 'POST', {
+    const response = await request<SourceSpaceResponse>(url, 'POST', {
       body: JSON.stringify({
         did: payload.userDID,
       }),
     });
 
-    return decodeURIComponent(response.space_id);
+    const subSpaces = Object.keys(response.subspaces).reduce<string[]>(
+      (acc, key) => {
+        const spaceId =
+          response.subspaces[key as keyof typeof response.subspaces]?.space_id;
+        if (spaceId) acc.push(spaceId);
+        return acc;
+      },
+      [],
+    );
+
+    return {
+      mainSpaceId: response.space_id,
+      subSpaces,
+    };
   }
 
   /**
