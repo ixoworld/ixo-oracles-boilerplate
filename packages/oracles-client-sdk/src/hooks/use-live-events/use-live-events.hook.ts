@@ -6,6 +6,7 @@ import type {
 import { type ErrorEvent, EventSource } from 'eventsource';
 import { useEffect, useState } from 'react';
 import { useOraclesContext } from '../../providers/oracles-provider/oracles-context.js';
+import { useGetOpenIdToken } from '../use-get-openid-token/use-get-openid-token.js';
 import { useOraclesConfig } from '../use-oracles-config.js';
 
 export const evNames = {
@@ -34,15 +35,10 @@ export const useLiveEvents = (props: {
   const { config } = useOraclesConfig(props.oracleDid);
   const apiUrl = props.overrides?.baseUrl ?? config.apiUrl ?? '';
   const { wallet } = useOraclesContext();
+  const { openIdToken } = useGetOpenIdToken();
 
   useEffect(() => {
-    if (
-      !wallet ||
-      !props.sessionId ||
-      !apiUrl ||
-      !wallet.did ||
-      !wallet.matrix.accessToken
-    ) {
+    if (!wallet || !props.sessionId || !apiUrl || !wallet.did || !openIdToken) {
       return;
     }
     const eventSource = new EventSource(
@@ -53,7 +49,7 @@ export const useLiveEvents = (props: {
             ...init,
             headers: {
               ...init?.headers,
-              'x-matrix-access-token': wallet.matrix.accessToken,
+              'x-matrix-access-token': openIdToken?.access_token,
               'x-did': wallet.did,
             },
           });
@@ -87,7 +83,7 @@ export const useLiveEvents = (props: {
       eventSource.close();
       eventSource.removeEventListener('message', handleEvent);
     };
-  }, [apiUrl, props.oracleDid, props.sessionId, wallet]);
+  }, [apiUrl, props.oracleDid, props.sessionId, wallet, openIdToken]);
 
   return { isConnected, error };
 };

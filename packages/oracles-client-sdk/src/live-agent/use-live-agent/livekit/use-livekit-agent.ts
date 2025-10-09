@@ -44,12 +44,15 @@ export function useLiveKitAgent(
     encryptionKey: string;
   } | null>(null);
 
+  // Lazy initialization - only create these when actually needed
   const keyProvider = useMemo(() => new ExternalE2EEKeyProvider(), []);
 
   const worker: Worker | undefined = useMemo(() => {
+    // Only create worker in browser environment
     if (typeof window === 'undefined') {
       return undefined;
     }
+    // Worker creation is deferred by useMemo - only runs once
     return new Worker(new URL('livekit-client/e2ee-worker', import.meta.url));
   }, []);
 
@@ -61,6 +64,8 @@ export function useLiveKitAgent(
     };
   }, [keyProvider, worker]);
 
+  // Room is created lazily but still on mount - this is acceptable since
+  // this hook should only be called when user wants voice/video capability
   const room = useMemo(() => new Room(roomOptions), [roomOptions]);
 
   // Cleanup worker on unmount

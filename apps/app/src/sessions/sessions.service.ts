@@ -24,7 +24,8 @@ export class SessionsService {
       const session = await this.sessionManager.createSession({
         did: data.did,
         oracleName: this.configService.getOrThrow('ORACLE_NAME'),
-        oracleDid: this.configService.getOrThrow<string>('ORACLE_DID'),
+        oracleEntityDid: this.configService.getOrThrow('ORACLE_ENTITY_DID'),
+        oracleDid: this.configService.getOrThrow('ORACLE_DID'),
       });
       return session;
     } catch (error) {
@@ -44,7 +45,7 @@ export class SessionsService {
     try {
       const sessionsResult = await this.sessionManager.listSessions({
         did: data.did,
-        oracleDid: this.configService.getOrThrow('ORACLE_DID'),
+        oracleEntityDid: this.configService.getOrThrow('ORACLE_ENTITY_DID'),
       });
 
       const oracleDid = this.configService.getOrThrow<string>('ORACLE_DID');
@@ -77,7 +78,7 @@ export class SessionsService {
       await this.sessionManager.deleteSession({
         did: data.did,
         sessionId: data.sessionId,
-        oracleDid: this.configService.getOrThrow('ORACLE_DID'),
+        oracleEntityDid: this.configService.getOrThrow('ORACLE_ENTITY_DID'), 
       });
       return { message: 'Session deleted successfully' };
     } catch (error) {

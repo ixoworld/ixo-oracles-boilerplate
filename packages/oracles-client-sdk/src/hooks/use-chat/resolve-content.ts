@@ -6,20 +6,19 @@ import {
   type Event,
   evNames,
 } from '../use-live-events/use-live-events.hook.js';
-import {
-  resolveUIComponent,
-  type UIComponents,
-} from './resolve-ui-component.js';
+import { type UIComponents } from './resolve-ui-component.js';
+import { type IComponentMetadata } from './v2/types.js';
 
 type RenderComponentEventOrToolCallEvent =
   | Event<ToolCallEventPayload>
   | Event<RenderComponentEventPayload>;
 
+// Now returns metadata instead of React elements
 export const resolveContent = (
   event: Event | null,
   uiComponents: Partial<UIComponents>,
-): React.ReactNode => {
-  if (!event) return null;
+): IComponentMetadata | string => {
+  if (!event) return 'Thinking...';
   const shouldRenderComponent =
     event.eventName === evNames.RenderComponent ||
     event.eventName === evNames.ToolCall;
@@ -33,9 +32,10 @@ export const resolveContent = (
     const toolName =
       (payload as ToolCallEventPayload).toolName ||
       (payload as RenderComponentEventPayload).componentName;
-    if (!toolName) return null;
+    if (!toolName) return 'Thinking...';
 
-    return resolveUIComponent(uiComponents, {
+    // Return metadata instead of rendering component
+    return {
       name: toolName,
       props: {
         args: payload.args,
@@ -45,7 +45,7 @@ export const resolveContent = (
         payload,
         isToolCall,
       },
-    });
+    };
   }
 
   return 'Thinking...';

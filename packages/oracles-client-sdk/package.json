@@ -1,25 +1,37 @@
 {
   "name": "@ixo/oracles-client-sdk",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "type": "module",
   "private": false,
   "description": "Client SDK for interacting with IXO Oracles, designed for React applications",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "types": "./dist/index.d.ts"
+    },
+    "./live-agent": {
+      "import": "./dist/live-agent/index.js",
+      "require": "./dist/live-agent/index.cjs",
+      "types": "./dist/live-agent/index.d.ts"
+    }
+  },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format cjs,esm --dts",
-    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "build": "tsup src/index.ts src/live-agent/index.ts --format cjs,esm --dts",
+    "dev": "tsup src/index.ts src/live-agent/index.ts --format cjs,esm --dts --watch",
     "test": "jest",
     "lint": "eslint . --ext .ts,.tsx",
     "clean": "rm -rf dist node_modules"
   },
   "dependencies": {
-    "@ixo/oracles-chain-client": "workspace:*",
-    "@ixo/oracles-events": "workspace:*",
+    "@ixo/oracles-chain-client": "file:../oracles-chain-client",
+    "@ixo/oracles-events": "file:../events",
     "@tanstack/react-query": "^5.29.0",
     "eventsource": "^3.0.6",
     "jose": "^6.1.0",

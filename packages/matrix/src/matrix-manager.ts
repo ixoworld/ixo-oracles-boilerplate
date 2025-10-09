@@ -240,10 +240,10 @@ export class MatrixManager {
 
   public async getOracleRoomId({
     userDid,
-    oracleDid,
+    oracleEntityDid,
   }: {
     userDid: string;
-    oracleDid: string;
+    oracleEntityDid: string;
   }): Promise<{
     roomId: string | undefined;
     roomAlias: string;
@@ -253,12 +253,13 @@ export class MatrixManager {
       throw new Error('Simple client not initialized');
     }
 
-    const oracleRoomAlias = `${getEntityRoomAliasFromDid(userDid)}_${getEntityRoomAliasFromDid(oracleDid)}`;
+    const oracleRoomAlias = `${getEntityRoomAliasFromDid(userDid)}_${getEntityRoomAliasFromDid(oracleEntityDid)}`;
     const oracleRoomFullAlias = `#${oracleRoomAlias}:${this.homeserverName}`;
 
     // Check cache first
     const cachedRoomId = this.roomCache.get(oracleRoomFullAlias);
     if (cachedRoomId) {
+      Logger.debug('🔍 Found cached room id for oracle room alias:', oracleRoomFullAlias);
       return {
         roomId: cachedRoomId,
         roomAlias: oracleRoomAlias,
@@ -268,6 +269,7 @@ export class MatrixManager {
 
     try {
       const roomId = await this.mxClient.resolveRoomAlias(oracleRoomFullAlias);
+      Logger.debug('🔍 Resolved room id for oracle room alias:', oracleRoomFullAlias);
       this.roomCache.set(oracleRoomFullAlias, roomId);
 
       return {

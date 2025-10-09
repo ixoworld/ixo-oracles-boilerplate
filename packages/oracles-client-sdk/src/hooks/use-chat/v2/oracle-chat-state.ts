@@ -1,4 +1,3 @@
-import React from 'react';
 import { type ChatStatus, type IChatState, type IMessage } from './types.js';
 
 export class OracleChatState implements IChatState {
@@ -6,6 +5,7 @@ export class OracleChatState implements IChatState {
   #status: ChatStatus = 'ready';
   #error: Error | undefined = undefined;
   #callbacks = new Set<() => void>();
+  #rafId: number | null = null;
 
   constructor(initialMessages: IMessage[] = []) {
     this.#messages = initialMessages;
@@ -66,7 +66,9 @@ export class OracleChatState implements IChatState {
 
   // Optimized for streaming - updates last message (90% of cases)
   updateLastMessage = (updater: (msg: IMessage) => IMessage): void => {
-    if (this.#messages.length === 0) return;
+    if (this.#messages.length === 0) {
+      return;
+    }
 
     const lastIndex = this.#messages.length - 1;
     const message = this.#messages[lastIndex];
@@ -96,16 +98,9 @@ export class OracleChatState implements IChatState {
   };
 
   snapshot = <T extends IMessage>(value: T): T => {
-    if (React.isValidElement(value.content)) {
-      return {
-        ...value,
-        content: value.content,
-        toolCalls: value.toolCalls
-          ? structuredClone(value.toolCalls)
-          : undefined,
-      };
-    }
-    return structuredClone(value);
+    // Simple shallow copy - creates new references for React re-renders
+    // No deep cloning needed since content is plain serializable data
+    return { ...value };
   };
 
   subscribe = (callback: () => void): (() => void) => {
@@ -116,13 +111,27 @@ export class OracleChatState implements IChatState {
   };
 
   #callCallbacks = (): void => {
-    this.#callbacks.forEach((callback) => {
-      callback();
+    // Batch multiple rapid updates into single render frame
+    // This is crucial for streaming performance
+    if (this.#rafId !== null) {
+      return; // Already scheduled
+    }
+
+    this.#rafId = requestAnimationFrame(() => {
+      this.#rafId = null;
+      this.#callbacks.forEach((callback) => {
+        callback();
+      });
     });
   };
 
   // Cleanup method to prevent memory leaks
   cleanup = (): void => {
+    // Cancel any pending RAF
+    if (this.#rafId !== null) {
+      cancelAnimationFrame(this.#rafId);
+      this.#rafId = null;
+    }
     this.#callbacks.clear(); // Critical: Clear all callbacks to prevent leaks
     this.#messages = [];
     this.#error = undefined;

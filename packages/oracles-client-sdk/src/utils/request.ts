@@ -45,13 +45,16 @@ export const request = async <T>(
     if (!response.ok) {
       const errorData = (await response.json()) as {
         error: string;
+        outstandingClaims?: string[];
         message: string;
         statusCode: number;
       };
+
       throw new RequestError(errorData.message, {
         status: errorData.statusCode,
         error: errorData.error,
         message: errorData.message,
+        outstandingClaims: errorData.outstandingClaims,
       });
     }
 
@@ -71,6 +74,7 @@ export default request;
 
 class RequestError extends Error {
   status?: number;
+  outstandingClaims?: string[];
   [key: string]: any;
 
   constructor(message: string, errorProps?: Record<string, any>) {

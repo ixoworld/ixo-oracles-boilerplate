@@ -4,6 +4,7 @@ import { useCallback } from 'react';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { useOraclesContext } from '../../../providers/oracles-provider/oracles-context.js';
 import { RequestError } from '../../../utils/request.js';
+import { useGetOpenIdToken } from '../../use-get-openid-token/use-get-openid-token.js';
 import { useOraclesConfig } from '../../use-oracles-config.js';
 import { type IMessage, type ISendMessageOptions } from './types.js';
 
@@ -30,6 +31,7 @@ export function useSendMessage({
   const { baseUrl: overridesUrl } = overrides ?? {};
   const apiUrl = overridesUrl ?? baseUrl;
   const { wallet } = useOraclesContext();
+  const { openIdToken } = useGetOpenIdToken();
 
   // Streaming callback for AI responses
   const addAIResponse = useCallback(
@@ -54,7 +56,7 @@ export function useSendMessage({
       if (!wallet?.did) {
         throw new Error('DID is required');
       }
-      if (!wallet.matrix.accessToken) {
+      if (!openIdToken?.access_token) {
         throw new Error('Matrix access token is required');
       }
 
@@ -77,7 +79,7 @@ export function useSendMessage({
           apiURL: apiUrl,
           did: wallet.did,
           message,
-          matrixAccessToken: wallet.matrix.accessToken,
+          matrixAccessToken: openIdToken.access_token,
           sessionId,
           metadata,
           cb: addAIResponse,
@@ -92,6 +94,12 @@ export function useSendMessage({
 
         chatRef?.current.setStatus('ready');
 
+        // Delay refetch to ensure backend has processed the message
+        // SSE/WebSocket will handle real-time updates during streaming
+        setTimeout(() => {
+          void refetchQueries?.();
+        }, 500);
+
         return { requestId };
       } catch (err) {
         if (RequestError.isRequestError(err) && err.claims) {
@@ -104,8 +112,6 @@ export function useSendMessage({
           err instanceof Error ? err : new Error('Unknown error'),
         );
         throw err;
-      } finally {
-        await refetchQueries?.();
       }
     },
   });
@@ -124,7 +130,7 @@ export function useSendMessage({
   };
 }
 
-// Keep your existing askOracleStream function
+// Stream AI responses from the oracle
 const askOracleStream = async (props: {
   apiURL: string;
   did: string;
@@ -166,6 +172,7 @@ const askOracleStream = async (props: {
   }
 
   const requestId = response.headers.get('X-Request-Id');
+
   if (!requestId) {
     throw new Error('Did not receive a request ID');
   }
@@ -189,6 +196,7 @@ const askOracleStream = async (props: {
 
       // Decode this chunk
       const chunk = decoder.decode(value, { stream: true });
+
       if (chunk.length > 0) {
         // Call callback with just this chunk, not the accumulated text
         await props.cb({ requestId, message: chunk });

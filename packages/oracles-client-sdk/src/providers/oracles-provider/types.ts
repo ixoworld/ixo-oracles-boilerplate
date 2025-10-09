@@ -12,7 +12,6 @@ export interface IWalletProps {
 
 export interface IOraclesContextProps {
   wallet: IWalletProps | null;
-  apiKey: string;
   transactSignX: TransactionFn;
   authedRequest: <T>(
     url: string,
@@ -24,5 +23,4 @@ export interface IOraclesContextProps {
 export interface IOraclesProviderProps {
   initialWallet: IWalletProps;
   transactSignX: TransactionFn;
-  apiKey: string;
 }

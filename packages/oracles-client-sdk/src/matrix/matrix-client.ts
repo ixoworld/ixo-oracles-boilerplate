@@ -73,7 +73,7 @@ class MatrixClient {
     const response = await request<{ roomId: string }>(url, 'POST', {
       body: JSON.stringify({
         did: payload.userDID,
-        oracleDid: payload.oracleDID,
+        oracleDid: payload.oracleEntityDid,
       }),
       headers: {
         Authorization: `Bearer ${this.params.userAccessToken}`,
@@ -144,16 +144,16 @@ class MatrixClient {
 
   public async getOracleRoomId({
     userDid,
-    oracleDid,
+    oracleEntityDid,
   }: {
     userDid: string;
-    oracleDid: string;
+    oracleEntityDid: string;
   }): Promise<string> {
     if (!this.params.homeserverUrl) {
       throw new Error('Homeserver URL not found');
     }
     const hostname = new URL(this.params.homeserverUrl).hostname;
-    const oracleRoomAlias = `${getEntityRoomAliasFromDid(userDid)}_${getEntityRoomAliasFromDid(oracleDid)}`;
+    const oracleRoomAlias = `${getEntityRoomAliasFromDid(userDid)}_${getEntityRoomAliasFromDid(oracleEntityDid)}`;
     const oracleRoomFullAlias = `#${oracleRoomAlias}:${hostname}`;
 
     const url = `${this.params.homeserverUrl}/_matrix/client/v3/directory/room/${encodeURIComponent(oracleRoomFullAlias)}`;

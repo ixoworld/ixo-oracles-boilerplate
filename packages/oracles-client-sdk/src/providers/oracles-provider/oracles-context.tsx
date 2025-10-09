@@ -29,7 +29,6 @@ export const OraclesProvider = ({
   children,
   initialWallet,
   transactSignX,
-  apiKey,
 }: PropsWithChildren<IOraclesProviderProps>) => {
   if ((!initialWallet as unknown) || (!transactSignX as unknown)) {
     throw new Error('initialWallet and transactSignX are required');
@@ -58,14 +57,13 @@ export const OraclesProvider = ({
     () => ({
       wallet: initialWallet,
       transactSignX,
-      apiKey,
       authedRequest: authedRequest as <T>(
         url: string,
         method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
         options?: RequestInit & { openIdToken?: string },
       ) => Promise<T>,
     }),
-    [initialWallet, transactSignX, apiKey, authedRequest],
+    [initialWallet, transactSignX, authedRequest],
   );
 
   const queryClient = new QueryClient();

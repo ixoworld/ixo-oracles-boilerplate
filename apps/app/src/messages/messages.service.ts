@@ -220,7 +220,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     const { roomId } =
       await this.sessionManagerService.matrixManger.getOracleRoomId({
         userDid: did,
-        oracleDid: this.config.getOrThrow('ORACLE_DID'),
+        oracleEntityDid: this.config.getOrThrow('ORACLE_ENTITY_DID'),
       });
 
     if (!roomId) {
@@ -450,7 +450,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     const { roomId } =
       await this.sessionManagerService.matrixManger.getOracleRoomId({
         userDid: did,
-        oracleDid: this.config.getOrThrow('ORACLE_DID'),
+        oracleEntityDid: this.config.getOrThrow('ORACLE_ENTITY_DID'),
       });
     if (!roomId) {
       throw new NotFoundException('Room not found or Invalid Session Id');
@@ -463,7 +463,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
 
     const sessions = await this.sessionManagerService.listSessions({
       did,
-      oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
+      oracleEntityDid: this.config.getOrThrow('ORACLE_ENTITY_DID'),
     });
 
     const targetSession = sessions.sessions.find(
@@ -498,6 +498,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       did,
       messages: messages.map((message) => message.content),
       oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
+      oracleEntityDid: this.config.getOrThrow('ORACLE_ENTITY_DID'),
       lastProcessedCount: shouldTriggerMemoryAnalysis
         ? messages.length
         : (targetSession?.lastProcessedCount ?? 0),

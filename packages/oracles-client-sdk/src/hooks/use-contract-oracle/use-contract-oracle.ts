@@ -43,16 +43,16 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
   });
 
   const { data: oracleRoomId, isLoading: isLoadingOracleRoomId } = useQuery({
-    queryKey: ['oracle-room-id', params.oracleDid, authzConfig?.granteeAddress],
+    queryKey: ['oracle-room-id', params.oracleDid],
     queryFn: async () => {
       const roomId = await matrixClientRef.getOracleRoomId({
         userDid: wallet?.did ?? '',
-        oracleDid: `did:ixo:${authzConfig?.granteeAddress}`,
+        oracleEntityDid: params.oracleDid,
       });
       return roomId;
     },
     enabled: Boolean(
-      wallet?.did && params.oracleDid && authzConfig?.granteeAddress,
+      wallet?.did && params.oracleDid,
     ),
   });
 
@@ -96,7 +96,7 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
         });
 
         await matrixClientRef.createAndJoinOracleRoom({
-          oracleDID: `did:ixo:${config.granteeAddress}`,
+          oracleEntityDid: params.oracleDid,
           userDID: wallet.did,
         });
         void refetchOracleInRoom();

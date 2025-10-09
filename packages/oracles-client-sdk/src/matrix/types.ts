@@ -13,7 +13,7 @@ type JoinSpaceOrRoomPayload = {
 };
 
 type CreateAndJoinOracleRoomPayload = {
-  oracleDID: string;
+  oracleEntityDid: string;
   userDID: string;
 };
 

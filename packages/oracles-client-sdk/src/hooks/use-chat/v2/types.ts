@@ -3,15 +3,35 @@ import {
   type RenderComponentEventPayload,
   type ToolCallEventPayload,
 } from '@ixo/oracles-events/types';
-import { type ReactNode } from 'react';
 import { type IBrowserTools } from '../../../types/browser-tool.type.js';
 import { type Event } from '../../use-live-events/use-live-events.hook.js';
 import { type UIComponents } from '../resolve-ui-component.js';
 import { type OracleChat } from './oracle-chat.js';
 
+// Component metadata for deferred rendering
+export interface IComponentMetadata {
+  name: string;
+  props: {
+    id: string;
+    args: unknown;
+    status?: 'isRunning' | 'done';
+    output?: string;
+    event?: any;
+    payload?: any;
+    isToolCall?: boolean;
+    toolName?: string; // Original tool name (for generic ToolCall component)
+  };
+}
+
+// Message content can be string, array of strings/metadata, or single metadata
+export type MessageContent =
+  | string
+  | IComponentMetadata
+  | Array<string | IComponentMetadata>;
+
 export interface IMessage {
   id: string;
-  content: ReactNode | string;
+  content: MessageContent;
   type: 'ai' | 'human';
   chunks?: number;
   toolCalls?: {

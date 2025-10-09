@@ -8,6 +8,8 @@ import {
   useSyncExternalStore,
 } from 'react';
 import { useOraclesContext } from '../../../providers/oracles-provider/oracles-context.js';
+import { RequestError } from '../../../utils/request.js';
+import { useGetOpenIdToken } from '../../use-get-openid-token/use-get-openid-token.js';
 import {
   type Event,
   useLiveEvents,
@@ -16,11 +18,9 @@ import { useOracleSessions } from '../../use-oracle-sessions/use-oracle-sessions
 import { useOraclesConfig } from '../../use-oracles-config.js';
 import { useWebSocketEvents } from '../../use-websocket-events/use-websocket-events.js';
 import { resolveContent } from '../resolve-content.js';
-import transformToMessagesMap, {
-  type IMessage,
-} from '../transform-to-messages-map.js';
+import transformToMessagesMap from '../transform-to-messages-map.js';
 import { OracleChat } from './oracle-chat.js';
-import { type IChatOptions } from './types.js';
+import { type IChatOptions, type IMessage } from './types.js';
 import { useSendMessage } from './use-send-message.js';
 
 export function useChat({
@@ -54,7 +54,7 @@ export function useChat({
   // Subscribe to messages with useSyncExternalStore
   const messages = useSyncExternalStore(
     chatRef.current.subscribe,
-    () => chatRef.current?.messages,
+    () => chatRef.current?.messages ?? [],
     () => [], // Server snapshot (SSR)
   );
 
@@ -76,6 +76,7 @@ export function useChat({
   );
   const { config } = useOraclesConfig(oracleDid);
   const { authedRequest } = useOraclesContext();
+  const { openIdToken } = useGetOpenIdToken();
   const { apiUrl: baseUrl } = config;
   const { baseUrl: overridesUrl } = overrides ?? {};
   const apiUrl = overridesUrl ?? baseUrl;
@@ -90,9 +91,14 @@ export function useChat({
   } = useQuery({
     queryKey: [oracleDid, 'messages', sessionId],
     queryFn: async () => {
+      if (!openIdToken) {
+        throw new Error('OpenID token not found');
+      }
       const result = await authedRequest<{
         messages: IMessage[];
-      }>(`${apiUrl}/messages/${sessionId}`, 'GET');
+      }>(`${apiUrl}/messages/${sessionId}`, 'GET', {
+        openIdToken: openIdToken.access_token,
+      });
 
       const transformedMessages = transformToMessagesMap({
         messages: result.messages,
@@ -105,7 +111,7 @@ export function useChat({
 
       return transformedMessages;
     },
-    enabled: Boolean(sessionId && apiUrl),
+    enabled: Boolean(sessionId && apiUrl && openIdToken),
     retry: false,
   });
 
@@ -200,12 +206,19 @@ export function useChat({
     };
   }, []);
 
+  useEffect(() => {
+    if (queryError instanceof RequestError && queryError.outstandingClaims) {
+      onPaymentRequiredError?.(queryError.outstandingClaims ?? []);
+    }
+  }, [queryError]);
+
   return {
     messages: messages ?? [],
     isLoading,
     error: error || queryError,
     isSending: isSending || status === 'streaming',
     sendMessage,
+    refetchMessages,
     sendMessageError,
     isRealTimeConnected: isConnected && isWebSocketConnected,
     status,

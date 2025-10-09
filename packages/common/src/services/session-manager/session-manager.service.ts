@@ -13,8 +13,12 @@ import { NoUserRoomsFoundError } from './errors.js';
 export class SessionManagerService {
   constructor(public readonly matrixManger = MatrixManager.getInstance()) {}
 
-  public getSessionsStateKey(oracleDid: string): `${string}_${string}` {
-    return `${oracleDid}_sessions`;
+  public getSessionsStateKey({
+    oracleEntityDid,
+  }: {
+    oracleEntityDid: string;
+  }): `${string}_${string}` {
+    return `${oracleEntityDid}_sessions`;
   }
 
   private async createMessageTitle({
@@ -51,25 +55,27 @@ export class SessionManagerService {
     sessionId,
     did,
     messages,
-    oracleDid,
+    oracleEntityDid,
     oracleName,
     roomId: _roomId,
     lastProcessedCount,
+    oracleDid,
   }: {
     sessionId: string;
     did: string;
     messages: string[];
-    oracleDid: string;
+    oracleEntityDid: string;
     oracleName: string;
     roomId?: string;
     lastProcessedCount?: number;
+    oracleDid: string;
   }): Promise<ChatSession> {
     const matrixManager = MatrixManager.getInstance();
     await matrixManager.init();
 
     const { sessions } = await this.listSessions({
       did,
-      oracleDid,
+      oracleEntityDid,
     });
 
     const selectedSession = sessions.find((s) => s.sessionId === sessionId);
@@ -82,6 +88,7 @@ export class SessionManagerService {
         }),
         lastUpdatedAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
+        oracleEntityDid,
         oracleDid,
       };
 
@@ -91,14 +98,14 @@ export class SessionManagerService {
 
       const { roomId } = await this.matrixManger.getOracleRoomId({
         userDid: did,
-        oracleDid,
+        oracleEntityDid,
       });
       if (!roomId) {
         throw new Error('Room ID not found');
       }
       await this.matrixManger.stateManager.setState<ChatSession[]>({
         roomId,
-        stateKey: this.getSessionsStateKey(oracleDid),
+        stateKey: this.getSessionsStateKey({ oracleEntityDid }),
         data: [session, ...sessions],
       });
 
@@ -120,7 +127,7 @@ export class SessionManagerService {
       ? { roomId: _roomId }
       : await this.matrixManger.getOracleRoomId({
           userDid: did,
-          oracleDid,
+          oracleEntityDid,
         });
     if (!roomId) {
       throw new Error('Room ID not found');
@@ -128,7 +135,7 @@ export class SessionManagerService {
     const lastUpdatedAt = new Date().toISOString();
     await this.matrixManger.stateManager.setState<ChatSession[]>({
       roomId,
-      stateKey: this.getSessionsStateKey(oracleDid),
+      stateKey: this.getSessionsStateKey({ oracleEntityDid }),
       data: sessions.map((session) =>
         session.sessionId === sessionId
           ? {
@@ -155,7 +162,7 @@ export class SessionManagerService {
     await this.matrixManger.init();
     const { roomId } = await this.matrixManger.getOracleRoomId({
       userDid: listSessionsDto.did,
-      oracleDid: listSessionsDto.oracleDid,
+      oracleEntityDid: listSessionsDto.oracleEntityDid,
     });
     if (!roomId) {
       throw new Error('Room ID not found');
@@ -167,7 +174,7 @@ export class SessionManagerService {
       }
       const sessionsState = await this.matrixManger.stateManager.getState<
         ChatSession[]
-      >(roomId, `${listSessionsDto.oracleDid}_sessions`);
+      >(roomId, this.getSessionsStateKey({ oracleEntityDid: listSessionsDto.oracleEntityDid }));
       return { sessions: sessionsState };
     } catch (error) {
       if (
@@ -187,7 +194,7 @@ export class SessionManagerService {
     // const sessionId = crypto.randomUUID();
     const { roomId } = await this.matrixManger.getOracleRoomId({
       userDid: createSessionDto.did,
-      oracleDid: createSessionDto.oracleDid,
+      oracleEntityDid: createSessionDto.oracleEntityDid,
     });
     if (!roomId) {
       throw new Error('Room ID not found');
@@ -204,6 +211,7 @@ export class SessionManagerService {
       sessionId: eventId,
       oracleName: createSessionDto.oracleName,
       did: createSessionDto.did,
+      oracleEntityDid: createSessionDto.oracleEntityDid,
       oracleDid: createSessionDto.oracleDid,
       messages: [],
       roomId,
@@ -217,12 +225,12 @@ export class SessionManagerService {
   ): Promise<void> {
     const oldSessions = await this.listSessions({
       did: deleteSessionDto.did,
-      oracleDid: deleteSessionDto.oracleDid,
+      oracleEntityDid: deleteSessionDto.oracleEntityDid,
     });
 
     const { roomId } = await this.matrixManger.getOracleRoomId({
       userDid: deleteSessionDto.did,
-      oracleDid: deleteSessionDto.oracleDid,
+      oracleEntityDid: deleteSessionDto.oracleEntityDid,
     });
 
     if (!roomId) {
@@ -238,7 +246,7 @@ export class SessionManagerService {
     }
     await this.matrixManger.stateManager.setState<ChatSession[]>({
       roomId,
-      stateKey: this.getSessionsStateKey(deleteSessionDto.oracleDid),
+      stateKey: this.getSessionsStateKey({ oracleEntityDid: deleteSessionDto.oracleEntityDid }),
       data: newSessions,
     });
   }
