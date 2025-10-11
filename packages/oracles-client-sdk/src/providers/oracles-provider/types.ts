@@ -16,7 +16,7 @@ export interface IOraclesContextProps {
   authedRequest: <T>(
     url: string,
     method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
-    options?: RequestInit & { openIdToken?: string },
+    options?: RequestInit,
   ) => Promise<T>;
 }
 

@@ -98,9 +98,7 @@ export const useLiveAgent = (
       await authedRequest(
         `${overrides?.baseUrl ?? config.apiUrl}/calls/${callId}/sync`,
         'POST',
-        {
-          openIdToken: openIdToken.access_token,
-        },
+        {},
       );
 
       await startCall({

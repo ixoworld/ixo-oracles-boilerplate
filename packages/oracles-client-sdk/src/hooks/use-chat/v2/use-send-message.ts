@@ -31,7 +31,11 @@ export function useSendMessage({
   const { baseUrl: overridesUrl } = overrides ?? {};
   const apiUrl = overridesUrl ?? baseUrl;
   const { wallet } = useOraclesContext();
-  const { openIdToken } = useGetOpenIdToken();
+  const {
+    openIdToken,
+    isLoading: isTokenLoading,
+    error: tokenError,
+  } = useGetOpenIdToken();
 
   // Streaming callback for AI responses
   const addAIResponse = useCallback(
@@ -55,6 +59,14 @@ export function useSendMessage({
       }
       if (!wallet?.did) {
         throw new Error('DID is required');
+      }
+      if (isTokenLoading) {
+        throw new Error(
+          'OpenID token is still loading. Please wait for authentication to complete.',
+        );
+      }
+      if (tokenError) {
+        throw new Error(`OpenID token fetch failed: ${tokenError.message}`);
       }
       if (!openIdToken?.access_token) {
         throw new Error('Matrix access token is required');

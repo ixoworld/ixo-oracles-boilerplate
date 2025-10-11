@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useOraclesContext } from '../../providers/oracles-provider/oracles-context.js';
-import { useGetOpenIdToken } from '../use-get-openid-token/use-get-openid-token.js';
 import { useOraclesConfig } from '../use-oracles-config.js';
 import { type IChatSession } from './types.js';
 
@@ -11,7 +10,6 @@ export const useOracleSessions = (
   },
 ) => {
   const queryClient = useQueryClient();
-  const { openIdToken } = useGetOpenIdToken();
   const { authedRequest } = useOraclesContext();
 
   const { config } = useOraclesConfig(oracleDid);
@@ -23,12 +21,12 @@ export const useOracleSessions = (
   }>({
     queryKey: ['oracle-sessions', oracleDid],
     queryFn: () =>
-      authedRequest<{ sessions: IChatSession[] }>(`${apiUrl}/sessions`, 'GET', {
-        openIdToken: openIdToken?.access_token,
-      }),
-    enabled: Boolean(
-      (overrides?.baseUrl ?? config.apiUrl) && openIdToken?.access_token,
-    ),
+      authedRequest<{ sessions: IChatSession[] }>(
+        `${apiUrl}/sessions`,
+        'GET',
+        {},
+      ),
+    enabled: Boolean(overrides?.baseUrl ?? config.apiUrl),
     retry: false,
   });
 
@@ -38,9 +36,7 @@ export const useOracleSessions = (
     isError: isCreateSessionError,
   } = useMutation({
     mutationFn: () =>
-      authedRequest<IChatSession>(`${apiUrl}/sessions`, 'POST', {
-        openIdToken: openIdToken?.access_token,
-      }),
+      authedRequest<IChatSession>(`${apiUrl}/sessions`, 'POST', {}),
     onSettled: async () => {
       await queryClient.invalidateQueries({
         queryKey: ['oracle-sessions', oracleDid],
@@ -54,9 +50,7 @@ export const useOracleSessions = (
     isError: isDeleteSessionError,
   } = useMutation({
     mutationFn: (sessionId: string) =>
-      authedRequest<void>(`${apiUrl}/sessions/${sessionId}`, 'DELETE', {
-        openIdToken: openIdToken?.access_token,
-      }),
+      authedRequest<void>(`${apiUrl}/sessions/${sessionId}`, 'DELETE', {}),
     onSettled: async () => {
       await queryClient.invalidateQueries({
         queryKey: ['oracle-sessions', oracleDid],

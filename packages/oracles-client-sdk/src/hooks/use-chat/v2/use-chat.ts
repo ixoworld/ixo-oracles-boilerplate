@@ -9,7 +9,6 @@ import {
 } from 'react';
 import { useOraclesContext } from '../../../providers/oracles-provider/oracles-context.js';
 import { RequestError } from '../../../utils/request.js';
-import { useGetOpenIdToken } from '../../use-get-openid-token/use-get-openid-token.js';
 import {
   type Event,
   useLiveEvents,
@@ -76,7 +75,6 @@ export function useChat({
   );
   const { config } = useOraclesConfig(oracleDid);
   const { authedRequest } = useOraclesContext();
-  const { openIdToken } = useGetOpenIdToken();
   const { apiUrl: baseUrl } = config;
   const { baseUrl: overridesUrl } = overrides ?? {};
   const apiUrl = overridesUrl ?? baseUrl;
@@ -91,14 +89,9 @@ export function useChat({
   } = useQuery({
     queryKey: [oracleDid, 'messages', sessionId],
     queryFn: async () => {
-      if (!openIdToken) {
-        throw new Error('OpenID token not found');
-      }
       const result = await authedRequest<{
         messages: IMessage[];
-      }>(`${apiUrl}/messages/${sessionId}`, 'GET', {
-        openIdToken: openIdToken.access_token,
-      });
+      }>(`${apiUrl}/messages/${sessionId}`, 'GET', {});
 
       const transformedMessages = transformToMessagesMap({
         messages: result.messages,
@@ -111,7 +104,7 @@ export function useChat({
 
       return transformedMessages;
     },
-    enabled: Boolean(sessionId && apiUrl && openIdToken),
+    enabled: Boolean(sessionId && apiUrl),
     retry: false,
   });
 
