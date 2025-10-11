@@ -6,7 +6,7 @@ interface CachedTokenData {
   did: string;
 }
 
-const STORAGE_KEY_PREFIX = 'oracles_openid_token_';
+const STORAGE_KEY = 'oracles_openid_token';
 const ENCRYPTION_ALGORITHM = 'AES-GCM';
 const KEY_LENGTH = 256;
 
@@ -88,8 +88,7 @@ export async function encryptAndStore({
     combined.set(iv);
     combined.set(new Uint8Array(encryptedData), iv.length);
 
-    const storageKey = `${STORAGE_KEY_PREFIX}${did}`;
-    localStorage.setItem(storageKey, btoa(String.fromCharCode(...combined)));
+    localStorage.setItem(STORAGE_KEY, btoa(String.fromCharCode(...combined)));
   } catch (error) {
     console.error('Failed to encrypt and store token:', error);
     // Don't throw - caching is optional
@@ -107,8 +106,7 @@ export async function decryptAndRetrieve({
   matrixAccessToken: string;
 }): Promise<IOpenIDToken | null> {
   try {
-    const storageKey = `${STORAGE_KEY_PREFIX}${did}`;
-    const encryptedBase64 = localStorage.getItem(storageKey);
+    const encryptedBase64 = localStorage.getItem(STORAGE_KEY);
 
     if (!encryptedBase64) {
       return null;
@@ -139,10 +137,10 @@ export async function decryptAndRetrieve({
     const jsonString = decoder.decode(decryptedData);
     const cachedData: CachedTokenData = JSON.parse(jsonString);
 
-    // Check if token is expired
-    if (isTokenExpired(cachedData)) {
-      // Clean up expired token
-      localStorage.removeItem(storageKey);
+    // Check if token is expired or DID doesn't match
+    if (isTokenExpired(cachedData) || cachedData.did !== did) {
+      // Clean up expired/wrong token
+      localStorage.removeItem(STORAGE_KEY);
       return null;
     }
 
@@ -150,8 +148,7 @@ export async function decryptAndRetrieve({
   } catch (error) {
     console.error('Failed to decrypt token:', error);
     // Clean up corrupted data
-    const storageKey = `${STORAGE_KEY_PREFIX}${did}`;
-    localStorage.removeItem(storageKey);
+    localStorage.removeItem(STORAGE_KEY);
     return null;
   }
 }
@@ -164,9 +161,8 @@ export function isTokenExpired(cachedData: CachedTokenData): boolean {
 }
 
 /**
- * Clear cached token for a specific DID
+ * Clear cached token
  */
-export function clearTokenCache(did: string): void {
-  const storageKey = `${STORAGE_KEY_PREFIX}${did}`;
-  localStorage.removeItem(storageKey);
+export function clearTokenCache(): void {
+  localStorage.removeItem(STORAGE_KEY);
 }

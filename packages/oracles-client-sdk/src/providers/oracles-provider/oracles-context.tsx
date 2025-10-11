@@ -5,11 +5,13 @@ import {
   type PropsWithChildren,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
 } from 'react';
 import { getOpenIdToken } from '../../hooks/index.js';
 import { request } from '../../utils/request.js';
 import {
+  clearTokenCache,
   decryptAndRetrieve,
   encryptAndStore,
 } from '../../utils/token-cache.js';
@@ -38,6 +40,31 @@ export const OraclesProvider = ({
   if ((!initialWallet as unknown) || (!transactSignX as unknown)) {
     throw new Error('initialWallet and transactSignX are required');
   }
+
+  // Clear token cache when wallet/DID changes
+  useEffect(() => {
+    try {
+      // Check if cached token exists and if DID matches
+      const cachedToken = localStorage.getItem('oracles_openid_token');
+      if (cachedToken) {
+        // Try to decrypt and check DID - if it doesn't match, clear it
+        decryptAndRetrieve({
+          did: initialWallet.did,
+          matrixAccessToken: initialWallet.matrix.accessToken,
+        }).catch(() => {
+          // If decryption fails or DID doesn't match, clear the cache
+          clearTokenCache();
+          console.debug(
+            'Cleared token cache due to DID mismatch or decryption failure',
+          );
+        });
+      }
+    } catch (error) {
+      console.warn('Failed to check cached token:', error);
+      // Clear cache on any error
+      clearTokenCache();
+    }
+  }, [initialWallet.did]);
 
   const authedRequest = useCallback(
     async (
