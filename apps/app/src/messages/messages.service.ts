@@ -267,7 +267,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         sessionId: string;
       }
   > {
-    const { runnableConfig, sessionId, roomId } =
+    const { runnableConfig, sessionId, roomId, userContext } =
       await this.prepareForQuery(params);
 
     if (!params.msgFromMatrixRoom) {
@@ -303,6 +303,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
           runnableConfig,
           params.tools ?? [],
           params.msgFromMatrixRoom,
+          userContext,
         );
 
         let fullContent = '';
@@ -395,6 +396,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       runnableConfig,
       params.tools ?? [],
       params.msgFromMatrixRoom,
+      userContext,
     );
     const lastMessage = result.messages.at(-1);
     if (!lastMessage) {
@@ -436,6 +438,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         sessionId: string;
       };
     };
+    userContext?: TCustomerSupportGraphState['userContext'];
   }> {
     const accessToken = this.config.getOrThrow<string>(
       'MATRIX_ORACLE_ADMIN_ACCESS_TOKEN',
@@ -533,6 +536,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       config,
       runnableConfig,
       sessionId,
+      userContext: targetSession?.userContext,
     };
   }
 }

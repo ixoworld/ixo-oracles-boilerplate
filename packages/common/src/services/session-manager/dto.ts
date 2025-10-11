@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsString,
 } from 'class-validator';
+import { type UserContextData } from '../memory-engine/types.js';
 
 export class UserAuthDto {
   @IsString()
@@ -30,6 +31,9 @@ export class CreateChatSessionDto extends UserAuthDto {
   @IsString()
   @IsNotEmpty()
   oracleName: string;
+
+  @IsString()
+  openIdToken: string;
 }
 
 export class DeleteChatSessionDto extends UserAuthDto {
@@ -74,6 +78,9 @@ export class ChatSession {
   @IsNumber()
   @IsNotEmpty()
   lastProcessedCount?: number;
+
+  @IsOptional()
+  userContext?: UserContextData;
 }
 
 export class ListChatSessionsResponseDto {

@@ -1,5 +1,7 @@
 import { MatrixManager } from '@ixo/matrix';
 import { getChatOpenAiModel } from '../../ai/index.js';
+import { MemoryEngineService } from '../memory-engine/memory-engine.service.js';
+import { type UserContextData } from '../memory-engine/types.js';
 import {
   type ChatSession,
   type CreateChatSessionDto,
@@ -9,9 +11,13 @@ import {
   type ListChatSessionsResponseDto,
 } from './dto.js';
 import { NoUserRoomsFoundError } from './errors.js';
+import { Logger } from '@ixo/logger';
 
 export class SessionManagerService {
-  constructor(public readonly matrixManger = MatrixManager.getInstance()) {}
+  constructor(
+    public readonly matrixManger = MatrixManager.getInstance(),
+    private readonly memoryEngineService?: MemoryEngineService,
+  ) {}
 
   public getSessionsStateKey({
     oracleEntityDid,
@@ -60,6 +66,7 @@ export class SessionManagerService {
     roomId: _roomId,
     lastProcessedCount,
     oracleDid,
+    userContext,
   }: {
     sessionId: string;
     did: string;
@@ -69,6 +76,7 @@ export class SessionManagerService {
     roomId?: string;
     lastProcessedCount?: number;
     oracleDid: string;
+    userContext?: UserContextData;
   }): Promise<ChatSession> {
     const matrixManager = MatrixManager.getInstance();
     await matrixManager.init();
@@ -90,6 +98,7 @@ export class SessionManagerService {
         createdAt: new Date().toISOString(),
         oracleEntityDid,
         oracleDid,
+        userContext,
       };
 
       if (!this.matrixManger.stateManager) {
@@ -174,7 +183,12 @@ export class SessionManagerService {
       }
       const sessionsState = await this.matrixManger.stateManager.getState<
         ChatSession[]
-      >(roomId, this.getSessionsStateKey({ oracleEntityDid: listSessionsDto.oracleEntityDid }));
+      >(
+        roomId,
+        this.getSessionsStateKey({
+          oracleEntityDid: listSessionsDto.oracleEntityDid,
+        }),
+      );
       return { sessions: sessionsState };
     } catch (error) {
       if (
@@ -207,6 +221,21 @@ export class SessionManagerService {
       eventId: crypto.randomUUID(),
     };
 
+    // Gather user context from Memory Engine
+    let userContext: UserContextData | undefined;
+    if (this.memoryEngineService && createSessionDto.openIdToken) {
+      try {
+        userContext = await this.memoryEngineService.gatherUserContext({
+          oracleDid: createSessionDto.oracleDid,
+          openIdToken: createSessionDto.openIdToken,
+          roomId,
+        });
+      } catch (error) {
+        Logger.error('Failed to gather user context:', error);
+        // Continue without user context
+      }
+    }
+
     const session = await this.syncSessionSet({
       sessionId: eventId,
       oracleName: createSessionDto.oracleName,
@@ -215,6 +244,7 @@ export class SessionManagerService {
       oracleDid: createSessionDto.oracleDid,
       messages: [],
       roomId,
+      userContext,
     });
 
     return session;
@@ -246,7 +276,9 @@ export class SessionManagerService {
     }
     await this.matrixManger.stateManager.setState<ChatSession[]>({
       roomId,
-      stateKey: this.getSessionsStateKey({ oracleEntityDid: deleteSessionDto.oracleEntityDid }),
+      stateKey: this.getSessionsStateKey({
+        oracleEntityDid: deleteSessionDto.oracleEntityDid,
+      }),
       data: newSessions,
     });
   }

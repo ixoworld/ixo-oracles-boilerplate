@@ -11,7 +11,6 @@ import 'dotenv/config';
 import CallbackHandler from 'langfuse-langchain';
 import { type BrowserToolCallDto } from 'src/messages/dto/send-message.dto';
 import { chatNode } from './nodes/chat-node/chat-node';
-import { contextGatherNode } from './nodes/context-gather/context-gather';
 import { toolNode } from './nodes/tools-node';
 import toolsChatRouter from './router/tools.router';
 import {
@@ -34,13 +33,11 @@ if (!oracleName) {
 const workflow = new StateGraph(CustomerSupportGraphState)
 
   // Nodes
-  .addNode(GraphNodes.ContextGather, contextGatherNode)
   .addNode(GraphNodes.Chat, chatNode)
   .addNode(GraphNodes.Tools, toolNode)
 
   // Routes
-  .addEdge(START, GraphNodes.ContextGather)
-  .addEdge(GraphNodes.ContextGather, GraphNodes.Chat)
+  .addEdge(START, GraphNodes.Chat)
 
   .addConditionalEdges(GraphNodes.Chat, toolsChatRouter, {
     [GraphNodes.Tools]: GraphNodes.Tools,
@@ -64,6 +61,7 @@ export class CustomerSupportGraph {
     },
     browserTools?: BrowserToolCallDto[],
     msgFromMatrixRoom = false,
+    initialUserContext?: TCustomerSupportGraphState['userContext'],
   ): Promise<TCustomerSupportGraphState> {
     if (!runnableConfig.configurable.sessionId) {
       throw new Error('sessionId is required');
@@ -82,6 +80,7 @@ export class CustomerSupportGraph {
           }),
         ],
         browserTools,
+        ...(initialUserContext ? { userContext: initialUserContext } : {}),
       } satisfies Partial<TCustomerSupportGraphState>,
 
       {
@@ -109,6 +108,7 @@ export class CustomerSupportGraph {
     },
     browserTools?: BrowserToolCallDto[],
     msgFromMatrixRoom = false,
+    initialUserContext?: TCustomerSupportGraphState['userContext'],
   ): Promise<IterableReadableStream<StreamEvent>> {
     if (!runnableConfig.configurable.sessionId) {
       throw new Error('sessionId is required');
@@ -126,6 +126,7 @@ export class CustomerSupportGraph {
           }),
         ],
         browserTools,
+        ...(initialUserContext ? { userContext: initialUserContext } : {}),
       } satisfies Partial<TCustomerSupportGraphState>,
 
       {

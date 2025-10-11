@@ -1,7 +1,7 @@
+import { UserContextData } from '@ixo/common';
 import { type BaseMessage } from '@langchain/core/messages';
 import { Annotation, messagesStateReducer } from '@langchain/langgraph';
 import { type BrowserToolCallDto } from 'src/messages/dto/send-message.dto';
-import { type TUserContext } from './nodes/context-gather/type';
 
 export const CustomerSupportGraphState = Annotation.Root({
   config: Annotation<{
@@ -40,12 +40,14 @@ export const CustomerSupportGraphState = Annotation.Root({
     // always override the tool list
     reducer: (_, curr) => curr,
   }),
-  userContext: Annotation<TUserContext>({
+  userContext: Annotation<UserContextData>({
     default: () => ({
-      name: '',
-      communicationStyle: '',
-      recentSummary: '',
-      extraInfo: '',
+      identity: undefined,
+      work: undefined,
+      goals: undefined,
+      interests: undefined,
+      relationships: undefined,
+      recent: undefined,
     }),
     reducer: (prev, curr) => ({ ...prev, ...curr }),
   }),

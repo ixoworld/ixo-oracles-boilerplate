@@ -26,6 +26,7 @@ export class SessionsService {
         oracleName: this.configService.getOrThrow('ORACLE_NAME'),
         oracleEntityDid: this.configService.getOrThrow('ORACLE_ENTITY_DID'),
         oracleDid: this.configService.getOrThrow('ORACLE_DID'),
+        openIdToken: data.userOpenIdToken,
       });
       return session;
     } catch (error) {
@@ -78,7 +79,7 @@ export class SessionsService {
       await this.sessionManager.deleteSession({
         did: data.did,
         sessionId: data.sessionId,
-        oracleEntityDid: this.configService.getOrThrow('ORACLE_ENTITY_DID'), 
+        oracleEntityDid: this.configService.getOrThrow('ORACLE_ENTITY_DID'),
       });
       return { message: 'Session deleted successfully' };
     } catch (error) {

@@ -3,7 +3,6 @@ export async function verifyMatrixOpenIdToken(
   matrixServerName: string = 'devmx.ixo.earth',
 ): Promise<{ isValid: boolean; userId?: string; error?: string }> {
   try {
-    console.log('Verifying OpenID token:', openIdToken);
 
     // Make request to Matrix federation endpoint
     const response = await fetch(
