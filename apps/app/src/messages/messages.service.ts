@@ -318,6 +318,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
             params.tools ?? [],
             params.msgFromMatrixRoom,
             userContext,
+            abortController.signal,
           );
 
           let fullContent = '';

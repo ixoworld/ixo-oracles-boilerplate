@@ -10,6 +10,7 @@ import {
 } from '@langchain/core/prompts';
 import { RunnableConfig } from '@langchain/core/runnables';
 import { Logger } from '@nestjs/common';
+import { getSSEAbortSignal } from 'src/utils/sse-context';
 import { type TCustomerSupportGraphState } from '../../state';
 import { getMemoryEngineMcpTools, tools } from '../tools-node';
 import { AI_ASSISTANT_PROMPT } from './prompt';
@@ -21,6 +22,7 @@ export async function chatNode(
   const msgFromMatrixRoom = Boolean(
     state.messages.at(-1)?.additional_kwargs.msgFromMatrixRoom,
   );
+  const abortSignal = getSSEAbortSignal();
   const { configurable } = config as IRunnableConfigWithRequiredFields;
   const { matrix } = configurable?.configs ?? {};
   Logger.log(`msgFromMatrixRoom: ${msgFromMatrixRoom}`);
