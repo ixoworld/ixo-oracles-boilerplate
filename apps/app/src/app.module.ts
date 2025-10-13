@@ -19,7 +19,6 @@ import { AuthHeaderMiddleware } from './middleware/auth-header.middleware';
 import { SubscriptionMiddleware } from './middleware/subscription.middleware';
 import { SessionsModule } from './sessions/sessions.module';
 import { SlackModule } from './slack/slack.module';
-import { SseModule } from './sse/sse.module';
 import { normalizeDid } from './utils/header.utils';
 import { WsModule } from './ws/ws.module';
 
@@ -56,7 +55,6 @@ import { WsModule } from './ws/ws.module';
     MessagesModule,
     // QueueModule,
     // KnowledgeModule,
-    SseModule,
     ScheduleModule.forRoot(),
     SlackModule,
     CallsModule,

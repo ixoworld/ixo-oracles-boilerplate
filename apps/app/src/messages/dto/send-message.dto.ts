@@ -78,4 +78,5 @@ export class SendMessagePayload {
   sessionId: string;
   did: string;
   tools?: BrowserToolCallDto[];
+  userMatrixOpenIdToken: string;
 }

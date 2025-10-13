@@ -5,10 +5,10 @@ import {
 } from '@ixo/matrix';
 import { type ToolMessage } from '@langchain/core/messages';
 import { type RunnableConfig } from '@langchain/core/runnables';
+import { ToolNode } from '@langchain/langgraph/prebuilt';
 import { Logger } from '@nestjs/common';
 import { type TCustomerSupportGraphState } from 'src/graph/state';
 import { getMemoryEngineMcpTools, tools } from './tools';
-import { ToolNode } from '@langchain/langgraph/prebuilt';
 
 const mx = MatrixManager.getInstance();
 
@@ -28,7 +28,7 @@ async function toolNode(
   );
 
   const mcpTools = await getMemoryEngineMcpTools({
-    userDid: configs?.user.did ?? '',
+    userMatrixOpenIdToken: configs?.user?.matrixOpenIdToken ?? '',
     oracleDid: configs?.matrix.oracleDid ?? '',
     roomId: configs?.matrix.roomId ?? '',
   });

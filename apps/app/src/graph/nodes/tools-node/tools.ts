@@ -7,13 +7,13 @@ import { ENV } from 'src/config';
 const configService = new ConfigService<ENV>();
 
 interface GetMemoryEngineMcpToolsParams {
-  userDid: string;
+  userMatrixOpenIdToken: string;
   oracleDid: string;
   roomId: string;
 }
 
 const getMemoryEngineMcpTools = async ({
-  userDid,
+  userMatrixOpenIdToken,
   oracleDid,
   roomId,
 }: GetMemoryEngineMcpToolsParams) => {
@@ -28,7 +28,7 @@ const getMemoryEngineMcpTools = async ({
         // Optional: Add auth headers if needed
         headers: {
           'x-api-key': configService.getOrThrow('MEMORY_MCP_API'),
-          'x-user-did': userDid,
+          Authorization: `Bearer ${userMatrixOpenIdToken}`,
           'x-oracle-did': oracleDid,
           'x-room-id': roomId,
           'User-Agent': 'LangChain-MCP-Client/1.0',

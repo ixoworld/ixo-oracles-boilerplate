@@ -66,12 +66,13 @@ export class MessagesController {
     @Param('sessionId') sessionId: string,
     @Res() res: Response,
   ) {
-    const { did } = req.authData;
+    const { did, userOpenIdToken } = req.authData;
 
     // Build the payload
     const payload = {
       ...sendMessageDto,
 
+      userMatrixOpenIdToken: userOpenIdToken,
       did,
       sessionId,
     };
@@ -81,6 +82,7 @@ export class MessagesController {
       await this.messagesService.sendMessage({
         ...payload,
         res,
+        req,
       });
       // The response is handled inside the service when streaming
     } else {

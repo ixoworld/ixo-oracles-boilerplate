@@ -8,7 +8,7 @@ import {
   ChatPromptTemplate,
   MessagesPlaceholder,
 } from '@langchain/core/prompts';
-import { type RunnableConfig } from '@langchain/core/runnables';
+import { RunnableConfig } from '@langchain/core/runnables';
 import { Logger } from '@nestjs/common';
 import { type TCustomerSupportGraphState } from '../../state';
 import { getMemoryEngineMcpTools, tools } from '../tools-node';
@@ -21,8 +21,8 @@ export async function chatNode(
   const msgFromMatrixRoom = Boolean(
     state.messages.at(-1)?.additional_kwargs.msgFromMatrixRoom,
   );
-  const { matrix, user } =
-    (config as IRunnableConfigWithRequiredFields).configurable.configs ?? {};
+  const { configurable } = config as IRunnableConfigWithRequiredFields;
+  const { matrix } = configurable?.configs ?? {};
   Logger.log(`msgFromMatrixRoom: ${msgFromMatrixRoom}`);
 
   const llm = getOpenRouterChatModel({
@@ -51,7 +51,7 @@ export async function chatNode(
   );
 
   const mcpTools = await getMemoryEngineMcpTools({
-    userDid: user?.did ?? '',
+    userMatrixOpenIdToken: configurable?.configs?.user?.matrixOpenIdToken ?? '',
     oracleDid: matrix?.oracleDid ?? '',
     roomId: matrix?.roomId ?? '',
   });
