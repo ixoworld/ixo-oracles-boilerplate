@@ -4,7 +4,10 @@ import {
   type ToolCallEventPayload,
 } from '@ixo/oracles-events/types';
 import { type IBrowserTools } from '../../../types/browser-tool.type.js';
-import { type Event } from '../../use-live-events/use-live-events.hook.js';
+import {
+  type SSEErrorEventData,
+  type SSEToolCallEventData,
+} from '../../../utils/sse-parser.js';
 import { type UIComponents } from '../resolve-ui-component.js';
 import { type OracleChat } from './oracle-chat.js';
 
@@ -62,7 +65,7 @@ export interface IChatOptions {
   sessionId: string;
   onPaymentRequiredError: (claimIds: string[]) => void;
   browserTools?: IBrowserTools;
-  uiComponents?: Partial<UIComponents>;
+  uiComponents?: UIComponents;
   overrides?: {
     baseUrl?: string;
     wsUrl?: string;
@@ -79,6 +82,10 @@ export interface ISendMessageOptions {
   browserTools?: IBrowserTools;
   chatRef?: React.MutableRefObject<OracleChat>;
   refetchQueries?: () => Promise<void>;
+
+  // NEW callbacks for streaming events
+  onToolCall?: (toolCallData: SSEToolCallEventData) => Promise<void>;
+  onError?: (error: SSEErrorEventData) => Promise<void>;
 }
 
 interface IUIComponentProps {
@@ -91,13 +98,22 @@ interface IUIComponentProps {
 export type UIComponentProps<Ev extends AnyEvent> = IUIComponentProps &
   (Ev extends { payload: infer P } ? P : never);
 
-// EVENT _TYPES
+// EVENT TYPES - simplified without useLiveEvents
 
-export type ToolCallEvent = Event<ToolCallEventPayload>;
+export type ToolCallEvent = {
+  eventName: 'tool_call';
+  payload: ToolCallEventPayload;
+};
 
-export type RenderComponentEvent = Event<RenderComponentEventPayload>;
+export type RenderComponentEvent = {
+  eventName: 'render_component';
+  payload: RenderComponentEventPayload;
+};
 
-export type BrowserToolCallEvent = Event<BrowserToolCallEventPayload>;
+export type BrowserToolCallEvent = {
+  eventName: 'browser_tool_call';
+  payload: BrowserToolCallEventPayload;
+};
 
 export type AnyEvent =
   | ToolCallEvent

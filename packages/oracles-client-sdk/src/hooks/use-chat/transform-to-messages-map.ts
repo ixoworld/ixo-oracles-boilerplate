@@ -12,7 +12,7 @@ export default function transformToMessagesMap({
   uiComponents,
 }: {
   messages: IMessage[];
-  uiComponents?: Partial<UIComponents>;
+  uiComponents?: UIComponents;
 }): MessagesMap {
   const messagesMap: MessagesMap = {};
 

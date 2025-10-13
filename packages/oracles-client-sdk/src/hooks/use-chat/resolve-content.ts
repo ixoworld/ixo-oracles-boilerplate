@@ -1,51 +1,81 @@
 import {
+  type BrowserToolCallEventPayload,
   type RenderComponentEventPayload,
   type ToolCallEventPayload,
+  type WithRequiredEventProps,
 } from '@ixo/oracles-events/types';
-import {
-  type Event,
-  evNames,
-} from '../use-live-events/use-live-events.hook.js';
-import { type UIComponents } from './resolve-ui-component.js';
+
+import { SSEErrorEvent } from '../../utils/sse-parser.js';
 import { type IComponentMetadata } from './v2/types.js';
 
-type RenderComponentEventOrToolCallEvent =
-  | Event<ToolCallEventPayload>
-  | Event<RenderComponentEventPayload>;
+export type Event<T = Record<string, any>> = {
+  eventName: 'tool_call' | 'render_component' | 'browser_tool_call' | 'error';
+  payload: WithRequiredEventProps<T> | SSEErrorEvent;
+};
 
 // Now returns metadata instead of React elements
 export const resolveContent = (
   event: Event | null,
-  uiComponents: Partial<UIComponents>,
 ): IComponentMetadata | string => {
   if (!event) return 'Thinking...';
-  const shouldRenderComponent =
-    event.eventName === evNames.RenderComponent ||
-    event.eventName === evNames.ToolCall;
 
-  const isToolCall = event.eventName === evNames.ToolCall;
-
-  if (shouldRenderComponent) {
-    const payload =
-      event.payload as RenderComponentEventOrToolCallEvent['payload'];
-
-    const toolName =
-      (payload as ToolCallEventPayload).toolName ||
-      (payload as RenderComponentEventPayload).componentName;
-    if (!toolName) return 'Thinking...';
-
-    // Return metadata instead of rendering component
-    return {
-      name: toolName,
-      props: {
-        args: payload.args,
-        id: payload.eventId ?? payload.requestId,
-        status: payload.status,
-        output: (payload as ToolCallEventPayload).output,
-        payload,
-        isToolCall,
-      },
-    };
+  switch (event.eventName) {
+    case 'tool_call': {
+      const payload = event.payload as ToolCallEventPayload;
+      return {
+        name: payload.toolName,
+        props: {
+          args: payload.args,
+          id: payload.eventId ?? payload.requestId,
+          status: payload.status,
+          output: payload.output,
+          payload: payload,
+          isToolCall: true,
+          toolName: payload.toolName,
+          event: event,
+        },
+      };
+    }
+    case 'render_component': {
+      const payload = event.payload as RenderComponentEventPayload;
+      return {
+        name: payload.componentName,
+        props: {
+          args: payload.args,
+          id: payload.eventId ?? payload.requestId,
+          status: payload.status,
+        },
+      };
+    }
+    case 'browser_tool_call': {
+      const payload = event.payload as BrowserToolCallEventPayload;
+      return {
+        name: payload.toolName,
+        props: {
+          args: payload.args,
+          id: payload.toolCallId,
+          status: 'done',
+          event: event,
+          payload: payload,
+          isToolCall: true,
+          toolName: payload.toolName,
+        },
+      };
+    }
+    case 'error': {
+      const payload = event.payload as SSEErrorEvent;
+      return {
+        name: 'Error',
+        props: {
+          id: 'error',
+          args: {},
+          status: 'done',
+          output: payload.error,
+          event: event,
+          payload: payload,
+        },
+      };
+    }
   }
 
   return 'Thinking...';

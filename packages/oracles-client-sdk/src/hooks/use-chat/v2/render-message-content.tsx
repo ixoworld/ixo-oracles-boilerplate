@@ -11,7 +11,7 @@ import { type IComponentMetadata, type MessageContent } from './types.js';
  */
 export function renderMessageContent(
   content: MessageContent,
-  uiComponents?: Partial<UIComponents>,
+  uiComponents?: UIComponents,
 ): ReactNode {
   // Simple string content
   if (typeof content === 'string') {
