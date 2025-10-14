@@ -11,13 +11,28 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Request, Response } from 'express';
-import { SendMessageDto } from './dto/send-message.dto';
+import { AbortRequestDto, SendMessageDto } from './dto/send-message.dto';
 import { MessagesService } from './messages.service';
 
 @ApiTags('messages')
 @Controller('messages')
 export class MessagesController {
   constructor(private readonly messagesService: MessagesService) {}
+
+  @Post('abort')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Abort an ongoing stream request' })
+  @ApiResponse({ status: 200, description: 'Request aborted successfully.' })
+  @ApiResponse({
+    status: 200,
+    description: 'No active request found for session.',
+  })
+  async abortRequest(@Body() abortRequestDto: AbortRequestDto) {
+    const success = this.messagesService.abortRequest(
+      abortRequestDto.sessionId,
+    );
+    return { success };
+  }
 
   @Get(':sessionId')
   @ApiOperation({ summary: 'List messages in a session' })

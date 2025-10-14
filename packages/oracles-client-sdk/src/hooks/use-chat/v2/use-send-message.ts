@@ -38,7 +38,7 @@ export function useSendMessage({
   const { apiUrl: baseUrl } = config;
   const { baseUrl: overridesUrl } = overrides ?? {};
   const apiUrl = overridesUrl ?? baseUrl;
-  const { wallet } = useOraclesContext();
+  const { wallet, authedRequest } = useOraclesContext();
   const {
     openIdToken,
     isLoading: isTokenLoading,
@@ -49,13 +49,24 @@ export function useSendMessage({
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Abort function to cancel ongoing stream
-  const abortStream = useCallback(() => {
+  const abortStream = useCallback(async () => {
     if (abortControllerRef.current) {
+      // Call backend abort endpoint with sessionId
+      try {
+        await authedRequest(`${apiUrl}/messages/abort`, 'POST', {
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId }),
+        });
+      } catch (err) {
+        console.error('Failed to abort on backend:', err);
+      }
+
+      // Also abort locally for immediate UI feedback
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
       chatRef?.current.setStatus('ready');
     }
-  }, [chatRef]);
+  }, [apiUrl, sessionId, chatRef]);
 
   const { mutateAsync, isPending, error } = useMutation({
     retry: false, // Prevent retries on abort/errors

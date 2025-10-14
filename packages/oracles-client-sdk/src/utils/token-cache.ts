@@ -155,9 +155,11 @@ export async function decryptAndRetrieve({
 
 /**
  * Check if cached token data is expired
+ * Uses a 5-minute buffer to prevent 401 errors from expired tokens
  */
 export function isTokenExpired(cachedData: CachedTokenData): boolean {
-  return cachedData.expiresAt < Date.now();
+  const bufferMs = 5 * 60 * 1000; // 5 minutes in milliseconds
+  return cachedData.expiresAt < Date.now() + bufferMs;
 }
 
 /**

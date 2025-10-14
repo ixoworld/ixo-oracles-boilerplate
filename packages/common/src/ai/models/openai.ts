@@ -40,6 +40,10 @@ export const getOpenRouterChatModel = (params?: ChatOpenAIFields) =>
     configuration: {
       baseURL: 'https://openrouter.ai/api/v1',
       ...params?.configuration,
+      defaultHeaders: {
+        'HTTP-Referer': 'oracle-app.com',
+        'X-Title': process.env.ORACLE_NAME ?? 'Oracle App',
+      },
     },
     modelKwargs: {
       require_parameters: true,

@@ -27,7 +27,7 @@ export async function chatNode(
   Logger.log(`msgFromMatrixRoom: ${msgFromMatrixRoom}`);
 
   const llm = getOpenRouterChatModel({
-    model: 'meta-llama/llama-3.1-70b-instruct:nitro',
+    model: 'openai/gpt-oss-120b:nitro',
     modelKwargs: {
       require_parameters: true,
     },
@@ -76,9 +76,7 @@ export async function chatNode(
 
   result.additional_kwargs.msgFromMatrixRoom = msgFromMatrixRoom;
   result.additional_kwargs.timestamp = new Date().toISOString();
-  Logger.debug('chatNode result', {
-    result,
-  });
+
   return {
     messages: [result],
   };

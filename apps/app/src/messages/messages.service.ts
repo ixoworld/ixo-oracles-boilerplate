@@ -45,6 +45,7 @@ import { type SendMessagePayload } from './dto/send-message.dto';
 export class MessagesService implements OnModuleInit, OnModuleDestroy {
   private cleanUpMatrixListener: () => void;
   private threadRootCache = new Map<string, string>(); // eventId → rootEventId
+  private abortControllers = new Map<string, AbortController>(); // sessionId → AbortController
 
   matrixManager: MatrixManager;
 
@@ -349,6 +350,16 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       // Create abort signal for request cancellation
       const abortController = new AbortController();
 
+      // Abort any existing request for this session (only one request per session at a time)
+      const existingController = this.abortControllers.get(sessionId);
+      if (existingController) {
+        Logger.debug(`Aborting existing request for session ${sessionId}`);
+        existingController.abort();
+      }
+
+      // Register abort controller for this session
+      this.abortControllers.set(sessionId, abortController);
+
       // Listen for client disconnection - Response 'close' event is most reliable
       const onClose = () => {
         Logger.debug(
@@ -531,10 +542,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
           Logger.debug(
             '[MessagesService] Stream aborted by client, exiting cleanly',
           );
-          Logger.debug(`[MessagesService] Abort error details:
-  Name: ${error.name}
-  Message: ${error.message}
-  Stack: ${error.stack}`);
+
           return;
         }
 
@@ -554,6 +562,8 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         clearInterval(heartbeat);
         // Remove listener
         params.res.off('close', onClose);
+        // Cleanup abort controller from registry
+        this.abortControllers.delete(sessionId);
         if (!params.res.writableEnded) {
           params.res.end();
         }
@@ -657,6 +667,21 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         // Don't throw - this is fire-and-forget
       }
     });
+  }
+
+  /**
+   * Abort an ongoing stream request by sessionId
+   */
+  public abortRequest(sessionId: string): boolean {
+    const controller = this.abortControllers.get(sessionId);
+    if (controller) {
+      controller.abort();
+      this.abortControllers.delete(sessionId);
+      Logger.debug(`Aborted request for session ${sessionId}`);
+      return true;
+    }
+    Logger.debug(`No active request found for session ${sessionId}`);
+    return false;
   }
 
   private async prepareForQuery(payload: SendMessagePayload): Promise<{

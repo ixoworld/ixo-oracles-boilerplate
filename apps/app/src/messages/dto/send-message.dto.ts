@@ -80,3 +80,14 @@ export class SendMessagePayload {
   tools?: BrowserToolCallDto[];
   userMatrixOpenIdToken: string;
 }
+
+export class AbortRequestDto {
+  @ApiProperty({
+    description: 'The session ID to abort',
+    required: true,
+    type: String,
+  })
+  @IsNotEmpty()
+  @IsString()
+  sessionId: string;
+}
