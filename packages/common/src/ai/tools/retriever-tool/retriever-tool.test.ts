@@ -30,7 +30,7 @@ jest
 
 describe('RetrieverTool', () => {
   let mockStore: jest.Mocked<VectorDBDataStore>;
-  let mockModel: FakeChatModel;
+  let mockModel: FakeChatModel = new FakeChatModel({});
 
   beforeEach(() => {
     mockStore = {

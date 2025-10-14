@@ -33,15 +33,14 @@
   },
   "dependencies": {
     "@ixo/logger": "workspace:*",
-    "@langchain/community": "^0.3.53",
-    "@langchain/core": "^0.3.78",
+    "@langchain/community": "^0.3.57",
+    "@langchain/core": "1.0.0-alpha.6",
     "@langchain/openai": "^0.6.16",
     "airtable": "^0.12.2",
     "chromadb": "^1.10.4",
     "chromadb-default-embed": "^2.13.2",
-    "langchain": "^0.3.31",
     "neo4j-driver": "^5.28.1",
     "openai": "^5.15.0",
-    "zod": "^4.0.14"
+    "zod": "^4.1.12"
   }
 }

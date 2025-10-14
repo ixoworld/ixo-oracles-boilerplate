@@ -42,7 +42,9 @@ import { WsModule } from './ws/ws.module';
         };
       },
     }),
-    CacheModule.register(),
+    CacheModule.register({
+      isGlobal: true,
+    }),
     ThrottlerModule.forRoot([
       {
         ttl: 60000, // Time-to-live in milliseconds (e.g., 60 seconds)

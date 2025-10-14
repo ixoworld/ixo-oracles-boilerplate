@@ -58,6 +58,7 @@ export function useSendMessage({
   }, [chatRef]);
 
   const { mutateAsync, isPending, error } = useMutation({
+    retry: false, // Prevent retries on abort/errors
     mutationFn: async ({
       message,
       metadata,

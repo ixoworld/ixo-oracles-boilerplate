@@ -1,5 +1,3 @@
-import { PromptTemplate } from '@langchain/core/prompts';
-
 export type InputVariables = {
   APP_NAME: string;
   IDENTITY_CONTEXT: string;
@@ -9,6 +7,9 @@ export type InputVariables = {
   RELATIONSHIPS_CONTEXT: string;
   RECENT_CONTEXT: string;
 };
+
+import { PromptTemplate } from '@langchain/core/prompts';
+
 
 export const AI_ASSISTANT_PROMPT = new PromptTemplate<InputVariables, never>({
   template: `You are an intelligent AI assistant powered by {{APP_NAME}}, designed to provide helpful, personalized, and contextual assistance across a wide range of topics and tasks. You have advanced memory capabilities that allow you to learn from conversations, remember user preferences, and build meaningful relationships over time.

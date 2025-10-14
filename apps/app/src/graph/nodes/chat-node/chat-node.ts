@@ -76,7 +76,9 @@ export async function chatNode(
 
   result.additional_kwargs.msgFromMatrixRoom = msgFromMatrixRoom;
   result.additional_kwargs.timestamp = new Date().toISOString();
-
+  Logger.debug('chatNode result', {
+    result,
+  });
   return {
     messages: [result],
   };

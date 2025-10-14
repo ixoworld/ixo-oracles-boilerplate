@@ -2,12 +2,10 @@ import {
   MatrixCheckpointSaver,
   type IRunnableConfigWithRequiredFields,
 } from '@ixo/matrix';
-import { type StreamEvent } from '@langchain/core/dist/tracers/event_stream';
-import { HumanMessage } from '@langchain/core/messages';
-import { type IterableReadableStream } from '@langchain/core/utils/stream';
 import { END, START, StateGraph } from '@langchain/langgraph';
 import { Logger } from '@nestjs/common';
 import 'dotenv/config';
+import { HumanMessage } from 'langchain';
 import CallbackHandler from 'langfuse-langchain';
 import { type BrowserToolCallDto } from 'src/messages/dto/send-message.dto';
 import { chatNode } from './nodes/chat-node/chat-node';
@@ -66,7 +64,9 @@ export class CustomerSupportGraph {
     if (!runnableConfig.configurable.sessionId) {
       throw new Error('sessionId is required');
     }
-    Logger.log(`[sendMessage]: msgFromMatrixRoom: ${msgFromMatrixRoom}`);
+    Logger.log(
+      `[sendMessage]: msgFromMatrixRoom: ${msgFromMatrixRoom} input: ${input}`,
+    );
     return this.graph.invoke(
       {
         messages: [
@@ -110,10 +110,21 @@ export class CustomerSupportGraph {
     msgFromMatrixRoom = false,
     initialUserContext?: TCustomerSupportGraphState['userContext'],
     abortController?: AbortController,
-  ): Promise<IterableReadableStream<StreamEvent>> {
+  ) {
     if (!runnableConfig.configurable.sessionId) {
       throw new Error('sessionId is required');
     }
+
+    // Debug: Log abort signal state
+    if (abortController) {
+      Logger.debug(
+        `[streamMessage] AbortController passed, signal.aborted: ${abortController.signal.aborted}`,
+      );
+      abortController.signal.addEventListener('abort', () => {
+        Logger.debug('[streamMessage] Abort signal fired!');
+      });
+    }
+
     const stream = this.graph.streamEvents(
       {
         messages: [
@@ -135,7 +146,6 @@ export class CustomerSupportGraph {
         ...runnableConfig,
         streamMode: 'messages',
         recursionLimit: 15,
-        signal: abortController?.signal,
         configurable: {
           ...runnableConfig.configurable,
           thread_id: runnableConfig.configurable.sessionId,
@@ -145,6 +155,8 @@ export class CustomerSupportGraph {
           langfuseSessionId: runnableConfig.configurable.sessionId,
           langfuseUserId: runnableConfig.configurable.configs?.user.did,
         },
+        // Signal must be last to ensure it's not overwritten by runnableConfig spread
+        signal: abortController?.signal,
       },
     );
 

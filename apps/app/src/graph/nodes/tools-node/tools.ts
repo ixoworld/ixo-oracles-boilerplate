@@ -1,4 +1,4 @@
-import { type StructuredTool } from '@langchain/core/tools';
+import { type StructuredTool } from 'langchain';
 import { MultiServerMCPClient } from '@langchain/mcp-adapters';
 import { ConfigService } from '@nestjs/config';
 import 'dotenv/config';

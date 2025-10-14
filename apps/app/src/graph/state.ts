@@ -1,6 +1,6 @@
 import { UserContextData } from '@ixo/common';
-import { type BaseMessage } from '@langchain/core/messages';
 import { Annotation, messagesStateReducer } from '@langchain/langgraph';
+import { type BaseMessage } from 'langchain';
 import { type BrowserToolCallDto } from 'src/messages/dto/send-message.dto';
 
 export const CustomerSupportGraphState = Annotation.Root({

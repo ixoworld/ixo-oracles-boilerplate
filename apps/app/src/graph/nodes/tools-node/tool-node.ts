@@ -1,12 +1,11 @@
 import { parserBrowserTool } from '@ixo/common';
 import {
-  type IRunnableConfigWithRequiredFields,
   MatrixManager,
+  type IRunnableConfigWithRequiredFields,
 } from '@ixo/matrix';
-import { type ToolMessage } from '@langchain/core/messages';
-import { type RunnableConfig } from '@langchain/core/runnables';
-import { ToolNode } from '@langchain/langgraph/prebuilt';
+import { LangGraphRunnableConfig } from '@langchain/langgraph';
 import { Logger } from '@nestjs/common';
+import { ToolNode, type ToolMessage } from 'langchain';
 import { type TCustomerSupportGraphState } from 'src/graph/state';
 import { getMemoryEngineMcpTools, tools } from './tools';
 
@@ -14,7 +13,7 @@ const mx = MatrixManager.getInstance();
 
 async function toolNode(
   state: TCustomerSupportGraphState,
-  config?: RunnableConfig,
+  config?: LangGraphRunnableConfig,
 ): Promise<Partial<TCustomerSupportGraphState>> {
   const {
     configurable: { configs, thread_id },

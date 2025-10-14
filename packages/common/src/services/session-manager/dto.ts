@@ -81,6 +81,10 @@ export class ChatSession {
 
   @IsOptional()
   userContext?: UserContextData;
+
+  @IsString()
+  @IsOptional()
+  roomId?: string;
 }
 
 export class ListChatSessionsResponseDto {

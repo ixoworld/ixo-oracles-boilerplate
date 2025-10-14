@@ -1,3 +1,4 @@
+import { Logger } from '@ixo/logger';
 import { MatrixManager } from '@ixo/matrix';
 import { getChatOpenAiModel } from '../../ai/index.js';
 import { MemoryEngineService } from '../memory-engine/memory-engine.service.js';
@@ -11,7 +12,6 @@ import {
   type ListChatSessionsResponseDto,
 } from './dto.js';
 import { NoUserRoomsFoundError } from './errors.js';
-import { Logger } from '@ixo/logger';
 
 export class SessionManagerService {
   constructor(
