@@ -117,7 +117,25 @@ export async function* parseSSEStream(
 
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      let readResult;
+      try {
+        readResult = await reader.read();
+      } catch (readError) {
+        // Handle abort errors gracefully - this is expected when user cancels
+        if (
+          readError instanceof Error &&
+          (readError.name === 'AbortError' ||
+            (readError instanceof DOMException &&
+              readError.name === 'AbortError'))
+        ) {
+          // Stream was intentionally aborted, exit gracefully
+          break;
+        }
+        // Re-throw other errors
+        throw readError;
+      }
+
+      const { done, value } = readResult;
       if (done) break;
 
       // Decode chunk and add to buffer
@@ -192,6 +210,15 @@ export async function* parseSSEStream(
       }
     }
   } catch (error) {
+    // Handle abort errors gracefully - expected when stream is cancelled
+    if (
+      error instanceof Error &&
+      (error.name === 'AbortError' ||
+        (error instanceof DOMException && error.name === 'AbortError'))
+    ) {
+      // Stream was aborted, exit gracefully without throwing
+      return;
+    }
     console.error('Error parsing SSE stream:', error);
     throw error;
   }

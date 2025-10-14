@@ -35,7 +35,7 @@ async function toolNode(
 
   const tn = new ToolNode([...tools, ...(browserTools ?? []), ...mcpTools]);
 
-  const toolMsg: ToolMessage = await tn.invoke(state.messages);
+  const toolMsg: ToolMessage = await tn.invoke(state.messages, config);
 
   const room = configs?.matrix.roomId ?? '';
   mx.sendActionLog(

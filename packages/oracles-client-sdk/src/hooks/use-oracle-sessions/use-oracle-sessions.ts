@@ -38,9 +38,7 @@ export const useOracleSessions = (
     mutationFn: () =>
       authedRequest<IChatSession>(`${apiUrl}/sessions`, 'POST', {}),
     onSettled: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ['oracle-sessions', oracleDid],
-      });
+      refetch();
     },
   });
 
@@ -52,9 +50,7 @@ export const useOracleSessions = (
     mutationFn: (sessionId: string) =>
       authedRequest<void>(`${apiUrl}/sessions/${sessionId}`, 'DELETE', {}),
     onSettled: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ['oracle-sessions', oracleDid],
-      });
+      refetch();
     },
   });
 

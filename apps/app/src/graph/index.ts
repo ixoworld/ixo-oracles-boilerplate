@@ -109,7 +109,7 @@ export class CustomerSupportGraph {
     browserTools?: BrowserToolCallDto[],
     msgFromMatrixRoom = false,
     initialUserContext?: TCustomerSupportGraphState['userContext'],
-    abortSignal?: AbortSignal,
+    abortController?: AbortController,
   ): Promise<IterableReadableStream<StreamEvent>> {
     if (!runnableConfig.configurable.sessionId) {
       throw new Error('sessionId is required');
@@ -135,7 +135,7 @@ export class CustomerSupportGraph {
         ...runnableConfig,
         streamMode: 'messages',
         recursionLimit: 15,
-        signal: abortSignal,
+        signal: abortController?.signal,
         configurable: {
           ...runnableConfig.configurable,
           thread_id: runnableConfig.configurable.sessionId,

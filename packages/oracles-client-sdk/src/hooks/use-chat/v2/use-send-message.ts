@@ -149,6 +149,16 @@ export function useSendMessage({
         // Clear abort controller on error
         abortControllerRef.current = null;
 
+        // Handle abort errors gracefully - user intentionally cancelled
+        if (
+          err instanceof Error &&
+          (err.name === 'AbortError' ||
+            (err instanceof DOMException && err.name === 'AbortError'))
+        ) {
+          chatRef?.current.setStatus('ready');
+          return;
+        }
+
         if (RequestError.isRequestError(err) && err.claims) {
           onPaymentRequiredError(err.claims as string[]);
           chatRef?.current.setStatus('ready');
@@ -254,11 +264,6 @@ const askOracleStream = async (props: {
   try {
     // Parse SSE events from the stream
     for await (const sseEvent of parseSSEStream(reader)) {
-      // Check if request was aborted
-      if (props.abortSignal?.aborted) {
-        throw new Error('Request aborted by user');
-      }
-
       // Type-safe event handling using discriminated unions
       switch (sseEvent.event) {
         case 'message':
@@ -311,6 +316,20 @@ const askOracleStream = async (props: {
     };
   } catch (error) {
     reader.cancel();
+
+    // Handle abort errors gracefully
+    if (
+      error instanceof Error &&
+      (error.name === 'AbortError' ||
+        (error instanceof DOMException && error.name === 'AbortError'))
+    ) {
+      // Don't throw abort errors - they're expected when user cancels
+      return {
+        text: accumulatedText,
+        requestId,
+      };
+    }
+
     throw error;
   }
 };

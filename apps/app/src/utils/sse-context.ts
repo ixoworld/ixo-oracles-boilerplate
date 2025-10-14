@@ -5,7 +5,7 @@ import { formatSSEEvent } from './sse.utils';
 
 interface SSEContext {
   res: Response;
-  abortSignal?: AbortSignal;
+  abortController?: AbortController;
 }
 
 /**
@@ -21,21 +21,21 @@ const sseContextStorage = new AsyncLocalStorage<SSEContext>();
  *
  * @param res - Express Response object for SSE streaming
  * @param callback - Async function to run within the SSE context
- * @param abortSignal - Optional abort signal for request cancellation
+ * @param abortController - Optional abort signal for request cancellation
  * @returns The result of the callback
  *
  * @example
  * await runWithSSEContext(res, async () => {
  *   await processStream();
  *   // Inside processStream or any nested function, you can call emitSSEEvent()
- * }, abortSignal);
+ * }, abortController);
  */
 export function runWithSSEContext<T>(
   res: Response,
   callback: () => Promise<T>,
-  abortSignal?: AbortSignal,
+  abortController?: AbortController,
 ): Promise<T> {
-  return sseContextStorage.run({ res, abortSignal }, callback);
+  return sseContextStorage.run({ res, abortController }, callback);
 }
 
 /**
@@ -76,10 +76,10 @@ export function getSSEContext(): Response | undefined {
  * Get the current abort signal from the context
  * Returns undefined if not running within an SSE context or no abort signal set
  *
- * @returns The AbortSignal or undefined
+ * @returns The abortController or undefined
  */
-export function getSSEAbortSignal(): AbortSignal | undefined {
-  return sseContextStorage.getStore()?.abortSignal;
+export function getSSEabortController(): AbortController | undefined {
+  return sseContextStorage.getStore()?.abortController;
 }
 
 /**
@@ -98,5 +98,5 @@ export function hasSSEContext(): boolean {
  */
 export function isSSEAborted(): boolean {
   const context = sseContextStorage.getStore();
-  return context?.abortSignal?.aborted ?? false;
+  return context?.abortController?.signal.aborted ?? false;
 }

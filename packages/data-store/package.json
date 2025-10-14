@@ -34,8 +34,8 @@
   "dependencies": {
     "@ixo/logger": "workspace:*",
     "@langchain/community": "^0.3.53",
-    "@langchain/core": "^0.3.72",
-    "@langchain/openai": "^0.6.9",
+    "@langchain/core": "^0.3.78",
+    "@langchain/openai": "^0.6.16",
     "airtable": "^0.12.2",
     "chromadb": "^1.10.4",
     "chromadb-default-embed": "^2.13.2",
