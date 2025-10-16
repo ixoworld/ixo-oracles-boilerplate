@@ -13,7 +13,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { Request } from 'express';
+import type { Request } from 'express';
 import { SessionsService } from './sessions.service';
 
 @ApiTags('sessions')

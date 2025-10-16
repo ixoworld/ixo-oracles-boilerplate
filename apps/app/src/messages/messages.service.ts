@@ -23,7 +23,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cache } from 'cache-manager';
-import { Request, type Response } from 'express';
+import type { Request, Response } from 'express';
 import { AIMessageChunk, ToolMessage } from 'langchain';
 import * as crypto from 'node:crypto';
 import { CustomerSupportGraph } from 'src/graph';
