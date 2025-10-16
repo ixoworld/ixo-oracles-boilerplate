@@ -66,6 +66,21 @@ export interface SSEMessageCacheInvalidationEventData {
   eventId?: string;
 }
 
+export interface SSEReasoningEventData {
+  sessionId: string;
+  requestId: string;
+  reasoning: string;
+  reasoningDetails?: Array<{
+    type: string;
+    text: string;
+    format: string;
+    index: number;
+  }>;
+  isComplete?: boolean;
+  timestamp?: string;
+  eventId?: string;
+}
+
 // Type-safe SSE events using discriminated unions
 export type SSEEvent =
   | BaseSSEEvent<'message', SSEMessageEventData>
@@ -78,7 +93,8 @@ export type SSEEvent =
   | BaseSSEEvent<
       'message_cache_invalidation',
       SSEMessageCacheInvalidationEventData
-    >;
+    >
+  | BaseSSEEvent<'reasoning', SSEReasoningEventData>;
 
 // Legacy type aliases for backward compatibility
 export type SSEToolCallPayload = SSEToolCallEventData;
@@ -98,6 +114,7 @@ function isValidSSEEventType(
     'render_component',
     'browser_tool_call',
     'message_cache_invalidation',
+    'reasoning',
   ];
   return validEventTypes.includes(eventType as any);
 }

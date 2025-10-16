@@ -13,6 +13,7 @@ import { Logger } from '@nestjs/common';
 import { type TCustomerSupportGraphState } from '../../state';
 import { getMemoryEngineMcpTools, tools } from '../tools-node';
 import { AI_ASSISTANT_PROMPT } from './prompt';
+import { cleanAdditionalKwargs } from './utils';
 
 export async function chatNode(
   state: TCustomerSupportGraphState,
@@ -28,8 +29,14 @@ export async function chatNode(
 
   const llm = getOpenRouterChatModel({
     model: 'openai/gpt-oss-120b:nitro',
+    __includeRawResponse: true,
     modelKwargs: {
       require_parameters: true,
+      include_reasoning: true,
+      user: configurable?.configs?.user?.did,
+    },
+    reasoning: {
+      effort: 'low',
     },
   });
 
@@ -79,6 +86,14 @@ export async function chatNode(
 
   result.additional_kwargs.msgFromMatrixRoom = msgFromMatrixRoom;
   result.additional_kwargs.timestamp = new Date().toISOString();
+
+  // reao
+
+  const cleanedKwargs = cleanAdditionalKwargs(
+    result.additional_kwargs,
+    msgFromMatrixRoom,
+  );
+  result.additional_kwargs = cleanedKwargs;
 
   return {
     messages: [result],

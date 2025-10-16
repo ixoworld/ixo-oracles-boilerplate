@@ -7,6 +7,7 @@ import { RequestError } from '../../../utils/request.js';
 import {
   parseSSEStream,
   type SSEErrorEventData,
+  type SSEReasoningEventData,
   type SSEToolCallEventData,
 } from '../../../utils/sse-parser.js';
 import { useGetOpenIdToken } from '../../use-get-openid-token/use-get-openid-token.js';
@@ -33,6 +34,7 @@ export function useSendMessage({
   refetchQueries,
   onToolCall,
   onError,
+  onReasoning,
 }: ISendMessageOptions): IUseSendMessageReturn {
   const { config } = useOraclesConfig(oracleDid);
   const { apiUrl: baseUrl } = config;
@@ -148,6 +150,13 @@ export function useSendMessage({
               }
             : undefined,
 
+          // Reasoning (NEW - forward to useChat callback)
+          onReasoning: onReasoning
+            ? async ({ reasoningData, requestId }) => {
+                await onReasoning({ reasoningData, requestId });
+              }
+            : undefined,
+
           onDone: () => {
             chatRef?.current.setStatus('ready');
             abortControllerRef.current = null;
@@ -236,6 +245,10 @@ const askOracleStream = async (props: {
     error: SSEErrorEventData;
     requestId: string;
   }) => void | Promise<void>;
+  onReasoning?: (args: {
+    reasoningData: SSEReasoningEventData;
+    requestId: string;
+  }) => void | Promise<void>;
   onDone?: () => void;
 }): Promise<{ text: string; requestId: string }> => {
   const response = await fetch(`${props.apiURL}/messages/${props.sessionId}`, {
@@ -313,6 +326,15 @@ const askOracleStream = async (props: {
 
         case 'message_cache_invalidation':
           // Ignore for now - future enhancement
+          break;
+
+        case 'reasoning':
+          if (props.onReasoning) {
+            await props.onReasoning({
+              reasoningData: sseEvent.data,
+              requestId,
+            });
+          }
           break;
 
         default:

@@ -11,6 +11,7 @@ import { useOraclesContext } from '../../../providers/oracles-provider/oracles-c
 import { RequestError } from '../../../utils/request.js';
 import {
   type SSEErrorEvent,
+  type SSEReasoningEventData,
   type SSEToolCallPayload,
 } from '../../../utils/sse-parser.js';
 import { useOracleSessions } from '../../use-oracle-sessions/use-oracle-sessions.js';
@@ -29,6 +30,7 @@ export function useChat({
   onPaymentRequiredError,
   browserTools,
   uiComponents,
+  streamingMode,
 }: IChatOptions) {
   // Create chat instance with lazy initialization
   const chatRef = useRef<OracleChat | null>(null);
@@ -47,6 +49,7 @@ export function useChat({
       browserTools,
       uiComponents,
       overrides,
+      streamingMode,
     });
   }
 
@@ -164,6 +167,35 @@ export function useChat({
     [uiComponents],
   );
 
+  // Handle reasoning events from streaming
+  const handleReasoning = useCallback(
+    async ({
+      reasoningData,
+    }: {
+      reasoningData: SSEReasoningEventData;
+      requestId: string;
+    }) => {
+      // Use consistent ID for all reasoning chunks from the same request
+
+      // Create reasoning message - upsertEventMessage will handle accumulation
+      const reasoningMessage: IMessage = {
+        id: reasoningData.requestId,
+        type: 'ai',
+        content: reasoningData.reasoning,
+        reasoning:
+          reasoningData.reasoningDetails
+            ?.map((detail) => detail.text)
+            .filter((text) => text && text.trim().length > 0) // Filter out empty text
+            .join('\n') || '', // Safe fallback to empty string
+        isComplete: reasoningData.isComplete,
+        isReasoning: true,
+      };
+
+      await chatRef.current?.upsertEventMessage(reasoningMessage);
+    },
+    [],
+  );
+
   // Send message functionality
   const {
     sendMessage,
@@ -180,6 +212,7 @@ export function useChat({
     refetchQueries: revalidate,
     onToolCall: handleToolCall, // NEW
     onError: handleError, // NEW
+    onReasoning: handleReasoning,
   });
 
   // WebSocket events handling (keep your existing logic)

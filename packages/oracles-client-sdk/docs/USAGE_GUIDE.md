@@ -197,6 +197,33 @@ function Chat({ oracleDid, sessionId }) {
 }
 ```
 
+### Streaming Modes
+
+Control how streaming updates are handled for different use cases:
+
+```tsx
+// Real-time streaming - immediate updates as they arrive (default)
+const { messages } = useChat({
+  oracleDid,
+  sessionId,
+  streamingMode: 'immediate', // or omit for default behavior
+  onPaymentRequiredError: handlePayment,
+});
+
+// Batched streaming - optimized for performance
+const { messages } = useChat({
+  oracleDid,
+  sessionId,
+  streamingMode: 'batched', // Updates batched at ~60fps
+  onPaymentRequiredError: handlePayment,
+});
+```
+
+**When to use each mode:**
+
+- **`immediate`** (default): Live typing effects, real-time collaboration, when you want users to see text appearing character by character
+- **`batched`**: High-volume streaming, mobile devices, when performance is more important than visual smoothness
+
 ### Sending Messages with Metadata
 
 Attach custom metadata to messages:
