@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import MatrixClient from '../../matrix/matrix-client.js';
 import { useOraclesContext } from '../../providers/oracles-provider/oracles-context.js';
 
-export const useGetOpenIdToken = (forceNewToken: boolean = false) => {
+export const useGetOpenIdToken = () => {
   const { wallet } = useOraclesContext();
   const matrixClientRef = useMemo(
     () =>
@@ -23,14 +23,13 @@ export const useGetOpenIdToken = (forceNewToken: boolean = false) => {
         return;
       }
       return matrixClientRef.getOpenIdToken(
-        // `${wallet?.did.replace(':', '-')}@${new URL(matrixClientRef.params.homeserverUrl ?? '').hostname}`,
         `@did-ixo-${wallet?.address}:${new URL(matrixClientRef.params.homeserverUrl ?? '').hostname}`,
-        forceNewToken,
+        wallet.did,
       );
     },
     enabled: !!wallet?.did && !!wallet?.matrix.accessToken,
-    staleTime: forceNewToken ? 0 : 1000 * 60 * 5, // 5 minutes
-    gcTime: forceNewToken ? 0 : 1000 * 60 * 5, // 5 minutes
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    gcTime: 1000 * 60 * 5, // 5 minutes
   });
 
   return { openIdToken, isLoading, error };

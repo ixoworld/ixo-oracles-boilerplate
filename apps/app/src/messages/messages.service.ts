@@ -1,4 +1,5 @@
 import {
+  ChatSession,
   SessionManagerService,
   transformGraphStateMessageToListMessageResponse,
   type ListOracleMessagesResponse,
@@ -10,12 +11,10 @@ import {
   type MessageEventContent,
 } from '@ixo/matrix';
 import { ToolCallEvent } from '@ixo/oracles-events';
-import {
-  type AIMessageChunk,
-  type ToolMessage,
-} from '@langchain/core/messages';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
   BadRequestException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -23,14 +22,22 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { type Response } from 'express';
+import { Cache } from 'cache-manager';
+import { Request, type Response } from 'express';
+import { AIMessageChunk, ToolMessage } from 'langchain';
 import * as crypto from 'node:crypto';
 import { CustomerSupportGraph } from 'src/graph';
-import { triggerMemoryAnalysisWorkflow } from 'src/graph/nodes/tools-node/matrix-memory';
 import { type TCustomerSupportGraphState } from 'src/graph/state';
-import { SseService } from 'src/sse/sse.service';
 import { type ENV } from 'src/types';
 import { normalizeDid } from 'src/utils/header.utils';
+import { runWithSSEContext } from 'src/utils/sse-context';
+import {
+  formatSSE,
+  sendSSEDone,
+  sendSSEError,
+  setSSEHeaders,
+  startSSEHeartbeat,
+} from 'src/utils/sse.utils';
 import { type ListMessagesDto } from './dto/list-messages.dto';
 import { type SendMessagePayload } from './dto/send-message.dto';
 
@@ -38,6 +45,7 @@ import { type SendMessagePayload } from './dto/send-message.dto';
 export class MessagesService implements OnModuleInit, OnModuleDestroy {
   private cleanUpMatrixListener: () => void;
   private threadRootCache = new Map<string, string>(); // eventId → rootEventId
+  private abortControllers = new Map<string, AbortController>(); // sessionId → AbortController
 
   matrixManager: MatrixManager;
 
@@ -45,13 +53,60 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     private readonly customerSupportGraph: CustomerSupportGraph,
     private readonly sessionManagerService: SessionManagerService,
     private readonly config: ConfigService<ENV>,
-    private readonly sseService: SseService,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {
     this.matrixManager = this.sessionManagerService.matrixManger;
   }
 
   public onModuleDestroy(): void {
     this.cleanUpMatrixListener();
+  }
+
+  /**
+   * Get cached session or fetch from Matrix if not cached
+   */
+  private async getCachedSession(
+    sessionId: string,
+    did: string,
+    oracleEntityDid: string,
+  ): Promise<ChatSession | undefined> {
+    const cacheKey = `session:${did}:${oracleEntityDid}:${sessionId}`;
+
+    // Try to get from cache first
+    const cachedSession = await this.cacheManager.get<ChatSession>(cacheKey);
+    if (cachedSession) {
+      Logger.debug(`Cache hit for session ${sessionId}`);
+      return cachedSession;
+    }
+
+    // If not in cache, fetch from Matrix
+    Logger.debug(`Cache miss for session ${sessionId}, fetching from Matrix`);
+    const sessions = await this.sessionManagerService.listSessions({
+      did,
+      oracleEntityDid,
+    });
+
+    const session = sessions.sessions.find((s) => s.sessionId === sessionId);
+
+    // Cache the session if found (with 5 minute TTL)
+    if (session) {
+      await this.cacheManager.set(cacheKey, session, 5 * 60 * 1000); // 5 minutes
+    }
+
+    return session;
+  }
+
+  /**
+   * Invalidate session cache when session is updated
+   */
+  private async invalidateSessionCache(
+    sessionId: string,
+    did: string,
+    oracleEntityDid: string,
+  ): Promise<void> {
+    const cacheKey = `session:${did}:${oracleEntityDid}:${sessionId}`;
+    await this.cacheManager.del(cacheKey);
+    Logger.debug(`Invalidated cache for session ${sessionId}`);
   }
 
   private async getThreadRoot(
@@ -174,6 +229,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
           did,
           sessionId: threadId,
           msgFromMatrixRoom: true,
+          userMatrixOpenIdToken: '',
         });
         if (!aiMessage) {
           return;
@@ -181,10 +237,11 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
 
         // Send AI response to Matrix
         await this.sessionManagerService.matrixManger.sendMessage({
-          message: `${event.sender}: ${aiMessage.message.content}`,
+          message: aiMessage.message.content,
           roomId,
           threadId,
           isOracleAdmin: true,
+          disablePrefix: true,
         });
       } catch (error) {
         Logger.error('Failed to send message', error);
@@ -193,6 +250,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
           roomId,
           threadId,
           isOracleAdmin: true,
+          disablePrefix: true,
         });
       }
     }
@@ -220,7 +278,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     const { roomId } =
       await this.sessionManagerService.matrixManger.getOracleRoomId({
         userDid: did,
-        oracleDid: this.config.getOrThrow('ORACLE_DID'),
+        oracleEntityDid: this.config.getOrThrow('ORACLE_ENTITY_DID'),
       });
 
     if (!roomId) {
@@ -255,6 +313,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     params: SendMessagePayload & {
       res?: Response;
       msgFromMatrixRoom?: boolean;
+      req?: Request; // Express Request object for abort detection
     },
   ): Promise<
     | undefined
@@ -267,7 +326,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         sessionId: string;
       }
   > {
-    const { runnableConfig, sessionId, roomId } =
+    const { runnableConfig, sessionId, roomId, userContext, targetSession } =
       await this.prepareForQuery(params);
 
     if (!params.msgFromMatrixRoom) {
@@ -283,107 +342,230 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         });
     }
     if (params.stream && params.res) {
-      // SET the headers
-
-      params.res.set({
-        'X-Request-Id': runnableConfig.configurable.requestId,
-        'Content-Type': 'text/plain',
-        'Transfer-Encoding': 'chunked',
-        'Cache-Control': 'no-cache, no-transform',
-        Connection: 'keep-alive',
-        'X-Accel-Buffering': 'no',
-        'Access-Control-Expose-Headers': 'X-Request-Id',
-      });
-
+      // Set SSE headers
+      setSSEHeaders(params.res, runnableConfig.configurable.requestId);
       params.res.flushHeaders();
 
-      try {
-        const stream = await this.customerSupportGraph.streamMessage(
-          params.message,
-          runnableConfig,
-          params.tools ?? [],
-          params.msgFromMatrixRoom,
+      // Start heartbeat to keep connection alive
+      const heartbeat = startSSEHeartbeat(params.res);
+
+      // Create abort signal for request cancellation
+      const abortController = new AbortController();
+
+      // Abort any existing request for this session (only one request per session at a time)
+      const existingController = this.abortControllers.get(sessionId);
+      if (existingController) {
+        Logger.debug(`Aborting existing request for session ${sessionId}`);
+        existingController.abort();
+      }
+
+      // Register abort controller for this session
+      this.abortControllers.set(sessionId, abortController);
+
+      // Listen for client disconnection - Response 'close' event is most reliable
+      const onClose = () => {
+        Logger.debug(
+          `[MessagesService] Client disconnected, aborting stream. Signal already aborted: ${abortController.signal.aborted}`,
         );
+        abortController.abort();
+        Logger.debug(
+          `[MessagesService] After abort(), signal.aborted: ${abortController.signal.aborted}`,
+        );
+      };
 
-        let fullContent = '';
-        if (params.sessionId) {
-          const toolCallMap = new Map<string, ToolCallEvent>();
-          for await (const { data, event, tags } of stream) {
-            const isChatNode = tags?.includes('chat_node');
+      // Listen to response close event (fires when client disconnects/aborts)
+      params.res.on('close', onClose);
 
-            if (event === 'on_tool_end') {
-              const toolMessage = data.output as ToolMessage;
-              const toolCallEvent = toolCallMap.get(toolMessage.tool_call_id);
-              if (!toolCallEvent) {
-                return;
-              }
-              toolCallEvent.payload.output = toolMessage.content as string;
-              toolCallEvent.payload.status = 'done';
-              (toolCallEvent.payload.args as Record<string, unknown>).toolName =
-                toolMessage.name;
-              toolCallEvent.payload.eventId = toolMessage.tool_call_id;
-              this.sseService.publishToSession(sessionId, toolCallEvent);
-              toolCallMap.delete(toolMessage.tool_call_id);
-            }
+      try {
+        await runWithSSEContext(
+          params.res,
+          async () => {
+            const stream = await this.customerSupportGraph.streamMessage(
+              params.message,
+              runnableConfig,
+              params.tools ?? [],
+              params.msgFromMatrixRoom,
+              userContext,
+              abortController,
+            );
 
-            if (event === 'on_chat_model_stream') {
-              const content = (data.chunk as AIMessageChunk).content;
+            let fullContent = '';
+            if (params.sessionId) {
+              const toolCallMap = new Map<string, ToolCallEvent>();
+              for await (const { data, event, tags } of stream) {
+                const isChatNode = tags?.includes('chat_node');
 
-              const toolCall = (data.chunk as AIMessageChunk).tool_calls;
-
-              toolCall?.forEach((tool) => {
-                // update toolCallEvent with toolCall
-                if (!tool.name.trim() || !tool.id) {
-                  return;
+                if (event === 'on_tool_end') {
+                  const toolMessage = data.output as ToolMessage;
+                  const toolCallEvent = toolCallMap.get(
+                    toolMessage.tool_call_id,
+                  );
+                  if (!toolCallEvent) {
+                    continue;
+                  }
+                  toolCallEvent.payload.output = toolMessage.content as string;
+                  toolCallEvent.payload.status = 'done';
+                  (
+                    toolCallEvent.payload.args as Record<string, unknown>
+                  ).toolName = toolMessage.name;
+                  toolCallEvent.payload.eventId = toolMessage.tool_call_id;
+                  if (!params.res) {
+                    throw new Error('Response not found');
+                  }
+                  // Send tool call completion event as SSE
+                  if (
+                    !params.res.writableEnded &&
+                    !abortController.signal.aborted
+                  ) {
+                    params.res.write(
+                      formatSSE(toolCallEvent.eventName, toolCallEvent.payload),
+                    );
+                  }
+                  toolCallMap.delete(toolMessage.tool_call_id);
                 }
-                const toolCallEvent = new ToolCallEvent({
-                  requestId: runnableConfig.configurable.requestId ?? '',
-                  sessionId,
-                  toolName: 'toolCall',
-                  args: {},
-                  status: 'isRunning',
-                });
-                toolCallEvent.payload.args = tool.args;
-                (
-                  toolCallEvent.payload.args as Record<string, unknown>
-                ).toolName = tool.name;
-                toolCallEvent.payload.eventId = tool.id;
 
-                this.sseService.publishToSession(sessionId, toolCallEvent);
-                toolCallMap.set(tool.id, toolCallEvent);
-              });
+                if (event === 'on_chat_model_stream') {
+                  const content = (data.chunk as AIMessageChunk).content;
+                  const toolCall = (data.chunk as AIMessageChunk).tool_calls;
 
-              if (!content) {
-                continue;
+                  toolCall?.forEach((tool) => {
+                    // update toolCallEvent with toolCall
+                    if (!tool.name.trim() || !tool.id) {
+                      return;
+                    }
+                    const toolCallEvent = new ToolCallEvent({
+                      requestId: runnableConfig.configurable.requestId ?? '',
+                      sessionId,
+                      toolName: 'toolCall',
+                      args: {},
+                      status: 'isRunning',
+                    });
+                    toolCallEvent.payload.args = tool.args;
+                    (
+                      toolCallEvent.payload.args as Record<string, unknown>
+                    ).toolName = tool.name;
+                    toolCallEvent.payload.eventId = tool.id;
+
+                    // Send tool call start event as SSE
+                    if (!params.res) {
+                      throw new Error('Response not found');
+                    }
+                    if (
+                      !params.res.writableEnded &&
+                      !abortController.signal.aborted
+                    ) {
+                      params.res.write(
+                        formatSSE(
+                          toolCallEvent.eventName,
+                          toolCallEvent.payload,
+                        ),
+                      );
+                    }
+                    toolCallMap.set(tool.id, toolCallEvent);
+                  });
+
+                  if (!content) {
+                    continue;
+                  }
+                  if (isChatNode) {
+                    fullContent += content.toString();
+                    // Send message chunk as SSE
+                    if (!params.res) {
+                      throw new Error('Response not found');
+                    }
+                    if (
+                      !params.res.writableEnded &&
+                      !abortController.signal.aborted
+                    ) {
+                      params.res.write(
+                        formatSSE('message', {
+                          content: content.toString(),
+                          timestamp: new Date().toISOString(),
+                        }),
+                      );
+                    }
+                  }
+                }
               }
-              if (isChatNode) {
-                fullContent += content.toString();
-                params.res.write(content.toString());
+
+              // Only send to Matrix if not aborted
+              if (!abortController.signal.aborted && fullContent) {
+                Logger.debug(
+                  `[MessagesService] Sending AI response to Matrix (${fullContent.length} chars)`,
+                );
+                this.sessionManagerService.matrixManger
+                  .sendMessage({
+                    message: fullContent,
+                    roomId,
+                    threadId: sessionId,
+                    isOracleAdmin: true,
+                  })
+                  .catch((err) => {
+                    Logger.error(
+                      'Failed to replay API AI response message to matrix room',
+                      err,
+                    );
+                  });
+              } else {
+                Logger.debug(
+                  `[MessagesService] Skipping Matrix send - aborted: ${abortController.signal.aborted}, content length: ${fullContent.length}`,
+                );
               }
             }
-          }
 
-          this.sessionManagerService.matrixManger
-            .sendMessage({
-              message: fullContent,
-              roomId,
-              threadId: sessionId,
-              isOracleAdmin: true,
-            })
-            .catch((err) => {
-              Logger.error(
-                'Failed to replay API AI response message to matrix room',
-                err,
+            // Send completion event only if not aborted
+            if (!abortController.signal.aborted) {
+              if (!params.res) {
+                throw new Error('Response not found');
+              }
+              sendSSEDone(params.res);
+
+              // Fire-and-forget post-message sync operations for streaming
+              this.performPostMessageSync(
+                params,
+                sessionId,
+                roomId,
+                targetSession,
+                [],
               );
-            });
+            }
+          },
+          abortController,
+        );
+        return;
+      } catch (error) {
+        // Handle abort errors gracefully - don't treat as error
+        if (
+          error instanceof Error &&
+          (error.name === 'AbortError' ||
+            error.message.includes('aborted') ||
+            error.message.includes('Stream aborted by client'))
+        ) {
+          Logger.debug(
+            '[MessagesService] Stream aborted by client, exiting cleanly',
+          );
+
           return;
         }
 
-        return;
-      } catch (error) {
+        // Only log and send error if it's not an abort
         Logger.error('Failed to stream message', error);
-        params.res.write('Something went wrong');
+        Logger.error(
+          `Error stack trace: ${error instanceof Error ? error.stack : 'No stack trace'}`,
+        );
+        if (!params.res.writableEnded && !abortController.signal.aborted) {
+          sendSSEError(
+            params.res,
+            error instanceof Error ? error : 'Something went wrong',
+          );
+        }
       } finally {
+        // Clear heartbeat and end response
+        clearInterval(heartbeat);
+        // Remove listener
+        params.res.off('close', onClose);
+        // Cleanup abort controller from registry
+        this.abortControllers.delete(sessionId);
         if (!params.res.writableEnded) {
           params.res.end();
         }
@@ -395,6 +577,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       runnableConfig,
       params.tools ?? [],
       params.msgFromMatrixRoom,
+      userContext,
     );
     const lastMessage = result.messages.at(-1);
     if (!lastMessage) {
@@ -417,6 +600,15 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         });
     }
 
+    // Fire-and-forget post-message sync operations
+    this.performPostMessageSync(
+      params,
+      sessionId,
+      roomId,
+      targetSession,
+      result.messages,
+    );
+
     return {
       message: {
         type: lastMessage.getType(),
@@ -425,6 +617,73 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       },
       sessionId,
     };
+  }
+
+  /**
+   * Performs post-message sync operations in fire-and-forget mode
+   * This includes session sync and async title updates
+   */
+  private performPostMessageSync(
+    params: SendMessagePayload,
+    sessionId: string,
+    roomId: string,
+    targetSession: any,
+    messages: any[],
+  ): void {
+    // Run in background without blocking
+    Promise.resolve().then(async () => {
+      try {
+        const accessToken = this.config.getOrThrow<string>(
+          'MATRIX_ORACLE_ADMIN_ACCESS_TOKEN',
+        );
+
+        // Get current messages for sync
+        const { messages: currentMessages } = await this.listMessages({
+          did: params.did,
+          matrixAccessToken: accessToken,
+          sessionId,
+        });
+
+        // Sync session (fire-and-forget)
+        await this.sessionManagerService.syncSessionSet({
+          sessionId,
+          oracleName: this.config.getOrThrow('ORACLE_NAME'),
+          did: params.did,
+          messages: currentMessages.map((message) => message.content),
+          oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
+          oracleEntityDid: this.config.getOrThrow('ORACLE_ENTITY_DID'),
+          lastProcessedCount: targetSession?.lastProcessedCount ?? 0,
+          roomId,
+        });
+
+        // Invalidate cache after session update
+        await this.invalidateSessionCache(
+          sessionId,
+          params.did,
+          this.config.getOrThrow('ORACLE_ENTITY_DID'),
+        );
+
+        // Note: Title updates are now handled by syncSessionSet when messages.length > 2
+      } catch (error) {
+        Logger.error('Failed to perform post-message sync:', error);
+        // Don't throw - this is fire-and-forget
+      }
+    });
+  }
+
+  /**
+   * Abort an ongoing stream request by sessionId
+   */
+  public abortRequest(sessionId: string): boolean {
+    const controller = this.abortControllers.get(sessionId);
+    if (controller) {
+      controller.abort();
+      this.abortControllers.delete(sessionId);
+      Logger.debug(`Aborted request for session ${sessionId}`);
+      return true;
+    }
+    Logger.debug(`No active request found for session ${sessionId}`);
+    return false;
   }
 
   private async prepareForQuery(payload: SendMessagePayload): Promise<{
@@ -436,72 +695,36 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         sessionId: string;
       };
     };
+    userContext?: TCustomerSupportGraphState['userContext'];
+    targetSession?: ChatSession; // For post-message sync
   }> {
-    const accessToken = this.config.getOrThrow<string>(
-      'MATRIX_ORACLE_ADMIN_ACCESS_TOKEN',
-    );
     const did = payload.did;
-    const sessionId = payload.sessionId || crypto.randomUUID();
+    const sessionId = payload.sessionId;
     const requestId =
       payload.stream && 'requestId' in payload
         ? (payload.requestId as string)
         : crypto.randomUUID();
 
-    const { roomId } =
-      await this.sessionManagerService.matrixManger.getOracleRoomId({
-        userDid: did,
-        oracleDid: this.config.getOrThrow('ORACLE_DID'),
-      });
+    // Get cached session to check for cached roomId
+    const targetSession = await this.getCachedSession(
+      sessionId,
+      did,
+      this.config.getOrThrow('ORACLE_ENTITY_DID'),
+    );
+
+    // Use cached roomId if available, otherwise fetch it
+    let roomId = targetSession?.roomId;
     if (!roomId) {
-      throw new NotFoundException('Room not found or Invalid Session Id');
-    }
-    const { messages } = await this.listMessages({
-      did,
-      matrixAccessToken: accessToken,
-      sessionId,
-    });
-
-    const sessions = await this.sessionManagerService.listSessions({
-      did,
-      oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
-    });
-
-    const targetSession = sessions.sessions.find(
-      (session) => session.sessionId === sessionId,
-    );
-
-    let shouldTriggerMemoryAnalysis = false;
-
-    Logger.log(
-      `messages.length: ${messages.length}, targetSession?.lastProcessedCount: ${targetSession?.lastProcessedCount}`,
-    );
-    if (messages.length - (targetSession?.lastProcessedCount ?? 0) > 30) {
-      shouldTriggerMemoryAnalysis = true;
-      Logger.log('Triggering memory analysis workflow');
-      triggerMemoryAnalysisWorkflow({
-        userDid: did,
-        sessionId,
-        oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
-        roomId,
-      })
-        .then(() => {
-          Logger.log('Memory analysis workflow triggered');
-        })
-        .catch((error) => {
-          Logger.error('Failed to trigger memory analysis workflow:', error);
+      const roomResult =
+        await this.sessionManagerService.matrixManger.getOracleRoomId({
+          userDid: did,
+          oracleEntityDid: this.config.getOrThrow('ORACLE_ENTITY_DID'),
         });
+      roomId = roomResult.roomId;
+      if (!roomId) {
+        throw new NotFoundException('Room not found or Invalid Session Id');
+      }
     }
-
-    await this.sessionManagerService.syncSessionSet({
-      sessionId,
-      oracleName: this.config.getOrThrow('ORACLE_NAME'),
-      did,
-      messages: messages.map((message) => message.content),
-      oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
-      lastProcessedCount: shouldTriggerMemoryAnalysis
-        ? messages.length
-        : (targetSession?.lastProcessedCount ?? 0),
-    });
 
     const config: TCustomerSupportGraphState['config'] = {
       did: payload.did,
@@ -522,6 +745,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
           },
           user: {
             did,
+            matrixOpenIdToken: payload.userMatrixOpenIdToken,
           },
         },
       },
@@ -532,6 +756,8 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       config,
       runnableConfig,
       sessionId,
+      userContext: targetSession?.userContext,
+      targetSession,
     };
   }
 }

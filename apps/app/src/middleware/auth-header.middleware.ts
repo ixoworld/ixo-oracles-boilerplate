@@ -1,17 +1,17 @@
 import { verifyMatrixOpenIdToken } from '@ixo/common';
+import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
   HttpException,
   HttpStatus,
+  Inject,
   Injectable,
   Logger,
   type NestMiddleware,
 } from '@nestjs/common';
+import { minutes } from '@nestjs/throttler';
 import { type NextFunction, type Request, type Response } from 'express';
-import {
-  getAuthHeaders,
-  getLoginResponse,
-  normalizeDid,
-} from '../utils/header.utils';
+import * as crypto from 'node:crypto';
+import { getAuthHeaders, normalizeDid } from '../utils/header.utils';
 
 // Extend Express Request interface to include our custom property
 declare global {
@@ -21,15 +21,19 @@ declare global {
     interface Request {
       authData: {
         did: string;
-        matrixAccessToken: string;
+        userOpenIdToken: string;
       };
     }
   }
 }
 
+const TEN_MINUTES = minutes(10);
+
 @Injectable()
 export class AuthHeaderMiddleware implements NestMiddleware {
   private readonly logger = new Logger(AuthHeaderMiddleware.name);
+
+  constructor(@Inject(CACHE_MANAGER) private cacheManager: Cache) {}
 
   private async validateToken(matrixToken: string): Promise<{
     isValid: boolean;
@@ -37,21 +41,26 @@ export class AuthHeaderMiddleware implements NestMiddleware {
   }> {
     try {
       const isOpenIdToken = !matrixToken.startsWith('syt_');
-      if (isOpenIdToken) {
-        this.logger.debug(`Validating OpenID token`);
-        const { isValid, userId } = await verifyMatrixOpenIdToken(matrixToken);
-        if (!userId) {
-          return { isValid: false, userDid: '' };
-        }
-        return { isValid, userDid: normalizeDid(userId) };
+      if (!isOpenIdToken) {
+        throw new HttpException(
+          'Invalid token Please use a user open id token',
+          HttpStatus.UNAUTHORIZED,
+        );
       }
-      const loginResponse = await getLoginResponse(matrixToken);
-      const did = normalizeDid(loginResponse.user_id);
-      return { isValid: true, userDid: did };
+      this.logger.debug(`Validating OpenID token`);
+      const { isValid, userId } = await verifyMatrixOpenIdToken(matrixToken);
+      if (!userId) {
+        return { isValid: false, userDid: '' };
+      }
+      return { isValid, userDid: normalizeDid(userId) };
     } catch (error) {
       this.logger.error(`Error validating token: ${error}`);
       return { isValid: false, userDid: '' };
     }
+  }
+
+  private hashToken(token: string): string {
+    return crypto.createHash('sha256').update(token, 'utf8').digest('hex');
   }
 
   async use(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -62,14 +71,31 @@ export class AuthHeaderMiddleware implements NestMiddleware {
       // Extract headers using the utility function
       const { matrixAccessToken } = await getAuthHeaders(req.headers);
 
+      const cachedUser = await this.cacheManager.get<{ did: string }>(
+        `user_${this.hashToken(matrixAccessToken)}`,
+      );
+
+      if (cachedUser?.did) {
+        req.authData = {
+          did: cachedUser.did,
+          userOpenIdToken: matrixAccessToken,
+        };
+        next();
+        return;
+      }
+
       const { isValid, userDid } = await this.validateToken(matrixAccessToken);
       if (!isValid) {
         throw new HttpException('Invalid token', HttpStatus.UNAUTHORIZED);
       }
 
       // Attach extracted data to the request object
-      req.authData = { did: userDid, matrixAccessToken };
-
+      req.authData = { did: userDid, userOpenIdToken: matrixAccessToken };
+      await this.cacheManager.set(
+        `user_${this.hashToken(matrixAccessToken)}`,
+        { did: userDid },
+        TEN_MINUTES,
+      );
       this.logger.debug(`Auth headers validated for DID: ${userDid}`);
       next(); // Proceed to the next middleware or route handler
     } catch (error) {

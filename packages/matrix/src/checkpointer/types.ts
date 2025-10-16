@@ -20,6 +20,7 @@ interface IRunnableConfigWithRequiredFields extends RunnableConfig {
       };
       user: {
         did: string;
+        matrixOpenIdToken?: string;
       };
     };
     thread_id?: string;

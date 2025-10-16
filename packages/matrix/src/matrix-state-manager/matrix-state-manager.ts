@@ -111,34 +111,8 @@ export class MatrixStateManager {
     }
   }
 
-  private async migrateToNewFormat<C>(
-    roomId: string,
-    stateKey: string,
-    data: C,
-  ): Promise<void> {
-    try {
-      Logger.info(
-        `Starting migration to new format for ${stateKey} in room ${roomId}`,
-      );
-
-      // Re-save using new compressed format
-      await this.setState({
-        roomId,
-        stateKey,
-        data,
-      });
-
-      Logger.info(
-        `Successfully migrated ${stateKey} in room ${roomId} to new zlib format`,
-      );
-    } catch (error) {
-      Logger.error(
-        `Failed to migrate ${stateKey} in room ${roomId} to new format`,
-        error,
-      );
-      // Don't throw here - migration failure shouldn't break the read operation
-    }
-  }
+  // Migration is now done lazily on individual getState() calls
+  // This avoids 413 "Payload Too Large" errors from bulk migrations
 
   async getState<C>(roomId: string, stateKey: string): Promise<C> {
     try {
@@ -288,9 +262,14 @@ export class MatrixStateManager {
     Logger.info(
       `Completed listing state events for room ${room.roomId}: ${totalProcessed} processed, ${migratedCount} legacy format detected`,
     );
-    Logger.info(`Started migrating ${migratedCount} events to new format`);
-    await this.migrateToNewFormat(room.roomId, 'ixo.room.state', data);
-    Logger.info(`Completed migrating ${migratedCount} events to new format`);
+
+    // Note: We don't bulk migrate here to avoid 413 errors (payload too large)
+    // Individual events are migrated on-demand when accessed via getState()
+    if (migratedCount > 0) {
+      Logger.info(
+        `Found ${migratedCount} events in legacy format - will migrate on next access`,
+      );
+    }
 
     return data;
   }

@@ -1,22 +1,10 @@
-import { isValidElement } from 'react';
+import { type UIComponents } from './resolve-ui-component.js';
 import {
-  resolveUIComponent,
-  type UIComponents,
-} from './resolve-ui-component.js';
+  type IComponentMetadata,
+  type IMessage,
+  type MessageContent,
+} from './v2/types.js';
 
-export interface IMessage {
-  id: string;
-  content: React.ReactNode | string;
-  type: 'ai' | 'human';
-  chunks?: number;
-  toolCalls?: {
-    name: string;
-    id: string;
-    args: unknown;
-    status?: 'isRunning' | 'done';
-    output?: string;
-  }[];
-}
 export type MessagesMap = Record<string, IMessage>;
 
 export default function transformToMessagesMap({
@@ -24,7 +12,7 @@ export default function transformToMessagesMap({
   uiComponents,
 }: {
   messages: IMessage[];
-  uiComponents?: Partial<UIComponents>;
+  uiComponents?: UIComponents;
 }): MessagesMap {
   const messagesMap: MessagesMap = {};
 
@@ -42,24 +30,38 @@ export default function transformToMessagesMap({
       messagesMap[message.id] = message;
       return;
     }
-    const content = [message.content];
+
+    // Store metadata instead of React elements - build array of content
+    const content: Array<string | IComponentMetadata> = [];
+
+    // Add original content if it's a string
+    if (typeof message.content === 'string') {
+      content.push(message.content);
+    }
+
+    // Add component metadata for each tool call
     message.toolCalls?.forEach((toolCall) => {
-      const component = resolveUIComponent(uiComponents, {
-        name: toolCall.name,
+      // Check if there's a custom UI component for this specific tool
+      // If not, fall back to generic "ToolCall" component
+      const hasCustomComponent = uiComponents && toolCall.name in uiComponents;
+
+      const componentMetadata: IComponentMetadata = {
+        name: hasCustomComponent ? toolCall.name : 'ToolCall',
         props: {
           id: toolCall.id,
           args: toolCall.args,
           status: toolCall.status,
           output: toolCall.output,
+          isToolCall: true,
+          toolName: toolCall.name, // Pass original tool name for generic component
         },
-      });
-      const isReactElement = isValidElement(component);
-
-      if (isReactElement) content.push(component);
+      };
+      content.push(componentMetadata);
     });
+
     messagesMap[message.id] = {
       ...message,
-      content: content.filter(Boolean),
+      content: content.filter(Boolean) as MessageContent,
     };
   });
   return messagesMap;

@@ -49,12 +49,15 @@ export const useLiveAgent = (
     queryFn: async () => {
       const roomId = await matrixClientRef.getOracleRoomId({
         userDid: wallet?.did ?? '',
-        oracleDid: `did:ixo:${authzConfig?.granteeAddress}`,
+        oracleEntityDid: oracleDid,
       });
       return roomId;
     },
     enabled: Boolean(
-      wallet?.did && authzConfig?.granteeAddress && wallet.matrix.accessToken,
+      wallet?.did &&
+        authzConfig?.granteeAddress &&
+        wallet.matrix.accessToken &&
+        oracleDid,
     ),
   });
 
@@ -92,13 +95,10 @@ export const useLiveAgent = (
         language,
       });
 
-
       await authedRequest(
         `${overrides?.baseUrl ?? config.apiUrl}/calls/${callId}/sync`,
         'POST',
-        {
-          openIdToken: openIdToken.access_token,
-        },
+        {},
       );
 
       await startCall({

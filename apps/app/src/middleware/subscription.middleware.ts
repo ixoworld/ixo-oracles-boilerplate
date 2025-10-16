@@ -2,14 +2,17 @@ import {
   getUserSubscription,
   type GetMySubscriptionsResponseDto,
 } from '@ixo/common';
+import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
   HttpException,
   HttpStatus,
+  Inject,
   Injectable,
   Logger,
   type NestMiddleware,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { minutes } from '@nestjs/throttler';
 import { type NextFunction, type Request, type Response } from 'express';
 import { ENV } from 'src/config';
 
@@ -23,11 +26,14 @@ declare global {
     }
   }
 }
-
+const TEN_MINUTES = minutes(10);
 @Injectable()
 export class SubscriptionMiddleware implements NestMiddleware {
   private readonly logger = new Logger(SubscriptionMiddleware.name);
-  constructor(private readonly configService: ConfigService<ENV>) {}
+  constructor(
+    private readonly configService: ConfigService<ENV>,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
+  ) {}
 
   async use(req: Request, res: Response, next: NextFunction): Promise<void> {
     this.logger.debug(
@@ -42,7 +48,20 @@ export class SubscriptionMiddleware implements NestMiddleware {
         return next();
       }
 
-      const { did, matrixAccessToken } = req.authData;
+      const { did, userOpenIdToken: matrixAccessToken } = req.authData;
+
+      const cachedSubscription =
+        await this.cacheManager.get<GetMySubscriptionsResponseDto>(
+          `subscription_${did}`,
+        );
+
+      if (cachedSubscription) {
+        this.logger.debug(`Subscription found in cache for user: ${did}`);
+        this.logger.debug(`Subscription`, cachedSubscription);
+        req.subscriptionData = cachedSubscription;
+        next();
+        return;
+      }
 
       // Default to devnet, but this could be made configurable
       const network: 'mainnet' | 'testnet' | 'devnet' =
@@ -50,13 +69,12 @@ export class SubscriptionMiddleware implements NestMiddleware {
 
       // Get user subscription
       const subscription = await getUserSubscription({
-        userId: did,
-        matrixAccessToken,
+        bearerToken: matrixAccessToken,
         network,
       });
 
       if (!subscription) {
-        this.logger.warn(`No subscription found for user: ${did}`);
+        this.logger.debug(`No subscription found for user: ${did}`);
         req.subscriptionData = undefined;
 
         // throw error
@@ -73,24 +91,35 @@ export class SubscriptionMiddleware implements NestMiddleware {
         `Subscription validated for user: ${did}, status: ${subscription.status}`,
       );
 
-      // syt_ZGlkLWl4by1peG8xNWE3cDlkNG44d2poNndjc3FrNTNnNHlrN3UzenRxcHV5bXpueG4_xkMSYMVvxxsKijVmoeqw_3o5ken
-
       // Check if subscription is active
       if (subscription.status !== 'active' && subscription.status !== 'trial') {
-        this.logger.warn(
-          `User ${did} has inactive subscription: ${subscription.status}`,
+        throw new HttpException(
+          'User has inactive subscription, please subscribe to continue',
+          HttpStatus.PAYMENT_REQUIRED,
         );
-        // You can choose to block the request here or just log the warning
-        // For now, we'll just log and continue
       }
-
+      await this.cacheManager.set(
+        `subscription_${did}`,
+        subscription,
+        TEN_MINUTES,
+      );
       next();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Subscription check failed: ${message}`);
 
+      // If it's already an HttpException (from lines 80 or 96), throw it to stop the request
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      // For any other error, log it and throw a generic payment required error
+      this.logger.error(`Subscription check failed: ${message}`);
       req.subscriptionData = undefined;
-      next(error);
+
+      throw new HttpException(
+        'Subscription validation failed',
+        HttpStatus.PAYMENT_REQUIRED,
+      );
     }
   }
 }

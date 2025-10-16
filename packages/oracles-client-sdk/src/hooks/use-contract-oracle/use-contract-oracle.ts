@@ -43,17 +43,15 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
   });
 
   const { data: oracleRoomId, isLoading: isLoadingOracleRoomId } = useQuery({
-    queryKey: ['oracle-room-id', params.oracleDid, authzConfig?.granteeAddress],
+    queryKey: ['oracle-room-id', params.oracleDid],
     queryFn: async () => {
       const roomId = await matrixClientRef.getOracleRoomId({
         userDid: wallet?.did ?? '',
-        oracleDid: `did:ixo:${authzConfig?.granteeAddress}`,
+        oracleEntityDid: params.oracleDid,
       });
       return roomId;
     },
-    enabled: Boolean(
-      wallet?.did && params.oracleDid && authzConfig?.granteeAddress,
-    ),
+    enabled: Boolean(wallet?.did && params.oracleDid),
   });
 
   // Get pricing list
@@ -92,11 +90,19 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
         });
 
         await matrixClientRef.joinSpaceOrRoom({
-          roomId: mainSpaceId,
+          roomId: mainSpaceId.mainSpaceId,
         });
 
+        await Promise.all(
+          mainSpaceId.subSpaces.map(async (subSpaceId) => {
+            await matrixClientRef.joinSpaceOrRoom({
+              roomId: subSpaceId,
+            });
+          }),
+        );
+
         await matrixClientRef.createAndJoinOracleRoom({
-          oracleDID: `did:ixo:${config.granteeAddress}`,
+          oracleEntityDid: params.oracleDid,
           userDID: wallet.did,
         });
         void refetchOracleInRoom();

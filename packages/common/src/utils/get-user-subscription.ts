@@ -2,9 +2,9 @@ export const getSubscriptionUrlByNetwork = (
   network: 'mainnet' | 'testnet' | 'devnet',
 ) => {
   return {
-    mainnet: 'https://subscriptions.oracle.devnet.ixo.earth',
-    testnet: 'https://subscriptions.oracle.devnet.ixo.earth',
-    devnet: 'https://subscriptions.oracle.devnet.ixo.earth',
+    mainnet: 'https://subscriptions-api-testnet.ixo-api.workers.dev',
+    testnet: 'https://subscriptions-api-testnet.ixo-api.workers.dev',
+    devnet: 'https://subscriptions-api.ixo-api.workers.dev',
   }[network];
 };
 
@@ -22,31 +22,27 @@ export interface GetMySubscriptionsResponseDto {
   planCredits: number;
   status: 'active' | 'inactive' | 'processing' | 'trial';
   adminAddress: string;
+  manageSubscriptionUrl: string;
 }
 
 export interface GetUserSubscriptionParams {
-  userId: string;
   network: 'mainnet' | 'testnet' | 'devnet';
-  matrixAccessToken: string;
+  bearerToken: string;
 }
 
 export const getUserSubscription = async ({
-  userId,
-  matrixAccessToken,
+  bearerToken,
   network,
 }: GetUserSubscriptionParams) => {
   const subscriptionUrl = getSubscriptionUrlByNetwork(network);
   try {
-    const response = await fetch(
-      `${subscriptionUrl}/api/v1/subscriptions?userId=${encodeURIComponent(userId)}`,
-      {
-        method: 'GET',
-        headers: {
-          'x-matrix-access-token': matrixAccessToken,
-          'Content-Type': 'application/json',
-        },
+    const response = await fetch(`${subscriptionUrl}/api/v1/subscriptions`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${bearerToken}`,
+        'Content-Type': 'application/json',
       },
-    );
+    });
 
     if (!response.ok) {
       console.error(

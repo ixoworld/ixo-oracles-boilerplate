@@ -13,7 +13,7 @@ type JoinSpaceOrRoomPayload = {
 };
 
 type CreateAndJoinOracleRoomPayload = {
-  oracleDID: string;
+  oracleEntityDid: string;
   userDID: string;
 };
 
@@ -60,3 +60,27 @@ export interface IOpenIDToken {
   matrix_server_name: string;
   expires_in: number;
 }
+
+export type SourceSpaceResponse = {
+  success: boolean;
+  space_id: string;
+  space_alias: string;
+  privacy: {
+    encrypted: boolean;
+    join_rule: string;
+    history_visibility: string;
+  };
+  rooms: unknown[];
+  subspaces: {
+    oracles: {
+      space_id: string;
+      space_alias: string;
+      privacy: {
+        encrypted: boolean;
+        join_rule: string;
+        history_visibility: string;
+      };
+      rooms: unknown[];
+    };
+  };
+};

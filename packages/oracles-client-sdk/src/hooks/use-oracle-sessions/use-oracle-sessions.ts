@@ -10,13 +10,7 @@ export const useOracleSessions = (
   },
 ) => {
   const queryClient = useQueryClient();
-  const { wallet, authedRequest } = useOraclesContext();
-
-  if (!wallet) {
-    throw new Error(
-      'Wallet not found please add a wallet to the OraclesProvider',
-    );
-  }
+  const { authedRequest } = useOraclesContext();
 
   const { config } = useOraclesConfig(oracleDid);
 
@@ -27,7 +21,11 @@ export const useOracleSessions = (
   }>({
     queryKey: ['oracle-sessions', oracleDid],
     queryFn: () =>
-      authedRequest<{ sessions: IChatSession[] }>(`${apiUrl}/sessions`, 'GET'),
+      authedRequest<{ sessions: IChatSession[] }>(
+        `${apiUrl}/sessions`,
+        'GET',
+        {},
+      ),
     enabled: Boolean(overrides?.baseUrl ?? config.apiUrl),
     retry: false,
   });
@@ -37,11 +35,10 @@ export const useOracleSessions = (
     isPending: isCreatingSession,
     isError: isCreateSessionError,
   } = useMutation({
-    mutationFn: () => authedRequest<IChatSession>(`${apiUrl}/sessions`, 'POST'),
+    mutationFn: () =>
+      authedRequest<IChatSession>(`${apiUrl}/sessions`, 'POST', {}),
     onSettled: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ['oracle-sessions', oracleDid],
-      });
+      refetch();
     },
   });
 
@@ -51,11 +48,9 @@ export const useOracleSessions = (
     isError: isDeleteSessionError,
   } = useMutation({
     mutationFn: (sessionId: string) =>
-      authedRequest<void>(`${apiUrl}/sessions/${sessionId}`, 'DELETE'),
+      authedRequest<void>(`${apiUrl}/sessions/${sessionId}`, 'DELETE', {}),
     onSettled: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ['oracle-sessions', oracleDid],
-      });
+      refetch();
     },
   });
 

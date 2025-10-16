@@ -36,6 +36,7 @@ export class MatrixManager {
 
   private homeserverName: string;
   private roomCache: Cache;
+  private oracleName: string;
 
   private constructor(
     public stateManager: MatrixStateManager = matrixStateManager,
@@ -44,6 +45,7 @@ export class MatrixManager {
     const url = new URL(process.env.MATRIX_BASE_URL ?? '');
     this.homeserverName = process.env.MATRIX_HOMESERVER_NAME ?? url.hostname;
     this.roomCache = new Cache();
+    this.oracleName = process.env.ORACLE_NAME ?? 'Oracle';
   }
 
   /**
@@ -240,10 +242,10 @@ export class MatrixManager {
 
   public async getOracleRoomId({
     userDid,
-    oracleDid,
+    oracleEntityDid,
   }: {
     userDid: string;
-    oracleDid: string;
+    oracleEntityDid: string;
   }): Promise<{
     roomId: string | undefined;
     roomAlias: string;
@@ -253,12 +255,16 @@ export class MatrixManager {
       throw new Error('Simple client not initialized');
     }
 
-    const oracleRoomAlias = `${getEntityRoomAliasFromDid(userDid)}_${getEntityRoomAliasFromDid(oracleDid)}`;
+    const oracleRoomAlias = `${getEntityRoomAliasFromDid(userDid)}_${getEntityRoomAliasFromDid(oracleEntityDid)}`;
     const oracleRoomFullAlias = `#${oracleRoomAlias}:${this.homeserverName}`;
 
     // Check cache first
     const cachedRoomId = this.roomCache.get(oracleRoomFullAlias);
     if (cachedRoomId) {
+      Logger.debug(
+        '🔍 Found cached room id for oracle room alias:',
+        oracleRoomFullAlias,
+      );
       return {
         roomId: cachedRoomId,
         roomAlias: oracleRoomAlias,
@@ -268,6 +274,10 @@ export class MatrixManager {
 
     try {
       const roomId = await this.mxClient.resolveRoomAlias(oracleRoomFullAlias);
+      Logger.debug(
+        '🔍 Resolved room id for oracle room alias:',
+        oracleRoomFullAlias,
+      );
       this.roomCache.set(oracleRoomFullAlias, roomId);
 
       return {
@@ -298,22 +308,65 @@ export class MatrixManager {
       }
 
       // Use the simplified sendMessage API from matrix-bot-sdk
-      const formattedMessage = formatMsg(
-        options.message,
-        Boolean(options.isOracleAdmin),
-      );
-
-      const eventId = await this.mxClient.sendMessage({
-        roomId: options.roomId,
-        message: formattedMessage,
-        threadId: options.threadId,
+      const { content, htmlContent } = formatMsg({
+        message: options.message,
+        isOracleAdmin: Boolean(options.isOracleAdmin),
+        oracleName: options.oracleName ?? this.oracleName,
+        disablePrefix: options.disablePrefix,
       });
 
-      return eventId;
+      return await this.mxClient.sendMessage({
+        roomId: options.roomId,
+        message: content,
+        type: 'html',
+        formattedBody: htmlContent,
+        threadId: options.threadId,
+      });
     } catch (error) {
       Logger.error('❌ Error sending message:', error);
       throw error;
     }
+  }
+
+  async editMessage(
+    options: IMessageOptions & { messageId: string },
+  ): Promise<string> {
+    if (!this.mxClient) {
+      throw new Error('Simple client not initialized');
+    }
+
+    // Use the simplified sendMessage API from matrix-bot-sdk
+    const { content, htmlContent } = formatMsg({
+      message: options.message,
+      isOracleAdmin: Boolean(options.isOracleAdmin),
+      oracleName: options.oracleName ?? this.oracleName,
+      disablePrefix: options.disablePrefix,
+    });
+
+    const ev = {
+      msgtype: 'm.text',
+      body: content,
+      format: 'org.matrix.custom.html',
+      formatted_body: htmlContent,
+      'm.new_content': {
+        msgtype: 'm.text',
+        body: content,
+        format: 'org.matrix.custom.html',
+        formatted_body: htmlContent,
+        'm.mentions': {},
+      },
+      'm.mentions': {},
+      'm.relates_to': {
+        rel_type: 'm.replace',
+        event_id: options.messageId,
+      },
+    };
+
+    return await this.mxClient.mxClient.sendEvent(
+      options.roomId,
+      'm.room.message',
+      ev,
+    );
   }
 
   /**

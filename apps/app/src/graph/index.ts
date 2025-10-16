@@ -2,16 +2,13 @@ import {
   MatrixCheckpointSaver,
   type IRunnableConfigWithRequiredFields,
 } from '@ixo/matrix';
-import { type StreamEvent } from '@langchain/core/dist/tracers/event_stream';
-import { HumanMessage } from '@langchain/core/messages';
-import { type IterableReadableStream } from '@langchain/core/utils/stream';
 import { END, START, StateGraph } from '@langchain/langgraph';
 import { Logger } from '@nestjs/common';
 import 'dotenv/config';
+import { HumanMessage } from 'langchain';
 import CallbackHandler from 'langfuse-langchain';
 import { type BrowserToolCallDto } from 'src/messages/dto/send-message.dto';
 import { chatNode } from './nodes/chat-node/chat-node';
-import { contextGatherNode } from './nodes/context-gather/context-gather';
 import { toolNode } from './nodes/tools-node';
 import toolsChatRouter from './router/tools.router';
 import {
@@ -34,13 +31,11 @@ if (!oracleName) {
 const workflow = new StateGraph(CustomerSupportGraphState)
 
   // Nodes
-  .addNode(GraphNodes.ContextGather, contextGatherNode)
   .addNode(GraphNodes.Chat, chatNode)
   .addNode(GraphNodes.Tools, toolNode)
 
   // Routes
-  .addEdge(START, GraphNodes.ContextGather)
-  .addEdge(GraphNodes.ContextGather, GraphNodes.Chat)
+  .addEdge(START, GraphNodes.Chat)
 
   .addConditionalEdges(GraphNodes.Chat, toolsChatRouter, {
     [GraphNodes.Tools]: GraphNodes.Tools,
@@ -64,11 +59,14 @@ export class CustomerSupportGraph {
     },
     browserTools?: BrowserToolCallDto[],
     msgFromMatrixRoom = false,
+    initialUserContext?: TCustomerSupportGraphState['userContext'],
   ): Promise<TCustomerSupportGraphState> {
     if (!runnableConfig.configurable.sessionId) {
       throw new Error('sessionId is required');
     }
-    Logger.log(`[sendMessage]: msgFromMatrixRoom: ${msgFromMatrixRoom}`);
+    Logger.log(
+      `[sendMessage]: msgFromMatrixRoom: ${msgFromMatrixRoom} input: ${input}`,
+    );
     return this.graph.invoke(
       {
         messages: [
@@ -82,6 +80,7 @@ export class CustomerSupportGraph {
           }),
         ],
         browserTools,
+        ...(initialUserContext ? { userContext: initialUserContext } : {}),
       } satisfies Partial<TCustomerSupportGraphState>,
 
       {
@@ -109,10 +108,23 @@ export class CustomerSupportGraph {
     },
     browserTools?: BrowserToolCallDto[],
     msgFromMatrixRoom = false,
-  ): Promise<IterableReadableStream<StreamEvent>> {
+    initialUserContext?: TCustomerSupportGraphState['userContext'],
+    abortController?: AbortController,
+  ) {
     if (!runnableConfig.configurable.sessionId) {
       throw new Error('sessionId is required');
     }
+
+    // Debug: Log abort signal state
+    if (abortController) {
+      Logger.debug(
+        `[streamMessage] AbortController passed, signal.aborted: ${abortController.signal.aborted}`,
+      );
+      abortController.signal.addEventListener('abort', () => {
+        Logger.debug('[streamMessage] Abort signal fired!');
+      });
+    }
+
     const stream = this.graph.streamEvents(
       {
         messages: [
@@ -126,6 +138,7 @@ export class CustomerSupportGraph {
           }),
         ],
         browserTools,
+        ...(initialUserContext ? { userContext: initialUserContext } : {}),
       } satisfies Partial<TCustomerSupportGraphState>,
 
       {
@@ -142,6 +155,8 @@ export class CustomerSupportGraph {
           langfuseSessionId: runnableConfig.configurable.sessionId,
           langfuseUserId: runnableConfig.configurable.configs?.user.did,
         },
+        // Signal must be last to ensure it's not overwritten by runnableConfig spread
+        signal: abortController?.signal,
       },
     );
 

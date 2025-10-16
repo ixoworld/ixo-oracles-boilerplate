@@ -12,17 +12,15 @@ export interface IWalletProps {
 
 export interface IOraclesContextProps {
   wallet: IWalletProps | null;
-  apiKey: string;
   transactSignX: TransactionFn;
   authedRequest: <T>(
     url: string,
     method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
-    options?: RequestInit & { openIdToken?: string },
+    options?: RequestInit,
   ) => Promise<T>;
 }
 
 export interface IOraclesProviderProps {
   initialWallet: IWalletProps;
   transactSignX: TransactionFn;
-  apiKey: string;
 }

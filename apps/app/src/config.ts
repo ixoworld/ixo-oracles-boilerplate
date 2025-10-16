@@ -69,7 +69,10 @@ export const EnvSchema = z.object({
   SECP_MNEMONIC: z.string(),
   LIVE_AGENT_AUTH_API_KEY: z.string(),
   MEMORY_MCP_URL: z.url(),
+  MEMORY_ENGINE_URL: z.url(),
   MEMORY_MCP_API: z.string(),
+  MEMORY_SERVICE_API_KEY: z.string(),
+  ORACLE_ENTITY_DID: z.string(),
 });
 
 export type ENV = z.infer<typeof EnvSchema> & {

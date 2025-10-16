@@ -34,8 +34,8 @@
     "@ixo/jest-config": "workspace:*",
     "@ixo/typescript-config": "workspace:*",
     "@jest/types": "^29.6.3",
-    "@langchain/core": "^0.3.72",
-    "@langchain/langgraph": "^0.4.9",
+    "@langchain/core": "1.0.0-alpha.6",
+    "@langchain/langgraph": "1.0.0-alpha.5",
     "@langchain/langgraph-checkpoint-validation": "^0.1.1",
     "@testcontainers/postgresql": "^10.16.0",
     "@types/jest": "^29.5.14",
@@ -49,6 +49,7 @@
     "@ixo/logger": "workspace:*",
     "@langchain/langgraph-checkpoint": "0.1.1",
     "dotenv": "^17.2.0",
+    "marked": "^16.4.0",
     "matrix-bot-sdk": "^0.7.1",
     "matrix-js-sdk": "^37.11.0",
     "superjson": "1.13.3"

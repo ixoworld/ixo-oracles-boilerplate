@@ -1,3 +1,4 @@
+import { CacheModule } from '@nestjs/cache-manager';
 import {
   Logger,
   type MiddlewareConsumer,
@@ -11,14 +12,13 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { CallsModule } from './calls/calls.module';
 import { EnvSchema } from './config';
 import { MessagesModule } from './messages/messages.module';
 import { AuthHeaderMiddleware } from './middleware/auth-header.middleware';
-// import { QueueModule } from './queue/queue.module';
-import { CallsModule } from './calls/calls.module';
+import { SubscriptionMiddleware } from './middleware/subscription.middleware';
 import { SessionsModule } from './sessions/sessions.module';
 import { SlackModule } from './slack/slack.module';
-import { SseModule } from './sse/sse.module';
 import { normalizeDid } from './utils/header.utils';
 import { WsModule } from './ws/ws.module';
 
@@ -42,6 +42,9 @@ import { WsModule } from './ws/ws.module';
         };
       },
     }),
+    CacheModule.register({
+      isGlobal: true,
+    }),
     ThrottlerModule.forRoot([
       {
         ttl: 60000, // Time-to-live in milliseconds (e.g., 60 seconds)
@@ -54,7 +57,6 @@ import { WsModule } from './ws/ws.module';
     MessagesModule,
     // QueueModule,
     // KnowledgeModule,
-    SseModule,
     ScheduleModule.forRoot(),
     SlackModule,
     CallsModule,
@@ -71,7 +73,7 @@ import { WsModule } from './ws/ws.module';
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
-      .apply(AuthHeaderMiddleware)
+      .apply(AuthHeaderMiddleware, SubscriptionMiddleware)
       .exclude(
         { path: '/', method: RequestMethod.ALL },
         { path: '/health', method: RequestMethod.ALL },

@@ -31,12 +31,15 @@ export const useMemoryEngine = (oracleDid: string) => {
     queryFn: async () => {
       const roomId = await matrixClientRef.getOracleRoomId({
         userDid: wallet?.did ?? '',
-        oracleDid: `did:ixo:${authzConfig?.granteeAddress}`,
+        oracleEntityDid: oracleDid,
       });
       return roomId;
     },
     enabled: Boolean(
-      wallet?.did && authzConfig?.granteeAddress && wallet.matrix.accessToken,
+      wallet?.did &&
+        authzConfig?.granteeAddress &&
+        wallet.matrix.accessToken &&
+        oracleDid,
     ),
   });
 
@@ -63,7 +66,7 @@ export const useMemoryEngine = (oracleDid: string) => {
         oracleRoomId ??
         (await matrixClientRef.getOracleRoomId({
           userDid: wallet?.did ?? '',
-          oracleDid: `did:ixo:${authzConfig?.granteeAddress}`,
+          oracleEntityDid: oracleDid,
         }));
       if (!roomId) {
         throw new Error('Oracle room id not found');
@@ -71,7 +74,7 @@ export const useMemoryEngine = (oracleDid: string) => {
       await matrixClientRef.inviteUser(roomId, userId);
       await refetchMembers();
     },
-    [oracleRoomId, authzConfig?.granteeAddress, wallet?.did],
+    [oracleRoomId, authzConfig?.granteeAddress, wallet?.did, oracleDid],
   );
 
   const { mutateAsync: inviteUser, isPending: isInvitingUser } = useMutation({
@@ -84,7 +87,7 @@ export const useMemoryEngine = (oracleDid: string) => {
         oracleRoomId ??
         (await matrixClientRef.getOracleRoomId({
           userDid: wallet?.did ?? '',
-          oracleDid: `did:ixo:${authzConfig?.granteeAddress}`,
+          oracleEntityDid: oracleDid,
         }));
       if (!roomId) {
         throw new Error('Oracle room id not found');
@@ -93,7 +96,7 @@ export const useMemoryEngine = (oracleDid: string) => {
       await matrixClientRef.setPowerLevel(roomId, memoryEngineUserId, 50);
       await refetchMembers();
     },
-    [oracleRoomId, authzConfig?.granteeAddress, wallet?.did],
+    [oracleRoomId, authzConfig?.granteeAddress, wallet?.did, oracleDid],
   );
 
   const { mutateAsync: enableMemoryEngine, isPending: isLoadingMemoryEngine } =

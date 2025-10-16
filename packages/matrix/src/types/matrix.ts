@@ -9,7 +9,9 @@ export interface IMessageOptions {
   roomId: string;
   message: string;
   isOracleAdmin?: boolean;
+  oracleName?: string;
   threadId?: string;
+  disablePrefix?: boolean;
 }
 
 export interface ICreateRoomAndJoinOptions {

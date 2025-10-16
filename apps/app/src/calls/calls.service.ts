@@ -153,7 +153,7 @@ export class CallsService {
 
       const { roomId } = await this.matrixManager.getOracleRoomId({
         userDid: dto.userDid,
-        oracleDid: this.configService.getOrThrow('ORACLE_DID'),
+        oracleEntityDid: this.configService.getOrThrow('ORACLE_ENTITY_DID'),
       });
 
       if (!roomId) {

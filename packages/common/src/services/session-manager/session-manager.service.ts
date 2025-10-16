@@ -1,5 +1,8 @@
+import { Logger } from '@ixo/logger';
 import { MatrixManager } from '@ixo/matrix';
 import { getChatOpenAiModel } from '../../ai/index.js';
+import { MemoryEngineService } from '../memory-engine/memory-engine.service.js';
+import { type UserContextData } from '../memory-engine/types.js';
 import {
   type ChatSession,
   type CreateChatSessionDto,
@@ -11,10 +14,17 @@ import {
 import { NoUserRoomsFoundError } from './errors.js';
 
 export class SessionManagerService {
-  constructor(public readonly matrixManger = MatrixManager.getInstance()) {}
+  constructor(
+    public readonly matrixManger = MatrixManager.getInstance(),
+    private readonly memoryEngineService?: MemoryEngineService,
+  ) {}
 
-  public getSessionsStateKey(oracleDid: string): `${string}_${string}` {
-    return `${oracleDid}_sessions`;
+  public getSessionsStateKey({
+    oracleEntityDid,
+  }: {
+    oracleEntityDid: string;
+  }): `${string}_${string}` {
+    return `${oracleEntityDid}_sessions`;
   }
 
   private async createMessageTitle({
@@ -26,7 +36,7 @@ export class SessionManagerService {
       return 'Untitled';
     }
     const llm = getChatOpenAiModel({
-      model: 'qwen/qwen-2.5-7b-instruct',
+      model: 'meta-llama/llama-3.1-8b-instruct',
       temperature: 0.3,
       apiKey: process.env.OPEN_ROUTER_API_KEY,
       timeout: 20 * 1000 * 60, // 20 minutes
@@ -35,11 +45,51 @@ export class SessionManagerService {
       },
     });
     const response = await llm.invoke(
-      `Based on this messages messages, Add a title for this convo and only based on the messages? MAKE SURE TO ONLY RESPOND WITH THE TITLE. <messages>\n\n${messages.join('\n\n')}</messages>
+      `Based on this messages messages, Add a title for this convo and only based on the messages? MAKE SURE TO ONLY RESPOND WITH THE TITLE. 
       
       ## RESPONSE FORMAT
       ONLY RESPOND WITH THE TITLE not anything else that title will be saved to the store directly from your response so generated based on the messages.
-      
+
+      EXample
+
+      Input:
+      <messages>
+      Hello, how are you?
+      I'm good, thank you!
+      did u see the new feature i added?
+      yes but i didn't like it
+      </messages>
+
+      Output:
+      Conversation about a new feature
+
+      ___________________________________________________________
+
+      Input:
+      <messages>
+      What are the store opening hours?
+      We are open from 9am to 5pm, Monday to Friday.
+      </messages>
+
+      Output:
+      Store Opening Hours Information
+___________________________________________________________
+      Input:
+      <messages>
+      Can you help me reset my password?
+      Sure, I can assist you with that.
+      </messages>
+
+      Output:
+      Password Reset Assistance
+
+      ___________________________________________________________
+      # the out put should be only the title not anything else that title will be saved to the store directly from your response so generated based on the messages.
+
+      USER MESSAGES:
+      <messages>
+      ${messages.join('\n\n')}
+      </messages>
       `,
     );
 
@@ -51,25 +101,29 @@ export class SessionManagerService {
     sessionId,
     did,
     messages,
-    oracleDid,
+    oracleEntityDid,
     oracleName,
     roomId: _roomId,
     lastProcessedCount,
+    oracleDid,
+    userContext,
   }: {
     sessionId: string;
     did: string;
     messages: string[];
-    oracleDid: string;
+    oracleEntityDid: string;
     oracleName: string;
     roomId?: string;
     lastProcessedCount?: number;
+    oracleDid: string;
+    userContext?: UserContextData;
   }): Promise<ChatSession> {
     const matrixManager = MatrixManager.getInstance();
     await matrixManager.init();
 
     const { sessions } = await this.listSessions({
       did,
-      oracleDid,
+      oracleEntityDid,
     });
 
     const selectedSession = sessions.find((s) => s.sessionId === sessionId);
@@ -82,7 +136,9 @@ export class SessionManagerService {
         }),
         lastUpdatedAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
+        oracleEntityDid,
         oracleDid,
+        userContext,
       };
 
       if (!this.matrixManger.stateManager) {
@@ -91,14 +147,14 @@ export class SessionManagerService {
 
       const { roomId } = await this.matrixManger.getOracleRoomId({
         userDid: did,
-        oracleDid,
+        oracleEntityDid,
       });
       if (!roomId) {
         throw new Error('Room ID not found');
       }
       await this.matrixManger.stateManager.setState<ChatSession[]>({
         roomId,
-        stateKey: this.getSessionsStateKey(oracleDid),
+        stateKey: this.getSessionsStateKey({ oracleEntityDid }),
         data: [session, ...sessions],
       });
 
@@ -120,15 +176,18 @@ export class SessionManagerService {
       ? { roomId: _roomId }
       : await this.matrixManger.getOracleRoomId({
           userDid: did,
-          oracleDid,
+          oracleEntityDid,
         });
     if (!roomId) {
       throw new Error('Room ID not found');
     }
     const lastUpdatedAt = new Date().toISOString();
-    await this.matrixManger.stateManager.setState<ChatSession[]>({
+
+    const setStatePromise = this.matrixManger.stateManager.setState<
+      ChatSession[]
+    >({
       roomId,
-      stateKey: this.getSessionsStateKey(oracleDid),
+      stateKey: this.getSessionsStateKey({ oracleEntityDid }),
       data: sessions.map((session) =>
         session.sessionId === sessionId
           ? {
@@ -140,6 +199,16 @@ export class SessionManagerService {
           : session,
       ),
     });
+
+    const editMessagePromise = this.matrixManger.editMessage({
+      message: selectedSession.title ?? `New Conversation Started`,
+      roomId,
+      messageId: selectedSession.sessionId,
+      isOracleAdmin: true,
+      disablePrefix: true,
+    });
+
+    await Promise.all([setStatePromise, editMessagePromise]);
 
     return {
       ...selectedSession,
@@ -155,7 +224,7 @@ export class SessionManagerService {
     await this.matrixManger.init();
     const { roomId } = await this.matrixManger.getOracleRoomId({
       userDid: listSessionsDto.did,
-      oracleDid: listSessionsDto.oracleDid,
+      oracleEntityDid: listSessionsDto.oracleEntityDid,
     });
     if (!roomId) {
       throw new Error('Room ID not found');
@@ -167,7 +236,12 @@ export class SessionManagerService {
       }
       const sessionsState = await this.matrixManger.stateManager.getState<
         ChatSession[]
-      >(roomId, `${listSessionsDto.oracleDid}_sessions`);
+      >(
+        roomId,
+        this.getSessionsStateKey({
+          oracleEntityDid: listSessionsDto.oracleEntityDid,
+        }),
+      );
       return { sessions: sessionsState };
     } catch (error) {
       if (
@@ -187,26 +261,43 @@ export class SessionManagerService {
     // const sessionId = crypto.randomUUID();
     const { roomId } = await this.matrixManger.getOracleRoomId({
       userDid: createSessionDto.did,
-      oracleDid: createSessionDto.oracleDid,
+      oracleEntityDid: createSessionDto.oracleEntityDid,
     });
     if (!roomId) {
       throw new Error('Room ID not found');
     }
     const eventId = (await this.matrixManger.sendMessage({
-      message: '',
+      message: 'New Conversation Started',
       roomId,
       isOracleAdmin: true,
     })) ?? {
       eventId: crypto.randomUUID(),
     };
 
+    // Gather user context from Memory Engine
+    let userContext: UserContextData | undefined;
+    if (this.memoryEngineService && createSessionDto.openIdToken) {
+      try {
+        userContext = await this.memoryEngineService.gatherUserContext({
+          oracleDid: createSessionDto.oracleDid,
+          userDid: createSessionDto.did,
+          roomId,
+        });
+      } catch (error) {
+        Logger.error('Failed to gather user context:', error);
+        // Continue without user context
+      }
+    }
+
     const session = await this.syncSessionSet({
       sessionId: eventId,
       oracleName: createSessionDto.oracleName,
       did: createSessionDto.did,
+      oracleEntityDid: createSessionDto.oracleEntityDid,
       oracleDid: createSessionDto.oracleDid,
       messages: [],
       roomId,
+      userContext,
     });
 
     return session;
@@ -217,12 +308,12 @@ export class SessionManagerService {
   ): Promise<void> {
     const oldSessions = await this.listSessions({
       did: deleteSessionDto.did,
-      oracleDid: deleteSessionDto.oracleDid,
+      oracleEntityDid: deleteSessionDto.oracleEntityDid,
     });
 
     const { roomId } = await this.matrixManger.getOracleRoomId({
       userDid: deleteSessionDto.did,
-      oracleDid: deleteSessionDto.oracleDid,
+      oracleEntityDid: deleteSessionDto.oracleEntityDid,
     });
 
     if (!roomId) {
@@ -238,7 +329,9 @@ export class SessionManagerService {
     }
     await this.matrixManger.stateManager.setState<ChatSession[]>({
       roomId,
-      stateKey: this.getSessionsStateKey(deleteSessionDto.oracleDid),
+      stateKey: this.getSessionsStateKey({
+        oracleEntityDid: deleteSessionDto.oracleEntityDid,
+      }),
       data: newSessions,
     });
   }

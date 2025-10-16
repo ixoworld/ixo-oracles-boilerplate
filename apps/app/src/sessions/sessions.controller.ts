@@ -33,8 +33,11 @@ export class SessionsController {
   async createSession(
     @Req() req: Request,
   ): Promise<CreateChatSessionResponseDto> {
-    const { matrixAccessToken, did } = req.authData;
-    return this.sessionsService.createSession({ matrixAccessToken, did });
+    const { userOpenIdToken, did } = req.authData;
+    return this.sessionsService.createSession({
+      userOpenIdToken,
+      did,
+    });
   }
 
   @Get()
@@ -48,7 +51,7 @@ export class SessionsController {
   async listSessions(
     @Req() req: Request,
   ): Promise<ListChatSessionsResponseDto> {
-    const { matrixAccessToken, did } = req.authData;
+    const { userOpenIdToken: matrixAccessToken, did } = req.authData;
     return this.sessionsService.listSessions({ matrixAccessToken, did });
   }
 
@@ -74,7 +77,7 @@ export class SessionsController {
     @Req() req: Request,
     @Param('sessionId') sessionId: string,
   ): Promise<{ message: string }> {
-    const { matrixAccessToken, did } = req.authData;
+    const { userOpenIdToken: matrixAccessToken, did } = req.authData;
     return this.sessionsService.deleteSession({
       matrixAccessToken,
       did,

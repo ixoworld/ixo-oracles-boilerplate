@@ -8,19 +8,18 @@ import {
   useSyncExternalStore,
 } from 'react';
 import { useOraclesContext } from '../../../providers/oracles-provider/oracles-context.js';
+import { RequestError } from '../../../utils/request.js';
 import {
-  type Event,
-  useLiveEvents,
-} from '../../use-live-events/use-live-events.hook.js';
+  type SSEErrorEvent,
+  type SSEToolCallPayload,
+} from '../../../utils/sse-parser.js';
 import { useOracleSessions } from '../../use-oracle-sessions/use-oracle-sessions.js';
 import { useOraclesConfig } from '../../use-oracles-config.js';
 import { useWebSocketEvents } from '../../use-websocket-events/use-websocket-events.js';
 import { resolveContent } from '../resolve-content.js';
-import transformToMessagesMap, {
-  type IMessage,
-} from '../transform-to-messages-map.js';
+import transformToMessagesMap from '../transform-to-messages-map.js';
 import { OracleChat } from './oracle-chat.js';
-import { type IChatOptions } from './types.js';
+import { type AnyEvent, type IChatOptions, type IMessage } from './types.js';
 import { useSendMessage } from './use-send-message.js';
 
 export function useChat({
@@ -54,7 +53,7 @@ export function useChat({
   // Subscribe to messages with useSyncExternalStore
   const messages = useSyncExternalStore(
     chatRef.current.subscribe,
-    () => chatRef.current?.messages,
+    () => chatRef.current?.messages ?? [],
     () => [], // Server snapshot (SSR)
   );
 
@@ -92,7 +91,7 @@ export function useChat({
     queryFn: async () => {
       const result = await authedRequest<{
         messages: IMessage[];
-      }>(`${apiUrl}/messages/${sessionId}`, 'GET');
+      }>(`${apiUrl}/messages/${sessionId}`, 'GET', {});
 
       const transformedMessages = transformToMessagesMap({
         messages: result.messages,
@@ -121,9 +120,54 @@ export function useChat({
     }
   }, [data, queryStatus]);
 
+  // Handle tool call events from streaming
+  const handleToolCall = useCallback(
+    async (toolCallData: SSEToolCallPayload) => {
+      if (!uiComponents) return;
+
+      const toolCallMessage: IMessage = {
+        id: `${toolCallData.requestId}-ToolCall-${toolCallData.eventId}`,
+        type: 'ai',
+        content: resolveContent({
+          eventName: 'tool_call',
+          payload: toolCallData,
+        }),
+        toolCalls: [
+          {
+            id: toolCallData.eventId ?? toolCallData.requestId,
+            name: toolCallData.toolName,
+            args: toolCallData.args,
+            status: toolCallData.status,
+            output: toolCallData.output,
+          },
+        ],
+      };
+
+      await chatRef.current?.upsertEventMessage(toolCallMessage);
+    },
+    [uiComponents],
+  );
+
+  // Handle error events from streaming
+  const handleError = useCallback(
+    async (errorData: SSEErrorEvent) => {
+      if (!uiComponents) return;
+
+      const errorMessage: IMessage = {
+        id: `${crypto.randomUUID()}-error`,
+        type: 'ai',
+        content: resolveContent({ eventName: 'error', payload: errorData }),
+      };
+
+      await chatRef.current?.addUserMessage(errorMessage);
+    },
+    [uiComponents],
+  );
+
   // Send message functionality
   const {
     sendMessage,
+    abortStream,
     isSending,
     error: sendMessageError,
   } = useSendMessage({
@@ -134,21 +178,26 @@ export function useChat({
     browserTools,
     chatRef: chatRef as MutableRefObject<OracleChat>,
     refetchQueries: revalidate,
+    onToolCall: handleToolCall, // NEW
+    onError: handleError, // NEW
   });
 
   // WebSocket events handling (keep your existing logic)
 
   const handleNewEvent = useCallback(
-    (event: Event) => {
+    (event: AnyEvent) => {
       if (!uiComponents) return;
       // Process immediately when event arrives
       if (event.payload.sessionId === sessionId) {
         const messagePayload: IMessage = {
           id: `${event.payload.requestId}-${event.eventName}-${event.payload.eventId}`,
           type: 'ai',
-          content: resolveContent(event, uiComponents),
+          content: resolveContent({
+            eventName: event.eventName,
+            payload: event.payload,
+          }),
           toolCalls:
-            'toolName' in event.payload
+            'toolName' in event.payload && 'status' in event.payload
               ? [
                   {
                     id: event.payload.requestId,
@@ -169,15 +218,7 @@ export function useChat({
     [sessionId, uiComponents],
   );
 
-  const { isConnected } = useLiveEvents({
-    oracleDid,
-    sessionId,
-    handleInvalidateCache: () => {
-      void revalidate();
-    },
-    handleNewEvent,
-    overrides,
-  });
+  // useLiveEvents removed - all events now come through streaming
 
   const { isConnected: isWebSocketConnected } = useWebSocketEvents({
     oracleDid,
@@ -186,7 +227,10 @@ export function useChat({
     handleInvalidateCache: () => {
       void revalidate();
     },
-    handleNewEvent,
+    handleNewEvent: (event) => {
+      // Type assertion for WebSocket events
+      handleNewEvent(event as AnyEvent);
+    },
     browserTools,
   });
 
@@ -200,14 +244,22 @@ export function useChat({
     };
   }, []);
 
+  useEffect(() => {
+    if (queryError instanceof RequestError && queryError.outstandingClaims) {
+      onPaymentRequiredError?.(queryError.outstandingClaims ?? []);
+    }
+  }, [queryError]);
+
   return {
     messages: messages ?? [],
     isLoading,
     error: error || queryError,
     isSending: isSending || status === 'streaming',
     sendMessage,
+    abortStream,
+    refetchMessages,
     sendMessageError,
-    isRealTimeConnected: isConnected && isWebSocketConnected,
+    isRealTimeConnected: isWebSocketConnected,
     status,
   };
 }

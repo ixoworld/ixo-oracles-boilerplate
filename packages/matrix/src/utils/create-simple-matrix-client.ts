@@ -25,6 +25,9 @@ export interface IMessageOptions {
   roomId: string;
   message: string;
   threadId?: string;
+
+  type?: 'text' | 'html';
+  formattedBody?: string;
 }
 
 /**
@@ -176,6 +179,12 @@ export class SimpleMatrixClient {
                 },
                 rel_type: 'm.thread',
               },
+            }
+          : {}),
+        ...(options.type === 'html'
+          ? {
+              format: 'org.matrix.custom.html',
+              formatted_body: options.formattedBody,
             }
           : {}),
       });
@@ -351,7 +360,6 @@ export class SimpleMatrixClient {
       await mxCrypto.bootstrapSecretStorage({
         createSecretStorageKey: async () => recoveryKey,
         setupNewSecretStorage: true,
-
       });
 
       // Step 2: Bootstrap cross-signing

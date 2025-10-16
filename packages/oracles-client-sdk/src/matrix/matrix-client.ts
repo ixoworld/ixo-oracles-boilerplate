@@ -1,6 +1,8 @@
 import { request } from '../utils/request.js';
+import { decryptAndRetrieve, encryptAndStore } from '../utils/token-cache.js';
 import {
   IOpenIDToken,
+  SourceSpaceResponse,
   type CreateAndJoinOracleRoomPayload,
   type JoinSpaceOrRoomPayload,
   type MatrixClientConstructorParams,
@@ -15,9 +17,11 @@ function getEntityRoomAliasFromDid(did: string) {
 class MatrixClient {
   constructor(public readonly params: MatrixClientConstructorParams) {
     this.params.appServiceBotUrl =
-      this.params.appServiceBotUrl ?? MatrixRoomBotServerUrl[chainNetwork ?? 'devnet'];
+      this.params.appServiceBotUrl ??
+      MatrixRoomBotServerUrl[chainNetwork ?? 'devnet'];
     this.params.homeserverUrl =
-      this.params.homeserverUrl ?? MatrixHomeServerUrl[chainNetwork ?? 'devnet'];
+      this.params.homeserverUrl ??
+      MatrixHomeServerUrl[chainNetwork ?? 'devnet'];
 
     if (!this.params.appServiceBotUrl || !this.params.homeserverUrl) {
       throw new Error('Matrix client params are not valid');
@@ -25,15 +29,31 @@ class MatrixClient {
   }
 
   // source space
-  public async sourceMainSpace(payload: SourceSpacePayload): Promise<string> {
+  public async sourceMainSpace(payload: SourceSpacePayload): Promise<{
+    mainSpaceId: string;
+    subSpaces: string[];
+  }> {
     const url = `${this.params.appServiceBotUrl}/spaces/source`;
-    const response = await request<{ space_id: string }>(url, 'POST', {
+    const response = await request<SourceSpaceResponse>(url, 'POST', {
       body: JSON.stringify({
         did: payload.userDID,
       }),
     });
 
-    return decodeURIComponent(response.space_id);
+    const subSpaces = Object.keys(response.subspaces).reduce<string[]>(
+      (acc, key) => {
+        const spaceId =
+          response.subspaces[key as keyof typeof response.subspaces]?.space_id;
+        if (spaceId) acc.push(spaceId);
+        return acc;
+      },
+      [],
+    );
+
+    return {
+      mainSpaceId: response.space_id,
+      subSpaces,
+    };
   }
 
   /**
@@ -73,7 +93,7 @@ class MatrixClient {
     const response = await request<{ roomId: string }>(url, 'POST', {
       body: JSON.stringify({
         did: payload.userDID,
-        oracleDid: payload.oracleDID,
+        oracleDid: payload.oracleEntityDid,
       }),
       headers: {
         Authorization: `Bearer ${this.params.userAccessToken}`,
@@ -144,16 +164,16 @@ class MatrixClient {
 
   public async getOracleRoomId({
     userDid,
-    oracleDid,
+    oracleEntityDid,
   }: {
     userDid: string;
-    oracleDid: string;
+    oracleEntityDid: string;
   }): Promise<string> {
     if (!this.params.homeserverUrl) {
       throw new Error('Homeserver URL not found');
     }
     const hostname = new URL(this.params.homeserverUrl).hostname;
-    const oracleRoomAlias = `${getEntityRoomAliasFromDid(userDid)}_${getEntityRoomAliasFromDid(oracleDid)}`;
+    const oracleRoomAlias = `${getEntityRoomAliasFromDid(userDid)}_${getEntityRoomAliasFromDid(oracleEntityDid)}`;
     const oracleRoomFullAlias = `#${oracleRoomAlias}:${hostname}`;
 
     const url = `${this.params.homeserverUrl}/_matrix/client/v3/directory/room/${encodeURIComponent(oracleRoomFullAlias)}`;
@@ -193,7 +213,8 @@ class MatrixClient {
 
   public async getOpenIdToken(
     userId: string,
-    forceNewToken: boolean = false,
+    did: string,
+    useCache: boolean = true,
   ): Promise<IOpenIDToken> {
     try {
       if (!this.params.userAccessToken) {
@@ -208,12 +229,23 @@ class MatrixClient {
         throw new Error('User ID not found');
       }
 
-      // If not forcing a new token, try to get from cookie first
-      if (!forceNewToken) {
-        const cachedToken = this.getCachedToken(userId);
-        if (cachedToken) {
-          console.debug('Using cached OpenID token for user:', userId);
-          return cachedToken;
+      if (!did) {
+        throw new Error('DID not found');
+      }
+
+      // Try to get cached token first (if caching is enabled)
+      if (useCache) {
+        try {
+          const cachedToken = await decryptAndRetrieve({
+            did,
+            matrixAccessToken: this.params.userAccessToken,
+          });
+          if (cachedToken) {
+            console.debug('Using cached OpenID token for user:', userId);
+            return cachedToken;
+          }
+        } catch (error) {
+          console.warn('Failed to retrieve cached token:', error);
         }
       }
 
@@ -234,9 +266,27 @@ class MatrixClient {
       if (response.ok) {
         const openIdToken = (await response.json()) as IOpenIDToken;
 
-        // Store token in cookie with browser-managed expiration
-        this.setCachedToken(userId, openIdToken);
-        console.debug('OpenID token generated and cached for user:', userId);
+        // Cache the new token (if caching is enabled)
+        if (useCache) {
+          try {
+            await encryptAndStore({
+              token: openIdToken,
+              matrixAccessToken: this.params.userAccessToken,
+              did,
+            });
+            console.debug(
+              'OpenID token generated and cached for user:',
+              userId,
+            );
+          } catch (error) {
+            console.warn('Failed to cache token:', error);
+          }
+        } else {
+          console.debug(
+            'OpenID token generated (caching disabled) for user:',
+            userId,
+          );
+        }
 
         return openIdToken;
       } else {
@@ -249,55 +299,6 @@ class MatrixClient {
       console.error('Failed to get OpenID token:', error);
       throw error;
     }
-  }
-
-  // Simple cookie helpers
-  private getCachedToken(userId: string): IOpenIDToken | null {
-    if (typeof document === 'undefined') return null;
-
-    const cookieName = `matrix_openid_${userId.replace(/[^a-zA-Z0-9]/g, '_')}`;
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${cookieName}=`);
-
-    if (parts.length === 2) {
-      const tokenData = parts.pop()?.split(';').shift();
-      if (tokenData) {
-        try {
-          return JSON.parse(atob(tokenData));
-        } catch (error) {
-          console.warn('Failed to parse cached token:', error);
-          this.clearCachedToken(userId);
-        }
-      }
-    }
-
-    return null;
-  }
-
-  private setCachedToken(userId: string, token: IOpenIDToken): void {
-    if (typeof document === 'undefined') return;
-
-    const cookieName = `matrix_openid_${userId.replace(/[^a-zA-Z0-9]/g, '_')}`;
-    const tokenData = btoa(JSON.stringify(token));
-
-    // Let browser handle expiration based on token.expires_in
-    const maxAge = token.expires_in;
-    document.cookie = `${cookieName}=${tokenData}; Max-Age=${maxAge}; Path=/; SameSite=Lax`;
-  }
-
-  private clearCachedToken(userId: string): void {
-    if (typeof document === 'undefined') return;
-
-    const cookieName = `matrix_openid_${userId.replace(/[^a-zA-Z0-9]/g, '_')}`;
-    document.cookie = `${cookieName}=; Max-Age=0; Path=/`;
-  }
-
-  /**
-   * Clear the cached OpenID token for a user
-   */
-  public clearCachedOpenIdToken(userId: string): void {
-    this.clearCachedToken(userId);
-    console.debug('Cleared cached OpenID token for user:', userId);
   }
 }
 

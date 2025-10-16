@@ -1,24 +1,26 @@
 import { parserBrowserTool } from '@ixo/common';
 import {
-  type IRunnableConfigWithRequiredFields,
   MatrixManager,
+  type IRunnableConfigWithRequiredFields,
 } from '@ixo/matrix';
-import { type ToolMessage } from '@langchain/core/messages';
-import { type RunnableConfig } from '@langchain/core/runnables';
+import { LangGraphRunnableConfig } from '@langchain/langgraph';
 import { Logger } from '@nestjs/common';
+import { ToolNode, type ToolMessage } from 'langchain';
 import { type TCustomerSupportGraphState } from 'src/graph/state';
 import { getMemoryEngineMcpTools, tools } from './tools';
-import { ToolNode } from '@langchain/langgraph/prebuilt';
 
 const mx = MatrixManager.getInstance();
 
 async function toolNode(
   state: TCustomerSupportGraphState,
-  config?: RunnableConfig,
+  config?: LangGraphRunnableConfig,
 ): Promise<Partial<TCustomerSupportGraphState>> {
   const {
     configurable: { configs, thread_id },
   } = config as IRunnableConfigWithRequiredFields;
+  if (!configs?.user?.did) {
+    throw new Error('User DID is required');
+  }
   const browserTools = state.browserTools?.map((tool) =>
     parserBrowserTool({
       description: tool.description,
@@ -28,14 +30,14 @@ async function toolNode(
   );
 
   const mcpTools = await getMemoryEngineMcpTools({
-    userDid: configs?.user.did ?? '',
+    userDid: configs?.user?.did,
     oracleDid: configs?.matrix.oracleDid ?? '',
     roomId: configs?.matrix.roomId ?? '',
   });
 
   const tn = new ToolNode([...tools, ...(browserTools ?? []), ...mcpTools]);
 
-  const toolMsg: ToolMessage = await tn.invoke(state.messages);
+  const toolMsg: ToolMessage = await tn.invoke(state.messages, config);
 
   const room = configs?.matrix.roomId ?? '';
   mx.sendActionLog(
