@@ -10,18 +10,33 @@ interface ToolCall {
   name: string;
   id: string;
   args: unknown;
-  output: string | null;
+  status?: 'isRunning' | 'done';
+  output?: string;
 }
 
 interface MessageDto {
   id: string;
-  type: string;
+  type: 'ai' | 'human';
   content: string;
   toolCalls?: ToolCall[];
+  reasoning?: string;
+  isComplete?: boolean;
+  isReasoning?: boolean;
 }
 
 export interface ListOracleMessagesResponse {
   messages: MessageDto[];
+}
+export interface CleanAdditionalKwargs {
+  msgFromMatrixRoom: boolean;
+  timestamp: string;
+  oracleName: string;
+  reasoning?: string;
+  reasoningDetails?: Array<{
+    type: string;
+    text: string;
+  }>;
+  [key: string]: unknown; // Allow additional properties for LangChain compatibility
 }
 
 export function transformGraphStateMessageToListMessageResponse(
@@ -29,19 +44,26 @@ export function transformGraphStateMessageToListMessageResponse(
 ): ListOracleMessagesResponse {
   return {
     messages: messages.reduce<MessageDto[]>((acc, message) => {
-      const toolMsg =
-        message.getType() === 'tool' ? (message as ToolMessage) : null;
-      if (message.getType() !== 'system' && message.getType() !== 'tool') {
+      const toolMsg = message.type === 'tool' ? (message as ToolMessage) : null;
+      if (message.type !== 'system' && message.type !== 'tool') {
+        // Extract reasoning from additional_kwargs
+        const additionalKwargs =
+          message.additional_kwargs as CleanAdditionalKwargs;
+        const reasoning = additionalKwargs?.reasoning;
+
         acc.push({
-          type: message.getType(),
+          type: message.type === 'ai' ? 'ai' : 'human',
           content: message.content.toString(),
           id: uuidFromString(message.id ?? message.content.toString()),
           toolCalls: (message as AIMessage).tool_calls?.map((toolCall) => ({
             name: toolCall.name,
             args: toolCall.args,
             id: toolCall.id ?? uuidFromString(JSON.stringify(toolCall.args)),
-            output: null,
+            output: undefined,
           })),
+          reasoning,
+          isComplete: true, // Messages from DB are always complete
+          isReasoning: false, // since this is not a reasoning message and the request is done
         });
       }
       if (toolMsg) {

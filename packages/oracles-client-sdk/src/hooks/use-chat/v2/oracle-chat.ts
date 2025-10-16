@@ -11,7 +11,7 @@ export class OracleChat {
   constructor(options: IChatOptions) {
     this.id = options.sessionId;
     this.#options = options;
-    this.#state = new OracleChatState();
+    this.#state = new OracleChatState([], options.streamingMode ?? 'immediate');
   }
 
   get status() {
@@ -132,7 +132,28 @@ export class OracleChat {
         (m) => m.id === message.id,
       );
       if (existingIndex >= 0) {
-        this.#state.replaceMessage(existingIndex, message);
+        const existingMessage = this.#state.messages[existingIndex];
+        if (!existingMessage) {
+          throw new Error('Message not found');
+        }
+
+        // Special handling for reasoning messages - accumulate content
+        if (message.type === 'ai' && existingMessage.type === 'ai') {
+          this.#state.replaceMessage(existingIndex, {
+            ...message,
+            content:
+              typeof existingMessage.content === 'string' &&
+              typeof message.content === 'string'
+                ? existingMessage.content + message.content
+                : message.content,
+            reasoning:
+              (existingMessage.reasoning || '') + (message.reasoning || ''), // Safe concatenation
+            isReasoning: message.isReasoning || existingMessage.isReasoning, // Keep reasoning flag if either has it
+          });
+        } else {
+          // Default behavior - replace entire message
+          this.#state.replaceMessage(existingIndex, message);
+        }
       } else {
         this.#state.pushMessage(message);
       }

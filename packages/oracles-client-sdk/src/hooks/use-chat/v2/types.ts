@@ -6,6 +6,7 @@ import {
 import { type IBrowserTools } from '../../../types/browser-tool.type.js';
 import {
   type SSEErrorEventData,
+  type SSEReasoningEventData,
   type SSEToolCallEventData,
 } from '../../../utils/sse-parser.js';
 import { type UIComponents } from '../resolve-ui-component.js';
@@ -44,6 +45,9 @@ export interface IMessage {
     status?: 'isRunning' | 'done';
     output?: string;
   }[];
+  reasoning?: string;
+  isComplete?: boolean;
+  isReasoning?: boolean;
 }
 
 export type ChatStatus = 'submitted' | 'streaming' | 'ready' | 'error';
@@ -70,6 +74,7 @@ export interface IChatOptions {
     baseUrl?: string;
     wsUrl?: string;
   };
+  streamingMode?: 'batched' | 'immediate';
 }
 
 export interface ISendMessageOptions {
@@ -86,6 +91,10 @@ export interface ISendMessageOptions {
   // NEW callbacks for streaming events
   onToolCall?: (toolCallData: SSEToolCallEventData) => Promise<void>;
   onError?: (error: SSEErrorEventData) => Promise<void>;
+  onReasoning?: (data: {
+    reasoningData: SSEReasoningEventData;
+    requestId: string;
+  }) => Promise<void>;
 }
 
 interface IUIComponentProps {

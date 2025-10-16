@@ -45,7 +45,33 @@ interface IChatOptions {
     baseUrl?: string; // Override API base URL
     wsUrl?: string; // Override WebSocket URL
   };
+  streamingMode?: 'batched' | 'immediate'; // Streaming update behavior
 }
+```
+
+#### Streaming Modes
+
+The `streamingMode` option controls how updates are batched during streaming:
+
+- **`'immediate'`** (default): Updates are applied immediately as they arrive from the backend, providing true real-time streaming at the cost of more React re-renders.
+- **`'batched'`**: Updates are batched using `requestAnimationFrame` for optimal performance. Multiple rapid updates are grouped into single React re-renders (~60fps).
+
+```tsx
+// Real-time streaming (default behavior)
+const { messages } = useChat({
+  oracleDid,
+  sessionId,
+  streamingMode: 'immediate', // or omit for default
+  onPaymentRequiredError: handlePayment,
+});
+
+// Batched streaming (optimized for performance)
+const { messages } = useChat({
+  oracleDid,
+  sessionId,
+  streamingMode: 'batched',
+  onPaymentRequiredError: handlePayment,
+});
 ```
 
 #### Return Value

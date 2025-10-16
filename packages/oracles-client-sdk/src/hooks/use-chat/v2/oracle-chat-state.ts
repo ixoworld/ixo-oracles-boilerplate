@@ -6,9 +6,14 @@ export class OracleChatState implements IChatState {
   #error: Error | undefined = undefined;
   #callbacks = new Set<() => void>();
   #rafId: number | null = null;
+  #streamingMode: 'batched' | 'immediate';
 
-  constructor(initialMessages: IMessage[] = []) {
+  constructor(
+    initialMessages: IMessage[] = [],
+    streamingMode: 'batched' | 'immediate' = 'immediate',
+  ) {
     this.#messages = initialMessages;
+    this.#streamingMode = streamingMode;
   }
 
   get status(): ChatStatus {
@@ -111,6 +116,13 @@ export class OracleChatState implements IChatState {
   };
 
   #callCallbacks = (): void => {
+    if (this.#streamingMode === 'immediate') {
+      // Immediate mode: call callbacks synchronously
+      this.#callbacks.forEach((callback) => callback());
+      return;
+    }
+
+    // Batched mode: existing RAF logic
     // Batch multiple rapid updates into single render frame
     // This is crucial for streaming performance
     if (this.#rafId !== null) {

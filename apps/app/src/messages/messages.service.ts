@@ -10,7 +10,7 @@ import {
   type MessageEvent,
   type MessageEventContent,
 } from '@ixo/matrix';
-import { ToolCallEvent } from '@ixo/oracles-events';
+import { ReasoningEvent, ToolCallEvent } from '@ixo/oracles-events';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
   BadRequestException,
@@ -27,6 +27,7 @@ import { Request, type Response } from 'express';
 import { AIMessageChunk, ToolMessage } from 'langchain';
 import * as crypto from 'node:crypto';
 import { CustomerSupportGraph } from 'src/graph';
+import { cleanAdditionalKwargs } from 'src/graph/nodes/chat-node/utils';
 import { type TCustomerSupportGraphState } from 'src/graph/state';
 import { type ENV } from 'src/types';
 import { normalizeDid } from 'src/utils/header.utils';
@@ -428,6 +429,50 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
                   const content = (data.chunk as AIMessageChunk).content;
                   const toolCall = (data.chunk as AIMessageChunk).tool_calls;
 
+                  // Extract reasoning tokens from raw response
+                  const rawResponse = (data.chunk as AIMessageChunk)
+                    .additional_kwargs?.__raw_response as any;
+                  if (
+                    rawResponse?.choices?.[0]?.delta?.reasoning &&
+                    isChatNode
+                  ) {
+                    const reasoning = rawResponse.choices[0].delta.reasoning;
+                    const reasoningDetails =
+                      rawResponse.choices[0].delta.reasoning_details;
+
+                    if (reasoning && reasoning.trim()) {
+                      // Use cleanAdditionalKwargs to extract and clean reasoning details
+                      const cleanedKwargs = cleanAdditionalKwargs(
+                        (data.chunk as AIMessageChunk).additional_kwargs,
+                        params.msgFromMatrixRoom ?? false,
+                      );
+
+                      const reasoningEvent = ReasoningEvent.createChunk(
+                        sessionId,
+                        runnableConfig.configurable.requestId ?? '',
+                        reasoning,
+                        cleanedKwargs.reasoningDetails,
+                        false, // Not complete yet
+                      );
+
+                      // Send reasoning chunk as SSE
+                      if (!params.res) {
+                        throw new Error('Response not found');
+                      }
+                      if (
+                        !params.res.writableEnded &&
+                        !abortController.signal.aborted
+                      ) {
+                        params.res.write(
+                          formatSSE(
+                            reasoningEvent.eventName,
+                            reasoningEvent.payload,
+                          ),
+                        );
+                      }
+                    }
+                  }
+
                   toolCall?.forEach((tool) => {
                     // update toolCallEvent with toolCall
                     if (!tool.name.trim() || !tool.id) {
@@ -518,6 +563,25 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
               if (!params.res) {
                 throw new Error('Response not found');
               }
+
+              // Send reasoning completion event
+              const reasoningCompleteEvent = ReasoningEvent.createChunk(
+                sessionId,
+                runnableConfig.configurable.requestId ?? '',
+                '', // Empty reasoning for completion
+                undefined,
+                true, // Mark as complete
+              );
+
+              if (!params.res.writableEnded) {
+                params.res.write(
+                  formatSSE(
+                    reasoningCompleteEvent.eventName,
+                    reasoningCompleteEvent.payload,
+                  ),
+                );
+              }
+
               sendSSEDone(params.res);
 
               // Fire-and-forget post-message sync operations for streaming
