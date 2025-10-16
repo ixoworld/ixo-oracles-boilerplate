@@ -6,7 +6,7 @@
   "author": "",
   "license": "UNLICENSED",
   "scripts": {
-    "dev": "turbo dev",
+    "dev": "turbo dev --filter=app",
     "build": "turbo build",
     "test": "turbo test",
     "test:e2e": "turbo test:e2e",

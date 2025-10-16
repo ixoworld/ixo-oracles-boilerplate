@@ -50,9 +50,12 @@ export async function chatNode(
       toolName: tool.name,
     }),
   );
+  if (!configurable?.configs?.user?.did) {
+    throw new Error('User DID is required');
+  }
 
   const mcpTools = await getMemoryEngineMcpTools({
-    userMatrixOpenIdToken: configurable?.configs?.user?.matrixOpenIdToken ?? '',
+    userDid: configurable?.configs?.user?.did,
     oracleDid: matrix?.oracleDid ?? '',
     roomId: matrix?.roomId ?? '',
   });

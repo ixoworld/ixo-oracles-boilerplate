@@ -117,6 +117,8 @@ interface CacheMetrics {
   hits: number;
   misses: number;
   indexRebuilds: number;
+  filteredEvents: number;
+  duplicateEvents: number;
 }
 
 // Promise deduplication map
@@ -159,6 +161,8 @@ export class MatrixCheckpointSaver<
     hits: 0,
     misses: 0,
     indexRebuilds: 0,
+    filteredEvents: 0,
+    duplicateEvents: 0,
   };
 
   // Config
@@ -170,12 +174,15 @@ export class MatrixCheckpointSaver<
     super(serde);
 
     // Read config from env
-    this.cacheTTL = parseInt(process.env.MATRIX_CP_CACHE_TTL_MS || '30000', 10);
-    this.cacheMax = parseInt(process.env.MATRIX_CP_CACHE_MAX || '5000', 10);
-    this.maxCheckpointSizeBytes = parseInt(
-      process.env.MATRIX_CP_MAX_SIZE_BYTES || '1048576',
+    this.cacheTTL = parseInt(
+      process.env.MATRIX_CP_CACHE_TTL_MS || '300000',
       10,
-    ); // 1MB default
+    );
+    this.cacheMax = parseInt(process.env.MATRIX_CP_CACHE_MAX || '50000', 10);
+    this.maxCheckpointSizeBytes = parseInt(
+      process.env.MATRIX_CP_MAX_SIZE_BYTES || '10485760',
+      10,
+    ); // 10MB default
 
     // Initialize caches
     this.indexCache = new LRUCache<ThreadIndex>(this.cacheMax, this.cacheTTL);
@@ -323,21 +330,38 @@ export class MatrixCheckpointSaver<
       const stateEvents =
         await this.stateManager.listStateEvents<StoredCheckpoint>(roomId);
 
-      const checkpointIds = stateEvents
-        .filter(
-          (event) =>
-            event &&
-            'thread_id' in event &&
-            event.thread_id === threadId &&
-            event.checkpoint_ns === checkpointNs &&
-            'checkpoint_id' in event,
-        )
-        .map((event) => event.checkpoint_id)
-        .filter(
-          (id, index, self) => id && self.indexOf(id) === index,
-        ) as string[];
+      // Optimized filtering with early termination and Set-based deduplication
+      const checkpointIds: string[] = [];
+      const seenIds = new Set<string>();
+      let filteredCount = 0;
+      let duplicateCount = 0;
 
-      // Sort descending
+      for (const event of stateEvents) {
+        // Early filtering - check conditions in order of likelihood
+        if (
+          event &&
+          'thread_id' in event &&
+          event.thread_id === threadId &&
+          'checkpoint_ns' in event &&
+          event.checkpoint_ns === checkpointNs &&
+          'checkpoint_id' in event &&
+          event.checkpoint_id
+        ) {
+          if (!seenIds.has(event.checkpoint_id)) {
+            checkpointIds.push(event.checkpoint_id);
+            seenIds.add(event.checkpoint_id);
+            filteredCount++;
+          } else {
+            duplicateCount++;
+          }
+        }
+      }
+
+      // Update metrics
+      this.metrics.filteredEvents += filteredCount;
+      this.metrics.duplicateEvents += duplicateCount;
+
+      // Sort descending (newest first)
       checkpointIds.sort((a, b) => (b > a ? 1 : b < a ? -1 : 0));
 
       const index: ThreadIndex = {
@@ -355,7 +379,15 @@ export class MatrixCheckpointSaver<
       this.indexCache.set(cacheKey, index);
 
       Logger.info(
-        `Built index for thread ${threadId}: ${checkpointIds.length} checkpoints`,
+        `Built index for thread ${threadId}: ${checkpointIds.length} checkpoints (${filteredCount} filtered, ${duplicateCount} duplicates)`,
+        {
+          threadId,
+          checkpointNs,
+          totalEvents: stateEvents.length,
+          filteredEvents: filteredCount,
+          duplicateEvents: duplicateCount,
+          finalCheckpoints: checkpointIds.length,
+        },
       );
 
       return index;
@@ -1300,5 +1332,25 @@ export class MatrixCheckpointSaver<
   // Get cache metrics (useful for debugging/monitoring)
   public getCacheMetrics(): CacheMetrics {
     return { ...this.metrics };
+  }
+
+  // Get filtering performance metrics
+  public getFilteringMetrics(): {
+    filteredEvents: number;
+    duplicateEvents: number;
+    indexRebuilds: number;
+    avgEventsPerRebuild: number;
+  } {
+    const avgEventsPerRebuild =
+      this.metrics.indexRebuilds > 0
+        ? this.metrics.filteredEvents / this.metrics.indexRebuilds
+        : 0;
+
+    return {
+      filteredEvents: this.metrics.filteredEvents,
+      duplicateEvents: this.metrics.duplicateEvents,
+      indexRebuilds: this.metrics.indexRebuilds,
+      avgEventsPerRebuild: Math.round(avgEventsPerRebuild),
+    };
   }
 }

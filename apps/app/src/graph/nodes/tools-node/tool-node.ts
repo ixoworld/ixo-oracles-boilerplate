@@ -18,6 +18,9 @@ async function toolNode(
   const {
     configurable: { configs, thread_id },
   } = config as IRunnableConfigWithRequiredFields;
+  if (!configs?.user?.did) {
+    throw new Error('User DID is required');
+  }
   const browserTools = state.browserTools?.map((tool) =>
     parserBrowserTool({
       description: tool.description,
@@ -27,7 +30,7 @@ async function toolNode(
   );
 
   const mcpTools = await getMemoryEngineMcpTools({
-    userMatrixOpenIdToken: configs?.user?.matrixOpenIdToken ?? '',
+    userDid: configs?.user?.did,
     oracleDid: configs?.matrix.oracleDid ?? '',
     roomId: configs?.matrix.roomId ?? '',
   });

@@ -237,10 +237,11 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
 
         // Send AI response to Matrix
         await this.sessionManagerService.matrixManger.sendMessage({
-          message: `${event.sender}: ${aiMessage.message.content}`,
+          message: aiMessage.message.content,
           roomId,
           threadId,
           isOracleAdmin: true,
+          disablePrefix: true,
         });
       } catch (error) {
         Logger.error('Failed to send message', error);
@@ -249,6 +250,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
           roomId,
           threadId,
           isOracleAdmin: true,
+          disablePrefix: true,
         });
       }
     }

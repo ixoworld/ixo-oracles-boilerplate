@@ -36,7 +36,7 @@ export class SessionManagerService {
       return 'Untitled';
     }
     const llm = getChatOpenAiModel({
-      model: 'qwen/qwen-2.5-7b-instruct',
+      model: 'meta-llama/llama-3.1-8b-instruct',
       temperature: 0.3,
       apiKey: process.env.OPEN_ROUTER_API_KEY,
       timeout: 20 * 1000 * 60, // 20 minutes
@@ -45,11 +45,51 @@ export class SessionManagerService {
       },
     });
     const response = await llm.invoke(
-      `Based on this messages messages, Add a title for this convo and only based on the messages? MAKE SURE TO ONLY RESPOND WITH THE TITLE. <messages>\n\n${messages.join('\n\n')}</messages>
+      `Based on this messages messages, Add a title for this convo and only based on the messages? MAKE SURE TO ONLY RESPOND WITH THE TITLE. 
       
       ## RESPONSE FORMAT
       ONLY RESPOND WITH THE TITLE not anything else that title will be saved to the store directly from your response so generated based on the messages.
-      
+
+      EXample
+
+      Input:
+      <messages>
+      Hello, how are you?
+      I'm good, thank you!
+      did u see the new feature i added?
+      yes but i didn't like it
+      </messages>
+
+      Output:
+      Conversation about a new feature
+
+      ___________________________________________________________
+
+      Input:
+      <messages>
+      What are the store opening hours?
+      We are open from 9am to 5pm, Monday to Friday.
+      </messages>
+
+      Output:
+      Store Opening Hours Information
+___________________________________________________________
+      Input:
+      <messages>
+      Can you help me reset my password?
+      Sure, I can assist you with that.
+      </messages>
+
+      Output:
+      Password Reset Assistance
+
+      ___________________________________________________________
+      # the out put should be only the title not anything else that title will be saved to the store directly from your response so generated based on the messages.
+
+      USER MESSAGES:
+      <messages>
+      ${messages.join('\n\n')}
+      </messages>
       `,
     );
 
@@ -142,7 +182,10 @@ export class SessionManagerService {
       throw new Error('Room ID not found');
     }
     const lastUpdatedAt = new Date().toISOString();
-    await this.matrixManger.stateManager.setState<ChatSession[]>({
+
+    const setStatePromise = this.matrixManger.stateManager.setState<
+      ChatSession[]
+    >({
       roomId,
       stateKey: this.getSessionsStateKey({ oracleEntityDid }),
       data: sessions.map((session) =>
@@ -156,6 +199,16 @@ export class SessionManagerService {
           : session,
       ),
     });
+
+    const editMessagePromise = this.matrixManger.editMessage({
+      message: selectedSession.title ?? `New Conversation Started`,
+      roomId,
+      messageId: selectedSession.sessionId,
+      isOracleAdmin: true,
+      disablePrefix: true,
+    });
+
+    await Promise.all([setStatePromise, editMessagePromise]);
 
     return {
       ...selectedSession,
@@ -214,7 +267,7 @@ export class SessionManagerService {
       throw new Error('Room ID not found');
     }
     const eventId = (await this.matrixManger.sendMessage({
-      message: '',
+      message: 'New Conversation Started',
       roomId,
       isOracleAdmin: true,
     })) ?? {
@@ -227,7 +280,7 @@ export class SessionManagerService {
       try {
         userContext = await this.memoryEngineService.gatherUserContext({
           oracleDid: createSessionDto.oracleDid,
-          openIdToken: createSessionDto.openIdToken,
+          userDid: createSessionDto.did,
           roomId,
         });
       } catch (error) {

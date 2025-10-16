@@ -6,17 +6,20 @@ import type {
 } from './types.js';
 
 export class MemoryEngineService {
-  constructor(private readonly memoryEngineUrl: string) {}
+  constructor(
+    private readonly memoryEngineUrl: string,
+    private readonly memoryServiceApiKey: string,
+  ) {}
 
   /**
    * Gather user context from Memory Engine by executing 6 parallel queries
    */
   async gatherUserContext(params: {
     oracleDid: string;
-    openIdToken: string;
+    userDid: string;
     roomId: string;
   }): Promise<UserContextData> {
-    const { oracleDid, openIdToken, roomId } = params;
+    const { oracleDid, userDid, roomId } = params;
 
     Logger.info(
       `[MemoryEngineService] Gathering user context for oracle: ${oracleDid}, room: ${roomId}`,
@@ -26,12 +29,12 @@ export class MemoryEngineService {
       // Execute all 6 queries in parallel
       const [identity, work, goals, interests, relationships, recent] =
         await Promise.all([
-          this.queryIdentity(oracleDid, openIdToken, roomId),
-          this.queryWork(oracleDid, openIdToken, roomId),
-          this.queryGoals(oracleDid, openIdToken, roomId),
-          this.queryInterests(oracleDid, openIdToken, roomId),
-          this.queryRelationships(oracleDid, openIdToken, roomId),
-          this.queryRecent(oracleDid, openIdToken, roomId),
+          this.queryIdentity(oracleDid, userDid, roomId),
+          this.queryWork(oracleDid, userDid, roomId),
+          this.queryGoals(oracleDid, userDid, roomId),
+          this.queryInterests(oracleDid, userDid, roomId),
+          this.queryRelationships(oracleDid, userDid, roomId),
+          this.queryRecent(oracleDid, userDid, roomId),
         ]);
 
       return {
@@ -57,7 +60,7 @@ export class MemoryEngineService {
    */
   private async queryIdentity(
     oracleDid: string,
-    openIdToken: string,
+    userDid: string,
     roomId: string,
   ): Promise<SearchEnhancedResponse | undefined> {
     const request: SearchEnhancedRequest = {
@@ -82,7 +85,7 @@ export class MemoryEngineService {
       },
     };
 
-    return this.executeQuery(request, openIdToken, oracleDid, roomId);
+    return this.executeQuery(request, userDid, oracleDid, roomId);
   }
 
   /**
@@ -90,7 +93,7 @@ export class MemoryEngineService {
    */
   private async queryWork(
     oracleDid: string,
-    openIdToken: string,
+    userDid: string,
     roomId: string,
   ): Promise<SearchEnhancedResponse | undefined> {
     const request: SearchEnhancedRequest = {
@@ -109,7 +112,7 @@ export class MemoryEngineService {
       },
     };
 
-    return this.executeQuery(request, openIdToken, oracleDid, roomId);
+    return this.executeQuery(request, userDid, oracleDid, roomId);
   }
 
   /**
@@ -117,7 +120,7 @@ export class MemoryEngineService {
    */
   private async queryGoals(
     oracleDid: string,
-    openIdToken: string,
+    userDid: string,
     roomId: string,
   ): Promise<SearchEnhancedResponse | undefined> {
     const request: SearchEnhancedRequest = {
@@ -136,7 +139,7 @@ export class MemoryEngineService {
       },
     };
 
-    return this.executeQuery(request, openIdToken, oracleDid, roomId);
+    return this.executeQuery(request, userDid, oracleDid, roomId);
   }
 
   /**
@@ -144,7 +147,7 @@ export class MemoryEngineService {
    */
   private async queryInterests(
     oracleDid: string,
-    openIdToken: string,
+    userDid: string,
     roomId: string,
   ): Promise<SearchEnhancedResponse | undefined> {
     const request: SearchEnhancedRequest = {
@@ -163,7 +166,7 @@ export class MemoryEngineService {
       },
     };
 
-    return this.executeQuery(request, openIdToken, oracleDid, roomId);
+    return this.executeQuery(request, userDid, oracleDid, roomId);
   }
 
   /**
@@ -171,7 +174,7 @@ export class MemoryEngineService {
    */
   private async queryRelationships(
     oracleDid: string,
-    openIdToken: string,
+    userDid: string,
     roomId: string,
   ): Promise<SearchEnhancedResponse | undefined> {
     const request: SearchEnhancedRequest = {
@@ -190,7 +193,7 @@ export class MemoryEngineService {
       },
     };
 
-    return this.executeQuery(request, openIdToken, oracleDid, roomId);
+    return this.executeQuery(request, userDid, oracleDid, roomId);
   }
 
   /**
@@ -198,7 +201,7 @@ export class MemoryEngineService {
    */
   private async queryRecent(
     oracleDid: string,
-    openIdToken: string,
+    userDid: string,
     roomId: string,
   ): Promise<SearchEnhancedResponse | undefined> {
     const request: SearchEnhancedRequest = {
@@ -217,7 +220,7 @@ export class MemoryEngineService {
       },
     };
 
-    return this.executeQuery(request, openIdToken, oracleDid, roomId);
+    return this.executeQuery(request, userDid, oracleDid, roomId);
   }
 
   /**
@@ -225,18 +228,15 @@ export class MemoryEngineService {
    */
   private async executeQuery(
     request: SearchEnhancedRequest,
-    openIdToken: string,
+    userDid: string,
     oracleDid: string,
     roomId: string,
   ): Promise<SearchEnhancedResponse | undefined> {
-    if (!openIdToken) {
+    if (!userDid) {
       Logger.warn(
-        `[MemoryEngineService] No auth token provided, skipping query "${request.query}"`,
+        `[MemoryEngineService] No user DID provided, skipping query "${request.query}"`,
       );
       return undefined;
-    }
-    if (openIdToken.startsWith('sys_')) {
-      throw new Error('Invalid auth token please use a user open id token');
     }
     if (!oracleDid) {
       Logger.warn(
@@ -255,9 +255,10 @@ export class MemoryEngineService {
       const response = await fetch(`${this.memoryEngineUrl}/search-enhanced`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${openIdToken}`,
+          'x-user-did': userDid,
           'x-oracle-did': oracleDid,
           'x-room-id': roomId,
+          'x-service-api-key': this.memoryServiceApiKey,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(request),

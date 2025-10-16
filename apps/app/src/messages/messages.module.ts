@@ -16,8 +16,12 @@ import { MessagesService } from './messages.service';
     {
       provide: MemoryEngineService,
       useFactory: (configService: ConfigService<ENV>) => {
-        const memoryEngineUrl = configService.get<string>('MEMORY_ENGINE_URL');
-        return new MemoryEngineService(memoryEngineUrl ?? '');
+        const memoryEngineUrl =
+          configService.getOrThrow<string>('MEMORY_ENGINE_URL');
+        const memoryServiceApiKey = configService.getOrThrow<string>(
+          'MEMORY_SERVICE_API_KEY',
+        );
+        return new MemoryEngineService(memoryEngineUrl, memoryServiceApiKey);
       },
       inject: [ConfigService],
     },

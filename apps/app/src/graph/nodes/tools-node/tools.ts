@@ -1,19 +1,19 @@
-import { type StructuredTool } from 'langchain';
 import { MultiServerMCPClient } from '@langchain/mcp-adapters';
 import { ConfigService } from '@nestjs/config';
 import 'dotenv/config';
+import { type StructuredTool } from 'langchain';
 import { ENV } from 'src/config';
 
 const configService = new ConfigService<ENV>();
 
 interface GetMemoryEngineMcpToolsParams {
-  userMatrixOpenIdToken: string;
+  userDid: string;
   oracleDid: string;
   roomId: string;
 }
 
 const getMemoryEngineMcpTools = async ({
-  userMatrixOpenIdToken,
+  userDid,
   oracleDid,
   roomId,
 }: GetMemoryEngineMcpToolsParams) => {
@@ -27,10 +27,12 @@ const getMemoryEngineMcpTools = async ({
         url: configService.getOrThrow('MEMORY_MCP_URL'),
         // Optional: Add auth headers if needed
         headers: {
-          'x-api-key': configService.getOrThrow('MEMORY_MCP_API'),
-          Authorization: `Bearer ${userMatrixOpenIdToken}`,
+          Authorization: `Bearer ${configService.getOrThrow(
+            'MEMORY_SERVICE_API_KEY',
+          )}`,
           'x-oracle-did': oracleDid,
           'x-room-id': roomId,
+          'x-user-did': userDid,
           'User-Agent': 'LangChain-MCP-Client/1.0',
         },
         // Automatic reconnection
