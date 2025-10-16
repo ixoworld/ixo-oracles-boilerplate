@@ -21,6 +21,11 @@ import { Logger } from '@ixo/logger';
 import { matrixStateManager } from '../matrix-state-manager/matrix-state-manager.js';
 import type { IGraphStateWithRequiredFields } from './types.js';
 
+// Thread mapping interface (like SQL index)
+interface ThreadMap {
+  [threadId: string]: string; // threadId -> latestCheckpointId
+}
+
 // Storage interfaces - simplified like SQL
 interface StoredCheckpoint {
   thread_id: string;
@@ -43,12 +48,6 @@ interface StoredWrite {
   channel: string;
   type: string;
   value: string; // serialized
-}
-
-interface ThreadIndex {
-  ids: string[];
-  lastUpdatedAt: number;
-  deleted?: boolean;
 }
 
 // LRU Cache implementation
@@ -121,40 +120,20 @@ interface CacheMetrics {
   duplicateEvents: number;
 }
 
-// Promise deduplication map
-class PromiseDeduplicator<T> {
-  private pending = new Map<string, Promise<T>>();
-
-  async dedupe(key: string, fn: () => Promise<T>): Promise<T> {
-    const existing = this.pending.get(key);
-    if (existing) return existing;
-
-    const promise = fn().finally(() => {
-      this.pending.delete(key);
-    });
-
-    this.pending.set(key, promise);
-    return promise;
-  }
-}
-
 export class MatrixCheckpointSaver<
   _GraphState extends
     IGraphStateWithRequiredFields = IGraphStateWithRequiredFields,
 > extends BaseCheckpointSaver {
   private stateManager = matrixStateManager;
 
-  // LRU Caches
-  private indexCache: LRUCache<ThreadIndex>;
+  // LRU Caches (simplified for thread mapping approach)
   private checkpointCache: LRUCache<StoredCheckpoint>;
   private writesCache: LRUCache<StoredWrite[]>;
   private latestCache: LRUCache<{
     checkpointId: string;
     lastUpdatedAt: number;
   }>;
-
-  // Promise deduplication
-  private promiseDedup = new PromiseDeduplicator<any>();
+  private indexCache: LRUCache<any>; // Used for thread map caching
 
   // Metrics
   private metrics: CacheMetrics = {
@@ -185,13 +164,13 @@ export class MatrixCheckpointSaver<
     ); // 10MB default
 
     // Initialize caches
-    this.indexCache = new LRUCache<ThreadIndex>(this.cacheMax, this.cacheTTL);
     this.checkpointCache = new LRUCache(this.cacheMax, this.cacheTTL);
     this.writesCache = new LRUCache<StoredWrite[]>(
       this.cacheMax,
       this.cacheTTL,
     );
     this.latestCache = new LRUCache(this.cacheMax, this.cacheTTL);
+    this.indexCache = new LRUCache(this.cacheMax, this.cacheTTL); // For thread map
   }
 
   // Sanitize oracleDid to safe token
@@ -229,25 +208,13 @@ export class MatrixCheckpointSaver<
     return `${safe}_latest_${threadId}_${checkpointNs}`;
   }
 
-  private getIndexKey(
-    oracleDid: string,
-    threadId: string,
-    checkpointNs: string,
-  ): string {
+  // Thread mapping keys (like SQL table names)
+  private getThreadMapKey(oracleDid: string): string {
     const safe = this.sanitizeOracleDid(oracleDid);
-    return `${safe}_index_${threadId}_${checkpointNs}`;
+    return `${safe}_thread_map`;
   }
 
-  // Cache key builders
-  private getCacheIndexKey(
-    roomId: string,
-    oracleDid: string,
-    threadId: string,
-    checkpointNs: string,
-  ): string {
-    return `${roomId}:${oracleDid}:${threadId}:${checkpointNs}:index`;
-  }
-
+  // Cache key builders (simplified for thread mapping approach)
   private getCacheWritesKey(
     roomId: string,
     oracleDid: string,
@@ -277,124 +244,68 @@ export class MatrixCheckpointSaver<
     return `${roomId}:${oracleDid}:${threadId}:${checkpointNs}:${checkpointId}:checkpoint`;
   }
 
-  // Get or build thread index
-  private async getOrBuildIndex(
+  // Get thread mapping (like SQL SELECT from thread_map)
+  private async getThreadMap(
+    roomId: string,
+    oracleDid: string,
+  ): Promise<ThreadMap> {
+    const cacheKey = `thread_map:${roomId}:${oracleDid}`;
+
+    // Try cache first
+    const cached = this.indexCache.get(cacheKey);
+    if (cached) {
+      this.metrics.hits++;
+      return cached as ThreadMap;
+    }
+
+    this.metrics.misses++;
+
+    try {
+      const threadMapKey = this.getThreadMapKey(oracleDid);
+      const threadMap = await this.stateManager.getState<ThreadMap>(
+        roomId,
+        threadMapKey,
+      );
+
+      if (threadMap && !(threadMap as any).deleted) {
+        this.indexCache.set(cacheKey, threadMap);
+        return threadMap;
+      }
+    } catch {
+      // Thread map doesn't exist yet
+    }
+
+    // Return empty thread map
+    const emptyMap: ThreadMap = {};
+    this.indexCache.set(cacheKey, emptyMap);
+    return emptyMap;
+  }
+
+  // Update thread mapping (like SQL UPDATE thread_map)
+  private async updateThreadMap(
     roomId: string,
     oracleDid: string,
     threadId: string,
-    checkpointNs: string,
-  ): Promise<ThreadIndex> {
-    const cacheKey = this.getCacheIndexKey(
+    checkpointId: string,
+  ): Promise<void> {
+    const threadMap = await this.getThreadMap(roomId, oracleDid);
+    threadMap[threadId] = checkpointId;
+
+    const threadMapKey = this.getThreadMapKey(oracleDid);
+    await this.stateManager.setState({
       roomId,
-      oracleDid,
-      threadId,
-      checkpointNs,
-    );
-
-    return this.promiseDedup.dedupe(cacheKey, async () => {
-      // Try cache first
-      const cached = this.indexCache.get(cacheKey);
-      if (cached) {
-        this.metrics.hits++;
-        Logger.debug(`Index cache HIT for ${threadId}`, {
-          threadId,
-          checkpointNs,
-          cacheKey,
-        });
-        return cached;
-      }
-
-      this.metrics.misses++;
-
-      // Try Matrix storage
-      const indexKey = this.getIndexKey(oracleDid, threadId, checkpointNs);
-      try {
-        const stored = await this.stateManager.getState<ThreadIndex>(
-          roomId,
-          indexKey,
-        );
-        if (stored && !stored.deleted) {
-          this.indexCache.set(cacheKey, stored);
-          return stored;
-        }
-      } catch {
-        // Index doesn't exist, need to build
-      }
-
-      // Build index by scanning room
-      Logger.info(
-        `Building index for thread ${threadId} in room ${roomId}, ns: ${checkpointNs}`,
-      );
-      this.metrics.indexRebuilds++;
-
-      const stateEvents =
-        await this.stateManager.listStateEvents<StoredCheckpoint>(roomId);
-
-      // Optimized filtering with early termination and Set-based deduplication
-      const checkpointIds: string[] = [];
-      const seenIds = new Set<string>();
-      let filteredCount = 0;
-      let duplicateCount = 0;
-
-      for (const event of stateEvents) {
-        // Early filtering - check conditions in order of likelihood
-        if (
-          event &&
-          'thread_id' in event &&
-          event.thread_id === threadId &&
-          'checkpoint_ns' in event &&
-          event.checkpoint_ns === checkpointNs &&
-          'checkpoint_id' in event &&
-          event.checkpoint_id
-        ) {
-          if (!seenIds.has(event.checkpoint_id)) {
-            checkpointIds.push(event.checkpoint_id);
-            seenIds.add(event.checkpoint_id);
-            filteredCount++;
-          } else {
-            duplicateCount++;
-          }
-        }
-      }
-
-      // Update metrics
-      this.metrics.filteredEvents += filteredCount;
-      this.metrics.duplicateEvents += duplicateCount;
-
-      // Sort descending (newest first)
-      checkpointIds.sort((a, b) => (b > a ? 1 : b < a ? -1 : 0));
-
-      const index: ThreadIndex = {
-        ids: checkpointIds,
-        lastUpdatedAt: Date.now(),
-      };
-
-      // Store index
-      await this.stateManager.setState({
-        roomId,
-        stateKey: indexKey,
-        data: index,
-      });
-
-      this.indexCache.set(cacheKey, index);
-
-      Logger.info(
-        `Built index for thread ${threadId}: ${checkpointIds.length} checkpoints (${filteredCount} filtered, ${duplicateCount} duplicates)`,
-        {
-          threadId,
-          checkpointNs,
-          totalEvents: stateEvents.length,
-          filteredEvents: filteredCount,
-          duplicateEvents: duplicateCount,
-          finalCheckpoints: checkpointIds.length,
-        },
-      );
-
-      return index;
+      stateKey: threadMapKey,
+      data: threadMap,
     });
+
+    // Update cache
+    const cacheKey = `thread_map:${roomId}:${oracleDid}`;
+    this.indexCache.set(cacheKey, threadMap);
+
+    Logger.debug(`Updated thread mapping: ${threadId} -> ${checkpointId}`);
   }
 
-  // Store checkpoint with index update
+  // Store checkpoint with thread mapping update (like SQL INSERT + UPDATE)
   private async storeCheckpoint(
     roomId: string,
     oracleDid: string,
@@ -424,54 +335,22 @@ export class MatrixCheckpointSaver<
       );
     }
 
-    // Write checkpoint first
+    // Write checkpoint first (like SQL INSERT INTO checkpoints)
     await this.stateManager.setState({
       roomId,
       stateKey: key,
       data: storedCheckpoint,
     });
 
-    // Update index
-    const indexKey = this.getIndexKey(
-      oracleDid,
-      storedCheckpoint.thread_id,
-      storedCheckpoint.checkpoint_ns,
-    );
-    const cacheIndexKey = this.getCacheIndexKey(
+    // Update thread mapping (like SQL UPDATE thread_map)
+    await this.updateThreadMap(
       roomId,
       oracleDid,
       storedCheckpoint.thread_id,
-      storedCheckpoint.checkpoint_ns,
+      storedCheckpoint.checkpoint_id,
     );
 
-    let index: ThreadIndex;
-    try {
-      index = await this.getOrBuildIndex(
-        roomId,
-        oracleDid,
-        storedCheckpoint.thread_id,
-        storedCheckpoint.checkpoint_ns,
-      );
-    } catch {
-      index = { ids: [], lastUpdatedAt: Date.now() };
-    }
-
-    // Add new checkpoint id if not present
-    if (!index.ids.includes(storedCheckpoint.checkpoint_id)) {
-      index.ids.unshift(storedCheckpoint.checkpoint_id);
-      index.ids.sort((a, b) => (b > a ? 1 : b < a ? -1 : 0)); // Sort desc
-    }
-    index.lastUpdatedAt = Date.now();
-
-    await this.stateManager.setState({
-      roomId,
-      stateKey: indexKey,
-      data: index,
-    });
-
-    this.indexCache.set(cacheIndexKey, index);
-
-    // Update latest pointer last
+    // Update latest pointer (for backward compatibility)
     const latestKey = this.getLatestCheckpointKey(
       oracleDid,
       storedCheckpoint.thread_id,
@@ -568,7 +447,7 @@ export class MatrixCheckpointSaver<
     );
   }
 
-  // Get stored checkpoint (with caching)
+  // Get stored checkpoint (with caching) - like SQL SELECT
   private async getStoredCheckpoint(
     roomId: string,
     oracleDid: string,
@@ -578,53 +457,17 @@ export class MatrixCheckpointSaver<
   ): Promise<StoredCheckpoint | undefined> {
     try {
       if (!checkpointId) {
-        // Get latest checkpoint - try cache first
-        const latestCacheKey = this.getCacheLatestKey(
-          roomId,
-          oracleDid,
-          threadId,
-          checkpointNs,
-        );
-        const cachedLatest = this.latestCache.get(latestCacheKey);
-        if (cachedLatest) {
-          this.metrics.hits++;
-          Logger.debug(`Latest cache HIT for ${threadId}`, {
-            threadId,
-            checkpointNs,
-            checkpointId: cachedLatest.checkpointId,
-          });
-          // Use cached checkpoint ID to get the actual checkpoint
-          checkpointId = cachedLatest.checkpointId;
-        } else {
-          this.metrics.misses++;
-          // Get latest checkpoint from Matrix
-          const latestKey = this.getLatestCheckpointKey(
-            oracleDid,
-            threadId,
-            checkpointNs,
-          );
-          const stored = await this.stateManager.getState<StoredCheckpoint>(
-            roomId,
-            latestKey,
-          );
+        // Get latest checkpoint from thread mapping (like SQL ORDER BY DESC LIMIT 1)
+        const threadMap = await this.getThreadMap(roomId, oracleDid);
+        const latestCheckpointId = threadMap[threadId];
 
-          // Skip null/deleted/invalid states
-          if (
-            !stored ||
-            (stored as any).deleted ||
-            !this.isValidCheckpoint(stored)
-          ) {
-            return undefined;
-          }
-
-          // Cache the latest checkpoint info
-          this.latestCache.set(latestCacheKey, {
-            checkpointId: stored.checkpoint_id,
-            lastUpdatedAt: stored.lastUpdatedAt || Date.now(),
-          });
-
-          return stored;
+        if (!latestCheckpointId) {
+          Logger.debug(`No checkpoint found for thread ${threadId}`);
+          return undefined;
         }
+
+        // Use the latest checkpoint ID
+        checkpointId = latestCheckpointId;
       }
 
       // For specific checkpoint ID - try checkpoint cache first
@@ -953,70 +796,53 @@ export class MatrixCheckpointSaver<
     // Extract options
     const { filter, before, limit } = options ?? {};
 
-    // Get or build thread index
-    const index = await this.getOrBuildIndex(
-      matrix.roomId,
-      matrix.oracleDid,
+    // Get thread mapping (like SQL SELECT from thread_map)
+    const threadMap = await this.getThreadMap(matrix.roomId, matrix.oracleDid);
+    const latestCheckpointId = threadMap[threadId];
+
+    if (!latestCheckpointId) {
+      Logger.debug('No checkpoints found for thread (empty thread map)', {
+        threadId,
+        checkpointNs,
+      });
+      return;
+    }
+
+    Logger.debug(`Listing checkpoints for thread ${threadId}`, {
       threadId,
       checkpointNs,
-    );
-
-    // Handle missing or deleted index
-    if (!index || index.deleted) {
-      Logger.debug('Index not found or deleted', {
-        threadId,
-        checkpointNs,
-        deleted: index?.deleted,
-      });
-      return;
-    }
-
-    if (index.ids.length === 0) {
-      Logger.debug('No checkpoints in index', {
-        threadId,
-        checkpointNs,
-      });
-      return;
-    }
-
-    // Filter checkpoint ids
-    let checkpointIds = [...index.ids]; // Already sorted desc
-
-    // Apply "before" filter (lexicographic <)
-    if (before?.configurable?.checkpoint_id) {
-      const beforeId = before.configurable.checkpoint_id;
-      checkpointIds = checkpointIds.filter((id) => id < beforeId);
-    }
-
-    // Apply limit
-    if (limit !== undefined) {
-      checkpointIds = checkpointIds.slice(0, limit);
-    }
-
-    Logger.debug(`Listing ${checkpointIds.length} checkpoints`, {
-      threadId,
-      total: index.ids.length,
-      filtered: checkpointIds.length,
+      latestCheckpointId,
     });
 
+    // Walk checkpoint chain backwards (like SQL ORDER BY checkpoint_id DESC)
+    let currentId: string | undefined = latestCheckpointId;
     let yieldedCount = 0;
-    for (const checkpointId of checkpointIds) {
+
+    while (currentId && (limit === undefined || yieldedCount < limit)) {
       try {
+        // Apply "before" filter (lexicographic <)
+        if (
+          before?.configurable?.checkpoint_id &&
+          currentId >= before.configurable.checkpoint_id
+        ) {
+          break;
+        }
+
         // Get stored checkpoint
         const storedCheckpoint = await this.getStoredCheckpoint(
           matrix.roomId,
           matrix.oracleDid,
           threadId,
           checkpointNs,
-          checkpointId,
+          currentId,
         );
 
         if (!storedCheckpoint) {
-          Logger.warn('Checkpoint in index but not found in storage', {
+          Logger.warn('Checkpoint in chain but not found in storage', {
             threadId,
-            checkpointId,
+            checkpointId: currentId,
           });
-          continue;
+          break;
         }
 
         // Deserialize checkpoint and metadata
@@ -1040,6 +866,8 @@ export class MatrixCheckpointSaver<
             }
           }
           if (!matches) {
+            // Continue to next checkpoint in chain
+            currentId = storedCheckpoint.parent_checkpoint_id;
             continue;
           }
         }
@@ -1078,13 +906,16 @@ export class MatrixCheckpointSaver<
         };
 
         yieldedCount++;
+
+        // Move to parent checkpoint (walk backwards through chain)
+        currentId = storedCheckpoint.parent_checkpoint_id;
       } catch (error) {
         // Skip corrupted checkpoints
-        Logger.warn('Skipping corrupted checkpoint', {
-          checkpointId,
+        Logger.warn('Skipping corrupted checkpoint in chain', {
+          checkpointId: currentId,
           error: error instanceof Error ? error.message : String(error),
         });
-        continue;
+        break;
       }
     }
 
@@ -1249,22 +1080,37 @@ export class MatrixCheckpointSaver<
     });
 
     try {
-      // Get thread index
-      const index = await this.getOrBuildIndex(
-        roomId,
-        oracleDid,
-        threadId,
-        checkpointNs,
-      );
+      // Get thread mapping
+      const threadMap = await this.getThreadMap(roomId, oracleDid);
+      const latestCheckpointId = threadMap[threadId];
 
-      // Nullify all checkpoints and writes
-      for (const checkpointId of index.ids) {
+      if (!latestCheckpointId) {
+        Logger.debug(`Thread ${threadId} not found in thread map`);
+        return;
+      }
+
+      // Walk checkpoint chain and nullify all checkpoints
+      let currentId: string | undefined = latestCheckpointId;
+      let deletedCount = 0;
+
+      while (currentId) {
+        // Get checkpoint to find parent
+        const checkpoint = await this.getStoredCheckpoint(
+          roomId,
+          oracleDid,
+          threadId,
+          checkpointNs,
+          currentId,
+        );
+
+        if (!checkpoint) break;
+
         // Nullify checkpoint
         const checkpointKey = this.getCheckpointKey(
           oracleDid,
           threadId,
           checkpointNs,
-          checkpointId,
+          currentId,
         );
         await this.stateManager.setState({
           roomId,
@@ -1277,14 +1123,26 @@ export class MatrixCheckpointSaver<
           oracleDid,
           threadId,
           checkpointNs,
-          checkpointId,
+          currentId,
         );
         await this.stateManager.setState({
           roomId,
           stateKey: writesKey,
           data: null as any,
         });
+
+        deletedCount++;
+        currentId = checkpoint.parent_checkpoint_id;
       }
+
+      // Remove from thread mapping
+      delete threadMap[threadId];
+      const threadMapKey = this.getThreadMapKey(oracleDid);
+      await this.stateManager.setState({
+        roomId,
+        stateKey: threadMapKey,
+        data: threadMap,
+      });
 
       // Nullify latest pointer
       const latestKey = this.getLatestCheckpointKey(
@@ -1298,27 +1156,86 @@ export class MatrixCheckpointSaver<
         data: null as any,
       });
 
-      // Mark index as deleted
-      const indexKey = this.getIndexKey(oracleDid, threadId, checkpointNs);
-      await this.stateManager.setState({
-        roomId,
-        stateKey: indexKey,
-        data: { ids: [], deleted: true, lastUpdatedAt: Date.now() },
-      });
-
       // Purge all LRU entries for this thread
       const threadPattern = `${roomId}:${oracleDid}:${threadId}:${checkpointNs}`;
-      this.indexCache.deletePattern(threadPattern);
       this.checkpointCache.deletePattern(threadPattern);
       this.writesCache.deletePattern(threadPattern);
       this.latestCache.deletePattern(threadPattern);
 
+      // Clear thread map cache
+      const cacheKey = `thread_map:${roomId}:${oracleDid}`;
+      this.indexCache.delete(cacheKey);
+
       Logger.info(`Deleted thread ${threadId}`, {
         roomId,
-        checkpointCount: index.ids.length,
+        deletedCheckpoints: deletedCount,
       });
     } catch (error) {
       Logger.error(`Failed to delete thread ${threadId}`, error);
+      throw error;
+    }
+  }
+
+  // Manual thread map rebuild for recovery scenarios (ONLY place that calls listStateEvents)
+  public async rebuildThreadMap(
+    roomId: string,
+    oracleDid: string,
+  ): Promise<void> {
+    Logger.warn(`Manual thread map rebuild requested for room ${roomId}`, {
+      oracleDid,
+    });
+
+    try {
+      // Scan all events to rebuild thread map
+      const stateEvents =
+        await this.stateManager.listStateEvents<StoredCheckpoint>(roomId);
+
+      // Build thread map from all checkpoints
+      const threadMap: ThreadMap = {};
+      let processedCount = 0;
+
+      for (const event of stateEvents) {
+        if (
+          event &&
+          'thread_id' in event &&
+          'checkpoint_id' in event &&
+          'checkpoint_ns' in event &&
+          event.checkpoint_ns === '' // Only default namespace for now
+        ) {
+          const threadId = event.thread_id;
+          const checkpointId = event.checkpoint_id;
+
+          // Keep latest checkpoint for each thread
+          if (!threadMap[threadId] || checkpointId > threadMap[threadId]) {
+            threadMap[threadId] = checkpointId;
+          }
+          processedCount++;
+        }
+      }
+
+      // Store rebuilt thread map
+      const threadMapKey = this.getThreadMapKey(oracleDid);
+      await this.stateManager.setState({
+        roomId,
+        stateKey: threadMapKey,
+        data: threadMap,
+      });
+
+      // Update cache
+      const cacheKey = `thread_map:${roomId}:${oracleDid}`;
+      this.indexCache.set(cacheKey, threadMap);
+
+      Logger.info(
+        `Successfully rebuilt thread map: ${Object.keys(threadMap).length} threads, ${processedCount} checkpoints processed`,
+        {
+          roomId,
+          oracleDid,
+          threadCount: Object.keys(threadMap).length,
+          processedCheckpoints: processedCount,
+        },
+      );
+    } catch (error) {
+      Logger.error(`Failed to rebuild thread map for room ${roomId}`, error);
       throw error;
     }
   }
