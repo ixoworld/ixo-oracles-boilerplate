@@ -1,6 +1,6 @@
 {
   "name": "@ixo/oracles-events",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Events for the IXO Oracles",
   "private": false,
   "main": "./dist/server.js",
