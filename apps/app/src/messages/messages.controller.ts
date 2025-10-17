@@ -54,10 +54,9 @@ export class MessagesController {
     @Req() req: Request,
     @Param('sessionId') sessionId: string,
   ) {
-    const { userOpenIdToken: matrixAccessToken, did } = req.authData;
+    const { did } = req.authData;
     return this.messagesService.listMessages({
       sessionId,
-      matrixAccessToken,
       did,
     });
   }

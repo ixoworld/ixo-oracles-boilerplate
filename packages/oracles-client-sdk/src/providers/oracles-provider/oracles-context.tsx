@@ -1,4 +1,5 @@
 'use client';
+import { chainNetwork } from '@ixo/oracles-chain-client/matrix-bot/config';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   createContext,
@@ -9,6 +10,7 @@ import {
   useMemo,
 } from 'react';
 import { getOpenIdToken } from '../../hooks/index.js';
+import { MatrixHomeServerUrl } from '../../matrix/matrix-client.js';
 import { request } from '../../utils/request.js';
 import {
   clearTokenCache,
@@ -88,9 +90,11 @@ export const OraclesProvider = ({
         console.warn('Failed to retrieve cached token:', error);
       }
 
+      const fullUserId = `@did-ixo-${initialWallet.address}:${new URL(MatrixHomeServerUrl[chainNetwork ?? 'devnet']).hostname}`;
+
       if (!openIdToken) {
         const token = await getOpenIdToken({
-          userId: initialWallet.did,
+          userId: fullUserId,
           matrixAccessToken,
           did: initialWallet.did,
         });

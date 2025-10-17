@@ -268,11 +268,10 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
   public async listMessages(
     params: ListMessagesDto & {
       did: string;
-      matrixAccessToken: string;
     },
   ): Promise<ListOracleMessagesResponse> {
-    const { did, matrixAccessToken, sessionId } = params;
-    if (!sessionId || !did || !matrixAccessToken) {
+    const { did, sessionId } = params;
+    if (!sessionId || !did) {
       throw new BadRequestException('Invalid parameters');
     }
 
@@ -704,7 +703,6 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         // Get current messages for sync
         const { messages: currentMessages } = await this.listMessages({
           did: params.did,
-          matrixAccessToken: accessToken,
           sessionId,
         });
 

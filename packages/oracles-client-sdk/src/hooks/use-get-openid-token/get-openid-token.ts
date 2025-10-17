@@ -10,6 +10,9 @@ export const getOpenIdToken = async ({
   matrixAccessToken,
   did,
 }: GetOpenIdTokenParams) => {
+  if (!userId.startsWith('@')) {
+    throw new Error('User ID must start with @');
+  }
   const matrixClient = new MatrixClient({
     userAccessToken: matrixAccessToken,
   });

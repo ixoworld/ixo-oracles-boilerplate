@@ -310,7 +310,7 @@ const MatrixRoomBotServerUrl = {
   mainnet: 'https://rooms.bot.mx.ixo.earth',
 };
 
-const MatrixHomeServerUrl = {
+export const MatrixHomeServerUrl = {
   devnet: 'https://devmx.ixo.earth',
   testnet: 'https://testmx.ixo.earth',
   mainnet: 'https://mx.ixo.earth',
