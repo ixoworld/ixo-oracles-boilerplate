@@ -8,7 +8,7 @@ import {
   useEffect,
   useMemo,
 } from 'react';
-import { getOpenIdToken } from '../../hooks/index.js';
+import { useGetOpenIdToken } from '../../hooks/index.js';
 import { request } from '../../utils/request.js';
 import {
   clearTokenCache,
@@ -66,6 +66,13 @@ export const OraclesProvider = ({
     }
   }, [initialWallet.did]);
 
+  const {
+    openIdToken,
+    isLoading: isTokenLoading,
+    error: tokenError,
+    refetch,
+  } = useGetOpenIdToken(initialWallet);
+
   const authedRequest = useCallback(
     async (
       url: string,
@@ -89,12 +96,11 @@ export const OraclesProvider = ({
       }
 
       if (!openIdToken) {
-        const token = await getOpenIdToken({
-          userId: initialWallet.did,
-          matrixAccessToken,
-          did: initialWallet.did,
-        });
-        openIdToken = token.access_token;
+        const { data: token } = await refetch();
+        openIdToken = token?.access_token;
+        if (!openIdToken || !token) {
+          throw new Error('Failed to get openIdToken');
+        }
 
         await encryptAndStore({
           token,
