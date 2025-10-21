@@ -45,7 +45,7 @@ export function useSendMessage({
     openIdToken,
     isLoading: isTokenLoading,
     error: tokenError,
-  } = useGetOpenIdToken();
+  } = useGetOpenIdToken(wallet ?? undefined);
 
   // Abort controller for canceling requests
   const abortControllerRef = useRef<AbortController | null>(null);
