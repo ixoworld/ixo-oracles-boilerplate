@@ -67,7 +67,7 @@ export const OraclesProvider = ({
   }, [initialWallet.did]);
 
   const {
-    openIdToken,
+    openIdToken: openIdTokenFromHook,
     isLoading: isTokenLoading,
     error: tokenError,
     refetch,
@@ -96,7 +96,11 @@ export const OraclesProvider = ({
       }
 
       if (!openIdToken) {
-        const { data: token } = await refetch();
+        const { data: token } = openIdTokenFromHook?.access_token
+          ? {
+              data: openIdTokenFromHook ?? undefined,
+            }
+          : await refetch();
         openIdToken = token?.access_token;
         if (!openIdToken || !token) {
           throw new Error('Failed to get openIdToken');
