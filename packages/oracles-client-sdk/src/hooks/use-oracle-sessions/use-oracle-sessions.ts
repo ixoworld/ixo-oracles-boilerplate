@@ -14,7 +14,7 @@ export const useOracleSessions = (
 
   const { config } = useOraclesConfig(oracleDid);
 
-  const apiUrl = overrides?.baseUrl ?? config.apiUrl ?? '';
+  const getApiUrl = () => overrides?.baseUrl ?? config.apiUrl ?? '';
 
   const { data, isLoading, error, refetch } = useQuery<{
     sessions: IChatSession[];
@@ -22,7 +22,7 @@ export const useOracleSessions = (
     queryKey: ['oracle-sessions', oracleDid],
     queryFn: () =>
       authedRequest<{ sessions: IChatSession[] }>(
-        `${apiUrl}/sessions`,
+        `${getApiUrl()}/sessions`,
         'GET',
         {},
       ),
@@ -36,7 +36,7 @@ export const useOracleSessions = (
     isError: isCreateSessionError,
   } = useMutation({
     mutationFn: () =>
-      authedRequest<IChatSession>(`${apiUrl}/sessions`, 'POST', {}),
+      authedRequest<IChatSession>(`${getApiUrl()}/sessions`, 'POST', {}),
     onSettled: async () => {
       refetch();
     },
@@ -48,7 +48,7 @@ export const useOracleSessions = (
     isError: isDeleteSessionError,
   } = useMutation({
     mutationFn: (sessionId: string) =>
-      authedRequest<void>(`${apiUrl}/sessions/${sessionId}`, 'DELETE', {}),
+      authedRequest<void>(`${getApiUrl()}/sessions/${sessionId}`, 'DELETE', {}),
     onSettled: async () => {
       refetch();
     },
