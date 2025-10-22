@@ -8,9 +8,11 @@ import {
   Logger,
   type NestMiddleware,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { minutes } from '@nestjs/throttler';
 import { type NextFunction, type Request, type Response } from 'express';
 import * as crypto from 'node:crypto';
+import { ENV } from 'src/config';
 import { getAuthHeaders, normalizeDid } from '../utils/header.utils';
 
 // Extend Express Request interface to include our custom property
@@ -33,7 +35,10 @@ const TEN_MINUTES = minutes(10);
 export class AuthHeaderMiddleware implements NestMiddleware {
   private readonly logger = new Logger(AuthHeaderMiddleware.name);
 
-  constructor(@Inject(CACHE_MANAGER) private cacheManager: Cache) {}
+  constructor(
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    private readonly configService: ConfigService<ENV>,
+  ) {}
 
   private async validateToken(matrixToken: string): Promise<{
     isValid: boolean;
@@ -48,7 +53,7 @@ export class AuthHeaderMiddleware implements NestMiddleware {
         );
       }
       this.logger.debug(`Validating OpenID token`);
-      const { isValid, userId } = await verifyMatrixOpenIdToken(matrixToken);
+      const { isValid, userId } = await verifyMatrixOpenIdToken(matrixToken, this.configService.get('MATRIX_BASE_URL'));
       if (!userId) {
         return { isValid: false, userDid: '' };
       }

@@ -1,12 +1,11 @@
 export async function verifyMatrixOpenIdToken(
   openIdToken: string,
-  matrixServerName: string = 'devmx.ixo.earth',
+  matrixBaseUrl: string,
 ): Promise<{ isValid: boolean; userId?: string; error?: string }> {
   try {
-
     // Make request to Matrix federation endpoint
     const response = await fetch(
-      `https://${matrixServerName}/_matrix/federation/v1/openid/userinfo?access_token=${openIdToken}`,
+      `${matrixBaseUrl}/_matrix/federation/v1/openid/userinfo?access_token=${openIdToken}`,
       {
         method: 'GET',
       },
