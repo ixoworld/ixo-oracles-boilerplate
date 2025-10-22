@@ -142,8 +142,9 @@ export function useLiveKitAgent(
         throw new Error('Call ID is required');
       }
 
+      const apiUrl = overrides?.baseUrl ?? config.apiUrl;
       const response = await authedRequest(
-        `${config.apiUrl}/calls/${callId}/update`,
+        `${apiUrl}/calls/${callId}/update`,
         'PATCH',
         {
           body: JSON.stringify({
@@ -253,8 +254,7 @@ export function useLiveKitAgent(
       existingOrRefreshConnectionDetails,
       idToken,
       toastAlert,
-      config.apiUrl,
-      authedRequest,
+      updateCall,
     ],
   );
 

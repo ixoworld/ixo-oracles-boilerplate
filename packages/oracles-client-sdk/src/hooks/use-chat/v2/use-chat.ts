@@ -78,9 +78,7 @@ export function useChat({
   );
   const { config } = useOraclesConfig(oracleDid);
   const { authedRequest } = useOraclesContext();
-  const { apiUrl: baseUrl } = config;
-  const { baseUrl: overridesUrl } = overrides ?? {};
-  const apiUrl = overridesUrl ?? baseUrl;
+  const getApiUrl = () => overrides?.baseUrl ?? config.apiUrl;
 
   // React Query for initial data fetch
   const {
@@ -94,7 +92,7 @@ export function useChat({
     queryFn: async () => {
       const result = await authedRequest<{
         messages: IMessage[];
-      }>(`${apiUrl}/messages/${sessionId}`, 'GET', {});
+      }>(`${getApiUrl()}/messages/${sessionId}`, 'GET', {});
 
       const transformedMessages = transformToMessagesMap({
         messages: result.messages,
@@ -107,7 +105,7 @@ export function useChat({
 
       return transformedMessages;
     },
-    enabled: Boolean(sessionId && apiUrl),
+    enabled: Boolean(sessionId && getApiUrl()),
     retry: false,
   });
 

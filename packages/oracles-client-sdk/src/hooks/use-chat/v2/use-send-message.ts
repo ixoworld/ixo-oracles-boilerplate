@@ -37,9 +37,7 @@ export function useSendMessage({
   onReasoning,
 }: ISendMessageOptions): IUseSendMessageReturn {
   const { config } = useOraclesConfig(oracleDid);
-  const { apiUrl: baseUrl } = config;
-  const { baseUrl: overridesUrl } = overrides ?? {};
-  const apiUrl = overridesUrl ?? baseUrl;
+  const getApiUrl = () => overrides?.baseUrl ?? config.apiUrl;
   const { wallet, authedRequest } = useOraclesContext();
   const {
     openIdToken,
@@ -55,7 +53,7 @@ export function useSendMessage({
     if (abortControllerRef.current) {
       // Call backend abort endpoint with sessionId
       try {
-        await authedRequest(`${apiUrl}/messages/abort`, 'POST', {
+        await authedRequest(`${getApiUrl()}/messages/abort`, 'POST', {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId }),
         });
@@ -68,7 +66,7 @@ export function useSendMessage({
       abortControllerRef.current = null;
       chatRef?.current.setStatus('ready');
     }
-  }, [apiUrl, sessionId, chatRef]);
+  }, [sessionId, chatRef]);
 
   const { mutateAsync, isPending, error } = useMutation({
     retry: false, // Prevent retries on abort/errors
@@ -79,6 +77,7 @@ export function useSendMessage({
       message: string;
       metadata?: Record<string, unknown>;
     }) => {
+      const apiUrl = getApiUrl();
       if (!apiUrl) {
         throw new Error('API URL is required');
       }

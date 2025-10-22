@@ -31,9 +31,11 @@ export function useWebSocketEvents(
   handleInvalidateCacheRef.current = props.handleInvalidateCache;
 
   const { sessionId, overrides } = props;
-  const apiUrl = overrides?.wsUrl ?? config.socketUrl ?? overrides?.baseUrl;
+  const getApiUrl = () =>
+    overrides?.wsUrl ?? config.socketUrl ?? overrides?.baseUrl;
 
   useEffect(() => {
+    const apiUrl = getApiUrl();
     if (!wallet || !sessionId || !apiUrl) {
       return;
     }
@@ -142,7 +144,7 @@ export function useWebSocketEvents(
       setIsConnected(false);
       setConnectionStatus('disconnected');
     };
-  }, [sessionId, wallet, apiUrl]); // Removed handleInvalidateCache from dependencies
+  }, [sessionId, wallet, overrides, config.socketUrl]); // Removed handleInvalidateCache from dependencies
 
   return {
     isConnected,

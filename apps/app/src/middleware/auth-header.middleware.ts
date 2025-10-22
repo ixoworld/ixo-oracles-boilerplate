@@ -53,7 +53,10 @@ export class AuthHeaderMiddleware implements NestMiddleware {
         );
       }
       this.logger.debug(`Validating OpenID token`);
-      const { isValid, userId } = await verifyMatrixOpenIdToken(matrixToken, this.configService.get('MATRIX_BASE_URL'));
+      const { isValid, userId } = await verifyMatrixOpenIdToken(
+        matrixToken,
+        this.configService.getOrThrow('MATRIX_BASE_URL'),
+      );
       if (!userId) {
         return { isValid: false, userDid: '' };
       }

@@ -1,6 +1,6 @@
 {
   "name": "@ixo/oracles-client-sdk",
-  "version": "1.0.1",
+  "version": "1.0.0",
   "type": "module",
   "private": false,
   "description": "Client SDK for interacting with IXO Oracles, designed for React applications",
@@ -30,8 +30,8 @@
     "clean": "rm -rf dist node_modules"
   },
   "dependencies": {
-    "@ixo/oracles-chain-client": "workspace:*",
-    "@ixo/oracles-events": "workspace:*",
+    "@ixo/oracles-chain-client": "file:../oracles-chain-client",
+    "@ixo/oracles-events": "file:../events",
     "@tanstack/react-query": "^5.29.0",
     "eventsource": "^3.0.6",
     "jose": "^6.1.0",
