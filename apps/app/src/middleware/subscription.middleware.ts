@@ -71,6 +71,7 @@ export class SubscriptionMiddleware implements NestMiddleware {
       const subscription = await getUserSubscription({
         bearerToken: matrixAccessToken,
         network,
+        subscriptionUrl: this.configService.get('SUBSCRIPTION_URL'),
       });
 
       if (!subscription) {

@@ -73,6 +73,7 @@ export const EnvSchema = z.object({
   MEMORY_MCP_API: z.string(),
   MEMORY_SERVICE_API_KEY: z.string(),
   ORACLE_ENTITY_DID: z.string(),
+  SUBSCRIPTION_URL: z.url().optional(),
 });
 
 export type ENV = z.infer<typeof EnvSchema> & {
