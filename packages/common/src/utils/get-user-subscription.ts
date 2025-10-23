@@ -2,7 +2,7 @@ export const getSubscriptionUrlByNetwork = (
   network: 'mainnet' | 'testnet' | 'devnet',
 ) => {
   return {
-    mainnet: 'https://subscriptions-api-testnet.ixo-api.workers.dev',
+    mainnet: 'https://subscriptions-api-mainnet.ixo-api.workers.dev',
     testnet: 'https://subscriptions-api-testnet.ixo-api.workers.dev',
     devnet: 'https://subscriptions-api.ixo-api.workers.dev',
   }[network];
@@ -28,13 +28,16 @@ export interface GetMySubscriptionsResponseDto {
 export interface GetUserSubscriptionParams {
   network: 'mainnet' | 'testnet' | 'devnet';
   bearerToken: string;
+  subscriptionUrl?: string;
 }
 
 export const getUserSubscription = async ({
   bearerToken,
   network,
+  subscriptionUrl: _subscriptionUrl,
 }: GetUserSubscriptionParams) => {
-  const subscriptionUrl = getSubscriptionUrlByNetwork(network);
+  const subscriptionUrl =
+    _subscriptionUrl ?? getSubscriptionUrlByNetwork(network);
   try {
     const response = await fetch(`${subscriptionUrl}/api/v1/subscriptions`, {
       method: 'GET',
