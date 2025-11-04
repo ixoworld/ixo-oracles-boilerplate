@@ -107,14 +107,19 @@ export class SubscriptionMiddleware implements NestMiddleware {
       next();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
 
       // If it's already an HttpException (from lines 80 or 96), throw it to stop the request
       if (error instanceof HttpException) {
+        this.logger.error(
+          `Subscription validation failed: ${message}`,
+          errorStack,
+        );
         throw error;
       }
 
       // For any other error, log it and throw a generic payment required error
-      this.logger.error(`Subscription check failed: ${message}`);
+      this.logger.error(`Subscription check failed: ${message}`, errorStack);
       req.subscriptionData = undefined;
 
       throw new HttpException(
