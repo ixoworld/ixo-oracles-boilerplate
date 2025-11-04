@@ -130,7 +130,7 @@ export class MatrixManager {
         baseUrl: process.env.MATRIX_BASE_URL!,
         accessToken: process.env.MATRIX_ORACLE_ADMIN_ACCESS_TOKEN!,
         userId: process.env.MATRIX_ORACLE_ADMIN_USER_ID!,
-        storagePath: './matrix-storage',
+        storagePath: process.env.MATRIX_STORE_PATH!,
         autoJoin: true,
       };
 

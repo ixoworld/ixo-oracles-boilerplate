@@ -62,7 +62,10 @@ export class AuthHeaderMiddleware implements NestMiddleware {
       }
       return { isValid, userDid: normalizeDid(userId) };
     } catch (error) {
-      this.logger.error(`Error validating token: ${error}`);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`Error validating token: ${errorMessage}`, errorStack);
       return { isValid: false, userDid: '' };
     }
   }
@@ -107,12 +110,16 @@ export class AuthHeaderMiddleware implements NestMiddleware {
       this.logger.debug(`Auth headers validated for DID: ${userDid}`);
       next(); // Proceed to the next middleware or route handler
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`Auth header validation failed: ${message}`);
       // Pass the original error if it's likely an Http Exception, otherwise wrap it
       if (error instanceof HttpException) {
         next(error);
       } else {
+        const message = error instanceof Error ? error.message : String(error);
+        const errorStack = error instanceof Error ? error.stack : undefined;
+        this.logger.error(
+          `Auth header validation failed: ${message}`,
+          errorStack,
+        );
         next(new HttpException(message, 401));
       }
     }

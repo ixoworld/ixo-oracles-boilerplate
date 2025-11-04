@@ -39,13 +39,16 @@ export const getUserSubscription = async ({
   const subscriptionUrl =
     _subscriptionUrl ?? getSubscriptionUrlByNetwork(network);
   try {
-    const response = await fetch(`${subscriptionUrl}/api/v1/subscriptions`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${bearerToken}`,
-        'Content-Type': 'application/json',
+    const response = await fetch(
+      `${subscriptionUrl.endsWith('/') ? subscriptionUrl.slice(0, -1) : subscriptionUrl}/api/v1/subscriptions`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${bearerToken}`,
+          'Content-Type': 'application/json',
+        },
       },
-    });
+    );
 
     if (!response.ok) {
       console.error(
