@@ -12,7 +12,10 @@ export const useOracleSessions = (
   const queryClient = useQueryClient();
   const { authedRequest } = useOraclesContext();
 
-  const { config } = useOraclesConfig(oracleDid);
+  const { config, isReady: isConfigReady } = useOraclesConfig(
+    oracleDid,
+    overrides,
+  );
 
   const getApiUrl = () => overrides?.baseUrl ?? config.apiUrl ?? '';
 
@@ -35,8 +38,15 @@ export const useOracleSessions = (
     isPending: isCreatingSession,
     isError: isCreateSessionError,
   } = useMutation({
-    mutationFn: () =>
-      authedRequest<IChatSession>(`${getApiUrl()}/sessions`, 'POST', {}),
+    mutationFn: () => {
+      const apiUrl = getApiUrl();
+      if (!apiUrl) {
+        throw new Error(
+          'API URL is not ready. Please wait for oracle config to load.',
+        );
+      }
+      return authedRequest<IChatSession>(`${apiUrl}/sessions`, 'POST', {});
+    },
     onSettled: async () => {
       refetch();
     },
@@ -47,8 +57,19 @@ export const useOracleSessions = (
     isPending: isDeletingSession,
     isError: isDeleteSessionError,
   } = useMutation({
-    mutationFn: (sessionId: string) =>
-      authedRequest<void>(`${getApiUrl()}/sessions/${sessionId}`, 'DELETE', {}),
+    mutationFn: (sessionId: string) => {
+      const apiUrl = getApiUrl();
+      if (!apiUrl) {
+        throw new Error(
+          'API URL is not ready. Please wait for oracle config to load.',
+        );
+      }
+      return authedRequest<void>(
+        `${apiUrl}/sessions/${sessionId}`,
+        'DELETE',
+        {},
+      );
+    },
     onSettled: async () => {
       refetch();
     },
@@ -65,5 +86,6 @@ export const useOracleSessions = (
     isDeletingSession,
     isDeleteSessionError,
     refetch,
+    isConfigReady,
   };
 };

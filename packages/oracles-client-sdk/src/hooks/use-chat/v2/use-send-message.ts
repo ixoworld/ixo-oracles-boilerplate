@@ -22,6 +22,7 @@ interface IUseSendMessageReturn {
   abortStream: () => void;
   isSending: boolean;
   error?: Error | null;
+  isConfigReady: boolean;
 }
 
 export function useSendMessage({
@@ -36,7 +37,10 @@ export function useSendMessage({
   onError,
   onReasoning,
 }: ISendMessageOptions): IUseSendMessageReturn {
-  const { config } = useOraclesConfig(oracleDid);
+  const { config, isReady: isConfigReady } = useOraclesConfig(
+    oracleDid,
+    overrides,
+  );
   const getApiUrl = () => overrides?.baseUrl ?? config.apiUrl;
   const { wallet, authedRequest } = useOraclesContext();
   const {
@@ -213,6 +217,7 @@ export function useSendMessage({
     abortStream,
     isSending: isPending,
     error,
+    isConfigReady,
   };
 }
 

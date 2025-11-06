@@ -13,7 +13,10 @@ import {
 export function useWebSocketEvents(
   props: IWebSocketConfig,
 ): IUseWebSocketEventsReturn {
-  const { config } = useOraclesConfig(props.oracleDid);
+  const { config, isReady: isConfigReady } = useOraclesConfig(
+    props.oracleDid,
+    props.overrides,
+  );
   const { wallet } = useOraclesContext();
 
   const [isConnected, setIsConnected] = useState(false);
@@ -151,6 +154,7 @@ export function useWebSocketEvents(
     error,
     connectionStatus,
     lastActivity,
+    isConfigReady,
   };
 }
 

@@ -29,4 +29,5 @@ export interface IUseWebSocketEventsReturn {
   error: Error | null;
   connectionStatus: ConnectionStatus;
   lastActivity: string | null;
+  isConfigReady: boolean;
 }
