@@ -76,7 +76,10 @@ export function useChat({
     oracleDid,
     overrides,
   );
-  const { config } = useOraclesConfig(oracleDid);
+  const { config, isReady: isConfigReady } = useOraclesConfig(
+    oracleDid,
+    overrides,
+  );
   const { authedRequest } = useOraclesContext();
   const getApiUrl = () => overrides?.baseUrl ?? config.apiUrl;
 
@@ -292,5 +295,6 @@ export function useChat({
     sendMessageError,
     isRealTimeConnected: isWebSocketConnected,
     status,
+    isConfigReady,
   };
 }
