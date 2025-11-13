@@ -1,11 +1,12 @@
-import {
-  type RenderComponentEventPayload,
-  type ToolCallEventPayload,
-} from '@ixo/oracles-events';
 import { createElement, type ComponentProps } from 'react';
 
 import { Event } from './resolve-content.js';
-import { type ToolCallEvent, type UIComponentProps } from './v2/types.js';
+import { DEFAULT_TOOL_CALL_COMPONENT_NAME } from './transform-to-messages-map.js';
+import {
+  IComponentMetadata,
+  type ToolCallEvent,
+  type UIComponentProps,
+} from './v2/types.js';
 
 export type UIComponents = {
   ToolCall: React.FC<UIComponentProps<ToolCallEvent> & { key: string }>;
@@ -24,18 +25,7 @@ export type UIComponents = {
 
 export const resolveUIComponent = (
   componentsMap: UIComponents,
-  component: {
-    name: string;
-    props: {
-      id: string;
-      args: unknown;
-      status?: 'isRunning' | 'done';
-      output?: string;
-      event?: Event;
-      payload?: ToolCallEventPayload | RenderComponentEventPayload;
-      isToolCall?: boolean;
-    };
-  },
+  component: IComponentMetadata,
 ): React.ReactElement | undefined => {
   if (!isValidProps(component.props.args)) {
     return undefined;
@@ -80,7 +70,10 @@ export const resolveUIComponent = (
       isLoading: isRunning,
       requestId: component.props.payload?.requestId ?? '',
       sessionId: component.props.payload?.sessionId ?? '',
-      toolName: component.name,
+      toolName:
+        component.name === DEFAULT_TOOL_CALL_COMPONENT_NAME
+          ? (component.props.toolName ?? component.name)
+          : component.name,
       eventId: component.props.payload?.eventId ?? '',
       key: `${component.name}${component.props.id}`,
     };

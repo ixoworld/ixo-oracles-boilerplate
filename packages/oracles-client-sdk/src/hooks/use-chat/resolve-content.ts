@@ -5,6 +5,7 @@ import {
   type WithRequiredEventProps,
 } from '@ixo/oracles-events/types';
 
+import { getToolName } from '../../utils/get-tool-name.js';
 import { SSEErrorEvent } from '../../utils/sse-parser.js';
 import { type IComponentMetadata } from './v2/types.js';
 
@@ -23,7 +24,7 @@ export const resolveContent = (
     case 'tool_call': {
       const payload = event.payload as ToolCallEventPayload;
       return {
-        name: payload.toolName,
+        name: getToolName(payload.toolName, (payload.args as any)?.toolName),
         props: {
           args: payload.args,
           id: payload.eventId ?? payload.requestId,
@@ -31,7 +32,7 @@ export const resolveContent = (
           output: payload.output,
           payload: payload,
           isToolCall: true,
-          toolName: payload.toolName,
+          toolName: getToolName(payload.toolName, (payload.args as any)?.toolName),
           event: event,
         },
       };

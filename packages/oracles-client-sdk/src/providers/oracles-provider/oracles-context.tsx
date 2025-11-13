@@ -26,15 +26,11 @@ export const useOraclesContext = () => {
   return context;
 };
 
-export const OraclesProvider = ({
+const OraclesProviderInner = ({
   children,
   initialWallet,
   transactSignX,
 }: PropsWithChildren<IOraclesProviderProps>) => {
-  if ((!initialWallet as unknown) || (!transactSignX as unknown)) {
-    throw new Error('initialWallet and transactSignX are required');
-  }
-
   const {
     openIdToken: openIdTokenFromHook,
     isLoading: isTokenLoading,
@@ -87,10 +83,31 @@ export const OraclesProvider = ({
     [initialWallet, transactSignX, authedRequest],
   );
 
-  const queryClient = new QueryClient();
   return (
-    <OraclesContext.Provider value={value}>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    </OraclesContext.Provider>
+    <OraclesContext.Provider value={value}>{children}</OraclesContext.Provider>
+  );
+};
+
+// Outer component that sets up QueryClient
+export const OraclesProvider = ({
+  children,
+  initialWallet,
+  transactSignX,
+}: PropsWithChildren<IOraclesProviderProps>) => {
+  if ((!initialWallet as unknown) || (!transactSignX as unknown)) {
+    throw new Error('initialWallet and transactSignX are required');
+  }
+
+  const queryClient = useMemo(() => new QueryClient(), []);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <OraclesProviderInner
+        initialWallet={initialWallet}
+        transactSignX={transactSignX}
+      >
+        {children}
+      </OraclesProviderInner>
+    </QueryClientProvider>
   );
 };

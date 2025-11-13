@@ -255,6 +255,8 @@ const askOracleStream = async (props: {
   }) => void | Promise<void>;
   onDone?: () => void;
 }): Promise<{ text: string; requestId: string }> => {
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
   const response = await fetch(`${props.apiURL}/messages/${props.sessionId}`, {
     headers: {
       'x-matrix-access-token': props.matrixAccessToken,
@@ -263,6 +265,7 @@ const askOracleStream = async (props: {
     },
     body: JSON.stringify({
       message: props.message,
+      timezone,
       stream: true,
       ...(props.metadata && { metadata: props.metadata }),
       ...(props.browserTools && { tools: props.browserTools }),
