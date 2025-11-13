@@ -7,6 +7,8 @@ import {
 
 export type MessagesMap = Record<string, IMessage>;
 
+export const DEFAULT_TOOL_CALL_COMPONENT_NAME = 'ToolCall';
+
 export default function transformToMessagesMap({
   messages,
   uiComponents,
@@ -46,7 +48,7 @@ export default function transformToMessagesMap({
       const hasCustomComponent = uiComponents && toolCall.name in uiComponents;
 
       const componentMetadata: IComponentMetadata = {
-        name: hasCustomComponent ? toolCall.name : 'ToolCall',
+        name: hasCustomComponent ? toolCall.name : DEFAULT_TOOL_CALL_COMPONENT_NAME,
         props: {
           id: toolCall.id,
           args: toolCall.args,

@@ -1,5 +1,5 @@
 import { type AllEvents } from '@ixo/oracles-events/types';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { useOraclesContext } from '../../providers/oracles-provider/oracles-context.js';
 import { useOraclesConfig } from '../use-oracles-config.js';
@@ -34,12 +34,25 @@ export function useWebSocketEvents(
   handleInvalidateCacheRef.current = props.handleInvalidateCache;
 
   const { sessionId, overrides } = props;
-  const getApiUrl = () =>
-    overrides?.wsUrl ?? config.socketUrl ?? overrides?.baseUrl;
+
+  // Compute WebSocket URL - memoize to prevent re-renders
+  const wsUrl = useMemo(() => {
+    const url = overrides?.wsUrl ?? config.socketUrl ?? overrides?.baseUrl;
+    if (!url) return null;
+
+    // Convert http:// to ws:// and https:// to wss:// for WebSocket connections
+    if (url.startsWith('http://')) {
+      return url.replace('http://', 'ws://');
+    }
+    if (url.startsWith('https://')) {
+      return url.replace('https://', 'wss://');
+    }
+
+    return url;
+  }, [config.socketUrl, overrides?.wsUrl, overrides?.baseUrl]);
 
   useEffect(() => {
-    const apiUrl = getApiUrl();
-    if (!wallet || !sessionId || !apiUrl) {
+    if (!wallet || !sessionId || !wsUrl) {
       return;
     }
 
@@ -52,7 +65,7 @@ export function useWebSocketEvents(
     setError(null);
 
     // Create WebSocket connection
-    const newSocket = io(apiUrl, {
+    const newSocket = io(wsUrl, {
       query: { sessionId },
       transports: ['websocket'],
     });
@@ -147,7 +160,7 @@ export function useWebSocketEvents(
       setIsConnected(false);
       setConnectionStatus('disconnected');
     };
-  }, [sessionId, wallet, overrides, config.socketUrl]); // Removed handleInvalidateCache from dependencies
+  }, [sessionId, wallet, wsUrl]);
 
   return {
     isConnected,
