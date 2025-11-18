@@ -378,6 +378,272 @@ All custom components receive standard props:
 - `id: string` - Unique identifier
 - Custom props from your component definition
 
+## AG-UI Actions
+
+AG-UI (Agentic UI) Actions enable the AI oracle to dynamically generate and control user interface components in your application.
+
+### What Are AG-UI Actions?
+
+AG-UI actions are **frontend tools** that combine business logic with UI rendering:
+
+- Run in the user's browser
+- Orchestrated by the AI oracle
+- Have both handler (logic) and render (UI) functions
+- Use Zod schemas for type-safe validation
+- Can maintain state across operations
+
+### When to Use AG-UI Actions
+
+Use AG-UI actions when you want the AI to:
+
+- **Create Dashboards** - Multi-component layouts with data visualization
+- **Generate Forms** - Dynamic forms based on user needs
+- **Build Data Tables** - Structured data display with sorting/filtering
+- **Compose Charts** - Data visualization components
+- **Manage Complex UI** - Any stateful, multi-operation interface
+
+### Basic Setup
+
+Register an AG-UI action using the `useAgAction` hook:
+
+```tsx
+import { useAgAction } from '@ixo/oracles-client-sdk';
+import { z } from 'zod';
+
+function ChatInterface() {
+  useAgAction({
+    name: 'create_data_table',
+    description: 'Create a data table with columns and rows',
+    parameters: z.object({
+      title: z.string().optional(),
+      columns: z.array(
+        z.object({
+          key: z.string(),
+          label: z.string(),
+          type: z.enum(['string', 'number', 'boolean']).optional(),
+        }),
+      ),
+      data: z.array(z.record(z.any())),
+    }),
+
+    handler: async (args) => {
+      // Execute logic (save to state, validate, etc.)
+      return { success: true, rowCount: args.data.length };
+    },
+
+    render: ({ status, args }) => {
+      if (status === 'done' && args) {
+        return <DataTable {...args} />;
+      }
+      return null;
+    },
+  });
+
+  // ... rest of chat interface
+}
+```
+
+### Working Example
+
+Here's a complete example with the DataTable component:
+
+```tsx
+// Define the schema with descriptions
+const createDataTableSchema = z.object({
+  title: z.string().optional().describe('Optional table title'),
+  columns: z
+    .array(
+      z.object({
+        key: z.string().describe('Data key for this column'),
+        label: z.string().describe('Display label'),
+        type: z.enum(['string', 'number', 'boolean']).optional(),
+      }),
+    )
+    .describe('Column definitions'),
+  data: z.array(z.record(z.any())).describe('Array of row objects'),
+});
+
+// Register the action
+function ChatInterface() {
+  useAgAction({
+    name: 'create_data_table',
+    description: 'Create a data table with structured data',
+    parameters: createDataTableSchema,
+
+    handler: async (args) => {
+      console.log('Creating table with', args.data.length, 'rows');
+      return {
+        success: true,
+        rowCount: args.data.length,
+      };
+    },
+
+    render: ({ status, args }) => {
+      if (status === 'done' && args) {
+        return (
+          <DataTable
+            title={args.title}
+            columns={args.columns}
+            data={args.data}
+          />
+        );
+      }
+      return null;
+    },
+  });
+}
+
+// The DataTable component
+interface DataTableProps {
+  title?: string;
+  columns: Array<{ key: string; label: string; type?: string }>;
+  data: Record<string, any>[];
+}
+
+function DataTable({ title, columns, data }: DataTableProps) {
+  return (
+    <div className="data-table">
+      {title && <h3>{title}</h3>}
+      <table>
+        <thead>
+          <tr>
+            {columns.map((col) => (
+              <th key={col.key}>{col.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((row, idx) => (
+            <tr key={idx}>
+              {columns.map((col) => (
+                <td key={col.key}>{row[col.key]}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+```
+
+**How the AI uses it:**
+
+```
+User: "Show me a table of top 3 customers"
+
+AI: [calls create_data_table with]
+{
+  "title": "Top 3 Customers",
+  "columns": [
+    { "key": "name", "label": "Name" },
+    { "key": "revenue", "label": "Revenue", "type": "number" }
+  ],
+  "data": [
+    { "name": "Acme Corp", "revenue": 125000 },
+    { "name": "TechStart", "revenue": 98000 },
+    { "name": "InnovateCo", "revenue": 87500 }
+  ]
+}
+```
+
+### State Management
+
+Use refs to maintain state across multiple operations:
+
+```tsx
+import { useRef } from 'react';
+
+function ChatInterface() {
+  // State persists across AI calls
+  const dashboardStateRef = useRef({
+    components: new Map(),
+  });
+
+  useAgAction({
+    name: 'manage_dashboard',
+    description: 'Manage dashboard components',
+    parameters: manageDashboardSchema,
+
+    handler: async (args) => {
+      // Read current state
+      const currentState = dashboardStateRef.current;
+
+      // Modify state
+      if (args.operation === 'add') {
+        currentState.components.set(args.id, args.component);
+      }
+
+      // State persists for next operation
+      return { success: true };
+    },
+
+    render: ({ status }) => {
+      if (status === 'done') {
+        return <DashboardCanvas state={dashboardStateRef.current} />;
+      }
+      return null;
+    },
+  });
+}
+```
+
+### Advanced Usage: Multi-Operation Actions
+
+Build sophisticated systems with discriminated unions:
+
+```tsx
+const manageDashboardSchema = z.discriminatedUnion('operation', [
+  z.object({
+    operation: z.literal('create'),
+    components: z.array(componentSchema),
+  }),
+  z.object({
+    operation: z.literal('add_component'),
+    component: componentSchema,
+  }),
+  z.object({
+    operation: z.literal('remove_component'),
+    componentId: z.string(),
+  }),
+]);
+
+useAgAction({
+  name: 'manage_dashboard',
+  description:
+    'Create and manage dashboards with operations: create, add_component, remove_component',
+  parameters: manageDashboardSchema,
+
+  handler: async (args) => {
+    switch (args.operation) {
+      case 'create':
+        // Create new dashboard
+        return { success: true, operation: 'create' };
+      case 'add_component':
+        // Add component
+        return { success: true, operation: 'add_component' };
+      case 'remove_component':
+        // Remove component
+        return { success: true, operation: 'remove_component' };
+    }
+  },
+
+  render: ({ status }) => {
+    if (status === 'done') {
+      return <DashboardCanvas state={dashboardStateRef.current} />;
+    }
+    return null;
+  },
+});
+```
+
+### Link to Full Guide
+
+For comprehensive documentation, examples, and best practices, see:
+
+- [AG-UI Tools Guide](./AG_UI_TOOLS.md) - Complete guide with advanced examples
+- [API Reference](./API_REFERENCE.md#useagaction) - API documentation
+
 ## Streaming
 
 Messages stream in real-time with optimized performance.
@@ -525,6 +791,115 @@ function MessageList({ messages, uiComponents }) {
     </div>
   );
 }
+```
+
+### AG-UI Actions Best Practices
+
+#### 5. Use Descriptive Action Names
+
+```tsx
+// ✅ Good - clear intent
+useAgAction({ name: 'create_data_table', ... });
+useAgAction({ name: 'manage_dashboard', ... });
+
+// ❌ Bad - ambiguous
+useAgAction({ name: 'table', ... });
+useAgAction({ name: 'action1', ... });
+```
+
+#### 6. Add Schema Descriptions
+
+```tsx
+// ✅ Good - helps the AI understand
+z.object({
+  query: z
+    .string()
+    .describe(
+      'Search query in natural language. Example: "documents about climate change"',
+    ),
+  limit: z.number().min(1).max(50).describe('Maximum results to return (1-50)'),
+});
+
+// ❌ Bad - no guidance for AI
+z.object({
+  query: z.string(),
+  limit: z.number(),
+});
+```
+
+#### 7. Use Refs for Stateful Actions
+
+```tsx
+// ✅ Good - state persists across operations
+const dashboardRef = useRef({ components: new Map() });
+
+useAgAction({
+  handler: async (args) => {
+    dashboardRef.current.components.set(id, component);
+    return { success: true };
+  },
+});
+
+// ❌ Bad - useState causes unnecessary re-renders
+const [dashboard, setDashboard] = useState({ components: new Map() });
+```
+
+#### 8. Use Discriminated Unions for Multi-Operation Actions
+
+```tsx
+// ✅ Good - type-safe operations
+const schema = z.discriminatedUnion('operation', [
+  z.object({ operation: z.literal('create'), data: z.any() }),
+  z.object({ operation: z.literal('update'), id: z.string() }),
+]);
+
+// ❌ Bad - no type safety
+const schema = z.object({
+  operation: z.enum(['create', 'update']),
+  id: z.string().optional(),
+  data: z.any().optional(),
+});
+```
+
+#### 9. Return Meaningful Results from Handlers
+
+```tsx
+// ✅ Good - informative
+handler: async (args) => {
+  return {
+    success: true,
+    operation: 'create',
+    componentCount: 5,
+    message: 'Dashboard created with 5 components',
+  };
+};
+
+// ❌ Bad - minimal info
+handler: async (args) => {
+  return { success: true };
+};
+```
+
+#### 10. Throw Descriptive Errors
+
+```tsx
+// ✅ Good - helps AI correct mistakes
+handler: async (args) => {
+  if (args.data.length === 0) {
+    throw new Error(
+      'Cannot create table with empty data. ' +
+        'Please provide at least one row. ' +
+        'Example: [{"name": "John", "age": 30}]',
+    );
+  }
+};
+
+// ❌ Bad - vague error
+handler: async (args) => {
+  if (args.data.length === 0) {
+    throw new Error('Invalid data');
+  }
+};
 ```
 
 ## Next Steps

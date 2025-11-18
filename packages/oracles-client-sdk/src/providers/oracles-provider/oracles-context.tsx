@@ -6,9 +6,12 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useRef,
+  useState,
 } from 'react';
 import { useGetOpenIdToken } from '../../hooks/index.js';
 import { request } from '../../utils/request.js';
+import type { AgAction } from '../../hooks/use-ag-action.js';
 import {
   type IOraclesContextProps,
   type IOraclesProviderProps,
@@ -37,6 +40,15 @@ const OraclesProviderInner = ({
     error: tokenError,
     refetch,
   } = useGetOpenIdToken(initialWallet);
+
+  // AG-UI action state management
+  const [agActions, setAgActions] = useState<AgAction[]>([]);
+  const agActionHandlers = useRef<
+    Map<string, (args: any) => Promise<any> | any>
+  >(new Map());
+  const agActionRenders = useRef<
+    Map<string, (props: any) => React.ReactElement | null>
+  >(new Map());
 
   const authedRequest = useCallback(
     async (
@@ -70,6 +82,50 @@ const OraclesProviderInner = ({
     [initialWallet.did, openIdTokenFromHook, refetch, tokenError],
   );
 
+  // AG-UI action management functions
+  const registerAgAction = useCallback(
+    (
+      action: AgAction,
+      handler: (args: any) => Promise<any> | any,
+      render?: (props: any) => React.ReactElement | null,
+    ) => {
+      setAgActions((prev) => {
+        // Check if action already exists
+        const exists = prev.some((a) => a.name === action.name);
+        if (exists) {
+          // Update existing action
+          return prev.map((a) => (a.name === action.name ? action : a));
+        }
+        // Add new action
+        return [...prev, action];
+      });
+
+      agActionHandlers.current.set(action.name, handler);
+      if (render) {
+        agActionRenders.current.set(action.name, render);
+      }
+    },
+    [],
+  );
+
+  const unregisterAgAction = useCallback((name: string) => {
+    setAgActions((prev) => prev.filter((a) => a.name !== name));
+    agActionHandlers.current.delete(name);
+    agActionRenders.current.delete(name);
+  }, []);
+
+  const executeAgAction = useCallback(async (name: string, args: any) => {
+    const handler = agActionHandlers.current.get(name);
+    if (!handler) {
+      throw new Error(`AG-UI action '${name}' not found`);
+    }
+    return await handler(args);
+  }, []);
+
+  const getAgActionRender = useCallback((name: string) => {
+    return agActionRenders.current.get(name);
+  }, []);
+
   const value: IOraclesContextProps = useMemo(
     () => ({
       wallet: initialWallet,
@@ -79,8 +135,22 @@ const OraclesProviderInner = ({
         method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
         options?: RequestInit,
       ) => Promise<T>,
+      agActions,
+      registerAgAction,
+      unregisterAgAction,
+      executeAgAction,
+      getAgActionRender,
     }),
-    [initialWallet, transactSignX, authedRequest],
+    [
+      initialWallet,
+      transactSignX,
+      authedRequest,
+      agActions,
+      registerAgAction,
+      unregisterAgAction,
+      executeAgAction,
+      getAgActionRender,
+    ],
   );
 
   return (
