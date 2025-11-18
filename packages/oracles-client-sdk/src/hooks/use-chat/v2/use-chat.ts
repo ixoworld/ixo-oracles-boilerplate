@@ -136,20 +136,6 @@ export function useChat({
     ) => {
       if (!uiComponents) return;
 
-      const f: SSEToolCallPayload = {
-        requestId: '37aedac3-9596-454f-ae2c-1ca35ac8434b',
-        sessionId: '$zY04HX7zFT7RKKJFY3PTkQyoRsBBXWkh2lISLIOQnKY',
-        toolName: 'toolCall',
-        args: {
-          query: 'personal information about the user',
-          strategy: 'balanced',
-          knowledge_level: 'user',
-          toolName: 'mcp_memory-engine-http_memory_query',
-        },
-        status: 'isRunning',
-        eventId: 'call_a5db5bf47c5945aea4',
-      };
-
       const toolName = getToolName(
         toolCallData.toolName,
         (toolCallData.args as any)?.toolName,
