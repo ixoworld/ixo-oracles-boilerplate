@@ -80,13 +80,25 @@ export const resolveUIComponent = (
       status: component.props.status as 'isRunning' | 'done' | undefined,
       output: component.props.output,
       isLoading: isRunning,
-      requestId: component.props.payload?.requestId ?? '',
-      sessionId: component.props.payload?.sessionId ?? '',
+      requestId: component.props.payload
+        ? 'requestId' in component.props.payload
+          ? component.props.payload.requestId
+          : ''
+        : '',
+      sessionId: component.props.payload
+        ? 'sessionId' in component.props.payload
+          ? component.props.payload.sessionId
+          : ''
+        : '',
       toolName:
         component.name === DEFAULT_TOOL_CALL_COMPONENT_NAME
           ? (component.props.toolName ?? component.name)
           : component.name,
-      eventId: component.props.payload?.eventId ?? '',
+      eventId: component.props.payload
+        ? 'eventId' in component.props.payload
+          ? component.props.payload.eventId
+          : ''
+        : '',
       key: `${component.name}${component.props.id}`,
     };
     return createElement(Component, toolCallComponentProps);
