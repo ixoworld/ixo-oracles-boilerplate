@@ -9,6 +9,7 @@ import {
   type IWebSocketConfig,
   type WebSocketEvent,
 } from './types.js';
+import { executeToolAndEmitResult } from './tool-executor.js';
 
 export function useWebSocketEvents(
   props: IWebSocketConfig,
@@ -29,9 +30,13 @@ export function useWebSocketEvents(
   const socketRef = useRef<Socket | null>(null);
   // Use ref to store callback to prevent dependency issues
   const handleInvalidateCacheRef = useRef(props.handleInvalidateCache);
+  const browserToolsRef = useRef(props.browserTools);
+  const actionToolsRef = useRef(props.actionTools);
 
-  // Update the callback ref when it changes
+  // Update the callback refs when they change
   handleInvalidateCacheRef.current = props.handleInvalidateCache;
+  browserToolsRef.current = props.browserTools;
+  actionToolsRef.current = props.actionTools;
 
   const { sessionId, overrides } = props;
 
@@ -104,31 +109,66 @@ export function useWebSocketEvents(
       handleInvalidateCacheRef.current ?? (() => {}),
     );
 
-    if (props.browserTools && Object.keys(props.browserTools).length > 0) {
+    if (
+      browserToolsRef.current &&
+      Object.keys(browserToolsRef.current).length > 0
+    ) {
       // Listen for browser tool calls
       newSocket.on(
         'browser_tool_call',
         async (data: { toolCallId: string; toolName: string; args: any }) => {
-          try {
-            const tool = props.browserTools?.[data.toolName];
-            if (!tool) {
-              throw new Error(`Tool ${data.toolName} not found`);
-            }
-            const result = await tool.fn(data.args);
-            newSocket.emit('tool_result', {
-              toolCallId: data.toolCallId,
-              result,
-            });
-          } catch (error) {
-            newSocket.emit('tool_result', {
-              toolCallId: data.toolCallId,
-              result: null,
-              error: error instanceof Error ? error.message : 'Unknown error',
-            });
-          }
+          await executeToolAndEmitResult(
+            {
+              socket: newSocket,
+              toolId: data.toolCallId,
+              eventName: 'tool_result',
+            },
+            async () => {
+              const tool = browserToolsRef.current?.[data.toolName];
+              if (!tool) {
+                throw new Error(`Tool ${data.toolName} not found`);
+              }
+              return await tool.fn(data.args);
+            },
+          );
         },
       );
     }
+
+    // Listen for AG-UI action calls (always register listener, even if no tools yet)
+    // The listener will check actionToolsRef at execution time
+    newSocket.on(
+      'action_call',
+      async (data: {
+        sessionId: string;
+        requestId: string;
+        toolName: string;
+        toolCallId: string;
+        args: any;
+        status: string;
+      }) => {
+        await executeToolAndEmitResult(
+          {
+            socket: newSocket,
+            toolId: data.toolCallId,
+            eventName: 'action_call_result',
+            sessionId: data.sessionId,
+          },
+          async () => {
+            const tool = actionToolsRef.current?.[data.toolName];
+            if (!tool) {
+              console.error(
+                `[SDK WS] Action tool ${data.toolName} not found in registry`,
+                'Available tools:',
+                Object.keys(actionToolsRef.current || {}),
+              );
+              throw new Error(`Action tool ${data.toolName} not found`);
+            }
+            return await tool.handler(data.args);
+          },
+        );
+      },
+    );
 
     // Listen for all events from the server
     newSocket.onAny((_, ev: unknown) => {
@@ -136,8 +176,11 @@ export function useWebSocketEvents(
       if (!event) {
         return;
       }
-      // Skip browser_tool_call events as they're handled above
-      if (event.eventName === 'browser_tool_call') {
+      // Skip browser_tool_call and action_call events as they're handled above
+      if (
+        event.eventName === 'browser_tool_call' ||
+        event.eventName === 'action_call'
+      ) {
         return;
       }
 
@@ -168,12 +211,14 @@ export function useWebSocketEvents(
     connectionStatus,
     lastActivity,
     isConfigReady,
+    socket: socketRef.current,
   };
 }
 
 // Export event names for convenience (same as SSE version)
 export const evNames = {
   ToolCall: 'tool_call',
+  ActionCall: 'action_call',
   RenderComponent: 'render_component',
   MessageCacheInvalidation: 'message_cache_invalidation',
   RouterUpdate: 'router_update',

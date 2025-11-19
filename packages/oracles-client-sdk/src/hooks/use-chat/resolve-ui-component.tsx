@@ -10,6 +10,18 @@ import {
 
 export type UIComponents = {
   ToolCall: React.FC<UIComponentProps<ToolCallEvent> & { key: string }>;
+  AgActionToolCall?: React.FC<{
+    id: string;
+    actionName: string;
+    args?: Record<string, unknown>;
+    output?: string;
+    status?: 'isRunning' | 'done' | 'error';
+    error?: string;
+    isLoading?: boolean;
+    isCurrentlyRendered?: boolean;
+    onRenderClick?: () => void;
+    key: string;
+  }>;
   Error: React.FC<{
     id: string;
     args: Record<string, unknown>;
@@ -20,7 +32,7 @@ export type UIComponents = {
     payload?: any;
     key: string;
   }>;
-  [key: string]: React.FC<any>;
+  [key: string]: React.FC<any> | undefined;
 };
 
 export const resolveUIComponent = (
@@ -56,7 +68,7 @@ export const resolveUIComponent = (
       payload: component.props.payload,
       key: `${component.name}${component.props.id}`,
     };
-    return createElement(Component, errorComponentProps);
+    return createElement(Component!, errorComponentProps);
   }
 
   if (component.props.isToolCall) {
@@ -65,7 +77,7 @@ export const resolveUIComponent = (
     } = {
       id: component.props.id,
       args: component.props.args,
-      status: component.props.status,
+      status: component.props.status as 'isRunning' | 'done' | undefined,
       output: component.props.output,
       isLoading: isRunning,
       requestId: component.props.payload?.requestId ?? '',
@@ -80,6 +92,27 @@ export const resolveUIComponent = (
     return createElement(Component, toolCallComponentProps);
   }
 
+  if (component.props.isAgAction) {
+    // Use AgActionToolCall if available, otherwise fallback to ToolCall
+    const AgActionComponent =
+      componentsMap.AgActionToolCall || componentsMap.ToolCall;
+
+    const agActionComponentProps = {
+      id: component.props.id,
+      actionName: component.name,
+      args: component.props.args,
+      output: component.props.output,
+      status: component.props.status,
+      error: component.props.error,
+      isLoading: isRunning,
+      key: `${component.name}${component.props.id}`,
+    };
+    return createElement(
+      AgActionComponent as React.FC<any>,
+      agActionComponentProps,
+    );
+  }
+
   // For other components, use generic props
   return createElement(Component, {
     key: `${component.name}${component.props.id}`,
@@ -90,8 +123,6 @@ export const resolveUIComponent = (
   });
 };
 
-const isValidProps = (
-  props: unknown,
-): props is ComponentProps<UIComponents[keyof UIComponents]> => {
+const isValidProps = (props: unknown): props is ComponentProps<any> => {
   return typeof props === 'object' && props !== null;
 };

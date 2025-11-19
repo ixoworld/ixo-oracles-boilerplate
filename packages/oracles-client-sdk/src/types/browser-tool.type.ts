@@ -1,10 +1,10 @@
-import { type zodToJsonSchema } from 'zod-to-json-schema';
+import { z } from 'zod';
 
 export interface IBrowserToolParams {
   description: string;
-  schema: Parameters<typeof zodToJsonSchema>[0];
+  schema: z.ZodTypeAny;
   toolName: string;
-  fn: <T>(args: T) => Promise<unknown>;
+  fn: (args: any) => Promise<unknown>;
 }
 
 export type IBrowserTools = Record<string, IBrowserToolParams>;

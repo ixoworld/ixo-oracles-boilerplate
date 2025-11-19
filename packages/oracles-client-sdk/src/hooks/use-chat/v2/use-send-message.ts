@@ -9,6 +9,7 @@ import {
   type SSEErrorEventData,
   type SSEReasoningEventData,
   type SSEToolCallEventData,
+  type SSEActionCallEventData,
 } from '../../../utils/sse-parser.js';
 import { useGetOpenIdToken } from '../../use-get-openid-token/use-get-openid-token.js';
 import { useOraclesConfig } from '../../use-oracles-config.js';
@@ -36,13 +37,14 @@ export function useSendMessage({
   onToolCall,
   onError,
   onReasoning,
+  onActionCall,
 }: ISendMessageOptions): IUseSendMessageReturn {
   const { config, isReady: isConfigReady } = useOraclesConfig(
     oracleDid,
     overrides,
   );
   const getApiUrl = () => overrides?.baseUrl ?? config.apiUrl;
-  const { wallet, authedRequest } = useOraclesContext();
+  const { wallet, authedRequest, agActions } = useOraclesContext();
   const {
     openIdToken,
     isLoading: isTokenLoading,
@@ -132,6 +134,15 @@ export function useSendMessage({
                 schema: zodToJsonSchema(tool.schema),
               }))
             : undefined,
+          agActions:
+            agActions.length > 0
+              ? agActions.map((action) => ({
+                  name: action.name,
+                  description: action.description,
+                  schema: zodToJsonSchema(action.parameters),
+                  hasRender: action.hasRender,
+                }))
+              : undefined,
           abortSignal: abortControllerRef.current?.signal,
 
           // Message chunks (existing pattern)
@@ -139,21 +150,24 @@ export function useSendMessage({
             await chatRef?.current.upsertAIMessage(requestId, chunk);
           },
 
-          // Tool calls (NEW - forward to useChat callback)
           onToolCall: onToolCall
-            ? async ({ toolCallData }) => {
-                await onToolCall(toolCallData);
+            ? async ({ toolCallData, requestId }) => {
+                await onToolCall({ toolCallData, requestId });
               }
             : undefined,
 
-          // Errors (NEW - forward to useChat callback)
+          onActionCall: onActionCall
+            ? async ({ actionCallData, requestId }) => {
+                await onActionCall({ actionCallData, requestId });
+              }
+            : undefined,
+
           onError: onError
-            ? async ({ error }) => {
-                await onError(error);
+            ? async ({ error, requestId }) => {
+                await onError({ error, requestId });
               }
             : undefined,
 
-          // Reasoning (NEW - forward to useChat callback)
           onReasoning: onReasoning
             ? async ({ reasoningData, requestId }) => {
                 await onReasoning({ reasoningData, requestId });
@@ -234,6 +248,12 @@ const askOracleStream = async (props: {
     description: string;
     schema: Record<string, unknown>;
   }[];
+  agActions?: {
+    name: string;
+    description: string;
+    schema: Record<string, unknown>;
+    hasRender: boolean;
+  }[];
   abortSignal?: AbortSignal;
 
   // Callbacks for different event types
@@ -243,6 +263,10 @@ const askOracleStream = async (props: {
   }) => void | Promise<void>;
   onToolCall?: (args: {
     toolCallData: SSEToolCallEventData;
+    requestId: string;
+  }) => void | Promise<void>;
+  onActionCall?: (args: {
+    actionCallData: SSEActionCallEventData;
     requestId: string;
   }) => void | Promise<void>;
   onError?: (args: {
@@ -269,6 +293,7 @@ const askOracleStream = async (props: {
       stream: true,
       ...(props.metadata && { metadata: props.metadata }),
       ...(props.browserTools && { tools: props.browserTools }),
+      ...(props.agActions && { agActions: props.agActions }),
     }),
     method: 'POST',
     signal: props.abortSignal,
@@ -306,6 +331,19 @@ const askOracleStream = async (props: {
         case 'tool_call':
           if (props.onToolCall) {
             await props.onToolCall({ toolCallData: sseEvent.data, requestId });
+          }
+          break;
+
+        case 'action_call':
+          if (props.onActionCall) {
+            await props.onActionCall({
+              actionCallData: sseEvent.data,
+              requestId,
+            });
+          } else {
+            console.warn(
+              '[useSendMessage] action_call received but onActionCall handler is missing',
+            );
           }
           break;
 
