@@ -5,6 +5,7 @@ import {
 } from '@ixo/oracles-events/types';
 import { type IBrowserTools } from '../../../types/browser-tool.type.js';
 import {
+  SSEErrorEvent,
   type SSEActionCallEventData,
   type SSEErrorEventData,
   type SSEReasoningEventData,
@@ -23,7 +24,12 @@ export interface IComponentMetadata {
     status?: 'isRunning' | 'done' | 'error';
     output?: string;
     event?: Event;
-    payload?: ToolCallEventPayload | RenderComponentEventPayload;
+    payload?:
+      | ToolCallEventPayload
+      | RenderComponentEventPayload
+      | BrowserToolCallEventPayload
+      | SSEErrorEvent
+      | SSEActionCallEventData;
     isToolCall?: boolean;
     isAgAction?: boolean;
     toolName?: string; // Original tool name (for generic ToolCall component)
