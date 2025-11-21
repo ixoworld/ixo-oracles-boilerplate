@@ -13,6 +13,7 @@ import {
   SimpleMatrixClient,
 } from './utils/create-simple-matrix-client.js';
 import { formatMsg } from './utils/format-msg.js';
+import { retry } from './utils/retry.js';
 
 function getEntityRoomAliasFromDid(did: string) {
   return did.replace(/:/g, '-');
@@ -273,7 +274,9 @@ export class MatrixManager {
     }
 
     try {
-      const roomId = await this.mxClient.resolveRoomAlias(oracleRoomFullAlias);
+      const roomId = await retry(async () => {
+        return await this.mxClient!.resolveRoomAlias(oracleRoomFullAlias);
+      });
       Logger.debug(
         '🔍 Resolved room id for oracle room alias:',
         oracleRoomFullAlias,
@@ -302,30 +305,27 @@ export class MatrixManager {
    * Send a message using matrix-bot-sdk - MUCH simpler!
    */
   async sendMessage(options: IMessageOptions): Promise<string> {
-    try {
-      if (!this.mxClient) {
-        throw new Error('Simple client not initialized');
-      }
+    if (!this.mxClient) {
+      throw new Error('Simple client not initialized');
+    }
 
-      // Use the simplified sendMessage API from matrix-bot-sdk
-      const { content, htmlContent } = formatMsg({
-        message: options.message,
-        isOracleAdmin: Boolean(options.isOracleAdmin),
-        oracleName: options.oracleName ?? this.oracleName,
-        disablePrefix: options.disablePrefix,
-      });
+    // Use the simplified sendMessage API from matrix-bot-sdk
+    const { content, htmlContent } = formatMsg({
+      message: options.message,
+      isOracleAdmin: Boolean(options.isOracleAdmin),
+      oracleName: options.oracleName ?? this.oracleName,
+      disablePrefix: options.disablePrefix,
+    });
 
-      return await this.mxClient.sendMessage({
+    return await retry(async () => {
+      return await this.mxClient!.sendMessage({
         roomId: options.roomId,
         message: content,
         type: 'html',
         formattedBody: htmlContent,
         threadId: options.threadId,
       });
-    } catch (error) {
-      Logger.error('❌ Error sending message:', error);
-      throw error;
-    }
+    });
   }
 
   async editMessage(
@@ -362,11 +362,13 @@ export class MatrixManager {
       },
     };
 
-    return await this.mxClient.mxClient.sendEvent(
-      options.roomId,
-      'm.room.message',
-      ev,
-    );
+    return await retry(async () => {
+      return await this.mxClient!.mxClient.sendEvent(
+        options.roomId,
+        'm.room.message',
+        ev,
+      );
+    });
   }
 
   /**
@@ -413,7 +415,13 @@ export class MatrixManager {
       throw new Error('Simple client not initialized');
     }
 
-    return await this.mxClient.mxClient.sendEvent(roomId, eventType, content);
+    return await retry(async () => {
+      return await this.mxClient!.mxClient.sendEvent(
+        roomId,
+        eventType,
+        content,
+      );
+    });
   }
 
   public async sendActionLog(
@@ -431,7 +439,13 @@ export class MatrixManager {
     roomId: string,
     eventId: string,
   ): Promise<MatrixEvent<T>> {
-    return await this.mxClient?.mxClient.getEvent(roomId, eventId);
+    if (!this.mxClient) {
+      throw new Error('Simple client not initialized');
+    }
+
+    return await retry(async () => {
+      return await this.mxClient!.mxClient.getEvent(roomId, eventId);
+    });
   }
 
   public async getLoginResponse(
@@ -442,8 +456,14 @@ export class MatrixManager {
       accessToken,
     });
 
-    const loginResponse = await tempClient.whoami();
+    const loginResponse = await retry(async () => {
+      return await tempClient.whoami();
+    });
+
     if (!loginResponse.user_id || !loginResponse.device_id) {
+      tempClient.stopClient();
+      tempClient.removeAllListeners();
+      tempClient.http.abort();
       throw new sdk.MatrixError({
         error: 'Invalid access token: User ID or device ID not found',
       });
@@ -460,7 +480,9 @@ export class MatrixManager {
     if (!this.mxClient) {
       throw new Error('Simple client not initialized');
     }
-    const profile = await this.mxClient.mxClient.getUserProfile(userId);
+    const profile = await retry(async () => {
+      return await this.mxClient!.mxClient.getUserProfile(userId);
+    });
     return profile.displayname;
   }
 
@@ -472,7 +494,9 @@ export class MatrixManager {
       throw new Error('Simple client not initialized');
     }
 
-    return await this.mxClient.joinRoom(roomIdOrAlias);
+    return await retry(async () => {
+      return await this.mxClient!.joinRoom(roomIdOrAlias);
+    });
   }
 
   /**
