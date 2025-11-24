@@ -15,6 +15,7 @@ import { ConfigService } from '@nestjs/config';
 import { minutes } from '@nestjs/throttler';
 import { type NextFunction, type Request, type Response } from 'express';
 import { ENV } from 'src/config';
+import { TokenLimiter } from 'src/utils/token-limit-handler';
 
 // Extend Express Request interface to include subscription data
 declare global {
@@ -26,7 +27,9 @@ declare global {
     }
   }
 }
-const TEN_MINUTES = minutes(10);
+
+// Cache for 3 minutes (shorter than cron interval to prevent stale data)
+const THREE_MINUTES = minutes(3);
 @Injectable()
 export class SubscriptionMiddleware implements NestMiddleware {
   private readonly logger = new Logger(SubscriptionMiddleware.name);
@@ -34,6 +37,26 @@ export class SubscriptionMiddleware implements NestMiddleware {
     private readonly configService: ConfigService<ENV>,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
+
+  private checkCanContinue(
+    subscription: GetMySubscriptionsResponseDto,
+  ): boolean {
+    if (subscription.status !== 'active' && subscription.status !== 'trial') {
+      throw new HttpException(
+        'User has inactive subscription, please subscribe to continue',
+        HttpStatus.PAYMENT_REQUIRED,
+      );
+    }
+
+    if (subscription.totalCredits <= 10) {
+      throw new HttpException(
+        'User has less than 10 credits, please top up to continue',
+        HttpStatus.PAYMENT_REQUIRED,
+      );
+    }
+
+    return true;
+  }
 
   async use(req: Request, res: Response, next: NextFunction): Promise<void> {
     this.logger.debug(
@@ -59,6 +82,9 @@ export class SubscriptionMiddleware implements NestMiddleware {
         this.logger.debug(`Subscription found in cache for user: ${did}`);
         this.logger.debug(`Subscription`, cachedSubscription);
         req.subscriptionData = cachedSubscription;
+        this.checkCanContinue(cachedSubscription);
+        await TokenLimiter.setSubscriptionPayload(did, cachedSubscription);
+        await TokenLimiter.overrideUserBalance(did, cachedSubscription.totalCredits);
         next();
         return;
       }
@@ -74,8 +100,15 @@ export class SubscriptionMiddleware implements NestMiddleware {
         subscriptionUrl: this.configService.get('SUBSCRIPTION_URL'),
       });
 
+      this.logger.debug(
+        `Subscription API response for user ${did}:`,
+        JSON.stringify(subscription, null, 2),
+      );
+
       if (!subscription) {
-        this.logger.debug(`No subscription found for user: ${did}`);
+        this.logger.warn(
+          `No subscription found for user: ${did}. This could mean: 1) API returned non-OK status, 2) API returned null/undefined data, 3) API call failed with error`,
+        );
         req.subscriptionData = undefined;
 
         // throw error
@@ -93,16 +126,13 @@ export class SubscriptionMiddleware implements NestMiddleware {
       );
 
       // Check if subscription is active
-      if (subscription.status !== 'active' && subscription.status !== 'trial') {
-        throw new HttpException(
-          'User has inactive subscription, please subscribe to continue',
-          HttpStatus.PAYMENT_REQUIRED,
-        );
-      }
+      this.checkCanContinue(subscription);
+      await TokenLimiter.setSubscriptionPayload(did, subscription);
+      await TokenLimiter.overrideUserBalance(did, subscription.totalCredits);
       await this.cacheManager.set(
         `subscription_${did}`,
         subscription,
-        TEN_MINUTES,
+        THREE_MINUTES,
       );
       next();
     } catch (error) {

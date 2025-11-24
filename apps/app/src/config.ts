@@ -63,17 +63,21 @@ export const EnvSchema = z.object({
   OPEN_ROUTER_API_KEY: z.string(),
 
   SUBSCRIPTION_ORACLE_MCP_URL: z.url().optional(),
-  NETWORK: z.enum(['mainnet', 'testnet', 'devnet']).default('devnet'),
+  NETWORK: z.enum(['mainnet', 'testnet', 'devnet']),
   DATABASE_USE_SSL: z.string().default('false'),
 
-  SECP_MNEMONIC: z.string(),
-  LIVE_AGENT_AUTH_API_KEY: z.string(),
+  LIVE_AGENT_AUTH_API_KEY: z.string().optional().default(''),
   MEMORY_MCP_URL: z.url(),
   MEMORY_ENGINE_URL: z.url(),
-  MEMORY_MCP_API: z.string(),
   MEMORY_SERVICE_API_KEY: z.string(),
   ORACLE_ENTITY_DID: z.string(),
-  SUBSCRIPTION_URL: z.url().optional(),
+  SUBSCRIPTION_URL: z.string().optional(),
+  FIRECRAWL_MCP_URL: z.url(),
+  DOMAIN_INDEXER_URL: z.url(),
+  REDIS_URL: z.string(),
+
+  SECP_MNEMONIC: z.string(),
+  RPC_URL: z.string(),
 });
 
 export type ENV = z.infer<typeof EnvSchema> & {

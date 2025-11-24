@@ -226,6 +226,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
 
       try {
         const aiMessage = await this.sendMessage({
+          clientType: 'matrix',
           message: text,
           did,
           sessionId: threadId,
@@ -312,6 +313,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
   public async sendMessage(
     params: SendMessagePayload & {
       res?: Response;
+      clientType?: 'matrix' | 'slack';
       msgFromMatrixRoom?: boolean;
       req?: Request; // Express Request object for abort detection
     },
@@ -387,13 +389,15 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
               params.msgFromMatrixRoom,
               userContext,
               abortController,
+              params.metadata?.editorRoomId,
+              params.metadata?.currentEntityDid,
             );
 
             let fullContent = '';
             if (params.sessionId) {
               const toolCallMap = new Map<string, ToolCallEvent>();
               for await (const { data, event, tags } of stream) {
-                const isChatNode = tags?.includes('chat_node');
+                const isChatNode = true;
 
                 if (event === 'on_tool_end') {
                   const toolMessage = data.output as ToolMessage;
@@ -641,6 +645,9 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       params.tools ?? [],
       params.msgFromMatrixRoom,
       userContext,
+      params.metadata?.editorRoomId,
+      params.metadata?.currentEntityDid,
+      params.clientType,
     );
     const lastMessage = result.messages.at(-1);
     if (!lastMessage) {
@@ -696,10 +703,6 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     // Run in background without blocking
     Promise.resolve().then(async () => {
       try {
-        const accessToken = this.config.getOrThrow<string>(
-          'MATRIX_ORACLE_ADMIN_ACCESS_TOKEN',
-        );
-
         // Get current messages for sync
         const { messages: currentMessages } = await this.listMessages({
           did: params.did,
@@ -748,7 +751,74 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     return false;
   }
 
-  private async prepareForQuery(payload: SendMessagePayload): Promise<{
+  /**
+   * Extract timezone from payload (body) or request headers (fallback)
+   * Body takes priority for backward compatibility with backends that don't support custom headers
+   */
+  private getTimezoneFromRequest(
+    payload?: SendMessagePayload,
+    req?: Request,
+  ): string | undefined {
+    // First check payload (body) - this is the primary source
+    if (payload?.timezone) {
+      return payload.timezone.trim() || undefined;
+    }
+
+    // Fallback to header if payload doesn't have it
+    if (!req) {
+      return undefined;
+    }
+
+    const timezoneHeader = req.headers['x-timezone'];
+    if (!timezoneHeader) {
+      return undefined;
+    }
+
+    // Handle both string and array formats
+    const timezone =
+      typeof timezoneHeader === 'string'
+        ? timezoneHeader
+        : Array.isArray(timezoneHeader)
+          ? timezoneHeader[0]
+          : undefined;
+
+    return timezone?.trim() || undefined;
+  }
+
+  /**
+   * Calculate current time in the user's timezone
+   */
+  private getCurrentTimeInTimezone(timezone: string): string {
+    try {
+      const now = new Date();
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true,
+        timeZoneName: 'short',
+      });
+
+      return formatter.format(now);
+    } catch (error) {
+      Logger.warn(
+        `Failed to format time for timezone ${timezone}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      // Fallback to UTC if timezone is invalid
+      return new Date().toLocaleString('en-US', {
+        timeZone: 'UTC',
+        timeZoneName: 'short',
+      });
+    }
+  }
+
+  private async prepareForQuery(
+    payload: SendMessagePayload & { req?: Request },
+  ): Promise<{
     sessionId: string;
     config: TCustomerSupportGraphState['config'];
     roomId: string;
@@ -792,6 +862,12 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       did: payload.did,
     };
 
+    // Extract timezone and calculate current time
+    const timezone = this.getTimezoneFromRequest(payload, payload.req);
+    const currentTime = timezone
+      ? this.getCurrentTimeInTimezone(timezone)
+      : undefined;
+
     const runnableConfig: IRunnableConfigWithRequiredFields & {
       configurable: {
         sessionId: string;
@@ -808,6 +884,8 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
           user: {
             did,
             matrixOpenIdToken: payload.userMatrixOpenIdToken,
+            ...(timezone && { timezone }),
+            ...(currentTime && { currentTime }),
           },
         },
       },

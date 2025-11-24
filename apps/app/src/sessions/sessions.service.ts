@@ -9,24 +9,51 @@ import { type ENV } from 'src/types';
 import { type CreateSessionDto } from './dto/create-session.dto'; // Import DTO
 import { type DeleteSessionDto } from './dto/delete-session.dto'; // Import DTO
 import { type ListSessionsDto } from './dto/list-sessions.dto'; // Import DTO
+import { SessionHistoryProcessor } from './session-history-processor.service';
 
 @Injectable()
 export class SessionsService {
   constructor(
     private readonly sessionManager: SessionManagerService,
     private readonly configService: ConfigService<ENV>,
+    private readonly sessionHistoryProcessor: SessionHistoryProcessor,
   ) {}
 
   async createSession(
     data: CreateSessionDto,
   ): Promise<CreateChatSessionResponseDto> {
     try {
+      const oracleEntityDid =
+        this.configService.getOrThrow('ORACLE_ENTITY_DID');
+
+      // Process previous session history before creating new session
+      const { sessions } = await this.listSessions({
+        did: data.did,
+      });
+
+      if (sessions.length > 0) {
+        const previousSession = sessions[0]; // Most recent session
+        // Fire-and-forget processing of previous session
+        this.sessionHistoryProcessor
+          .processSessionHistory({
+            sessionId: previousSession.sessionId,
+            did: data.did,
+            oracleEntityDid,
+          })
+          .catch((err) =>
+            Logger.error(
+              `Failed to process previous session ${previousSession.sessionId}:`,
+              err,
+            ),
+          );
+      }
+
       const session = await this.sessionManager.createSession({
         did: data.did,
         oracleName: this.configService.getOrThrow('ORACLE_NAME'),
-        oracleEntityDid: this.configService.getOrThrow('ORACLE_ENTITY_DID'),
+        oracleEntityDid,
         oracleDid: this.configService.getOrThrow('ORACLE_DID'),
-        openIdToken: data.userOpenIdToken,
+        slackThreadTs: data.slackThreadTs,
       });
       return session;
     } catch (error) {
@@ -76,10 +103,27 @@ export class SessionsService {
 
   async deleteSession(data: DeleteSessionDto): Promise<{ message: string }> {
     try {
+      const oracleEntityDid =
+        this.configService.getOrThrow('ORACLE_ENTITY_DID');
+
+      // Process session history before deletion
+      this.sessionHistoryProcessor
+        .processSessionHistory({
+          sessionId: data.sessionId,
+          did: data.did,
+          oracleEntityDid,
+        })
+        .catch((err) =>
+          Logger.error(
+            `Failed to process deleted session ${data.sessionId}:`,
+            err,
+          ),
+        );
+
       await this.sessionManager.deleteSession({
         did: data.did,
         sessionId: data.sessionId,
-        oracleEntityDid: this.configService.getOrThrow('ORACLE_ENTITY_DID'),
+        oracleEntityDid,
       });
       return { message: 'Session deleted successfully' };
     } catch (error) {

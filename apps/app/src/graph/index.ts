@@ -2,15 +2,13 @@ import {
   MatrixCheckpointSaver,
   type IRunnableConfigWithRequiredFields,
 } from '@ixo/matrix';
-import { END, START, StateGraph } from '@langchain/langgraph';
+import { START, StateGraph } from '@langchain/langgraph';
 import { Logger } from '@nestjs/common';
 import 'dotenv/config';
 import { HumanMessage } from 'langchain';
 import CallbackHandler from 'langfuse-langchain';
 import { type BrowserToolCallDto } from 'src/messages/dto/send-message.dto';
 import { chatNode } from './nodes/chat-node/chat-node';
-import { toolNode } from './nodes/tools-node';
-import toolsChatRouter from './router/tools.router';
 import {
   CustomerSupportGraphState,
   type TCustomerSupportGraphState,
@@ -32,23 +30,16 @@ const workflow = new StateGraph(CustomerSupportGraphState)
 
   // Nodes
   .addNode(GraphNodes.Chat, chatNode)
-  .addNode(GraphNodes.Tools, toolNode)
 
   // Routes
-  .addEdge(START, GraphNodes.Chat)
+  .addEdge(START, GraphNodes.Chat);
 
-  .addConditionalEdges(GraphNodes.Chat, toolsChatRouter, {
-    [GraphNodes.Tools]: GraphNodes.Tools,
-    [END]: END,
-  })
-  .addEdge(GraphNodes.Tools, GraphNodes.Chat);
-
-const compiledGraph = workflow.compile({
+const mxGraph = workflow.compile({
   checkpointer: new MatrixCheckpointSaver(),
 });
 
 export class CustomerSupportGraph {
-  constructor(private readonly graph = compiledGraph) {}
+  constructor(private readonly matrixCompiledGraph = mxGraph) {}
 
   async sendMessage(
     input: string,
@@ -60,6 +51,9 @@ export class CustomerSupportGraph {
     browserTools?: BrowserToolCallDto[],
     msgFromMatrixRoom = false,
     initialUserContext?: TCustomerSupportGraphState['userContext'],
+    editorRoomId?: string,
+    currentEntityDid?: string,
+    clientType?: 'matrix' | 'slack',
   ): Promise<TCustomerSupportGraphState> {
     if (!runnableConfig.configurable.sessionId) {
       throw new Error('sessionId is required');
@@ -67,7 +61,8 @@ export class CustomerSupportGraph {
     Logger.log(
       `[sendMessage]: msgFromMatrixRoom: ${msgFromMatrixRoom} input: ${input}`,
     );
-    return this.graph.invoke(
+
+    return this.matrixCompiledGraph.invoke(
       {
         messages: [
           new HumanMessage({
@@ -80,12 +75,15 @@ export class CustomerSupportGraph {
           }),
         ],
         browserTools,
+        editorRoomId,
+        currentEntityDid,
+        client: clientType ?? 'portal',
         ...(initialUserContext ? { userContext: initialUserContext } : {}),
       } satisfies Partial<TCustomerSupportGraphState>,
 
       {
         ...runnableConfig,
-        recursionLimit: 15,
+        recursionLimit: 50,
         configurable: {
           ...runnableConfig.configurable,
           thread_id: runnableConfig.configurable.sessionId,
@@ -110,6 +108,8 @@ export class CustomerSupportGraph {
     msgFromMatrixRoom = false,
     initialUserContext?: TCustomerSupportGraphState['userContext'],
     abortController?: AbortController,
+    editorRoomId?: string,
+    currentEntityDid?: string,
   ) {
     if (!runnableConfig.configurable.sessionId) {
       throw new Error('sessionId is required');
@@ -125,7 +125,7 @@ export class CustomerSupportGraph {
       });
     }
 
-    const stream = this.graph.streamEvents(
+    const stream = this.matrixCompiledGraph.streamEvents(
       {
         messages: [
           new HumanMessage({
@@ -139,13 +139,15 @@ export class CustomerSupportGraph {
         ],
         browserTools,
         ...(initialUserContext ? { userContext: initialUserContext } : {}),
+        editorRoomId,
+        currentEntityDid,
       } satisfies Partial<TCustomerSupportGraphState>,
 
       {
         version: 'v2',
         ...runnableConfig,
         streamMode: 'messages',
-        recursionLimit: 15,
+        recursionLimit: 50,
         configurable: {
           ...runnableConfig.configurable,
           thread_id: runnableConfig.configurable.sessionId,
@@ -166,7 +168,7 @@ export class CustomerSupportGraph {
   public async getGraphState(
     config: IRunnableConfigWithRequiredFields & { sessionId: string },
   ): Promise<TCustomerSupportGraphState | undefined> {
-    const state = await this.graph.getState(config);
+    const state = await this.matrixCompiledGraph.getState(config);
     if (Object.keys(state.values as TCustomerSupportGraphState).length === 0) {
       return undefined;
     }

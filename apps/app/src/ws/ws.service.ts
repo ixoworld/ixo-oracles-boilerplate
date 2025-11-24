@@ -5,18 +5,35 @@ import {
   type OnModuleDestroy,
   type OnModuleInit,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { type Socket } from 'socket.io';
+import { ENV } from 'src/config';
+import { SessionHistoryProcessor } from '../sessions/session-history-processor.service';
 import { WS_SERVICE_EVENT_NAME, wsEmitter } from './emitter';
+
+interface SessionMetadata {
+  did: string;
+}
 
 @Injectable()
 export class WsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WsService.name);
   private readonly sessionConnections = new Map<string, Set<Socket>>();
+  private readonly sessionMetadata = new Map<string, SessionMetadata>();
+
+  constructor(
+    private readonly sessionHistoryProcessor: SessionHistoryProcessor,
+    private readonly configService: ConfigService<ENV>,
+  ) {}
 
   /**
    * Add a WebSocket connection for a specific session
    */
-  addClientConnection(sessionId: string, socket: Socket): void {
+  addClientConnection(
+    sessionId: string,
+    socket: Socket,
+    metadata?: SessionMetadata,
+  ): void {
     if (!this.sessionConnections.has(sessionId)) {
       this.logger.log(`Creating new session for: ${sessionId}`);
       this.sessionConnections.set(sessionId, new Set());
@@ -27,6 +44,11 @@ export class WsService implements OnModuleInit, OnModuleDestroy {
     this.logger.log(
       `Added connection to session: ${sessionId}, total connections: ${connections?.size}`,
     );
+
+    // Store session metadata if provided
+    if (metadata) {
+      this.sessionMetadata.set(sessionId, metadata);
+    }
   }
 
   /**
@@ -68,6 +90,31 @@ export class WsService implements OnModuleInit, OnModuleDestroy {
       if (connections.size === 0) {
         this.sessionConnections.delete(sessionId);
         this.logger.log(`Cleaned up empty session: ${sessionId}`);
+        const oracleEntityDid =
+          this.configService.getOrThrow('ORACLE_ENTITY_DID');
+
+        // Process session history when last client disconnects
+        const metadata = this.sessionMetadata.get(sessionId);
+        if (metadata) {
+          this.sessionHistoryProcessor
+            .processSessionHistory({
+              sessionId,
+              did: metadata.did,
+              oracleEntityDid,
+            })
+            .catch((err) =>
+              this.logger.error(
+                `Failed to process session ${sessionId} on disconnect:`,
+                err,
+              ),
+            );
+          // Clean up metadata
+          this.sessionMetadata.delete(sessionId);
+        } else {
+          this.logger.debug(
+            `No metadata available for session ${sessionId}, skipping processing on disconnect`,
+          );
+        }
       }
     }
   }
@@ -105,5 +152,6 @@ export class WsService implements OnModuleInit, OnModuleDestroy {
       });
     });
     this.sessionConnections.clear();
+    this.sessionMetadata.clear();
   }
 }

@@ -57,7 +57,6 @@ export class MessagesController {
     const { did } = req.authData;
     return this.messagesService.listMessages({
       sessionId,
-
       did,
     });
   }
@@ -102,7 +101,10 @@ export class MessagesController {
       // The response is handled inside the service when streaming
     } else {
       // Regular response without streaming
-      const result = await this.messagesService.sendMessage(payload);
+      const result = await this.messagesService.sendMessage({
+        ...payload,
+        req,
+      });
       return res.status(HttpStatus.OK).json(result);
     }
   }

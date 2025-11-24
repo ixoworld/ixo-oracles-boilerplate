@@ -35,7 +35,6 @@ export class SessionsController {
   ): Promise<CreateChatSessionResponseDto> {
     const { userOpenIdToken, did } = req.authData;
     return this.sessionsService.createSession({
-      userOpenIdToken,
       did,
     });
   }
@@ -51,8 +50,8 @@ export class SessionsController {
   async listSessions(
     @Req() req: Request,
   ): Promise<ListChatSessionsResponseDto> {
-    const { userOpenIdToken: matrixAccessToken, did } = req.authData;
-    return this.sessionsService.listSessions({ matrixAccessToken, did });
+    const { did } = req.authData;
+    return this.sessionsService.listSessions({ did });
   }
 
   @Delete(':sessionId')

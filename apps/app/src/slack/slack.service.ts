@@ -1,11 +1,17 @@
+import { ChatSession } from '@ixo/common';
 import { Slack } from '@ixo/slack';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
+  Inject,
   Injectable,
   Logger,
   type OnModuleDestroy,
   type OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Cache } from 'cache-manager';
+import { MessagesService } from 'src/messages/messages.service';
+import { SessionsService } from 'src/sessions/sessions.service';
 import { type ENV } from 'src/types';
 
 @Injectable()
@@ -14,12 +20,15 @@ export class SlackService implements OnModuleInit, OnModuleDestroy {
   private slackInstance?: Slack;
   private readonly isConfigured: boolean;
 
-  constructor(private readonly configService: ConfigService<ENV>) {
+  constructor(
+    private readonly configService: ConfigService<ENV>,
+    private readonly messagesService: MessagesService,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+    private readonly sessionsService: SessionsService,
+  ) {
     const botToken = configService.get<string>('SLACK_BOT_OAUTH_TOKEN');
     const appToken = configService.get<string>('SLACK_APP_TOKEN');
-    const useSocketMode =
-      configService.get<string>('SLACK_USE_SOCKET_MODE') === 'true';
-
+    const useSocketMode = true;
     this.isConfigured = Boolean(botToken);
 
     if (!botToken) {
@@ -59,6 +68,10 @@ export class SlackService implements OnModuleInit, OnModuleDestroy {
         this.configService.get('SLACK_USE_SOCKET_MODE') === 'true';
       const mode = useSocketMode ? 'Socket Mode' : 'HTTP Mode';
       this.logger.log(`Initializing Slack ${mode} connection...`);
+
+      // Register message handler BEFORE starting the app
+      this.onMessageHandler();
+
       await this.slackInstance.start();
       this.logger.log(`Slack ${mode} connection initialized successfully`);
     } catch (error) {
@@ -122,5 +135,90 @@ export class SlackService implements OnModuleInit, OnModuleDestroy {
     const slackService = new Slack(BOT_OAUTH_TOKEN, SLACK_APP_TOKEN, options);
     await slackService.start();
     return slackService;
+  }
+
+  private readonly USERS = {
+    devnet: {
+      Yousef: 'did:ixo:ixo100jprv3ap66prgdvyuxhuynhp2muv0pclyx4l7',
+    },
+    testnet: {},
+    mainnet: {},
+  } as const;
+
+  private async getCachedSessionPerThread(
+    threadTs: string,
+  ): Promise<ChatSession | undefined> {
+    const cacheKey = `session:${threadTs}`;
+
+    const cachedSession = await this.cacheManager.get<ChatSession>(cacheKey);
+    Logger.debug('Cached session', { cachedSession });
+    return cachedSession;
+  }
+
+  private async getOrCreateSessionPerThread(
+    threadTs: string,
+    userDid: string,
+  ): Promise<ChatSession> {
+    const cachedSession = await this.getCachedSessionPerThread(threadTs);
+    if (cachedSession) {
+      return cachedSession;
+    }
+
+    const sessions = await this.sessionsService.listSessions({
+      did: userDid,
+    });
+
+    const targetSession = sessions.sessions.find(
+      (s) => s.slackThreadTs === threadTs,
+    );
+    if (targetSession) {
+      this.cacheManager.set(
+        `session:${threadTs}`,
+        targetSession,
+        5 * 60 * 1000,
+      );
+      return targetSession;
+    }
+
+    const newSession = await this.sessionsService.createSession({
+      did: userDid,
+      slackThreadTs: threadTs,
+    });
+    this.cacheManager.set(`session:${threadTs}`, newSession, 5 * 60 * 1000);
+    return newSession;
+  }
+  private onMessageHandler(): void {
+    if (!this.slackInstance?.app) {
+      return;
+    }
+    this.slackInstance.app.message(async ({ message, say, event }) => {
+      this.logger.debug('Message received', { message });
+      if (
+        message.type === 'message' &&
+        message.subtype === undefined &&
+        typeof message.text === 'string'
+      ) {
+        const userDid = 'did:ixo:ixo100jprv3ap66prgdvyuxhuynhp2muv0pclyx4l7';
+        const threadTs = message.thread_ts ?? message.ts;
+
+        const session = await this.getOrCreateSessionPerThread(
+          threadTs,
+          userDid,
+        );
+        Logger.debug('Session', { session });
+        const aiMessage = await this.messagesService.sendMessage({
+          did: userDid,
+          message: message.text,
+          sessionId: session.sessionId,
+          userMatrixOpenIdToken: '',
+        });
+
+        say({
+          text: aiMessage?.message.content ?? '',
+          thread_ts: threadTs,
+        });
+      }
+    });
+    this.logger.log('Slack message handler registered');
   }
 }

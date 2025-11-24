@@ -2,13 +2,17 @@ import { MemoryEngineService, SessionManagerService } from '@ixo/common';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { type ENV } from 'src/types';
+import { MessagesModule } from '../messages/messages.module';
+import { SessionHistoryProcessor } from './session-history-processor.service';
 import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
 
 @Module({
+  imports: [MessagesModule],
   controllers: [SessionsController],
   providers: [
     SessionsService,
+    SessionHistoryProcessor,
     {
       provide: MemoryEngineService,
       useFactory: (configService: ConfigService<ENV>) => {
@@ -29,5 +33,6 @@ import { SessionsService } from './sessions.service';
       inject: [MemoryEngineService],
     },
   ],
+  exports: [SessionsService, SessionHistoryProcessor],
 })
 export class SessionsModule {}
