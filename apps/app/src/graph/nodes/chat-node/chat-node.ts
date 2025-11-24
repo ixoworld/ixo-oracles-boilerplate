@@ -141,7 +141,7 @@ export async function chatNode(
   const result = await agent.invoke(
     {
       messages: state.messages,
-      did: userConfig?.did ?? 'fuck you motherfucker',
+      did: userConfig?.did ?? "",
     },
     {
       ...config,
