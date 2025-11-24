@@ -40,7 +40,7 @@
     "chromadb": "^1.10.4",
     "chromadb-default-embed": "^2.13.2",
     "neo4j-driver": "^5.28.1",
-    "openai": "^5.15.0",
+    "openai": "^6.9.1",
     "zod": "^4.1.12"
   }
 }

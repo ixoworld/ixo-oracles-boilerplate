@@ -41,8 +41,8 @@
       "@langchain/langgraph": "1.0.0-alpha.5"
     },
     "onlyBuiltDependencies": [
-      "@nestjs/core",
       "@matrix-org/matrix-sdk-crypto-nodejs",
+      "@nestjs/core",
       "@scarf/scarf",
       "@swc/core",
       "better-sqlite3",
@@ -52,7 +52,8 @@
       "protobufjs",
       "secp256k1",
       "sharp",
-      "ssh2"
+      "ssh2",
+      "unrs-resolver"
     ]
   }
 }
