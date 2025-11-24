@@ -24,6 +24,9 @@ export interface GetMySubscriptionsResponseDto {
   planCredits: number;
   status: 'active' | 'inactive' | 'processing' | 'trial';
   adminAddress: string;
+}
+
+interface GetUserSubscriptionResponse extends GetMySubscriptionsResponseDto {
   manageSubscriptionUrl: string;
 }
 
@@ -37,7 +40,7 @@ export const getUserSubscription = async ({
   bearerToken,
   network,
   subscriptionUrl: _subscriptionUrl,
-}: GetUserSubscriptionParams) => {
+}: GetUserSubscriptionParams): Promise<GetMySubscriptionsResponseDto | null> => {
   const subscriptionUrl =
     _subscriptionUrl ?? getSubscriptionUrlByNetwork(network);
   try {
@@ -64,7 +67,16 @@ export const getUserSubscription = async ({
     if (!data) {
       return null;
     }
-    return data as GetMySubscriptionsResponseDto;
+    const subscription = data as GetUserSubscriptionResponse;
+    return {
+      claimCollections: subscription.claimCollections,
+      currentPlan: subscription.currentPlan,
+      currentPlanName: subscription.currentPlanName,
+      totalCredits: subscription.totalCredits,
+      planCredits: subscription.planCredits,
+      status: subscription.status,
+      adminAddress: subscription.adminAddress,
+    };
   } catch (error) {
     console.error('Error fetching user subscription:', error);
     return null;
