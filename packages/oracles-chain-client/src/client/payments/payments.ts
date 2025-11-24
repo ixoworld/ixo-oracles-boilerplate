@@ -25,16 +25,17 @@ export class Payments {
       userClaimCollection: string;
     },
   ) {
-    const { amount, granteeAddress, userClaimCollection } = params;
+    const { amount, userClaimCollection } = params;
     return claimsClient.sendClaimIntent({
       amount: [amount],
       userClaimCollection,
-      granteeAddress,
     });
   }
 
   async checkForActiveIntent(
-    params: Omit<InitialPaymentRequestParams, 'amount'>,
+    params: Omit<InitialPaymentRequestParams, 'amount'> & {
+      granteeAddress: string;
+    },
   ) {
     await walletClient.init();
 
@@ -61,11 +62,9 @@ export class Payments {
     params: InitialPaymentRequestParams,
     claimId: string,
   ) {
-    const { userAddress, granteeAddress, userClaimCollection } = params;
+    const { userClaimCollection } = params;
 
     return claimsClient.submitClaim({
-      granteeAddress,
-      userAddress,
       claimId,
       useIntent: true,
       collectionId: userClaimCollection,

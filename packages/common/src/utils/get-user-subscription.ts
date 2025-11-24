@@ -1,3 +1,5 @@
+import { Logger } from '@ixo/logger';
+
 export const getSubscriptionUrlByNetwork = (
   network: 'mainnet' | 'testnet' | 'devnet',
 ) => {
@@ -39,6 +41,7 @@ export const getUserSubscription = async ({
   const subscriptionUrl =
     _subscriptionUrl ?? getSubscriptionUrlByNetwork(network);
   try {
+    Logger.debug('Fetching user subscription from:', subscriptionUrl);
     const response = await fetch(
       `${subscriptionUrl.endsWith('/') ? subscriptionUrl.slice(0, -1) : subscriptionUrl}/api/v1/subscriptions`,
       {

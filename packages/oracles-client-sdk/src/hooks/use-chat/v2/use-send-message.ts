@@ -9,7 +9,6 @@ import {
   type SSEErrorEventData,
   type SSEReasoningEventData,
   type SSEToolCallEventData,
-  type SSEActionCallEventData,
 } from '../../../utils/sse-parser.js';
 import { useGetOpenIdToken } from '../../use-get-openid-token/use-get-openid-token.js';
 import { useOraclesConfig } from '../../use-oracles-config.js';
@@ -23,7 +22,6 @@ interface IUseSendMessageReturn {
   abortStream: () => void;
   isSending: boolean;
   error?: Error | null;
-  isConfigReady: boolean;
 }
 
 export function useSendMessage({
@@ -37,19 +35,17 @@ export function useSendMessage({
   onToolCall,
   onError,
   onReasoning,
-  onActionCall,
 }: ISendMessageOptions): IUseSendMessageReturn {
-  const { config, isReady: isConfigReady } = useOraclesConfig(
-    oracleDid,
-    overrides,
-  );
-  const getApiUrl = () => overrides?.baseUrl ?? config.apiUrl;
-  const { wallet, authedRequest, agActions } = useOraclesContext();
+  const { config } = useOraclesConfig(oracleDid);
+  const { apiUrl: baseUrl } = config;
+  const { baseUrl: overridesUrl } = overrides ?? {};
+  const apiUrl = overridesUrl ?? baseUrl;
+  const { wallet, authedRequest } = useOraclesContext();
   const {
     openIdToken,
     isLoading: isTokenLoading,
     error: tokenError,
-  } = useGetOpenIdToken(wallet ?? undefined);
+  } = useGetOpenIdToken();
 
   // Abort controller for canceling requests
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -59,7 +55,7 @@ export function useSendMessage({
     if (abortControllerRef.current) {
       // Call backend abort endpoint with sessionId
       try {
-        await authedRequest(`${getApiUrl()}/messages/abort`, 'POST', {
+        await authedRequest(`${apiUrl}/messages/abort`, 'POST', {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId }),
         });
@@ -72,7 +68,7 @@ export function useSendMessage({
       abortControllerRef.current = null;
       chatRef?.current.setStatus('ready');
     }
-  }, [sessionId, chatRef]);
+  }, [apiUrl, sessionId, chatRef]);
 
   const { mutateAsync, isPending, error } = useMutation({
     retry: false, // Prevent retries on abort/errors
@@ -83,7 +79,6 @@ export function useSendMessage({
       message: string;
       metadata?: Record<string, unknown>;
     }) => {
-      const apiUrl = getApiUrl();
       if (!apiUrl) {
         throw new Error('API URL is required');
       }
@@ -134,15 +129,6 @@ export function useSendMessage({
                 schema: zodToJsonSchema(tool.schema),
               }))
             : undefined,
-          agActions:
-            agActions.length > 0
-              ? agActions.map((action) => ({
-                  name: action.name,
-                  description: action.description,
-                  schema: zodToJsonSchema(action.parameters),
-                  hasRender: action.hasRender,
-                }))
-              : undefined,
           abortSignal: abortControllerRef.current?.signal,
 
           // Message chunks (existing pattern)
@@ -150,24 +136,21 @@ export function useSendMessage({
             await chatRef?.current.upsertAIMessage(requestId, chunk);
           },
 
+          // Tool calls (NEW - forward to useChat callback)
           onToolCall: onToolCall
-            ? async ({ toolCallData, requestId }) => {
-                await onToolCall({ toolCallData, requestId });
+            ? async ({ toolCallData }) => {
+                await onToolCall(toolCallData);
               }
             : undefined,
 
-          onActionCall: onActionCall
-            ? async ({ actionCallData, requestId }) => {
-                await onActionCall({ actionCallData, requestId });
-              }
-            : undefined,
-
+          // Errors (NEW - forward to useChat callback)
           onError: onError
-            ? async ({ error, requestId }) => {
-                await onError({ error, requestId });
+            ? async ({ error }) => {
+                await onError(error);
               }
             : undefined,
 
+          // Reasoning (NEW - forward to useChat callback)
           onReasoning: onReasoning
             ? async ({ reasoningData, requestId }) => {
                 await onReasoning({ reasoningData, requestId });
@@ -231,7 +214,6 @@ export function useSendMessage({
     abortStream,
     isSending: isPending,
     error,
-    isConfigReady,
   };
 }
 
@@ -248,12 +230,6 @@ const askOracleStream = async (props: {
     description: string;
     schema: Record<string, unknown>;
   }[];
-  agActions?: {
-    name: string;
-    description: string;
-    schema: Record<string, unknown>;
-    hasRender: boolean;
-  }[];
   abortSignal?: AbortSignal;
 
   // Callbacks for different event types
@@ -263,10 +239,6 @@ const askOracleStream = async (props: {
   }) => void | Promise<void>;
   onToolCall?: (args: {
     toolCallData: SSEToolCallEventData;
-    requestId: string;
-  }) => void | Promise<void>;
-  onActionCall?: (args: {
-    actionCallData: SSEActionCallEventData;
     requestId: string;
   }) => void | Promise<void>;
   onError?: (args: {
@@ -279,8 +251,6 @@ const askOracleStream = async (props: {
   }) => void | Promise<void>;
   onDone?: () => void;
 }): Promise<{ text: string; requestId: string }> => {
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
   const response = await fetch(`${props.apiURL}/messages/${props.sessionId}`, {
     headers: {
       'x-matrix-access-token': props.matrixAccessToken,
@@ -289,11 +259,9 @@ const askOracleStream = async (props: {
     },
     body: JSON.stringify({
       message: props.message,
-      timezone,
       stream: true,
       ...(props.metadata && { metadata: props.metadata }),
       ...(props.browserTools && { tools: props.browserTools }),
-      ...(props.agActions && { agActions: props.agActions }),
     }),
     method: 'POST',
     signal: props.abortSignal,
@@ -331,19 +299,6 @@ const askOracleStream = async (props: {
         case 'tool_call':
           if (props.onToolCall) {
             await props.onToolCall({ toolCallData: sseEvent.data, requestId });
-          }
-          break;
-
-        case 'action_call':
-          if (props.onActionCall) {
-            await props.onActionCall({
-              actionCallData: sseEvent.data,
-              requestId,
-            });
-          } else {
-            console.warn(
-              '[useSendMessage] action_call received but onActionCall handler is missing',
-            );
           }
           break;
 

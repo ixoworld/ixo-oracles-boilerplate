@@ -5,13 +5,10 @@ import {
 } from '@ixo/oracles-events/types';
 import { type IBrowserTools } from '../../../types/browser-tool.type.js';
 import {
-  SSEErrorEvent,
-  type SSEActionCallEventData,
   type SSEErrorEventData,
   type SSEReasoningEventData,
   type SSEToolCallEventData,
 } from '../../../utils/sse-parser.js';
-import { type Event } from '../resolve-content.js';
 import { type UIComponents } from '../resolve-ui-component.js';
 import { type OracleChat } from './oracle-chat.js';
 
@@ -21,19 +18,12 @@ export interface IComponentMetadata {
   props: {
     id: string;
     args: unknown;
-    status?: 'isRunning' | 'done' | 'error';
+    status?: 'isRunning' | 'done';
     output?: string;
-    event?: Event;
-    payload?:
-      | ToolCallEventPayload
-      | RenderComponentEventPayload
-      | BrowserToolCallEventPayload
-      | SSEErrorEvent
-      | SSEActionCallEventData;
+    event?: any;
+    payload?: any;
     isToolCall?: boolean;
-    isAgAction?: boolean;
     toolName?: string; // Original tool name (for generic ToolCall component)
-    error?: string;
   };
 }
 
@@ -52,9 +42,8 @@ export interface IMessage {
     name: string;
     id: string;
     args: unknown;
-    status?: 'isRunning' | 'done' | 'error';
+    status?: 'isRunning' | 'done';
     output?: string;
-    error?: string;
   }[];
   reasoning?: string;
   isComplete?: boolean;
@@ -100,18 +89,8 @@ export interface ISendMessageOptions {
   refetchQueries?: () => Promise<void>;
 
   // NEW callbacks for streaming events
-  onToolCall?: (data: {
-    toolCallData: SSEToolCallEventData;
-    requestId: string;
-  }) => Promise<void>;
-  onActionCall?: (data: {
-    actionCallData: SSEActionCallEventData;
-    requestId: string;
-  }) => Promise<void>;
-  onError?: (data: {
-    error: SSEErrorEventData;
-    requestId: string;
-  }) => Promise<void>;
+  onToolCall?: (toolCallData: SSEToolCallEventData) => Promise<void>;
+  onError?: (error: SSEErrorEventData) => Promise<void>;
   onReasoning?: (data: {
     reasoningData: SSEReasoningEventData;
     requestId: string;
@@ -122,7 +101,6 @@ interface IUIComponentProps {
   id: string;
   isLoading?: boolean;
   output?: string;
-  status?: 'isRunning' | 'done' | 'error';
 }
 
 // Extract the payload type more carefully to avoid Record<string, any> fallback

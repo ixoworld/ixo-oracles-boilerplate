@@ -14,23 +14,6 @@ export const getOpenIdToken = async ({
     userAccessToken: matrixAccessToken,
   });
 
-  if (!userId) {
-    throw new Error('User ID is required');
-  }
-  if (!did) {
-    throw new Error('DID is required');
-  }
-  if (!matrixAccessToken) {
-    throw new Error('Matrix access token is required');
-  }
-  if (!matrixClient.params.homeserverUrl) {
-    throw new Error('Homeserver URL is required');
-  }
-
-  if (!userId.startsWith('@did-ixo-')) {
-    throw new Error('User ID must start with @did-ixo-');
-  }
-
-  const openIdToken = await matrixClient.getOpenIdToken(userId, did, false);
+  const openIdToken = await matrixClient.getOpenIdToken(userId, did);
   return openIdToken;
 };

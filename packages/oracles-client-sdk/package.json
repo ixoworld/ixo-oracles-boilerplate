@@ -1,6 +1,6 @@
 {
   "name": "@ixo/oracles-client-sdk",
-  "version": "1.0.7",
+  "version": "1.0.0",
   "type": "module",
   "private": false,
   "description": "Client SDK for interacting with IXO Oracles, designed for React applications",
@@ -9,14 +9,14 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "require": "./dist/index.cjs",
+      "types": "./dist/index.d.ts"
     },
     "./live-agent": {
-      "types": "./dist/live-agent/index.d.ts",
       "import": "./dist/live-agent/index.js",
-      "require": "./dist/live-agent/index.cjs"
+      "require": "./dist/live-agent/index.cjs",
+      "types": "./dist/live-agent/index.d.ts"
     }
   },
   "files": [
@@ -30,8 +30,8 @@
     "clean": "rm -rf dist node_modules"
   },
   "dependencies": {
-    "@ixo/oracles-chain-client": "workspace:*",
-    "@ixo/oracles-events": "workspace:*",
+    "@ixo/oracles-chain-client": "file:../../packages/oracles-chain-client",
+    "@ixo/oracles-events": "file:../../packages/events",
     "@tanstack/react-query": "^5.29.0",
     "eventsource": "^3.0.6",
     "jose": "^6.1.0",
@@ -40,8 +40,7 @@
     "zod-to-json-schema": "^3.24.5"
   },
   "peerDependencies": {
-    "react": ">=18.0.0",
-    "zod": "^3.22.4"
+    "react": ">=18.0.0"
   },
   "devDependencies": {
     "@ixo/eslint-config": "workspace:*",

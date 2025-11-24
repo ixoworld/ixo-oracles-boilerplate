@@ -7,13 +7,13 @@ import {
 } from '@slack/web-api';
 import { type MessageElement } from '@slack/web-api/dist/types/response/ConversationsHistoryResponse';
 import { type Profile } from '@slack/web-api/dist/types/response/ConversationsListConnectInvitesResponse';
-import slackfiy from 'slackify-markdown';
+import { markdownToBlocks } from '@tryfabric/mack';
 import {
   type ChatPostMessageResponse,
   type ListMembersResponse,
   type PostMessageParams,
 } from '../types';
-import { splitLongSlackBlocks } from '../utils/split-long-slack-blocks-message';
+import { transformMarkdown } from '../utils/transform-markdown';
 
 export interface SlackOptions {
   /**
@@ -34,7 +34,7 @@ export interface SlackOptions {
  * A class for interacting with the Slack API
  */
 export class Slack {
-  private app: App;
+  public readonly app: App;
   private isStarted = false;
   private reconnectAttempts = 0;
   private readonly maxReconnectAttempts = 10;
@@ -372,8 +372,8 @@ export class Slack {
 
     const res = await this.app.client.chat.postMessage({
       channel,
-      text: format && text ? slackfiy(text) : text,
-      blocks: blocks ? splitLongSlackBlocks(blocks) : [],
+      blocks: format && text ? await markdownToBlocks(text) : [],
+      text: format && text ? text : undefined,
       thread_ts: threadTs,
     });
 
@@ -416,16 +416,16 @@ export class Slack {
    * @throws Error if the API call fails
    */
   public async postEphemeral(
-    params: Pick<PostMessageParams, 'channel' | 'text' | 'blocks'> & {
+    params: Pick<PostMessageParams, 'channel' | 'text'> & {
       user: string;
     },
   ): Promise<ChatPostMessageResponse> {
-    const { channel, user, text, blocks } = params;
+    const { channel, user, text } = params;
     const res = await this.app.client.chat.postEphemeral({
       channel,
       user,
-      text: text ? slackfiy(text) : undefined,
-      blocks: blocks ? splitLongSlackBlocks(blocks) : [],
+      blocks: text ? await markdownToBlocks(text) : [],
+      text: text ? transformMarkdown(text) : undefined,
     });
 
     if (!res.ok) {
