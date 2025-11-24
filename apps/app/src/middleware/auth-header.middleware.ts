@@ -29,7 +29,8 @@ declare global {
   }
 }
 
-const TEN_MINUTES = minutes(10);
+// Cache for 3 minutes (consistent with subscription middleware)
+const THREE_MINUTES = minutes(3);
 
 @Injectable()
 export class AuthHeaderMiddleware implements NestMiddleware {
@@ -105,7 +106,7 @@ export class AuthHeaderMiddleware implements NestMiddleware {
       await this.cacheManager.set(
         `user_${this.hashToken(matrixAccessToken)}`,
         { did: userDid },
-        TEN_MINUTES,
+        THREE_MINUTES,
       );
       this.logger.debug(`Auth headers validated for DID: ${userDid}`);
       next(); // Proceed to the next middleware or route handler

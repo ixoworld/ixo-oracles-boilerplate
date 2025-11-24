@@ -1,3 +1,4 @@
+import { getSubscriptionUrlByNetwork } from '@ixo/common';
 import { MatrixManager } from '@ixo/matrix';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -5,6 +6,7 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { EditorMatrixClient } from './graph/agents/editor/editor-mx';
 
 async function bootstrap(): Promise<void> {
   // await migrate();
@@ -27,6 +29,7 @@ async function bootstrap(): Promise<void> {
       'x-matrix-access-token',
       'x-did',
       'x-request-id',
+      'x-timezone',
     ],
     exposedHeaders: ['X-Request-Id'],
   });
@@ -87,9 +90,19 @@ async function bootstrap(): Promise<void> {
   const matrixManager = MatrixManager.getInstance();
   await matrixManager.init();
 
+  const editorMatrixClient = EditorMatrixClient.getInstance();
+  editorMatrixClient.init().catch((error) => {
+    Logger.error('Failed to initialize EditorMatrixClient:', error);
+    Logger.warn('Editor functionality may be limited until sync completes');
+  });
+  Logger.log('EditorMatrixClient initialization started in background...');
+
   await app.listen(port);
   Logger.log(`Application is running on: ${await app.getUrl()}`);
   Logger.log(`Swagger UI available at: ${await app.getUrl()}/docs`);
   Logger.log(`Oracle: ${matrixManager.getClient()?.userId}`);
+  Logger.log(
+    `subscription: ${configService.get('SUBSCRIPTION_URL') ?? getSubscriptionUrlByNetwork(configService.getOrThrow('NETWORK'))}`,
+  );
 }
 void bootstrap();

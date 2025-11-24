@@ -70,6 +70,25 @@ export class SendMessageDto {
   @ValidateNested({ each: true })
   @Type(() => BrowserToolCallDto)
   tools?: BrowserToolCallDto[];
+
+  @ApiProperty({
+    description: 'The metadata to be passed to the LLM',
+    required: false,
+    type: Object,
+  })
+  @IsOptional()
+  @IsObject()
+  metadata?: Record<string, unknown> & { editorRoomId?: string };
+
+  @ApiProperty({
+    description: 'User timezone (e.g., "America/New_York" or "UTC-5")',
+    required: false,
+    type: String,
+    example: 'America/New_York',
+  })
+  @IsOptional()
+  @IsString()
+  timezone?: string;
 }
 
 export class SendMessagePayload {
@@ -79,6 +98,12 @@ export class SendMessagePayload {
   did: string;
   tools?: BrowserToolCallDto[];
   userMatrixOpenIdToken: string;
+  timezone?: string;
+
+  metadata?: {
+    editorRoomId?: string;
+    currentEntityDid?: string;
+  };
 }
 
 export class AbortRequestDto {

@@ -19,7 +19,9 @@ import { AuthHeaderMiddleware } from './middleware/auth-header.middleware';
 import { SubscriptionMiddleware } from './middleware/subscription.middleware';
 import { SessionsModule } from './sessions/sessions.module';
 import { SlackModule } from './slack/slack.module';
+import { TasksService } from './tasks/tasks.service';
 import { normalizeDid } from './utils/header.utils';
+import { RedisService } from './utils/redis.service';
 import { WsModule } from './ws/ws.module';
 
 @Module({
@@ -64,11 +66,14 @@ import { WsModule } from './ws/ws.module';
   controllers: [AppController],
   providers: [
     AppService,
+    RedisService,
+    TasksService,
     {
       provide: APP_GUARD, // Apply ThrottlerGuard globally
       useClass: ThrottlerGuard,
     },
   ],
+  exports: [RedisService],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

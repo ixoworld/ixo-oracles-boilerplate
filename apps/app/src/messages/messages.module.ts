@@ -33,5 +33,6 @@ import { MessagesService } from './messages.service';
       inject: [MemoryEngineService],
     },
   ],
+  exports: [MessagesService, MemoryEngineService, SessionManagerService],
 })
 export class MessagesModule {}

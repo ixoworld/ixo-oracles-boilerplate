@@ -1,2 +1,2 @@
-export * from './tool-node';
+export * from './domain-indexer-tool';
 export * from './tools';

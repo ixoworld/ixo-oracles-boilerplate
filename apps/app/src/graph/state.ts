@@ -17,22 +17,23 @@ export const CustomerSupportGraphState = Annotation.Root({
     },
   }),
 
+  client: Annotation<'portal' | 'matrix' | 'slack'>({
+    default: () => 'portal',
+    reducer: (_, curr) => curr,
+  }),
   messages: Annotation<BaseMessage[]>({
     reducer: messagesStateReducer,
     default: () => [],
   }),
 
-  accounts: Annotation<
-    {
-      did: string;
-      name: string;
-      email: string;
-      phone: string;
-      address: string;
-    }[]
-  >({
-    default: () => [],
-    reducer: (prev, curr) => [...prev, ...curr],
+  editorRoomId: Annotation<string | undefined>({
+    default: () => undefined,
+    reducer: (prev, curr) => curr,
+  }),
+
+  currentEntityDid: Annotation<string | undefined>({
+    default: () => undefined,
+    reducer: (prev, curr) => curr,
   }),
 
   browserTools: Annotation<BrowserToolCallDto[] | undefined>({
