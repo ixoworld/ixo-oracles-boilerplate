@@ -1,5 +1,5 @@
 import { Coin } from '@cosmjs/proto-signing';
-import { cosmos, ixo, utils } from '@ixo/impactxclient-sdk';
+import { cosmos, ixo } from '@ixo/impactxclient-sdk';
 import { gqlClient } from '../../gql/index.js';
 import { ValidationError } from '../../utils/validation-error.js';
 import { walletClient } from '../client.js';
@@ -28,28 +28,25 @@ export class Claims {
   public async sendClaimIntent({
     amount,
     userClaimCollection,
-    granteeAddress,
   }: {
     amount: Coin[];
     userClaimCollection: string;
-    granteeAddress: string; // oracle address
   }) {
     if (!userClaimCollection) {
       throw new ValidationError('Claim collection ID not found');
     }
     return this.client.runWithInitiatedClient(async (client) => {
-      const granteeDid = utils.did.generateSecpDid(granteeAddress);
       const message = {
         typeUrl: '/cosmos.authz.v1beta1.MsgExec',
         value: cosmos.authz.v1beta1.MsgExec.fromPartial({
-          grantee: granteeAddress,
+          grantee: client.address,
           msgs: [
             {
               typeUrl: '/ixo.claims.v1beta1.MsgClaimIntent',
               value: ixo.claims.v1beta1.MsgClaimIntent.encode(
                 ixo.claims.v1beta1.MsgClaimIntent.fromPartial({
-                  agentAddress: granteeAddress,
-                  agentDid: granteeDid,
+                  agentAddress: client.address,
+                  agentDid: `did:ixo:${client.address}`,
                   collectionId: userClaimCollection,
                   amount,
                 }),
@@ -64,46 +61,38 @@ export class Claims {
   }
 
   public async submitClaim({
-    granteeAddress,
-    userAddress,
     claimId,
     collectionId,
     useIntent = false,
     amount,
   }: {
-    granteeAddress: string;
-    userAddress?: string;
     claimId: string;
     collectionId: string;
     useIntent?: boolean;
     amount?: Coin[];
   }) {
-    if (!userAddress && !collectionId) {
-      throw new ValidationError('User address or collection ID is required');
-    }
-
     if (!collectionId) {
       throw new ValidationError('Claim collection ID not found');
     }
+
     const collection = await Entities.getClaimCollection(collectionId);
     if (!collection) {
       throw new ValidationError('Claim collection not found');
     }
 
     const adminAddress = collection.admin;
-    const granteeDid = utils.did.generateSecpDid(granteeAddress);
     const message = {
       typeUrl: '/cosmos.authz.v1beta1.MsgExec',
       value: cosmos.authz.v1beta1.MsgExec.fromPartial({
-        grantee: granteeAddress,
+        grantee: this.client.address,
         msgs: [
           {
             typeUrl: '/ixo.claims.v1beta1.MsgSubmitClaim',
             value: ixo.claims.v1beta1.MsgSubmitClaim.encode(
               ixo.claims.v1beta1.MsgSubmitClaim.fromPartial({
                 adminAddress: adminAddress,
-                agentAddress: granteeAddress,
-                agentDid: granteeDid,
+                agentAddress: this.client.address,
+                agentDid: `did:ixo:${this.client.address}`,
                 claimId,
                 collectionId,
                 useIntent,
@@ -130,6 +119,11 @@ export class Claims {
       collectionId: params.collectionId,
     });
     return claimsList;
+  }
+
+  public async getClaim(claimId: string) {
+    const claim = await gqlClient.ClaimById({ claimId });
+    return claim;
   }
 }
 

@@ -3,18 +3,6 @@ import  z  from 'zod';
 
 type InitialPaymentParams = {
   amount: Coin;
-  /**
-   * The address of the user who is paying the initial amount ex. collection owner
-   */
-  userAddress: string;
-  /**
-   * The address of the grantee who is receiving the initial amount ex. oracle address
-   */
-  granteeAddress: string;
-
-  /**
-   * The claim collection id of the user who is paying the initial amount ex. collection owner
-   */
   userClaimCollection: string;
 };
 

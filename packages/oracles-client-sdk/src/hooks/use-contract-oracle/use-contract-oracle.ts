@@ -154,7 +154,6 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
   const {
     data: isOracleInRoom,
     isLoading: isLoadingOracleInRoom,
-    error: oracleInRoomError,
     refetch: refetchOracleInRoom,
   } = useQuery({
     queryKey: [
@@ -213,7 +212,6 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
     isLoadingOracleInRoom,
     inviteOracle,
     isInvitingOracle,
-    oracleInRoomError,
   };
 };
 

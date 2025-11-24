@@ -1,4 +1,4 @@
-import { Logger } from '@ixo/logger';
+import { Logger } from "@ixo/logger";
 
 const ERROR_CODES = ['M_UNKNOWN_TOKEN', 'M_FORBIDDEN'];
 export async function verifyMatrixOpenIdToken(
@@ -23,9 +23,9 @@ export async function verifyMatrixOpenIdToken(
         userId: userInfo.sub, // The verified user ID
       };
     }
-    const error = (await response.json()) as { errcode: string };
+    const error = await response.json() as { errcode: string };
     const isAuthError = ERROR_CODES.includes(error.errcode);
-    if (!isAuthError) {
+    if (!isAuthError) { 
       Logger.error('Error verifying Matrix OpenID token:', error);
     }
     return {
@@ -33,14 +33,11 @@ export async function verifyMatrixOpenIdToken(
       error: `Server returned ${response.status}: ${response.statusText}`,
     };
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage =
+      error instanceof Error ? error.message : String(error);
     const errorStack = error instanceof Error ? error.stack : undefined;
 
-    console.error(
-      'Error verifying Matrix OpenID token:',
-      errorMessage,
-      errorStack,
-    );
+    console.error('Error verifying Matrix OpenID token:', errorMessage, errorStack);
     return {
       isValid: false,
       error: error instanceof Error ? error.message : 'Unknown error',

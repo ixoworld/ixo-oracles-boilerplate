@@ -66,7 +66,7 @@ import { Slack } from '@ixo/slack';
 
 const slack = new Slack(
   'xoxb-your-bot-token', // Bot OAuth Token
-  'xapp-your-app-token', // App-Level Token
+  'xapp-your-app-token', // App-Level Token with connection:write scope
 );
 
 // Start the Slack app with enhanced error handling

@@ -25,7 +25,6 @@ describe('Authz', () => {
     const Promise = claims.sendClaimIntent({
       amount: [{ denom: 'uixo', amount: '1000' }],
       userClaimCollection: '138',
-      granteeAddress: oracleAddress,
     });
     expect(Promise).rejects.toThrow();
   });
@@ -101,29 +100,23 @@ describe('Authz', () => {
     console.log('🚀 ~ Authz ~ it.only ~ intentList:', intentList.intents);
     intentList.intents.length &&
       (await claims.submitClaim({
-        granteeAddress: oracleAddress,
-        userAddress,
         claimId: Math.random().toString(36).substring(2, 15),
         useIntent: true,
         collectionId: '138',
       }));
     await claims.sendClaimIntent({
       amount: [{ denom: 'uixo', amount: '1000' }],
-      granteeAddress: oracleAddress,
       userClaimCollection: '138',
     });
     intentList = await client.queryClient.ixo.claims.v1beta1.intentList({});
     console.log('🚀 ~ Authz ~ it.only ~ intentList:', intentList.intents);
     await claims.submitClaim({
-      granteeAddress: oracleAddress,
-      userAddress,
       claimId: Math.random().toString(36).substring(2, 15),
       useIntent: true,
       collectionId: '138',
     });
     await claims.sendClaimIntent({
       amount: [{ denom: 'uixo', amount: '478' }],
-      granteeAddress: oracleAddress,
       userClaimCollection: '138',
     });
     // await expect(Promise).resolves.toBeDefined();
@@ -133,8 +126,6 @@ describe('Authz', () => {
     // const permissions = await authz.checkPermissions();
     // console.log('🚀 ~ Authz ~ it.only ~ permissions:', permissions);
     await claims.submitClaim({
-      granteeAddress: oracleAddress,
-      userAddress,
       claimId: '1',
       amount: [{ denom: 'uixo', amount: '1000' }],
       useIntent: true,

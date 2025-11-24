@@ -19,7 +19,7 @@
     "@ixo/eslint-config": "workspace:*",
     "@ixo/jest-config": "workspace:*",
     "@ixo/typescript-config": "workspace:*",
-    "@slack/web-api": "^7.9.2",
+    "@slack/web-api": "^7.12.0",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.10.5",
     "jest": "^29.7.0",
@@ -28,7 +28,8 @@
   },
   "dependencies": {
     "@ixo/logger": "workspace:*",
-    "@slack/bolt": "^4.4.0",
-    "slackify-markdown": "^4.4.0"
+    "@slack/bolt": "^4.6.0",
+    "@tryfabric/mack": "^1.2.1",
+    "slackify-markdown": "5.0.0"
   }
 }

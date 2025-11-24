@@ -107,6 +107,7 @@ ___________________________________________________________
     lastProcessedCount,
     oracleDid,
     userContext,
+    slackThreadTs,
   }: {
     sessionId: string;
     did: string;
@@ -117,6 +118,7 @@ ___________________________________________________________
     lastProcessedCount?: number;
     oracleDid: string;
     userContext?: UserContextData;
+    slackThreadTs?: string;
   }): Promise<ChatSession> {
     const matrixManager = MatrixManager.getInstance();
     await matrixManager.init();
@@ -139,6 +141,7 @@ ___________________________________________________________
         oracleEntityDid,
         oracleDid,
         userContext,
+        slackThreadTs,
       };
 
       if (!this.matrixManger.stateManager) {
@@ -195,6 +198,7 @@ ___________________________________________________________
               title,
               lastUpdatedAt,
               lastProcessedCount,
+              slackThreadTs,
             }
           : session,
       ),
@@ -276,8 +280,9 @@ ___________________________________________________________
 
     // Gather user context from Memory Engine
     let userContext: UserContextData | undefined;
-    if (this.memoryEngineService && createSessionDto.openIdToken) {
+    if (this.memoryEngineService) {
       try {
+        Logger.info('Gathering user context from Memory Engine');
         userContext = await this.memoryEngineService.gatherUserContext({
           oracleDid: createSessionDto.oracleDid,
           userDid: createSessionDto.did,
@@ -298,6 +303,7 @@ ___________________________________________________________
       messages: [],
       roomId,
       userContext,
+      slackThreadTs: createSessionDto.slackThreadTs,
     });
 
     return session;

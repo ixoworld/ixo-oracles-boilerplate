@@ -45,7 +45,7 @@ export function transformGraphStateMessageToListMessageResponse(
   return {
     messages: messages.reduce<MessageDto[]>((acc, message) => {
       const toolMsg = message.type === 'tool' ? (message as ToolMessage) : null;
-      if (message.type !== 'system' && message.type !== 'tool') {
+      if (message.type !== 'system' && message.type !== 'tool' && !message.additional_kwargs?.isError) {
         // Extract reasoning from additional_kwargs
         const additionalKwargs =
           message.additional_kwargs as CleanAdditionalKwargs;

@@ -33,7 +33,8 @@ export class CreateChatSessionDto extends UserAuthDto {
   oracleName: string;
 
   @IsString()
-  openIdToken: string;
+  @IsOptional()
+  slackThreadTs?: string;
 }
 
 export class DeleteChatSessionDto extends UserAuthDto {
@@ -85,6 +86,10 @@ export class ChatSession {
   @IsString()
   @IsOptional()
   roomId?: string;
+
+  @IsString()
+  @IsOptional()
+  slackThreadTs?: string;
 }
 
 export class ListChatSessionsResponseDto {

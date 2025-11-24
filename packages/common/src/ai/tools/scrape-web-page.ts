@@ -56,7 +56,7 @@ export const scrapeAndSummarizeWebPage = async (
   const doc = await scrapeWebPage(url);
 
   const agent = createAgent({
-    llm: llm,
+    model: llm,
     tools: [],
   });
 

@@ -21,7 +21,7 @@ export const useLiveAgent = (
 ) => {
   const { wallet, authedRequest } = useOraclesContext();
 
-  const { config, isReady: isConfigReady } = useOraclesConfig(oracleDid, {
+  const { config } = useOraclesConfig(oracleDid, {
     baseUrl: overrides?.baseUrl,
   });
   const matrixClientRef = useMemo(
@@ -95,14 +95,11 @@ export const useLiveAgent = (
         language,
       });
 
-      const apiUrl = overrides?.baseUrl ?? config.apiUrl;
-      if (!apiUrl) {
-        throw new Error(
-          'API URL is not ready. Please wait for oracle config to load.',
-        );
-      }
-
-      await authedRequest(`${apiUrl}/calls/${callId}/sync`, 'POST', {});
+      await authedRequest(
+        `${overrides?.baseUrl ?? config.apiUrl}/calls/${callId}/sync`,
+        'POST',
+        {},
+      );
 
       await startCall({
         callId,
@@ -116,6 +113,5 @@ export const useLiveAgent = (
     ...liveKitAgent,
     isCalling,
     callAgent,
-    isConfigReady,
   };
 };

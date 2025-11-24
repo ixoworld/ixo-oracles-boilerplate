@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import MatrixClient from '../../matrix/matrix-client.js';
-import { IWalletProps } from '../../providers/index.js';
+import { useOraclesContext } from '../../providers/oracles-provider/oracles-context.js';
 
-export const useGetOpenIdToken = (wallet?: IWalletProps) => {
+export const useGetOpenIdToken = () => {
+  const { wallet } = useOraclesContext();
   const matrixClientRef = useMemo(
     () =>
       new MatrixClient({
@@ -15,7 +16,6 @@ export const useGetOpenIdToken = (wallet?: IWalletProps) => {
     data: openIdToken,
     isLoading,
     error,
-    refetch,
   } = useQuery({
     queryKey: ['openIdToken', wallet?.did],
     queryFn: () => {
@@ -32,5 +32,5 @@ export const useGetOpenIdToken = (wallet?: IWalletProps) => {
     gcTime: 1000 * 60 * 5, // 5 minutes
   });
 
-  return { openIdToken, isLoading, error, refetch };
+  return { openIdToken, isLoading, error };
 };
