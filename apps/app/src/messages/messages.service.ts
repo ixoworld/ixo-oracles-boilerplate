@@ -303,8 +303,9 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     };
 
     const state = await this.customerSupportGraph.getGraphState(config);
+    console.log("🚀 ~ MessagesService ~ listMessages ~ state:", state)
 
-    if (!state || (state.config.did && state.config.did !== did)) {
+    if (!state) {
       return transformGraphStateMessageToListMessageResponse([]);
     }
     return transformGraphStateMessageToListMessageResponse(state.messages);
