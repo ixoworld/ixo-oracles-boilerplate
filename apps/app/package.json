@@ -32,6 +32,7 @@
   "dependencies": {
     "@ixo/common": "workspace:^",
     "@ixo/data-store": "workspace:^",
+    "@ixo/sqlite-saver": "workspace:^",
     "@ixo/matrix": "workspace:^",
     "@ixo/matrix-crdt": "^1.1.0",
     "@ixo/oracles-chain-client": "workspace:^",

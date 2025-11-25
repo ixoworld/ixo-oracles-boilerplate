@@ -1,46 +1,12 @@
-import {
-  MatrixCheckpointSaver,
-  type IRunnableConfigWithRequiredFields,
-} from '@ixo/matrix';
-import { START, StateGraph } from '@langchain/langgraph';
+import { type IRunnableConfigWithRequiredFields } from '@ixo/matrix';
 import { Logger } from '@nestjs/common';
 import 'dotenv/config';
 import { HumanMessage } from 'langchain';
-import CallbackHandler from 'langfuse-langchain';
 import { type BrowserToolCallDto } from 'src/messages/dto/send-message.dto';
-import { chatNode } from './nodes/chat-node/chat-node';
-import {
-  CustomerSupportGraphState,
-  type TCustomerSupportGraphState,
-} from './state';
-import { GraphNodes } from './types';
-
-const langfuseHandler = new CallbackHandler({
-  secretKey: process.env.LANGFUSE_SECRET_KEY,
-  publicKey: process.env.LANGFUSE_PUBLIC_KEY,
-  baseUrl: process.env.LANGFUSE_HOST,
-  flushInterval: 2,
-});
-
-const oracleName = process.env.ORACLE_NAME;
-if (!oracleName) {
-  throw new Error('ORACLE_NAME is not set');
-}
-const workflow = new StateGraph(CustomerSupportGraphState)
-
-  // Nodes
-  .addNode(GraphNodes.Chat, chatNode)
-
-  // Routes
-  .addEdge(START, GraphNodes.Chat);
-
-const mxGraph = workflow.compile({
-  checkpointer: new MatrixCheckpointSaver(),
-});
+import { createMainAgent } from './agents/main-agent';
+import { type TCustomerSupportGraphState } from './state';
 
 export class CustomerSupportGraph {
-  constructor(private readonly matrixCompiledGraph = mxGraph) {}
-
   async sendMessage(
     input: string,
     runnableConfig: IRunnableConfigWithRequiredFields & {
@@ -54,7 +20,7 @@ export class CustomerSupportGraph {
     editorRoomId?: string,
     currentEntityDid?: string,
     clientType?: 'matrix' | 'slack',
-  ): Promise<TCustomerSupportGraphState> {
+  ): Promise<Pick<TCustomerSupportGraphState, 'messages'>> {
     if (!runnableConfig.configurable.sessionId) {
       throw new Error('sessionId is required');
     }
@@ -62,7 +28,41 @@ export class CustomerSupportGraph {
       `[sendMessage]: msgFromMatrixRoom: ${msgFromMatrixRoom} input: ${input}`,
     );
 
-    return this.matrixCompiledGraph.invoke(
+    const state = {
+      messages: [
+        new HumanMessage({
+          content: input,
+          // this is to prevent the matrix manager to log this message as this message is from the matrix room itself not from the REST api
+          additional_kwargs: {
+            msgFromMatrixRoom,
+            timestamp: new Date().toISOString(),
+          },
+        }),
+      ],
+      browserTools,
+      editorRoomId,
+      currentEntityDid,
+      client: clientType ?? 'portal',
+      ...(initialUserContext ? { userContext: initialUserContext } : {}),
+    } satisfies Partial<TCustomerSupportGraphState>;
+
+    const agent = await createMainAgent({
+      state: state,
+      config: {
+        ...runnableConfig,
+        recursionLimit: 50,
+        configurable: {
+          ...runnableConfig.configurable,
+          thread_id: runnableConfig.configurable.sessionId,
+        },
+        metadata: {
+          langfuseSessionId: runnableConfig.configurable.sessionId,
+          langfuseUserId: runnableConfig.configurable.configs?.user.did,
+        },
+      },
+    });
+
+    const result = await agent.invoke(
       {
         messages: [
           new HumanMessage({
@@ -74,27 +74,18 @@ export class CustomerSupportGraph {
             },
           }),
         ],
-        browserTools,
-        editorRoomId,
-        currentEntityDid,
-        client: clientType ?? 'portal',
-        ...(initialUserContext ? { userContext: initialUserContext } : {}),
-      } satisfies Partial<TCustomerSupportGraphState>,
-
+      },
       {
-        ...runnableConfig,
-        recursionLimit: 50,
-        configurable: {
-          ...runnableConfig.configurable,
-          thread_id: runnableConfig.configurable.sessionId,
+        context: {
+          userDid: runnableConfig.configurable.configs?.user.did ?? '',
         },
-        callbacks: [langfuseHandler],
-        metadata: {
-          langfuseSessionId: runnableConfig.configurable.sessionId,
-          langfuseUserId: runnableConfig.configurable.configs?.user.did,
-        },
+        durability: 'async',
       },
     );
+
+    return {
+      messages: result.messages,
+    };
   }
 
   async streamMessage(
@@ -125,7 +116,41 @@ export class CustomerSupportGraph {
       });
     }
 
-    const stream = this.matrixCompiledGraph.streamEvents(
+    const state = {
+      messages: [
+        new HumanMessage({
+          content: input,
+          // this is to prevent the matrix manager to log this message as this message is from the matrix room itself not from the REST api
+          additional_kwargs: {
+            msgFromMatrixRoom,
+            timestamp: new Date().toISOString(),
+          },
+        }),
+      ],
+      browserTools,
+      editorRoomId,
+      currentEntityDid,
+      client: 'portal',
+      ...(initialUserContext ? { userContext: initialUserContext } : {}),
+    } satisfies Partial<TCustomerSupportGraphState>;
+
+    const agent = await createMainAgent({
+      state: state,
+      config: {
+        ...runnableConfig,
+        recursionLimit: 50,
+        configurable: {
+          ...runnableConfig.configurable,
+          thread_id: runnableConfig.configurable.sessionId,
+        },
+        metadata: {
+          langfuseSessionId: runnableConfig.configurable.sessionId,
+          langfuseUserId: runnableConfig.configurable.configs?.user.did,
+        },
+      },
+    });
+
+    const stream = agent.streamEvents(
       {
         messages: [
           new HumanMessage({
@@ -152,10 +177,8 @@ export class CustomerSupportGraph {
           ...runnableConfig.configurable,
           thread_id: runnableConfig.configurable.sessionId,
         },
-        callbacks: [langfuseHandler],
-        metadata: {
-          langfuseSessionId: runnableConfig.configurable.sessionId,
-          langfuseUserId: runnableConfig.configurable.configs?.user.did,
+        context: {
+          userDid: runnableConfig.configurable.configs?.user.did ?? '',
         },
         // Signal must be last to ensure it's not overwritten by runnableConfig spread
         signal: abortController?.signal,
@@ -167,8 +190,26 @@ export class CustomerSupportGraph {
 
   public async getGraphState(
     config: IRunnableConfigWithRequiredFields & { sessionId: string },
-  ): Promise<TCustomerSupportGraphState | undefined> {
-    const state = await this.matrixCompiledGraph.getState(config);
+  ): Promise<Pick<TCustomerSupportGraphState, 'messages'> | undefined> {
+    const agent = await createMainAgent({
+      state: {
+        messages: [],
+        browserTools: [],
+        editorRoomId: undefined,
+        currentEntityDid: undefined,
+        client: 'portal',
+        userContext: undefined,
+      } satisfies Partial<TCustomerSupportGraphState>,
+      config: {
+        ...config,
+        recursionLimit: 50,
+        configurable: {
+          ...config.configurable,
+        },
+      },
+    });
+    const state =
+      (await agent.graph.getState(config)) ?? agent.getState(config);
     if (Object.keys(state.values as TCustomerSupportGraphState).length === 0) {
       return undefined;
     }
