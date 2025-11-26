@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ENV } from 'src/config';
+import { UserMatrixSqliteSyncService } from '../user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 import {
   OraclesCallMatrixEventContent,
   SyncCallResponse,
@@ -33,47 +34,17 @@ export class CallsService {
   constructor(
     private readonly configService: ConfigService<ENV>,
     @Inject('MATRIX_MANAGER') private readonly matrixManager: MatrixManager,
+    private readonly syncService: UserMatrixSqliteSyncService,
   ) {}
 
   private async updateMXCallsListState(
     callId: CallId,
     sessionId: string,
     roomId: string,
+    userDid: string,
   ) {
-    let oraclesCallsListState: MatrixOraclesCallsListState | undefined =
-      undefined;
-    try {
-      oraclesCallsListState =
-        await this.matrixManager.stateManager.getState<MatrixOraclesCallsListState>(
-          roomId,
-          MATRIX_STATE_KEY_ORACLES_CALLS,
-        );
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        'errcode' in error &&
-        error.errcode === 'M_NOT_FOUND'
-      ) {
-        oraclesCallsListState = {
-          calls: [],
-        };
-      } else {
-        throw error;
-      }
-    }
-
-    oraclesCallsListState.calls.push({
-      callId,
-      sessionId,
-    });
-    await this.matrixManager.stateManager.setState<MatrixOraclesCallsListState>(
-      {
-        roomId,
-        stateKey: MATRIX_STATE_KEY_ORACLES_CALLS,
-        data: oraclesCallsListState,
-      },
-    );
-    return oraclesCallsListState;
+    // Use SQLite
+    await this.syncService.addCall(userDid, callId, sessionId);
   }
   async getEncryptionKey(
     dto: GetEncryptionKeyDTO,
@@ -142,6 +113,7 @@ export class CallsService {
       callId,
       callEvent.content.sessionId,
       roomId,
+      userDid,
     );
 
     return { callId };
@@ -150,6 +122,39 @@ export class CallsService {
   async listCalls(dto: ListCallDto): Promise<ListCallResponse> {
     try {
       validateSync(dto);
+
+      // Check SQLite first
+      let callsRows = await this.syncService.listCalls(
+        dto.userDid,
+        dto.sessionId,
+      );
+
+      // If SQLite is empty, check Matrix and migrate
+      if (callsRows.length === 0) {
+        const { roomId } = await this.matrixManager.getOracleRoomId({
+          userDid: dto.userDid,
+          oracleEntityDid: this.configService.getOrThrow('ORACLE_ENTITY_DID'),
+        });
+
+        if (roomId) {
+          // Migrate calls from Matrix to SQLite
+          await this.syncService.migrateUserDataFromMatrix(
+            dto.userDid,
+            roomId,
+            this.configService.getOrThrow('ORACLE_ENTITY_DID'),
+          );
+
+          // Read from SQLite again after migration
+          callsRows = await this.syncService.listCalls(
+            dto.userDid,
+            dto.sessionId,
+          );
+        }
+      }
+
+      if (callsRows.length === 0) {
+        return { calls: [] };
+      }
 
       const { roomId } = await this.matrixManager.getOracleRoomId({
         userDid: dto.userDid,
@@ -162,20 +167,14 @@ export class CallsService {
         );
       }
 
-      const callsState =
-        await this.matrixManager.stateManager.getState<MatrixOraclesCallsListState>(
-          roomId,
-          MATRIX_STATE_KEY_ORACLES_CALLS,
-        );
-
       const mxClient = this.matrixManager.getClient()?.mxClient;
       const crypto = mxClient?.crypto;
       const events = await Promise.all(
-        callsState.calls.map(async (call) => {
-          const [callEventId] = call.callId.split('@');
+        callsRows.map(async (call) => {
+          const [callEventId] = call.call_id.split('@');
           if (!callEventId) {
             throw new NotFoundException(
-              `Call event with ID '${call.callId}' not found`,
+              `Call event with ID '${call.call_id}' not found`,
             );
           }
           const callEvent = await this.matrixManager.getEventById<Call>(
@@ -184,17 +183,17 @@ export class CallsService {
           );
           if (!callEvent) {
             throw new NotFoundException(
-              `Call event with ID '${call.callId}' not found`,
+              `Call event with ID '${call.call_id}' not found`,
             );
           }
           const relations = await this.matrixManager
             .getClient()
             ?.mxClient.getRelationsForEvent(roomId, callEventId);
           if (relations?.chunk.length === 0) {
-            return {
-              ...callEvent.content,
-              id: call.callId as CallId,
-            };
+          return {
+            ...callEvent.content,
+            id: call.call_id as CallId,
+          };
           }
 
           // Sort the chunk array by origin_server_ts descending and get the most recent chunk
@@ -221,7 +220,7 @@ export class CallsService {
             ...callEvent.content,
             ...newContent,
 
-            id: call.callId as CallId,
+            id: call.call_id as CallId,
           };
         }),
       );

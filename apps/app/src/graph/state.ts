@@ -3,7 +3,7 @@ import { Annotation, messagesStateReducer } from '@langchain/langgraph';
 import { type BaseMessage } from 'langchain';
 import { type BrowserToolCallDto } from 'src/messages/dto/send-message.dto';
 
-export const CustomerSupportGraphState = Annotation.Root({
+export const MainAgentGraphState = Annotation.Root({
   config: Annotation<{
     wsId?: string;
     did: string;
@@ -54,4 +54,4 @@ export const CustomerSupportGraphState = Annotation.Root({
   }),
 });
 
-export type TCustomerSupportGraphState = typeof CustomerSupportGraphState.State;
+export type TMainAgentGraphState = typeof MainAgentGraphState.State;

@@ -3,7 +3,10 @@ import {
   parserBrowserTool,
   SearchEnhancedResponse,
 } from '@ixo/common';
-import { IRunnableConfigWithRequiredFields } from '@ixo/matrix';
+import {
+  IRunnableConfigWithRequiredFields,
+  MatrixCheckpointSaver,
+} from '@ixo/matrix';
 import { SqliteSaver } from '@ixo/sqlite-saver';
 import { Logger } from '@nestjs/common';
 import { createDeepAgent } from 'deepagents';
@@ -15,7 +18,7 @@ import {
   AI_ASSISTANT_PROMPT,
   SLACK_FORMATTING_CONSTRAINTS_CONTENT,
 } from '../nodes/chat-node/prompt';
-import { TCustomerSupportGraphState } from '../state';
+import { TMainAgentGraphState } from '../state';
 import { createDomainIndexerAgent } from './domain-indexer-agent';
 import { createEditorAgent, EditorAgentInstance } from './editor/editor-agent';
 import { EDITOR_DOCUMENTATION_CONTENT_READ_ONLY } from './editor/prompts';
@@ -23,18 +26,14 @@ import { createFirecrawlAgent } from './firecrawl-agent';
 import { createMemoryAgent } from './memory-agent';
 import { createPortalAgent } from './portal-agent';
 interface InvokeMainAgentParams {
-  state: Partial<TCustomerSupportGraphState>;
+  state: Partial<TMainAgentGraphState>;
   config: IRunnableConfigWithRequiredFields;
+  checkpointerType?: 'sqlite' | 'matrix';
 }
 
-import {
-  createFilesystemMiddleware,
-  createSubAgentMiddleware,
-  createPatchToolCallsMiddleware,
-  type SubAgent,
-} from 'deepagents';
-import { StateBackend, type BackendProtocol } from 'deepagents';
-import { createAgent } from 'langchain';
+import fs from 'node:fs';
+import path from 'node:path';
+import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 
 const llm = getOpenRouterChatModel({
   model: 'openai/gpt-oss-120b:nitro',
@@ -51,6 +50,7 @@ const llm = getOpenRouterChatModel({
 export const createMainAgent = async ({
   state,
   config,
+  checkpointerType = 'sqlite',
 }: InvokeMainAgentParams) => {
   const msgFromMatrixRoom = Boolean(
     state.messages?.at(-1)?.additional_kwargs.msgFromMatrixRoom,
@@ -68,44 +68,56 @@ export const createMainAgent = async ({
   // Format time context
   const timeContext = formatTimeContext(timezone, currentTime);
 
-  const systemPrompt = await AI_ASSISTANT_PROMPT.format({
-    APP_NAME: 'IXO | IXO Portal',
-    IDENTITY_CONTEXT: formatContextData(state.userContext?.identity),
-    WORK_CONTEXT: formatContextData(state.userContext?.work),
-    GOALS_CONTEXT: formatContextData(state.userContext?.goals),
-    INTERESTS_CONTEXT: formatContextData(state.userContext?.interests),
-    RELATIONSHIPS_CONTEXT: formatContextData(state.userContext?.relationships),
-    RECENT_CONTEXT: formatContextData(state.userContext?.recent),
-    TIME_CONTEXT: timeContext,
-    EDITOR_DOCUMENTATION: state.editorRoomId
-      ? EDITOR_DOCUMENTATION_CONTENT_READ_ONLY
-      : '',
-    CURRENT_ENTITY_DID: state.currentEntityDid ?? '',
-    SLACK_FORMATTING_CONSTRAINTS:
-      state.client === 'slack' ? SLACK_FORMATTING_CONSTRAINTS_CONTENT : '',
-  });
-
-  const portalAgent = await createPortalAgent({
-    tools:
-      state.browserTools?.map((tool) =>
-        parserBrowserTool({
-          description: tool.description,
-          schema: tool.schema,
-          toolName: tool.name,
-        }),
-      ) ?? [],
-  });
-
   if (!configurable?.configs?.user?.did) {
     throw new Error('User DID is required');
   }
-
-  const memoryAgent = await createMemoryAgent({
-    userDid: configurable?.configs?.user?.did,
-    oracleDid: matrix?.oracleDid ?? '',
-    roomId: matrix?.roomId ?? '',
-    mode: 'user',
-  });
+  if(!configurable.thread_id){
+    throw new Error('Thread ID is required');
+  }
+  const [
+    systemPrompt,
+    portalAgent,
+    memoryAgent,
+    firecrawlAgent,
+    domainIndexerAgent,
+  ] = await Promise.all([
+    AI_ASSISTANT_PROMPT.format({
+      APP_NAME: 'IXO | IXO Portal',
+      IDENTITY_CONTEXT: formatContextData(state.userContext?.identity),
+      WORK_CONTEXT: formatContextData(state.userContext?.work),
+      GOALS_CONTEXT: formatContextData(state.userContext?.goals),
+      INTERESTS_CONTEXT: formatContextData(state.userContext?.interests),
+      RELATIONSHIPS_CONTEXT: formatContextData(
+        state.userContext?.relationships,
+      ),
+      RECENT_CONTEXT: formatContextData(state.userContext?.recent),
+      TIME_CONTEXT: timeContext,
+      EDITOR_DOCUMENTATION: state.editorRoomId
+        ? EDITOR_DOCUMENTATION_CONTENT_READ_ONLY
+        : '',
+      CURRENT_ENTITY_DID: state.currentEntityDid ?? '',
+      SLACK_FORMATTING_CONSTRAINTS:
+        state.client === 'slack' ? SLACK_FORMATTING_CONSTRAINTS_CONTENT : '',
+    }),
+    createPortalAgent({
+      tools:
+        state.browserTools?.map((tool) =>
+          parserBrowserTool({
+            description: tool.description,
+            schema: tool.schema,
+            toolName: tool.name,
+          }),
+        ) ?? [],
+    }),
+    createMemoryAgent({
+      userDid: configurable?.configs?.user?.did,
+      oracleDid: matrix?.oracleDid ?? '',
+      roomId: matrix?.roomId ?? '',
+      mode: 'user',
+    }),
+    createFirecrawlAgent(),
+    createDomainIndexerAgent(),
+  ]);
 
   // Conditionally create BlockNote tools if editorRoomId is provided
   let blockNoteAgent: EditorAgentInstance | undefined = undefined;
@@ -119,13 +131,18 @@ export const createMainAgent = async ({
     });
   }
 
-  createAgent
-  const firecrawlAgent = await createFirecrawlAgent();
-  const domainIndexerAgent = await createDomainIndexerAgent();
-
   const agents = [portalAgent, domainIndexerAgent, memoryAgent, firecrawlAgent];
   if (blockNoteAgent) {
     agents.push(blockNoteAgent);
+  }
+
+  // check db folder if not exists, create it
+  const dbFolder = path.join(
+    UserMatrixSqliteSyncService.checkpointsFolder,
+    configurable?.configs?.user?.did,
+  );
+  if (!fs.existsSync(dbFolder)) {
+    fs.mkdirSync(dbFolder, { recursive: true });
   }
 
   const agent = createDeepAgent({
@@ -138,9 +155,15 @@ export const createMainAgent = async ({
       createTokenLimiterMiddleware(),
     ],
     systemPrompt,
-    checkpointer: SqliteSaver.fromConnString('./checkpoints.db'),
+    checkpointer:
+      checkpointerType === 'sqlite'
+        ? SqliteSaver.fromConnString(
+            UserMatrixSqliteSyncService.getUserCheckpointDbPath(
+              configurable?.configs?.user?.did,
+            ),
+          )
+        : new MatrixCheckpointSaver(),
     name: 'Companion Agent',
-
   });
 
   return agent;

@@ -2,13 +2,15 @@ import { MemoryEngineService, SessionManagerService } from '@ixo/common';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { type ENV } from 'src/types';
+import { CheckpointStorageSyncModule } from '../user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.module';
 import { MessagesModule } from '../messages/messages.module';
 import { SessionHistoryProcessor } from './session-history-processor.service';
 import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
+import { UserMatrixSqliteSyncService } from '../user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 
 @Module({
-  imports: [MessagesModule],
+  imports: [MessagesModule, CheckpointStorageSyncModule],
   controllers: [SessionsController],
   providers: [
     SessionsService,
@@ -27,10 +29,17 @@ import { SessionsService } from './sessions.service';
     },
     {
       provide: SessionManagerService,
-      useFactory: (memoryEngineService: MemoryEngineService) => {
-        return new SessionManagerService(undefined, memoryEngineService);
+      useFactory: (
+        syncService: UserMatrixSqliteSyncService,
+        memoryEngineService: MemoryEngineService,
+      ) => {
+        return new SessionManagerService(
+          syncService,
+          undefined,
+          memoryEngineService,
+        );
       },
-      inject: [MemoryEngineService],
+      inject: [UserMatrixSqliteSyncService, MemoryEngineService],
     },
   ],
   exports: [SessionsService, SessionHistoryProcessor],

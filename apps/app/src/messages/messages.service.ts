@@ -26,10 +26,11 @@ import { Cache } from 'cache-manager';
 import type { Request, Response } from 'express';
 import { AIMessageChunk, ToolMessage } from 'langchain';
 import * as crypto from 'node:crypto';
-import { CustomerSupportGraph } from 'src/graph';
+import { MainAgentGraph } from 'src/graph';
 import { cleanAdditionalKwargs } from 'src/graph/nodes/chat-node/utils';
-import { type TCustomerSupportGraphState } from 'src/graph/state';
+import { type TMainAgentGraphState } from 'src/graph/state';
 import { type ENV } from 'src/types';
+import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 import { normalizeDid } from 'src/utils/header.utils';
 import { runWithSSEContext } from 'src/utils/sse-context';
 import {
@@ -51,10 +52,11 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
   matrixManager: MatrixManager;
 
   constructor(
-    private readonly customerSupportGraph: CustomerSupportGraph,
+    private readonly mainAgent: MainAgentGraph,
     private readonly sessionManagerService: SessionManagerService,
     private readonly config: ConfigService<ENV>,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+    private readonly checkpointStorageSyncService: UserMatrixSqliteSyncService,
   ) {
     this.matrixManager = this.sessionManagerService.matrixManger;
   }
@@ -302,8 +304,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       sessionId,
     };
 
-    const state = await this.customerSupportGraph.getGraphState(config);
-    console.log("🚀 ~ MessagesService ~ listMessages ~ state:", state)
+    const state = await this.mainAgent.getGraphState(config);
 
     if (!state) {
       return transformGraphStateMessageToListMessageResponse([]);
@@ -383,7 +384,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         await runWithSSEContext(
           params.res,
           async () => {
-            const stream = await this.customerSupportGraph.streamMessage(
+            const stream = await this.mainAgent.streamMessage(
               params.message,
               runnableConfig,
               params.tools ?? [],
@@ -600,6 +601,11 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
           },
           abortController,
         );
+        await this.checkpointStorageSyncService.uploadCheckpointToMatrixStorage(
+          {
+            userDid: params.did,
+          },
+        );
         return;
       } catch (error) {
         // Handle abort errors gracefully - don't treat as error
@@ -640,7 +646,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    const result = await this.customerSupportGraph.sendMessage(
+    const result = await this.mainAgent.sendMessage(
       params.message,
       runnableConfig,
       params.tools ?? [],
@@ -821,14 +827,14 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     payload: SendMessagePayload & { req?: Request },
   ): Promise<{
     sessionId: string;
-    config: TCustomerSupportGraphState['config'];
+    config: TMainAgentGraphState['config'];
     roomId: string;
     runnableConfig: IRunnableConfigWithRequiredFields & {
       configurable: {
         sessionId: string;
       };
     };
-    userContext?: TCustomerSupportGraphState['userContext'];
+    userContext?: TMainAgentGraphState['userContext'];
     targetSession?: ChatSession; // For post-message sync
   }> {
     const did = payload.did;
@@ -838,12 +844,17 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         ? (payload.requestId as string)
         : crypto.randomUUID();
 
-    // Get cached session to check for cached roomId
-    const targetSession = await this.getCachedSession(
-      sessionId,
-      did,
-      this.config.getOrThrow('ORACLE_ENTITY_DID'),
-    );
+    // Get cached session and sync checkpoint to matrix storage in parallel
+    const [targetSession] = await Promise.all([
+      this.getCachedSession(
+        sessionId,
+        did,
+        this.config.getOrThrow('ORACLE_ENTITY_DID'),
+      ),
+      this.checkpointStorageSyncService.syncLocalStorageFromMatrixStorage({
+        userDid: did,
+      }),
+    ]);
 
     // Use cached roomId if available, otherwise fetch it
     let roomId = targetSession?.roomId;
@@ -859,7 +870,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    const config: TCustomerSupportGraphState['config'] = {
+    const config: TMainAgentGraphState['config'] = {
       did: payload.did,
     };
 
@@ -875,6 +886,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       };
     } = {
       configurable: {
+        thread_id: sessionId,
         requestId,
         sessionId,
         configs: {

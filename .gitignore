@@ -67,3 +67,5 @@ pnpm-debug.log*
 # Matrix
 matrix-local-storage/
 matrix-storage/
+
+checkpoints/
