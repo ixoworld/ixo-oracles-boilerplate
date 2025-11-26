@@ -1,18 +1,21 @@
 import { MemoryEngineService, SessionManagerService } from '@ixo/common';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { CustomerSupportGraph } from 'src/graph';
+import { MainAgentGraph } from 'src/graph';
 import { type ENV } from 'src/types';
 // SseService is provided globally by SseModule, no need to import or provide here.
+import { MatrixManager } from '@ixo/matrix';
+import { CheckpointStorageSyncModule } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.module';
+import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 import { MessagesController } from './messages.controller';
 import { MessagesService } from './messages.service';
 
 @Module({
-  imports: [],
+  imports: [CheckpointStorageSyncModule],
   controllers: [MessagesController],
   providers: [
     MessagesService,
-    CustomerSupportGraph,
+    MainAgentGraph,
     {
       provide: MemoryEngineService,
       useFactory: (configService: ConfigService<ENV>) => {
@@ -27,10 +30,17 @@ import { MessagesService } from './messages.service';
     },
     {
       provide: SessionManagerService,
-      useFactory: (memoryEngineService: MemoryEngineService) => {
-        return new SessionManagerService(undefined, memoryEngineService);
+      useFactory: (
+        syncService: UserMatrixSqliteSyncService,
+        memoryEngineService: MemoryEngineService,
+      ) => {
+        return new SessionManagerService(
+          syncService,
+          MatrixManager.getInstance(),
+          memoryEngineService,
+        );
       },
-      inject: [MemoryEngineService],
+      inject: [UserMatrixSqliteSyncService, MemoryEngineService],
     },
   ],
   exports: [MessagesService, MemoryEngineService, SessionManagerService],

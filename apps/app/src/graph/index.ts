@@ -4,9 +4,9 @@ import 'dotenv/config';
 import { HumanMessage } from 'langchain';
 import { type BrowserToolCallDto } from 'src/messages/dto/send-message.dto';
 import { createMainAgent } from './agents/main-agent';
-import { type TCustomerSupportGraphState } from './state';
+import { type TMainAgentGraphState } from './state';
 
-export class CustomerSupportGraph {
+export class MainAgentGraph {
   async sendMessage(
     input: string,
     runnableConfig: IRunnableConfigWithRequiredFields & {
@@ -16,11 +16,11 @@ export class CustomerSupportGraph {
     },
     browserTools?: BrowserToolCallDto[],
     msgFromMatrixRoom = false,
-    initialUserContext?: TCustomerSupportGraphState['userContext'],
+    initialUserContext?: TMainAgentGraphState['userContext'],
     editorRoomId?: string,
     currentEntityDid?: string,
     clientType?: 'matrix' | 'slack',
-  ): Promise<Pick<TCustomerSupportGraphState, 'messages'>> {
+  ): Promise<Pick<TMainAgentGraphState, 'messages'>> {
     if (!runnableConfig.configurable.sessionId) {
       throw new Error('sessionId is required');
     }
@@ -44,7 +44,7 @@ export class CustomerSupportGraph {
       currentEntityDid,
       client: clientType ?? 'portal',
       ...(initialUserContext ? { userContext: initialUserContext } : {}),
-    } satisfies Partial<TCustomerSupportGraphState>;
+    } satisfies Partial<TMainAgentGraphState>;
 
     const agent = await createMainAgent({
       state: state,
@@ -97,7 +97,7 @@ export class CustomerSupportGraph {
     },
     browserTools?: BrowserToolCallDto[],
     msgFromMatrixRoom = false,
-    initialUserContext?: TCustomerSupportGraphState['userContext'],
+    initialUserContext?: TMainAgentGraphState['userContext'],
     abortController?: AbortController,
     editorRoomId?: string,
     currentEntityDid?: string,
@@ -132,7 +132,7 @@ export class CustomerSupportGraph {
       currentEntityDid,
       client: 'portal',
       ...(initialUserContext ? { userContext: initialUserContext } : {}),
-    } satisfies Partial<TCustomerSupportGraphState>;
+    } satisfies Partial<TMainAgentGraphState>;
 
     const agent = await createMainAgent({
       state: state,
@@ -141,7 +141,6 @@ export class CustomerSupportGraph {
         recursionLimit: 50,
         configurable: {
           ...runnableConfig.configurable,
-          thread_id: runnableConfig.configurable.sessionId,
         },
         metadata: {
           langfuseSessionId: runnableConfig.configurable.sessionId,
@@ -166,7 +165,7 @@ export class CustomerSupportGraph {
         ...(initialUserContext ? { userContext: initialUserContext } : {}),
         editorRoomId,
         currentEntityDid,
-      } satisfies Partial<TCustomerSupportGraphState>,
+      } satisfies Partial<TMainAgentGraphState>,
 
       {
         version: 'v2',
@@ -175,7 +174,6 @@ export class CustomerSupportGraph {
         recursionLimit: 50,
         configurable: {
           ...runnableConfig.configurable,
-          thread_id: runnableConfig.configurable.sessionId,
         },
         context: {
           userDid: runnableConfig.configurable.configs?.user.did ?? '',
@@ -189,8 +187,11 @@ export class CustomerSupportGraph {
   }
 
   public async getGraphState(
-    config: IRunnableConfigWithRequiredFields & { sessionId: string },
-  ): Promise<Pick<TCustomerSupportGraphState, 'messages'> | undefined> {
+    config: IRunnableConfigWithRequiredFields & {
+      sessionId: string;
+      checkpointerType?: 'sqlite' | 'matrix';
+    },
+  ): Promise<Pick<TMainAgentGraphState, 'messages'> | undefined> {
     const agent = await createMainAgent({
       state: {
         messages: [],
@@ -199,7 +200,7 @@ export class CustomerSupportGraph {
         currentEntityDid: undefined,
         client: 'portal',
         userContext: undefined,
-      } satisfies Partial<TCustomerSupportGraphState>,
+      } satisfies Partial<TMainAgentGraphState>,
       config: {
         ...config,
         recursionLimit: 50,
@@ -207,14 +208,59 @@ export class CustomerSupportGraph {
           ...config.configurable,
         },
       },
+      checkpointerType: config.checkpointerType ?? 'sqlite',
     });
     const state =
       (await agent.graph.getState(config)) ?? agent.getState(config);
-    if (Object.keys(state.values as TCustomerSupportGraphState).length === 0) {
+    if (Object.keys(state.values as TMainAgentGraphState).length === 0) {
       return undefined;
     }
-    return state.values as TCustomerSupportGraphState;
+    return state.values as TMainAgentGraphState;
+  }
+
+  public async migrateChatHistoryToSqlite(
+    config: IRunnableConfigWithRequiredFields & { sessionId: string },
+  ): Promise<void> {
+    const sqliteAgent = await createMainAgent({
+      state: {
+        messages: [],
+        browserTools: [],
+        editorRoomId: undefined,
+        currentEntityDid: undefined,
+        client: 'portal',
+        userContext: undefined,
+      } satisfies Partial<TMainAgentGraphState>,
+      config: {
+        ...config,
+        recursionLimit: 50,
+        configurable: {
+          ...config.configurable,
+        },
+      },
+      checkpointerType: 'sqlite',
+    });
+    const sqliteGraphState =
+      (await sqliteAgent.graph.getState(config)) ??
+      sqliteAgent.getState(config);
+    const hasSqliteGraphState =
+      Object.keys(sqliteGraphState.values as TMainAgentGraphState).length > 0;
+
+    if (!hasSqliteGraphState) {
+      Logger.log('No sqlite graph state found, migrating from matrix');
+      const matrixGraphState = await this.getGraphState({
+        ...config,
+        checkpointerType: 'matrix',
+      });
+      if (!matrixGraphState) {
+        Logger.error(
+          'No matrix graph state found, cannot migrate chat history',
+        );
+        return;
+      }
+
+      await sqliteAgent.graph.updateState(config, matrixGraphState);
+    }
   }
 }
 
-export const customerSupportGraph = new CustomerSupportGraph();
+export const mainAgent = new MainAgentGraph();

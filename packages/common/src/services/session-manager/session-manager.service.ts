@@ -11,10 +11,18 @@ import {
   type ListChatSessionsDto,
   type ListChatSessionsResponseDto,
 } from './dto.js';
-import { NoUserRoomsFoundError } from './errors.js';
+export interface IDatabaseSyncService {
+  getUserDatabase(userDid: string): Promise<any>; // Database.Database type from better-sqlite3
+  migrateUserDataFromMatrix(
+    userDid: string,
+    roomId: string,
+    oracleEntityDid: string,
+  ): Promise<void>;
+}
 
 export class SessionManagerService {
   constructor(
+    private readonly syncService: IDatabaseSyncService,
     public readonly matrixManger = MatrixManager.getInstance(),
     private readonly memoryEngineService?: MemoryEngineService,
   ) {}
@@ -144,22 +152,30 @@ ___________________________________________________________
         slackThreadTs,
       };
 
-      if (!this.matrixManger.stateManager) {
-        throw new Error('MatrixStateManager not initialized');
-      }
-
-      const { roomId } = await this.matrixManger.getOracleRoomId({
-        userDid: did,
-        oracleEntityDid,
-      });
-      if (!roomId) {
-        throw new Error('Room ID not found');
-      }
-      await this.matrixManger.stateManager.setState<ChatSession[]>({
-        roomId,
-        stateKey: this.getSessionsStateKey({ oracleEntityDid }),
-        data: [session, ...sessions],
-      });
+      // Always use SQLite (migration handled in listSessions)
+      const db = await this.syncService.getUserDatabase(did);
+      db.prepare(
+        `
+        INSERT INTO sessions (
+          session_id, title, last_updated_at, created_at, oracle_name, 
+          oracle_did, oracle_entity_did, last_processed_count, 
+          user_context, room_id, slack_thread_ts
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      ).run(
+        session.sessionId,
+        session.title ?? null,
+        session.lastUpdatedAt,
+        session.createdAt,
+        session.oracleName,
+        session.oracleDid,
+        session.oracleEntityDid,
+        session.lastProcessedCount ?? null,
+        session.userContext ? JSON.stringify(session.userContext) : null,
+        session.roomId ?? null,
+        session.slackThreadTs ?? null,
+      );
 
       return session;
     }
@@ -172,91 +188,145 @@ ___________________________________________________________
         })
       : selectedSession.title;
 
-    if (!this.matrixManger.stateManager) {
-      throw new Error('MatrixStateManager not initialized');
-    }
-    const { roomId } = _roomId
-      ? { roomId: _roomId }
-      : await this.matrixManger.getOracleRoomId({
-          userDid: did,
-          oracleEntityDid,
-        });
-    if (!roomId) {
-      throw new Error('Room ID not found');
-    }
     const lastUpdatedAt = new Date().toISOString();
-
-    const setStatePromise = this.matrixManger.stateManager.setState<
-      ChatSession[]
-    >({
-      roomId,
-      stateKey: this.getSessionsStateKey({ oracleEntityDid }),
-      data: sessions.map((session) =>
-        session.sessionId === sessionId
-          ? {
-              ...session,
-              title,
-              lastUpdatedAt,
-              lastProcessedCount,
-              slackThreadTs,
-            }
-          : session,
-      ),
-    });
-
-    const editMessagePromise = this.matrixManger.editMessage({
-      message: selectedSession.title ?? `New Conversation Started`,
-      roomId,
-      messageId: selectedSession.sessionId,
-      isOracleAdmin: true,
-      disablePrefix: true,
-    });
-
-    await Promise.all([setStatePromise, editMessagePromise]);
-
-    return {
+    const updatedSession: ChatSession = {
       ...selectedSession,
       title,
       lastUpdatedAt,
       lastProcessedCount,
+      slackThreadTs,
     };
+
+    // Always use SQLite
+    const db = await this.syncService.getUserDatabase(did);
+    db.prepare(
+      `
+      UPDATE sessions 
+      SET title = ?, last_updated_at = ?, last_processed_count = ?, slack_thread_ts = ?
+      WHERE session_id = ?
+    `,
+    ).run(
+      updatedSession.title ?? null,
+      lastUpdatedAt,
+      updatedSession.lastProcessedCount ?? null,
+      updatedSession.slackThreadTs ?? null,
+      sessionId,
+    );
+
+    return updatedSession;
   }
 
   public async listSessions(
     listSessionsDto: ListChatSessionsDto,
   ): Promise<ListChatSessionsResponseDto> {
+    const db = await this.syncService.getUserDatabase(listSessionsDto.did);
+
+    // Check SQLite first
+    const rows = db
+      .prepare(
+        `SELECT 
+          session_id, title, last_updated_at, created_at, oracle_name,
+          oracle_did, oracle_entity_did, last_processed_count,
+          user_context, room_id, slack_thread_ts
+         FROM sessions 
+         WHERE oracle_entity_did = ? 
+         ORDER BY last_updated_at DESC`,
+      )
+      .all(listSessionsDto.oracleEntityDid) as Array<{
+      session_id: string;
+      title: string | null;
+      last_updated_at: string;
+      created_at: string;
+      oracle_name: string;
+      oracle_did: string;
+      oracle_entity_did: string;
+      last_processed_count: number | null;
+      user_context: string | null;
+      room_id: string | null;
+      slack_thread_ts: string | null;
+    }>;
+    const sessions = rows.map((row) => ({
+      sessionId: row.session_id,
+      title: row.title ?? undefined,
+      lastUpdatedAt: row.last_updated_at,
+      createdAt: row.created_at,
+      oracleName: row.oracle_name,
+      oracleDid: row.oracle_did,
+      oracleEntityDid: row.oracle_entity_did,
+      lastProcessedCount: row.last_processed_count ?? undefined,
+      userContext: row.user_context
+        ? (JSON.parse(row.user_context) as UserContextData)
+        : undefined,
+      roomId: row.room_id ?? undefined,
+      slackThreadTs: row.slack_thread_ts ?? undefined,
+    })) as ChatSession[];
+
+    // If SQLite has data, return it
+    if (sessions.length > 0) {
+      return { sessions };
+    }
+
+    // SQLite is empty, check Matrix and migrate
     await this.matrixManger.init();
+    Logger.info('Migrating chat history from Matrix to SQLite');
     const { roomId } = await this.matrixManger.getOracleRoomId({
       userDid: listSessionsDto.did,
       oracleEntityDid: listSessionsDto.oracleEntityDid,
     });
+
     if (!roomId) {
-      throw new Error('Room ID not found');
+      // No room found, return empty (new user)
+      return { sessions: [] };
     }
 
-    try {
-      if (!this.matrixManger.stateManager) {
-        throw new Error('MatrixStateManager not initialized');
-      }
-      const sessionsState = await this.matrixManger.stateManager.getState<
-        ChatSession[]
-      >(
-        roomId,
-        this.getSessionsStateKey({
-          oracleEntityDid: listSessionsDto.oracleEntityDid,
-        }),
-      );
-      return { sessions: sessionsState };
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        'errcode' in error &&
-        error.errcode === 'M_NOT_FOUND'
-      ) {
-        return { sessions: [] };
-      }
-      throw error;
-    }
+    // Migrate from Matrix to SQLite
+    await this.syncService.migrateUserDataFromMatrix(
+      listSessionsDto.did,
+      roomId,
+      listSessionsDto.oracleEntityDid,
+    );
+
+    // Read from SQLite again after migration
+    const migratedRows = db
+      .prepare(
+        `SELECT 
+          session_id, title, last_updated_at, created_at, oracle_name,
+          oracle_did, oracle_entity_did, last_processed_count,
+          user_context, room_id, slack_thread_ts
+         FROM sessions 
+         WHERE oracle_entity_did = ? 
+         ORDER BY last_updated_at DESC`,
+      )
+      .all(listSessionsDto.oracleEntityDid) as Array<{
+      session_id: string;
+      title: string | null;
+      last_updated_at: string;
+      created_at: string;
+      oracle_name: string;
+      oracle_did: string;
+      oracle_entity_did: string;
+      last_processed_count: number | null;
+      user_context: string | null;
+      room_id: string | null;
+      slack_thread_ts: string | null;
+    }>;
+    const migratedSessions = migratedRows.map((row) => ({
+      sessionId: row.session_id,
+      title: row.title ?? undefined,
+      lastUpdatedAt: row.last_updated_at,
+      createdAt: row.created_at,
+      oracleName: row.oracle_name,
+      oracleDid: row.oracle_did,
+      oracleEntityDid: row.oracle_entity_did,
+      lastProcessedCount: row.last_processed_count ?? undefined,
+      userContext: row.user_context
+        ? (JSON.parse(row.user_context) as UserContextData)
+        : undefined,
+      roomId: row.room_id ?? undefined,
+      slackThreadTs: row.slack_thread_ts ?? undefined,
+    })) as ChatSession[];
+
+    return { sessions: migratedSessions };
   }
 
   public async createSession(
@@ -282,7 +352,7 @@ ___________________________________________________________
     let userContext: UserContextData | undefined;
     if (this.memoryEngineService) {
       try {
-        Logger.info('Gathering user context from Memory Engine');
+        Logger.debug('Gathering user context from Memory Engine');
         userContext = await this.memoryEngineService.gatherUserContext({
           oracleDid: createSessionDto.oracleDid,
           userDid: createSessionDto.did,
@@ -312,33 +382,10 @@ ___________________________________________________________
   public async deleteSession(
     deleteSessionDto: DeleteChatSessionDto,
   ): Promise<void> {
-    const oldSessions = await this.listSessions({
-      did: deleteSessionDto.did,
-      oracleEntityDid: deleteSessionDto.oracleEntityDid,
-    });
-
-    const { roomId } = await this.matrixManger.getOracleRoomId({
-      userDid: deleteSessionDto.did,
-      oracleEntityDid: deleteSessionDto.oracleEntityDid,
-    });
-
-    if (!roomId) {
-      throw new NoUserRoomsFoundError(deleteSessionDto.did);
-    }
-
-    const newSessions = oldSessions.sessions.filter(
-      (session) => session.sessionId !== deleteSessionDto.sessionId,
+    // Always use SQLite (migration handled in listSessions if needed)
+    const db = await this.syncService.getUserDatabase(deleteSessionDto.did);
+    db.prepare('DELETE FROM sessions WHERE session_id = ?').run(
+      deleteSessionDto.sessionId,
     );
-
-    if (!this.matrixManger.stateManager) {
-      throw new Error('MatrixStateManager not initialized');
-    }
-    await this.matrixManger.stateManager.setState<ChatSession[]>({
-      roomId,
-      stateKey: this.getSessionsStateKey({
-        oracleEntityDid: deleteSessionDto.oracleEntityDid,
-      }),
-      data: newSessions,
-    });
   }
 }

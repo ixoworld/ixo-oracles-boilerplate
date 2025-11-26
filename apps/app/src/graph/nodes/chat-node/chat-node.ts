@@ -20,7 +20,7 @@
 // import { createTokenLimiterMiddleware } from 'src/graph/middlewares/token-limiter-middelware';
 // import { createToolValidationMiddleware } from 'src/graph/middlewares/tool-validation-middleware';
 // import z from 'zod';
-// import { type TCustomerSupportGraphState } from '../../state';
+// import { type TMainAgentGraphState } from '../../state';
 // import {
 //   AI_ASSISTANT_PROMPT,
 //   EDITOR_DOCUMENTATION_CONTENT_READ_ONLY,
@@ -29,7 +29,7 @@
 // import { cleanAdditionalKwargs } from './utils';
 // import { createMainAgent } from 'src/graph/agents/main-agent';
 
-import z from "zod";
+import z from 'zod';
 
 export const contextSchema = z.object({
   userDid: z.string(),
@@ -37,11 +37,10 @@ export const contextSchema = z.object({
 
 export type TChatNodeContext = z.infer<typeof contextSchema>;
 
-
 // export async function chatNode(
-//   state: TCustomerSupportGraphState,
+//   state: TMainAgentGraphState,
 //   config?: RunnableConfig,
-// ): Promise<Partial<TCustomerSupportGraphState>> {
+// ): Promise<Partial<TMainAgentGraphState>> {
 
 //   const agent = await createMainAgent({ state, config });
 //   const result = await agent.invoke(

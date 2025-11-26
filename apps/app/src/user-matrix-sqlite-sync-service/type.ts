@@ -1,0 +1,3 @@
+interface BaseSyncArgs {
+  userDid: string;
+}

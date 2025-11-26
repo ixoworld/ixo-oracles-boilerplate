@@ -1,8 +1,8 @@
 import { END } from '@langchain/langgraph';
-import { type TCustomerSupportGraphState } from '../state';
+import { type TMainAgentGraphState } from '../state';
 import { GraphNodes } from '../types';
 
-const toolsChatRouter = (state: TCustomerSupportGraphState): string => {
+const toolsChatRouter = (state: TMainAgentGraphState): string => {
   const { messages } = state;
   const lastMessage = messages[messages.length - 1];
   if (
