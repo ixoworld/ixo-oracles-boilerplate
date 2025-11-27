@@ -1,3 +1,4 @@
+import { Logger } from '@ixo/logger';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import {
   BaseCheckpointSaver,
@@ -145,7 +146,22 @@ export class SqliteSaver extends BaseCheckpointSaver {
       return;
     }
 
-    this.db.pragma('journal_mode=WAL');
+    // Network-aware SQLite configuration:
+    // - devnet: Uses shared NVMe (network-like filesystem) → DELETE mode for stability
+    // - testnet/mainnet: Uses local HDD (real block device) → WAL mode for performance
+    const network = process.env.NETWORK || 'devnet';
+
+    if (network === 'devnet') {
+      Logger.info('Using DELETE journal mode for devnet (shared NVMe)');
+      // Shared NVMe doesn't support mmap/locking properly
+      this.db.pragma('journal_mode=DELETE');
+      this.db.pragma('locking_mode=EXCLUSIVE');
+    } else {
+      Logger.info('Using WAL journal mode for testnet/mainnet (local HDD)');
+      // Local HDD: WAL works perfectly
+      this.db.pragma('journal_mode=WAL');
+    }
+
     this.db.exec(`
 CREATE TABLE IF NOT EXISTS checkpoints (
   thread_id TEXT NOT NULL,
