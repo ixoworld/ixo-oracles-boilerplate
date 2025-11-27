@@ -6,7 +6,7 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ git ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-# Setup pnpm and turbo on the alpine base
+# Setup pnpm and turbo on the debian base
 FROM --platform=linux/amd64 debian-base as base
 ENV CI=true
 RUN npm install pnpm@10.0.0 turbo --global
@@ -38,12 +38,15 @@ RUN --mount=type=cache,id=pnpm,target=~/.pnpm-store pnpm install --frozen-lockfi
 COPY --from=pruner /app/out/full/ .
 
 RUN turbo build --filter=${PROJECT}
-RUN --mount=type=cache,id=pnpm,target=~/.pnpm-store pnpm prune --prod --no-optional
-RUN rm -rf ./**/*/src
+# Remove dev dependencies and hoist production dependencies to top level for proper module resolution
+RUN --mount=type=cache,id=pnpm,target=~/.pnpm-store pnpm install --frozen-lockfile --prod --shamefully-hoist
+# Remove source files only from workspace packages, not from node_modules
+RUN rm -rf ./packages/*/src ./apps/*/src
 
 # Final image
 FROM --platform=linux/amd64 debian-base AS runner
 ARG PROJECT
+ENV PROJECT=${PROJECT}
 
 # Clean up build dependencies in the final image
 RUN apt-get purge -y make g++ git \
@@ -51,20 +54,14 @@ RUN apt-get purge -y make g++ git \
 
 WORKDIR /app
 COPY --from=builder /app .
-WORKDIR /app/apps/${PROJECT}
 
 # Create matrix storage directory
-RUN mkdir -p matrix-storage
+RUN mkdir -p apps/${PROJECT}/matrix-storage
 
-# ARG PORT=3000
-# ENV PORT=${PORT}
-# EXPOSE ${PORT}
 ENV NODE_ENV=production
-
 EXPOSE 3000
 
-# CMD node --experimental-vm-modules dist/main
-CMD NODE_OPTIONS='--experimental-require-module' node dist/main
+CMD sh -c "node --experimental-require-module apps/${PROJECT}/dist/main"
 
 # docker build -t api:latest --build-arg PROJECT=api .
 # docker build -t ghcr.io/ixofoundation/ixo-ai-oracles:v0.0.2 --build-arg PROJECT=guru .
