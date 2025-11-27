@@ -1,5 +1,5 @@
 import { type AllEvents } from '@ixo/oracles-events/types';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { useOraclesContext } from '../../providers/oracles-provider/oracles-context.js';
 import { useOraclesConfig } from '../use-oracles-config.js';
@@ -9,11 +9,15 @@ import {
   type IWebSocketConfig,
   type WebSocketEvent,
 } from './types.js';
+import { executeToolAndEmitResult } from './tool-executor.js';
 
 export function useWebSocketEvents(
   props: IWebSocketConfig,
 ): IUseWebSocketEventsReturn {
-  const { config } = useOraclesConfig(props.oracleDid);
+  const { config, isReady: isConfigReady } = useOraclesConfig(
+    props.oracleDid,
+    props.overrides,
+  );
   const { wallet } = useOraclesContext();
 
   const [isConnected, setIsConnected] = useState(false);
@@ -26,15 +30,34 @@ export function useWebSocketEvents(
   const socketRef = useRef<Socket | null>(null);
   // Use ref to store callback to prevent dependency issues
   const handleInvalidateCacheRef = useRef(props.handleInvalidateCache);
+  const browserToolsRef = useRef(props.browserTools);
+  const actionToolsRef = useRef(props.actionTools);
 
-  // Update the callback ref when it changes
+  // Update the callback refs when they change
   handleInvalidateCacheRef.current = props.handleInvalidateCache;
+  browserToolsRef.current = props.browserTools;
+  actionToolsRef.current = props.actionTools;
 
   const { sessionId, overrides } = props;
-  const apiUrl = overrides?.wsUrl ?? config.socketUrl ?? overrides?.baseUrl;
+
+  // Compute WebSocket URL - memoize to prevent re-renders
+  const wsUrl = useMemo(() => {
+    const url = overrides?.wsUrl ?? config.socketUrl ?? overrides?.baseUrl;
+    if (!url) return null;
+
+    // Convert http:// to ws:// and https:// to wss:// for WebSocket connections
+    if (url.startsWith('http://')) {
+      return url.replace('http://', 'ws://');
+    }
+    if (url.startsWith('https://')) {
+      return url.replace('https://', 'wss://');
+    }
+
+    return url;
+  }, [config.socketUrl, overrides?.wsUrl, overrides?.baseUrl]);
 
   useEffect(() => {
-    if (!wallet || !sessionId || !apiUrl) {
+    if (!wallet || !sessionId || !wsUrl) {
       return;
     }
 
@@ -47,7 +70,7 @@ export function useWebSocketEvents(
     setError(null);
 
     // Create WebSocket connection
-    const newSocket = io(apiUrl, {
+    const newSocket = io(wsUrl, {
       query: { sessionId, userDid: wallet.did },
       transports: ['websocket'],
     });
@@ -86,31 +109,66 @@ export function useWebSocketEvents(
       handleInvalidateCacheRef.current ?? (() => {}),
     );
 
-    if (props.browserTools && Object.keys(props.browserTools).length > 0) {
+    if (
+      browserToolsRef.current &&
+      Object.keys(browserToolsRef.current).length > 0
+    ) {
       // Listen for browser tool calls
       newSocket.on(
         'browser_tool_call',
         async (data: { toolCallId: string; toolName: string; args: any }) => {
-          try {
-            const tool = props.browserTools?.[data.toolName];
-            if (!tool) {
-              throw new Error(`Tool ${data.toolName} not found`);
-            }
-            const result = await tool.fn(data.args);
-            newSocket.emit('tool_result', {
-              toolCallId: data.toolCallId,
-              result,
-            });
-          } catch (error) {
-            newSocket.emit('tool_result', {
-              toolCallId: data.toolCallId,
-              result: null,
-              error: error instanceof Error ? error.message : 'Unknown error',
-            });
-          }
+          await executeToolAndEmitResult(
+            {
+              socket: newSocket,
+              toolId: data.toolCallId,
+              eventName: 'tool_result',
+            },
+            async () => {
+              const tool = browserToolsRef.current?.[data.toolName];
+              if (!tool) {
+                throw new Error(`Tool ${data.toolName} not found`);
+              }
+              return await tool.fn(data.args);
+            },
+          );
         },
       );
     }
+
+    // Listen for AG-UI action calls (always register listener, even if no tools yet)
+    // The listener will check actionToolsRef at execution time
+    newSocket.on(
+      'action_call',
+      async (data: {
+        sessionId: string;
+        requestId: string;
+        toolName: string;
+        toolCallId: string;
+        args: any;
+        status: string;
+      }) => {
+        await executeToolAndEmitResult(
+          {
+            socket: newSocket,
+            toolId: data.toolCallId,
+            eventName: 'action_call_result',
+            sessionId: data.sessionId,
+          },
+          async () => {
+            const tool = actionToolsRef.current?.[data.toolName];
+            if (!tool) {
+              console.error(
+                `[SDK WS] Action tool ${data.toolName} not found in registry`,
+                'Available tools:',
+                Object.keys(actionToolsRef.current || {}),
+              );
+              throw new Error(`Action tool ${data.toolName} not found`);
+            }
+            return await tool.handler(data.args);
+          },
+        );
+      },
+    );
 
     // Listen for all events from the server
     newSocket.onAny((_, ev: unknown) => {
@@ -118,8 +176,11 @@ export function useWebSocketEvents(
       if (!event) {
         return;
       }
-      // Skip browser_tool_call events as they're handled above
-      if (event.eventName === 'browser_tool_call') {
+      // Skip browser_tool_call and action_call events as they're handled above
+      if (
+        event.eventName === 'browser_tool_call' ||
+        event.eventName === 'action_call'
+      ) {
         return;
       }
 
@@ -142,19 +203,22 @@ export function useWebSocketEvents(
       setIsConnected(false);
       setConnectionStatus('disconnected');
     };
-  }, [sessionId, wallet, apiUrl]); // Removed handleInvalidateCache from dependencies
+  }, [sessionId, wallet, wsUrl]);
 
   return {
     isConnected,
     error,
     connectionStatus,
     lastActivity,
+    isConfigReady,
+    socket: socketRef.current,
   };
 }
 
 // Export event names for convenience (same as SSE version)
 export const evNames = {
   ToolCall: 'tool_call',
+  ActionCall: 'action_call',
   RenderComponent: 'render_component',
   MessageCacheInvalidation: 'message_cache_invalidation',
   RouterUpdate: 'router_update',

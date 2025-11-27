@@ -59,6 +59,17 @@ export interface SSEBrowserToolCallEventData {
   eventId?: string;
 }
 
+export interface SSEActionCallEventData {
+  sessionId: string;
+  requestId: string;
+  toolName: string;
+  args?: Record<string, unknown>;
+  status?: 'isRunning' | 'done' | 'error';
+  output?: string;
+  toolCallId?: string;
+  error?: string;
+}
+
 export interface SSEMessageCacheInvalidationEventData {
   status?: 'isRunning' | 'done';
   sessionId: string;
@@ -85,6 +96,7 @@ export interface SSEReasoningEventData {
 export type SSEEvent =
   | BaseSSEEvent<'message', SSEMessageEventData>
   | BaseSSEEvent<'tool_call', SSEToolCallEventData>
+  | BaseSSEEvent<'action_call', SSEActionCallEventData>
   | BaseSSEEvent<'error', SSEErrorEventData>
   | BaseSSEEvent<'done', SSEDoneEventData>
   | BaseSSEEvent<'router.update', SSERouterUpdateEventData>
@@ -108,6 +120,7 @@ function isValidSSEEventType(
   const validEventTypes: SSEEvent['event'][] = [
     'message',
     'tool_call',
+    'action_call',
     'error',
     'done',
     'router.update',
