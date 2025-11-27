@@ -133,8 +133,25 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
     // Create new connection
     const db = new Database(dbPath);
 
-    // Enable WAL mode (compatible with SqliteSaver)
-    db.pragma('journal_mode=WAL');
+    // Network-aware SQLite configuration:
+    // - devnet: Uses shared NVMe (network-like filesystem) → DELETE mode for stability
+    // - testnet/mainnet: Uses local HDD (real block device) → WAL mode for performance
+    const network = configService.get('NETWORK') || 'devnet';
+
+    if (network === 'devnet') {
+      // Shared NVMe doesn't support mmap/locking properly
+      db.pragma('journal_mode=DELETE');
+      db.pragma('locking_mode=EXCLUSIVE');
+      Logger.log(
+        `Using DELETE journal mode for devnet (shared NVMe): ${dbPath}`,
+      );
+    } else {
+      // Local HDD: WAL works perfectly
+      db.pragma('journal_mode=WAL');
+      Logger.log(
+        `Using WAL journal mode for ${network} (local HDD): ${dbPath}`,
+      );
+    }
 
     // Initialize sessions and calls tables if needed
     this.initializeSessionsAndCallsTables(db);
