@@ -1,7 +1,10 @@
 import { UserContextData } from '@ixo/common';
 import { Annotation, messagesStateReducer } from '@langchain/langgraph';
 import { type BaseMessage } from 'langchain';
-import { type BrowserToolCallDto } from 'src/messages/dto/send-message.dto';
+import {
+  type AgActionDto,
+  type BrowserToolCallDto,
+} from 'src/messages/dto/send-message.dto';
 
 export const MainAgentGraphState = Annotation.Root({
   config: Annotation<{
@@ -39,6 +42,11 @@ export const MainAgentGraphState = Annotation.Root({
   browserTools: Annotation<BrowserToolCallDto[] | undefined>({
     default: () => [],
     // always override the tool list
+    reducer: (_, curr) => curr,
+  }),
+  agActions: Annotation<AgActionDto[] | undefined>({
+    default: () => [],
+    // always override the action list
     reducer: (_, curr) => curr,
   }),
   userContext: Annotation<UserContextData>({

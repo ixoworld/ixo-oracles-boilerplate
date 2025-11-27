@@ -10,8 +10,13 @@ import {
   type MessageEvent,
   type MessageEventContent,
 } from '@ixo/matrix';
-import { ReasoningEvent, ToolCallEvent } from '@ixo/oracles-events';
-import { BaseMessage } from '@langchain/core/messages';
+import {
+  ReasoningEvent,
+  ToolCallEvent,
+  ActionCallEvent,
+  rootEventEmitter,
+} from '@ixo/oracles-events';
+
 import {
   BadRequestException,
   Injectable,
@@ -22,7 +27,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
-import { AIMessageChunk, ToolMessage } from 'langchain';
+import { AIMessageChunk, BaseMessage, ToolMessage } from 'langchain';
 import * as crypto from 'node:crypto';
 import { MainAgentGraph } from 'src/graph';
 import { cleanAdditionalKwargs } from 'src/graph/nodes/chat-node/utils';
@@ -352,74 +357,243 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
               abortController,
               params.metadata?.editorRoomId,
               params.metadata?.currentEntityDid,
+              params.agActions ?? [],
             );
 
             let fullContent = '';
             if (params.sessionId) {
               const toolCallMap = new Map<string, ToolCallEvent>();
-              for await (const { data, event, tags } of stream) {
-                const isChatNode = true;
+              const actionCallMap = new Map<string, ActionCallEvent>();
+              // Get list of AG-UI action names for quick lookup
+              const agActionNames = new Set(
+                (params.agActions ?? []).map((action) => action.name),
+              );
 
-                if (event === 'on_tool_end') {
-                  const toolMessage = data.output as ToolMessage;
-                  const toolCallEvent = toolCallMap.get(
-                    toolMessage.tool_call_id,
-                  );
-                  if (!toolCallEvent) {
-                    continue;
-                  }
-                  toolCallEvent.payload.output = toolMessage.content as string;
-                  toolCallEvent.payload.status = 'done';
-                  (
-                    toolCallEvent.payload.args as Record<string, unknown>
-                  ).toolName = toolMessage.name;
-                  toolCallEvent.payload.eventId = toolMessage.tool_call_id;
-                  if (!params.res) {
-                    throw new Error('Response not found');
-                  }
-                  // Send tool call completion event as SSE
-                  if (
-                    !params.res.writableEnded &&
-                    !abortController.signal.aborted
-                  ) {
-                    params.res.write(
-                      formatSSE(toolCallEvent.eventName, toolCallEvent.payload),
+              Logger.log(
+                `[streamMessage] AG-UI actions registered: ${Array.from(agActionNames).join(', ') || 'none'}`,
+              );
+
+              try {
+                for await (const { data, event, tags } of stream) {
+                  const isChatNode = true;
+
+                  if (event === 'on_tool_end') {
+                    const toolMessage = data.output as ToolMessage;
+
+                    // Check if this is an AG-UI action completion
+                    const actionCallEvent = actionCallMap.get(
+                      toolMessage.tool_call_id,
                     );
+
+                    if (actionCallEvent) {
+                      actionCallEvent.payload.output =
+                        toolMessage.content as string;
+                      actionCallEvent.payload.toolCallId =
+                        toolMessage.tool_call_id;
+
+                      // Check if the tool message content indicates an error
+                      try {
+                        const resultContent =
+                          typeof toolMessage.content === 'string'
+                            ? JSON.parse(toolMessage.content)
+                            : toolMessage.content;
+
+                        // Set status based on whether there's an error
+                        if (
+                          resultContent?.success === false ||
+                          resultContent?.error
+                        ) {
+                          actionCallEvent.payload.status = 'error';
+                          actionCallEvent.payload.error =
+                            resultContent.error || 'Action failed';
+                        } else {
+                          actionCallEvent.payload.status = 'done';
+                        }
+                      } catch {
+                        // If we can't parse, assume success
+                        actionCallEvent.payload.status = 'done';
+                      }
+
+                      if (!params.res) {
+                        throw new Error('Response not found');
+                      }
+                      // Send action call completion event as SSE
+                      if (
+                        !params.res.writableEnded &&
+                        !abortController.signal.aborted
+                      ) {
+                        params.res.write(
+                          formatSSE(
+                            actionCallEvent.eventName,
+                            actionCallEvent.payload,
+                          ),
+                        );
+                      }
+                      actionCallMap.delete(toolMessage.tool_call_id);
+                      continue;
+                    } else {
+                      // Normal tool call handling
+                      const toolCallEvent = toolCallMap.get(
+                        toolMessage.tool_call_id,
+                      );
+                      if (!toolCallEvent) {
+                        continue;
+                      }
+                      toolCallEvent.payload.output =
+                        toolMessage.content as string;
+                      toolCallEvent.payload.status = 'done';
+                      (
+                        toolCallEvent.payload.args as Record<string, unknown>
+                      ).toolName = toolMessage.name;
+                      toolCallEvent.payload.eventId = toolMessage.tool_call_id;
+                      if (!params.res) {
+                        throw new Error('Response not found');
+                      }
+                      // Send tool call completion event as SSE
+                      if (
+                        !params.res.writableEnded &&
+                        !abortController.signal.aborted
+                      ) {
+                        params.res.write(
+                          formatSSE(
+                            toolCallEvent.eventName,
+                            toolCallEvent.payload,
+                          ),
+                        );
+                      }
+                      toolCallMap.delete(toolMessage.tool_call_id);
+                      continue;
+                    }
                   }
-                  toolCallMap.delete(toolMessage.tool_call_id);
-                }
 
-                if (event === 'on_chat_model_stream') {
-                  const content = (data.chunk as AIMessageChunk).content;
-                  const toolCall = (data.chunk as AIMessageChunk).tool_calls;
+                  if (event === 'on_chat_model_stream') {
+                    const content = (data.chunk as AIMessageChunk).content;
+                    const toolCall = (data.chunk as AIMessageChunk).tool_calls;
 
-                  // Extract reasoning tokens from raw response
-                  const rawResponse = (data.chunk as AIMessageChunk)
-                    .additional_kwargs?.__raw_response as any;
-                  if (
-                    rawResponse?.choices?.[0]?.delta?.reasoning &&
-                    isChatNode
-                  ) {
-                    const reasoning = rawResponse.choices[0].delta.reasoning;
-                    const reasoningDetails =
-                      rawResponse.choices[0].delta.reasoning_details;
+                    // Extract reasoning tokens from raw response
+                    const rawResponse = (data.chunk as AIMessageChunk)
+                      .additional_kwargs?.__raw_response as any;
+                    if (
+                      rawResponse?.choices?.[0]?.delta?.reasoning &&
+                      isChatNode
+                    ) {
+                      const reasoning = rawResponse.choices[0].delta.reasoning;
+                      const reasoningDetails =
+                        rawResponse.choices[0].delta.reasoning_details;
 
-                    if (reasoning && reasoning.trim()) {
-                      // Use cleanAdditionalKwargs to extract and clean reasoning details
-                      const cleanedKwargs = cleanAdditionalKwargs(
-                        (data.chunk as AIMessageChunk).additional_kwargs,
-                        params.msgFromMatrixRoom ?? false,
+                      if (reasoning && reasoning.trim()) {
+                        // Use cleanAdditionalKwargs to extract and clean reasoning details
+                        const cleanedKwargs = cleanAdditionalKwargs(
+                          (data.chunk as AIMessageChunk).additional_kwargs,
+                          params.msgFromMatrixRoom ?? false,
+                        );
+
+                        const reasoningEvent = ReasoningEvent.createChunk(
+                          sessionId,
+                          runnableConfig.configurable.requestId ?? '',
+                          reasoning,
+                          cleanedKwargs.reasoningDetails,
+                          false, // Not complete yet
+                        );
+
+                        // Send reasoning chunk as SSE
+                        if (!params.res) {
+                          throw new Error('Response not found');
+                        }
+                        if (
+                          !params.res.writableEnded &&
+                          !abortController.signal.aborted
+                        ) {
+                          params.res.write(
+                            formatSSE(
+                              reasoningEvent.eventName,
+                              reasoningEvent.payload,
+                            ),
+                          );
+                        }
+                      }
+                    }
+
+                    toolCall?.forEach((tool) => {
+                      // update toolCallEvent with toolCall
+                      if (!tool.name.trim() || !tool.id) {
+                        return;
+                      }
+
+                      Logger.log(
+                        `[streamMessage] Tool call detected: ${tool.name}, isAgAction: ${agActionNames.has(tool.name)}`,
                       );
 
-                      const reasoningEvent = ReasoningEvent.createChunk(
-                        sessionId,
-                        runnableConfig.configurable.requestId ?? '',
-                        reasoning,
-                        cleanedKwargs.reasoningDetails,
-                        false, // Not complete yet
-                      );
+                      // Check if this is an AG-UI action
+                      if (agActionNames.has(tool.name)) {
+                        // Create ActionCallEvent for SSE status update (no args - sent via WebSocket only)
+                        const actionCallEvent = new ActionCallEvent({
+                          requestId:
+                            runnableConfig.configurable.requestId ?? '',
+                          sessionId,
+                          toolCallId: tool.id,
+                          toolName: tool.name,
+                          args: undefined, // Args sent via WebSocket only, not SSE
+                          status: 'isRunning',
+                        });
 
-                      // Send reasoning chunk as SSE
+                        // Send action call start event as SSE
+                        if (!params.res) {
+                          throw new Error('Response not found');
+                        }
+                        if (
+                          !params.res.writableEnded &&
+                          !abortController.signal.aborted
+                        ) {
+                          params.res.write(
+                            formatSSE(
+                              actionCallEvent.eventName,
+                              actionCallEvent.payload,
+                            ),
+                          );
+                        }
+                        actionCallMap.set(tool.id, actionCallEvent);
+                      } else {
+                        // Normal tool call handling
+                        const toolCallEvent = new ToolCallEvent({
+                          requestId:
+                            runnableConfig.configurable.requestId ?? '',
+                          sessionId,
+                          toolName: 'toolCall',
+                          args: {},
+                          status: 'isRunning',
+                        });
+                        toolCallEvent.payload.args = tool.args;
+                        (
+                          toolCallEvent.payload.args as Record<string, unknown>
+                        ).toolName = tool.name;
+                        toolCallEvent.payload.eventId = tool.id;
+
+                        // Send tool call start event as SSE
+                        if (!params.res) {
+                          throw new Error('Response not found');
+                        }
+                        if (
+                          !params.res.writableEnded &&
+                          !abortController.signal.aborted
+                        ) {
+                          params.res.write(
+                            formatSSE(
+                              toolCallEvent.eventName,
+                              toolCallEvent.payload,
+                            ),
+                          );
+                        }
+                        toolCallMap.set(tool.id, toolCallEvent);
+                      }
+                    });
+
+                    if (!content) {
+                      continue;
+                    }
+                    if (isChatNode) {
+                      fullContent += content.toString();
+                      // Send message chunk as SSE
                       if (!params.res) {
                         throw new Error('Response not found');
                       }
@@ -428,97 +602,41 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
                         !abortController.signal.aborted
                       ) {
                         params.res.write(
-                          formatSSE(
-                            reasoningEvent.eventName,
-                            reasoningEvent.payload,
-                          ),
+                          formatSSE('message', {
+                            content: content.toString(),
+                            timestamp: new Date().toISOString(),
+                          }),
                         );
                       }
                     }
                   }
-
-                  toolCall?.forEach((tool) => {
-                    // update toolCallEvent with toolCall
-                    if (!tool.name.trim() || !tool.id) {
-                      return;
-                    }
-                    const toolCallEvent = new ToolCallEvent({
-                      requestId: runnableConfig.configurable.requestId ?? '',
-                      sessionId,
-                      toolName: 'toolCall',
-                      args: {},
-                      status: 'isRunning',
-                    });
-                    toolCallEvent.payload.args = tool.args;
-                    (
-                      toolCallEvent.payload.args as Record<string, unknown>
-                    ).toolName = tool.name;
-                    toolCallEvent.payload.eventId = tool.id;
-
-                    // Send tool call start event as SSE
-                    if (!params.res) {
-                      throw new Error('Response not found');
-                    }
-                    if (
-                      !params.res.writableEnded &&
-                      !abortController.signal.aborted
-                    ) {
-                      params.res.write(
-                        formatSSE(
-                          toolCallEvent.eventName,
-                          toolCallEvent.payload,
-                        ),
-                      );
-                    }
-                    toolCallMap.set(tool.id, toolCallEvent);
-                  });
-
-                  if (!content) {
-                    continue;
-                  }
-                  if (isChatNode) {
-                    fullContent += content.toString();
-                    // Send message chunk as SSE
-                    if (!params.res) {
-                      throw new Error('Response not found');
-                    }
-                    if (
-                      !params.res.writableEnded &&
-                      !abortController.signal.aborted
-                    ) {
-                      params.res.write(
-                        formatSSE('message', {
-                          content: content.toString(),
-                          timestamp: new Date().toISOString(),
-                        }),
-                      );
-                    }
-                  }
                 }
-              }
 
-              // Only send to Matrix if not aborted
-              if (!abortController.signal.aborted && fullContent) {
-                Logger.debug(
-                  `[MessagesService] Sending AI response to Matrix (${fullContent.length} chars)`,
-                );
-                this.sessionManagerService.matrixManger
-                  .sendMessage({
-                    message: fullContent,
-                    roomId,
-                    threadId: sessionId,
-                    isOracleAdmin: true,
-                  })
-                  .catch((err) => {
-                    Logger.error(
-                      'Failed to replay API AI response message to matrix room',
-                      err,
-                    );
-                  });
-              } else {
-                Logger.debug(
-                  `[MessagesService] Skipping Matrix send - aborted: ${abortController.signal.aborted}, content length: ${fullContent.length}`,
-                );
+                // Only send to Matrix if not aborted
+                if (!abortController.signal.aborted && fullContent) {
+                  Logger.debug(
+                    `[MessagesService] Sending AI response to Matrix (${fullContent.length} chars)`,
+                  );
+                  this.sessionManagerService.matrixManger
+                    .sendMessage({
+                      message: fullContent,
+                      roomId,
+                      threadId: sessionId,
+                      isOracleAdmin: true,
+                    })
+                    .catch((err) => {
+                      Logger.error(
+                        'Failed to replay API AI response message to matrix room',
+                        err,
+                      );
+                    });
+                } else {
+                  Logger.debug(
+                    `[MessagesService] Skipping Matrix send - aborted: ${abortController.signal.aborted}, content length: ${fullContent.length}`,
+                  );
+                }
+              } catch (innerError) {
+                throw innerError;
               }
             }
 

@@ -1,18 +1,16 @@
 import { Logger } from '@nestjs/common';
 import { AIMessageChunk, createMiddleware } from 'langchain';
 import { TokenLimiter } from 'src/utils/token-limit-handler';
-import { contextSchema, TChatNodeContext } from '../nodes/chat-node/chat-node';
+import { contextSchema, TChatNodeContext } from '../types';
 
 const createTokenLimiterMiddleware = () => {
   return createMiddleware({
     name: 'TokenLimiterMiddleware',
     contextSchema,
     beforeModel: async (state, runtime) => {
-  
       if (!runtime.context) {
         throw new Error('Runtime context required for token limiting');
       }
-    
 
       const { userDid } = runtime.context as TChatNodeContext;
       if (!userDid) {

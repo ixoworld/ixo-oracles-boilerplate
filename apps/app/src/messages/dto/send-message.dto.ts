@@ -39,6 +39,44 @@ export class BrowserToolCallDto {
   description: string;
 }
 
+export class AgActionDto {
+  @ApiProperty({
+    description: 'The action name',
+    required: true,
+    type: String,
+  })
+  @IsNotEmpty()
+  @IsString()
+  name: string;
+
+  @ApiProperty({
+    description: 'The action description to be passed to the LLM',
+    required: true,
+    type: String,
+  })
+  @IsNotEmpty()
+  @IsString()
+  description: string;
+
+  @ApiProperty({
+    description: 'The action parameters schema to be passed to the LLM',
+    required: true,
+    type: Object,
+  })
+  @IsNotEmpty()
+  @IsObject()
+  schema: Record<string, unknown>;
+
+  @ApiProperty({
+    description: 'Whether this action has a render function',
+    required: false,
+    type: Boolean,
+  })
+  @IsOptional()
+  @IsBoolean()
+  hasRender?: boolean;
+}
+
 export class SendMessageDto {
   @ApiProperty({
     description: 'Whether to stream the response',
@@ -72,6 +110,17 @@ export class SendMessageDto {
   tools?: BrowserToolCallDto[];
 
   @ApiProperty({
+    description: 'The AG-UI action list to be passed to the LLM',
+    required: false,
+    type: [AgActionDto],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => AgActionDto)
+  agActions?: AgActionDto[];
+
+  @ApiProperty({
     description: 'The metadata to be passed to the LLM',
     required: false,
     type: Object,
@@ -97,6 +146,7 @@ export class SendMessagePayload {
   sessionId: string;
   did: string;
   tools?: BrowserToolCallDto[];
+  agActions?: AgActionDto[];
   userMatrixOpenIdToken: string;
   timezone?: string;
 
