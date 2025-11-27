@@ -11,10 +11,9 @@ import {
   type MessageEventContent,
 } from '@ixo/matrix';
 import {
+  ActionCallEvent,
   ReasoningEvent,
   ToolCallEvent,
-  ActionCallEvent,
-  rootEventEmitter,
 } from '@ixo/oracles-events';
 
 import {
@@ -27,7 +26,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
-import { AIMessageChunk, BaseMessage, ToolMessage } from 'langchain';
+import { AIMessageChunk, ToolMessage } from 'langchain';
 import * as crypto from 'node:crypto';
 import { MainAgentGraph } from 'src/graph';
 import { cleanAdditionalKwargs } from 'src/graph/nodes/chat-node/utils';
@@ -672,7 +671,6 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
                 sessionId,
                 roomId,
                 targetSession,
-                [],
               );
             }
           },
@@ -751,13 +749,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     }
 
     // Fire-and-forget post-message sync operations
-    this.performPostMessageSync(
-      params,
-      sessionId,
-      roomId,
-      targetSession,
-      result.messages,
-    );
+    this.performPostMessageSync(params, sessionId, roomId, targetSession);
 
     return {
       message: {
@@ -779,11 +771,14 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     sessionId: string,
     roomId: string,
     targetSession: ChatSession,
-    currentMessages: BaseMessage[],
   ): void {
     // Run in background without blocking
     Promise.resolve().then(async () => {
       try {
+        const { messages: currentMessages } = await this.listMessages({
+          did: params.did,
+          sessionId,
+        });
         // Sync session (fire-and-forget)
         await this.sessionManagerService.syncSessionSet({
           sessionId,
