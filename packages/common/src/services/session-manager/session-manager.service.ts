@@ -187,8 +187,15 @@ ___________________________________________________________
       return session;
     }
 
-    const allowTitleUpdate = messages.length === 4;
-    // update the session
+    // 1. We have at least 2 messages (enough to generate a meaningful title)
+    // 2. AND the current title is "Untitled" or undefined (hasn't been set yet)
+    const hasEnoughMessages = messages.length >= 2;
+    const needsTitleUpdate =
+      !selectedSession.title ||
+      selectedSession.title.toLowerCase() === 'untitled' ||
+      (selectedSession.title && selectedSession.title.trim() === '');
+
+    const allowTitleUpdate = hasEnoughMessages && needsTitleUpdate; // update the session
     const title = allowTitleUpdate
       ? await this.createMessageTitle({
           messages,
@@ -387,7 +394,6 @@ ___________________________________________________________
   public async deleteSession(
     deleteSessionDto: DeleteChatSessionDto,
   ): Promise<void> {
-    // Always use SQLite
     const db = await this.syncService.getUserDatabase(deleteSessionDto.did);
     db.prepare('DELETE FROM sessions WHERE session_id = ?').run(
       deleteSessionDto.sessionId,
