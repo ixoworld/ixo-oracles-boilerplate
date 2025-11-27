@@ -4,6 +4,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Min,
 } from 'class-validator';
 import { type UserContextData } from '../memory-engine/types.js';
 
@@ -17,6 +18,16 @@ export class ListChatSessionsDto extends UserAuthDto {
   @IsString()
   @IsNotEmpty()
   oracleEntityDid: string;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(1)
+  limit?: number;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  offset?: number;
 }
 
 export class CreateChatSessionDto extends UserAuthDto {
@@ -96,6 +107,10 @@ export class ListChatSessionsResponseDto {
   @IsArray()
   @IsNotEmpty()
   sessions: ChatSession[];
+
+  @IsNumber()
+  @IsOptional()
+  total?: number;
 }
 
 export class CreateChatSessionResponseDto extends ChatSession {}

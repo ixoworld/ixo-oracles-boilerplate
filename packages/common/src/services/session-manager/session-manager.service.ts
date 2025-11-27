@@ -1,5 +1,6 @@
 import { Logger } from '@ixo/logger';
 import { MatrixManager } from '@ixo/matrix';
+import { Database } from 'better-sqlite3';
 import { getChatOpenAiModel } from '../../ai/index.js';
 import { MemoryEngineService } from '../memory-engine/memory-engine.service.js';
 import { type UserContextData } from '../memory-engine/types.js';
@@ -11,13 +12,9 @@ import {
   type ListChatSessionsDto,
   type ListChatSessionsResponseDto,
 } from './dto.js';
+
 export interface IDatabaseSyncService {
-  getUserDatabase(userDid: string): Promise<any>; // Database.Database type from better-sqlite3
-  migrateUserDataFromMatrix(
-    userDid: string,
-    roomId: string,
-    oracleEntityDid: string,
-  ): Promise<void>;
+  getUserDatabase(userDid: string): Promise<Database>;
 }
 
 export class SessionManagerService {
@@ -105,6 +102,22 @@ ___________________________________________________________
     return title;
   }
 
+  public async updateLastProcessedCount({
+    sessionId,
+    did,
+    lastProcessedCount,
+  }: {
+    sessionId: string;
+    did: string;
+    lastProcessedCount: number;
+  }): Promise<void> {
+    const db = await this.syncService.getUserDatabase(did);
+    db.prepare(
+      'UPDATE sessions SET last_processed_count = ? WHERE session_id = ?',
+    ).run(lastProcessedCount, sessionId);
+    return;
+  }
+
   public async syncSessionSet({
     sessionId,
     did,
@@ -128,15 +141,10 @@ ___________________________________________________________
     userContext?: UserContextData;
     slackThreadTs?: string;
   }): Promise<ChatSession> {
-    const matrixManager = MatrixManager.getInstance();
-    await matrixManager.init();
+    const db = await this.syncService.getUserDatabase(did);
 
-    const { sessions } = await this.listSessions({
-      did,
-      oracleEntityDid,
-    });
+    const selectedSession = await this.getSession(sessionId, did, false);
 
-    const selectedSession = sessions.find((s) => s.sessionId === sessionId);
     if (!selectedSession) {
       const session: ChatSession = {
         sessionId,
@@ -152,8 +160,7 @@ ___________________________________________________________
         slackThreadTs,
       };
 
-      // Always use SQLite (migration handled in listSessions)
-      const db = await this.syncService.getUserDatabase(did);
+      // Always use SQLite
       db.prepare(
         `
         INSERT INTO sessions (
@@ -180,7 +187,7 @@ ___________________________________________________________
       return session;
     }
 
-    const allowTitleUpdate = messages.length > 2;
+    const allowTitleUpdate = messages.length === 4;
     // update the session
     const title = allowTitleUpdate
       ? await this.createMessageTitle({
@@ -197,8 +204,6 @@ ___________________________________________________________
       slackThreadTs,
     };
 
-    // Always use SQLite
-    const db = await this.syncService.getUserDatabase(did);
     db.prepare(
       `
       UPDATE sessions 
@@ -216,23 +221,87 @@ ___________________________________________________________
     return updatedSession;
   }
 
+  public async getSession(
+    sessionId: string,
+    did: string,
+    throwOnNotFound: boolean = true,
+  ): Promise<ChatSession | undefined> {
+    const db = await this.syncService.getUserDatabase(did);
+    const row = db
+      .prepare(
+        `SELECT 
+          session_id, title, last_updated_at, created_at, oracle_name,
+          oracle_did, oracle_entity_did, last_processed_count,
+          user_context, room_id, slack_thread_ts
+         FROM sessions 
+         WHERE session_id = ?`,
+      )
+      .get(sessionId) as
+      | {
+          session_id: string;
+          title: string | null;
+          last_updated_at: string;
+          created_at: string;
+          oracle_name: string;
+          oracle_did: string;
+          oracle_entity_did: string;
+          last_processed_count: number | null;
+          user_context: string | null;
+          room_id: string | null;
+          slack_thread_ts: string | null;
+        }
+      | undefined;
+
+    const selectedSession = row
+      ? {
+          sessionId: row.session_id,
+          title: row.title ?? undefined,
+          lastUpdatedAt: row.last_updated_at,
+          createdAt: row.created_at,
+          oracleName: row.oracle_name,
+          oracleDid: row.oracle_did,
+          oracleEntityDid: row.oracle_entity_did,
+          lastProcessedCount: row.last_processed_count ?? undefined,
+          userContext: row.user_context
+            ? (JSON.parse(row.user_context) as UserContextData)
+            : undefined,
+          roomId: row.room_id ?? undefined,
+          slackThreadTs: row.slack_thread_ts ?? undefined,
+        }
+      : undefined;
+
+    if (!selectedSession) {
+      if (throwOnNotFound) {
+        throw new Error('Session not found');
+      }
+      return undefined;
+    }
+
+    return selectedSession;
+  }
+
   public async listSessions(
     listSessionsDto: ListChatSessionsDto,
   ): Promise<ListChatSessionsResponseDto> {
     const db = await this.syncService.getUserDatabase(listSessionsDto.did);
 
-    // Check SQLite first
+    // Set default pagination values
+    const limit = listSessionsDto.limit ?? 20;
+    const offset = listSessionsDto.offset ?? 0;
+
+    // Get paginated sessions with total count
     const rows = db
       .prepare(
         `SELECT 
           session_id, title, last_updated_at, created_at, oracle_name,
           oracle_did, oracle_entity_did, last_processed_count,
-          user_context, room_id, slack_thread_ts
+          user_context, room_id, slack_thread_ts,
+          COUNT(*) OVER() as total
          FROM sessions 
-         WHERE oracle_entity_did = ? 
-         ORDER BY last_updated_at DESC`,
+         ORDER BY last_updated_at DESC
+         LIMIT ? OFFSET ?`,
       )
-      .all(listSessionsDto.oracleEntityDid) as Array<{
+      .all(limit, offset) as Array<{
       session_id: string;
       title: string | null;
       last_updated_at: string;
@@ -244,8 +313,11 @@ ___________________________________________________________
       user_context: string | null;
       room_id: string | null;
       slack_thread_ts: string | null;
+      total: number;
     }>;
-    const sessions = rows.map((row) => ({
+    const total = rows[0]?.total ?? 0;
+
+    const sessions: ChatSession[] = rows.map((row) => ({
       sessionId: row.session_id,
       title: row.title ?? undefined,
       lastUpdatedAt: row.last_updated_at,
@@ -259,94 +331,27 @@ ___________________________________________________________
         : undefined,
       roomId: row.room_id ?? undefined,
       slackThreadTs: row.slack_thread_ts ?? undefined,
-    })) as ChatSession[];
+    }));
 
-    // If SQLite has data, return it
-    if (sessions.length > 0) {
-      return { sessions };
-    }
-
-    // SQLite is empty, check Matrix and migrate
-    await this.matrixManger.init();
-    Logger.info('Migrating chat history from Matrix to SQLite');
-    const { roomId } = await this.matrixManger.getOracleRoomId({
-      userDid: listSessionsDto.did,
-      oracleEntityDid: listSessionsDto.oracleEntityDid,
-    });
-
-    if (!roomId) {
-      // No room found, return empty (new user)
-      return { sessions: [] };
-    }
-
-    // Migrate from Matrix to SQLite
-    await this.syncService.migrateUserDataFromMatrix(
-      listSessionsDto.did,
-      roomId,
-      listSessionsDto.oracleEntityDid,
-    );
-
-    // Read from SQLite again after migration
-    const migratedRows = db
-      .prepare(
-        `SELECT 
-          session_id, title, last_updated_at, created_at, oracle_name,
-          oracle_did, oracle_entity_did, last_processed_count,
-          user_context, room_id, slack_thread_ts
-         FROM sessions 
-         WHERE oracle_entity_did = ? 
-         ORDER BY last_updated_at DESC`,
-      )
-      .all(listSessionsDto.oracleEntityDid) as Array<{
-      session_id: string;
-      title: string | null;
-      last_updated_at: string;
-      created_at: string;
-      oracle_name: string;
-      oracle_did: string;
-      oracle_entity_did: string;
-      last_processed_count: number | null;
-      user_context: string | null;
-      room_id: string | null;
-      slack_thread_ts: string | null;
-    }>;
-    const migratedSessions = migratedRows.map((row) => ({
-      sessionId: row.session_id,
-      title: row.title ?? undefined,
-      lastUpdatedAt: row.last_updated_at,
-      createdAt: row.created_at,
-      oracleName: row.oracle_name,
-      oracleDid: row.oracle_did,
-      oracleEntityDid: row.oracle_entity_did,
-      lastProcessedCount: row.last_processed_count ?? undefined,
-      userContext: row.user_context
-        ? (JSON.parse(row.user_context) as UserContextData)
-        : undefined,
-      roomId: row.room_id ?? undefined,
-      slackThreadTs: row.slack_thread_ts ?? undefined,
-    })) as ChatSession[];
-
-    return { sessions: migratedSessions };
+    return { sessions, total };
   }
 
   public async createSession(
     createSessionDto: CreateChatSessionDto,
   ): Promise<CreateChatSessionResponseDto> {
-    // const sessionId = crypto.randomUUID();
     const { roomId } = await this.matrixManger.getOracleRoomId({
       userDid: createSessionDto.did,
       oracleEntityDid: createSessionDto.oracleEntityDid,
     });
+
     if (!roomId) {
       throw new Error('Room ID not found');
     }
-    const eventId = (await this.matrixManger.sendMessage({
+    const eventId = await this.matrixManger.sendMessage({
       message: 'New Conversation Started',
       roomId,
       isOracleAdmin: true,
-    })) ?? {
-      eventId: crypto.randomUUID(),
-    };
+    });
 
     // Gather user context from Memory Engine
     let userContext: UserContextData | undefined;
@@ -382,7 +387,7 @@ ___________________________________________________________
   public async deleteSession(
     deleteSessionDto: DeleteChatSessionDto,
   ): Promise<void> {
-    // Always use SQLite (migration handled in listSessions if needed)
+    // Always use SQLite
     const db = await this.syncService.getUserDatabase(deleteSessionDto.did);
     db.prepare('DELETE FROM sessions WHERE session_id = ?').run(
       deleteSessionDto.sessionId,

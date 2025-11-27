@@ -10,9 +10,16 @@ import {
   HttpStatus,
   Param,
   Post,
+  Query,
   Req,
 } from '@nestjs/common';
-import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { Request } from 'express';
 import { SessionsService } from './sessions.service';
 
@@ -41,6 +48,18 @@ export class SessionsController {
 
   @Get()
   @ApiOperation({ summary: 'List all sessions for a user' })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Number of sessions to return (default: 20)',
+  })
+  @ApiQuery({
+    name: 'offset',
+    required: false,
+    type: Number,
+    description: 'Number of sessions to skip (default: 0)',
+  })
   @ApiResponse({ status: 200, description: 'List of sessions retrieved.' })
   @ApiResponse({
     status: 400,
@@ -49,9 +68,15 @@ export class SessionsController {
   })
   async listSessions(
     @Req() req: Request,
+    @Query('limit') limit?: number,
+    @Query('offset') offset?: number,
   ): Promise<ListChatSessionsResponseDto> {
     const { did } = req.authData;
-    return this.sessionsService.listSessions({ did });
+    return this.sessionsService.listSessions({
+      did,
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+    });
   }
 
   @Delete(':sessionId')

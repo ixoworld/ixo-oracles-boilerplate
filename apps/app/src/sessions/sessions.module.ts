@@ -1,13 +1,14 @@
 import { MemoryEngineService, SessionManagerService } from '@ixo/common';
+import { MatrixManager } from '@ixo/matrix';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { type ENV } from 'src/types';
-import { CheckpointStorageSyncModule } from '../user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.module';
 import { MessagesModule } from '../messages/messages.module';
+import { CheckpointStorageSyncModule } from '../user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.module';
+import { UserMatrixSqliteSyncService } from '../user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 import { SessionHistoryProcessor } from './session-history-processor.service';
 import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
-import { UserMatrixSqliteSyncService } from '../user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 
 @Module({
   imports: [MessagesModule, CheckpointStorageSyncModule],
@@ -35,7 +36,7 @@ import { UserMatrixSqliteSyncService } from '../user-matrix-sqlite-sync-service/
       ) => {
         return new SessionManagerService(
           syncService,
-          undefined,
+          MatrixManager.getInstance(),
           memoryEngineService,
         );
       },

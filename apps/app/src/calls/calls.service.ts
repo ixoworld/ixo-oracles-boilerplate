@@ -20,13 +20,7 @@ import {
   GetEncryptionKeyDTO,
   GetEncryptionKeyResponse,
 } from './dto/get-encrpytion-key';
-import {
-  Call,
-  ListCallDto,
-  ListCallResponse,
-  MATRIX_STATE_KEY_ORACLES_CALLS,
-  MatrixOraclesCallsListState,
-} from './dto/list-call';
+import { Call, ListCallDto, ListCallResponse } from './dto/list-call';
 import { CallId } from './dto/types';
 import { UpdateCallDto, UpdateCallResponse } from './dto/update-dto';
 @Injectable()
@@ -37,14 +31,38 @@ export class CallsService {
     private readonly syncService: UserMatrixSqliteSyncService,
   ) {}
 
-  private async updateMXCallsListState(
+  private async addCall(
+    userDid: string,
     callId: CallId,
     sessionId: string,
-    roomId: string,
+  ): Promise<void> {
+    const db = await this.syncService.getUserDatabase(userDid);
+
+    db.prepare(
+      `
+      INSERT OR REPLACE INTO calls (call_id, session_id, created_at)
+      VALUES (?, ?, ?)
+    `,
+    ).run(callId, sessionId, new Date().toISOString());
+  }
+
+  private async listCallsFromDB(
     userDid: string,
-  ) {
-    // Use SQLite
-    await this.syncService.addCall(userDid, callId, sessionId);
+    sessionId?: string,
+  ): Promise<Array<{ call_id: string; session_id: string }>> {
+    const db = await this.syncService.getUserDatabase(userDid);
+
+    if (sessionId) {
+      const rows = db
+        .prepare('SELECT call_id, session_id FROM calls WHERE session_id = ?')
+        .all(sessionId) as Array<{ call_id: string; session_id: string }>;
+      return rows;
+    }
+
+    const rows = db
+      .prepare('SELECT call_id, session_id FROM calls')
+      .all() as Array<{ call_id: string; session_id: string }>;
+    return rows;
   }
   async getEncryptionKey(
     dto: GetEncryptionKeyDTO,
@@ -109,12 +127,7 @@ export class CallsService {
       throw new NotFoundException(`Call event with ID '${callId}' not found`);
     }
 
-    await this.updateMXCallsListState(
-      callId,
-      callEvent.content.sessionId,
-      roomId,
-      userDid,
-    );
+    await this.addCall(userDid, callId, callEvent.content.sessionId);
 
     return { callId };
   }
@@ -124,37 +137,7 @@ export class CallsService {
       validateSync(dto);
 
       // Check SQLite first
-      let callsRows = await this.syncService.listCalls(
-        dto.userDid,
-        dto.sessionId,
-      );
-
-      // If SQLite is empty, check Matrix and migrate
-      if (callsRows.length === 0) {
-        const { roomId } = await this.matrixManager.getOracleRoomId({
-          userDid: dto.userDid,
-          oracleEntityDid: this.configService.getOrThrow('ORACLE_ENTITY_DID'),
-        });
-
-        if (roomId) {
-          // Migrate calls from Matrix to SQLite
-          await this.syncService.migrateUserDataFromMatrix(
-            dto.userDid,
-            roomId,
-            this.configService.getOrThrow('ORACLE_ENTITY_DID'),
-          );
-
-          // Read from SQLite again after migration
-          callsRows = await this.syncService.listCalls(
-            dto.userDid,
-            dto.sessionId,
-          );
-        }
-      }
-
-      if (callsRows.length === 0) {
-        return { calls: [] };
-      }
+      const callsRows = await this.listCallsFromDB(dto.userDid, dto.sessionId);
 
       const { roomId } = await this.matrixManager.getOracleRoomId({
         userDid: dto.userDid,
@@ -190,10 +173,10 @@ export class CallsService {
             .getClient()
             ?.mxClient.getRelationsForEvent(roomId, callEventId);
           if (relations?.chunk.length === 0) {
-          return {
-            ...callEvent.content,
-            id: call.call_id as CallId,
-          };
+            return {
+              ...callEvent.content,
+              id: call.call_id as CallId,
+            };
           }
 
           // Sort the chunk array by origin_server_ts descending and get the most recent chunk

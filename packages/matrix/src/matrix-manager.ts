@@ -182,13 +182,12 @@ export class MatrixManager {
       Logger.info('Destroying MatrixManager...');
 
       // Reset initialization state
-      this.isInitialized = false;
       this.initializationPromise = null;
+      this.isInitialized = false;
 
-      if (this.mxClient) {
-        await this.mxClient.stop();
-        this.mxClient = undefined;
-      }
+      await this.shutdown();
+
+      this.mxClient = undefined;
 
       Logger.info('MatrixManager destroyed');
     } catch (error) {
@@ -480,5 +479,43 @@ export class MatrixManager {
    */
   public getClient(): SimpleMatrixClient | undefined {
     return this.mxClient;
+  }
+
+  /**
+   * Gracefully stop the Matrix client to avoid crypto corruption
+   */
+  public async shutdown(): Promise<void> {
+    if (!this.mxClient) {
+      return;
+    }
+
+    try {
+      Logger.info(
+        'MatrixManager graceful shutdown: stopping Matrix client sync...',
+      );
+      await this.mxClient.stop();
+      Logger.info(
+        'MatrixManager graceful shutdown: Matrix client sync stopped',
+      );
+
+      Logger.info(
+        'MatrixManager graceful shutdown: waiting for pending sync operations...',
+      );
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      const cryptoClient = (this.mxClient.mxClient as any)?.crypto;
+      if (cryptoClient?.engine?.machine?.close) {
+        Logger.info('MatrixManager graceful shutdown: closing crypto store...');
+        cryptoClient.engine.machine.close();
+        Logger.info('MatrixManager graceful shutdown: crypto store closed');
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      this.isInitialized = false;
+      Logger.info('MatrixManager graceful shutdown complete');
+    } catch (error) {
+      Logger.error('Error during MatrixManager graceful shutdown:', error);
+      throw error;
+    }
   }
 }
