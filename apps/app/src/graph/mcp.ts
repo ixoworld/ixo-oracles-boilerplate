@@ -30,9 +30,10 @@ const mcpConfig: ClientConfig = {
  * @param config - Configuration object with server definitions
  * @returns Configured MultiServerMCPClient instance
  */
-export const createMCPClient = (config: ClientConfig): MultiServerMCPClient => {
+export const createMCPClient = (config: ClientConfig): MultiServerMCPClient | undefined => {
   if (!config || Object.keys(config).length === 0) {
     Logger.warn('Creating MCP client with empty configuration');
+    return
   }
 
   try {
@@ -56,6 +57,9 @@ export const createMCPClientAndGetTools = async (): Promise<
 > => {
   try {
     const client = createMCPClient(mcpConfig);
+    if (!client) {
+      return [];
+    }
     const tools = await client.getTools();
     Logger.log(`✅ Successfully loaded ${tools.length} MCP tool(s)`);
     return tools;
