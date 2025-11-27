@@ -218,49 +218,6 @@ export class MainAgentGraph {
     return state.values as TMainAgentGraphState;
   }
 
-  public async migrateChatHistoryToSqlite(
-    config: IRunnableConfigWithRequiredFields & { sessionId: string },
-  ): Promise<void> {
-    const sqliteAgent = await createMainAgent({
-      state: {
-        messages: [],
-        browserTools: [],
-        editorRoomId: undefined,
-        currentEntityDid: undefined,
-        client: 'portal',
-        userContext: undefined,
-      } satisfies Partial<TMainAgentGraphState>,
-      config: {
-        ...config,
-        recursionLimit: 50,
-        configurable: {
-          ...config.configurable,
-        },
-      },
-      checkpointerType: 'sqlite',
-    });
-    const sqliteGraphState =
-      (await sqliteAgent.graph.getState(config)) ??
-      sqliteAgent.getState(config);
-    const hasSqliteGraphState =
-      Object.keys(sqliteGraphState.values as TMainAgentGraphState).length > 0;
-
-    if (!hasSqliteGraphState) {
-      Logger.log('No sqlite graph state found, migrating from matrix');
-      const matrixGraphState = await this.getGraphState({
-        ...config,
-        checkpointerType: 'matrix',
-      });
-      if (!matrixGraphState) {
-        Logger.error(
-          'No matrix graph state found, cannot migrate chat history',
-        );
-        return;
-      }
-
-      await sqliteAgent.graph.updateState(config, matrixGraphState);
-    }
-  }
 }
 
 export const mainAgent = new MainAgentGraph();

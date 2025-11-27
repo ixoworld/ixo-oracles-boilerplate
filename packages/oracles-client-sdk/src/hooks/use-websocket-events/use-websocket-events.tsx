@@ -48,7 +48,7 @@ export function useWebSocketEvents(
 
     // Create WebSocket connection
     const newSocket = io(apiUrl, {
-      query: { sessionId },
+      query: { sessionId, userDid: wallet.did },
       transports: ['websocket'],
     });
 

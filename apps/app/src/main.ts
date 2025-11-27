@@ -1,6 +1,6 @@
 import { getSubscriptionUrlByNetwork } from '@ixo/common';
 import { MatrixManager } from '@ixo/matrix';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { INestApplication, Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -97,6 +97,8 @@ async function bootstrap(): Promise<void> {
   });
   Logger.log('EditorMatrixClient initialization started in background...');
 
+  registerGracefulShutdown({ app, matrixManager });
+
   await app.listen(port);
   Logger.log(`Application is running on: ${await app.getUrl()}`);
   Logger.log(`Swagger UI available at: ${await app.getUrl()}/docs`);
@@ -106,3 +108,44 @@ async function bootstrap(): Promise<void> {
   );
 }
 void bootstrap();
+
+function registerGracefulShutdown({
+  app,
+  matrixManager,
+}: {
+  app: INestApplication;
+  matrixManager: MatrixManager;
+}): void {
+  const context = 'Bootstrap';
+
+  const gracefulShutdown = async (signal: NodeJS.Signals) => {
+    Logger.log(`${signal} received, starting graceful shutdown...`, context);
+    try {
+      Logger.log('Stopping Nest application...', context);
+      await app.close();
+      Logger.log('Nest application stopped', context);
+
+      Logger.log('Stopping MatrixManager client...', context);
+      await matrixManager.shutdown();
+      Logger.log('MatrixManager client stopped', context);
+
+      Logger.log('Stopping EditorMatrixClient...', context);
+      await EditorMatrixClient.destroy();
+      Logger.log('EditorMatrixClient stopped', context);
+
+      Logger.log('Graceful shutdown complete', context);
+      process.exit(0);
+    } catch (error) {
+      Logger.error(
+        'Error during graceful shutdown',
+        error instanceof Error ? error.stack : String(error),
+        context,
+      );
+      process.exit(1);
+    }
+  };
+
+  ['SIGTERM', 'SIGINT'].forEach((signal) => {
+    process.once(signal, () => void gracefulShutdown(signal as NodeJS.Signals));
+  });
+}

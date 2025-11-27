@@ -43,15 +43,13 @@ export class WsGateway
   }
 
   async handleConnection(client: Socket): Promise<void> {
-    const sessionId = client.handshake.query.sessionId as string;
+    const sessionId = client.handshake.query.sessionId;
+    const userDid = client.handshake.query.userDid;
 
-    if (!sessionId) {
+    if (!sessionId || !userDid) {
       this.logger.error(
-        `WebSocket connection attempt without sessionId from ${client.id}`,
+        `WebSocket connection attempt without ${sessionId ? 'sessionId' : ''} and ${userDid ? 'userDid' : ''} from ${client.id}`,
       );
-      client.emit('error', {
-        message: 'sessionId query parameter is required',
-      });
       client.disconnect();
       return;
     }
@@ -64,10 +62,7 @@ export class WsGateway
     await client.join(sessionId);
 
     // Also track in our service for monitoring
-    this.wsService.addClientConnection(sessionId, client);
-
-    // Store sessionId on socket for later use
-    (client.data as ISocketData).sessionId = sessionId;
+    this.wsService.addClientConnection(sessionId as string, client);
 
     // Send connection confirmation
     client.emit('connected', {

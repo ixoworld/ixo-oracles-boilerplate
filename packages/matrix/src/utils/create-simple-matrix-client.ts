@@ -53,7 +53,7 @@ export class SimpleMatrixClient {
     this.prepareStorage();
     this.prepareCryptoStorage();
     this.createClient();
-    this.extraConfig();
+    this.extraConfig(config.autoJoin ?? true);
   }
 
   public async prepareProfile(): Promise<void> {
@@ -99,9 +99,9 @@ export class SimpleMatrixClient {
     );
   }
 
-  private extraConfig(): void {
+  private extraConfig(autoJoin: boolean): void {
     // Setup the autojoin mixin (if enabled)
-    if (this.config.autoJoin !== false) {
+    if (autoJoin) {
       // Default to true unless explicitly disabled
       AutojoinRoomsMixin.setupOnClient(this.mxClient);
     }

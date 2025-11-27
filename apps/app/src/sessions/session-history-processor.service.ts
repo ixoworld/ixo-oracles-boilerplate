@@ -109,13 +109,12 @@ export class SessionHistoryProcessor {
   }: ProcessSessionHistoryParams): Promise<void> {
     this.logger.debug(`Processing session history for session ${sessionId}`);
 
-    // Get session details to find lastProcessedCount
-    const { sessions } = await this.sessionManagerService.listSessions({
+    const session = await this.sessionManagerService.getSession(
+      sessionId,
       did,
-      oracleEntityDid,
-    });
+      false,
+    );
 
-    const session = sessions.find((s) => s.sessionId === sessionId);
     if (!session) {
       this.logger.warn(`Session ${sessionId} not found, skipping processing`);
       return;
@@ -178,16 +177,10 @@ export class SessionHistoryProcessor {
 
     // Update session with new lastProcessedCount
     const newLastProcessedCount = lastProcessedCount + newMessages.length;
-    await this.sessionManagerService.syncSessionSet({
+    await this.sessionManagerService.updateLastProcessedCount({
       sessionId,
       did,
-      oracleEntityDid,
-      oracleName: session.oracleName,
-      oracleDid: session.oracleDid,
-      messages: messagesResponse.messages.map((msg) => msg.content),
-      roomId,
       lastProcessedCount: newLastProcessedCount,
-      userContext: session.userContext,
     });
 
     this.logger.log(

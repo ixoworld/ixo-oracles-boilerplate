@@ -11,10 +11,9 @@ import {
   type MessageEventContent,
 } from '@ixo/matrix';
 import { ReasoningEvent, ToolCallEvent } from '@ixo/oracles-events';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { BaseMessage } from '@langchain/core/messages';
 import {
   BadRequestException,
-  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -22,7 +21,6 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Cache } from 'cache-manager';
 import type { Request, Response } from 'express';
 import { AIMessageChunk, ToolMessage } from 'langchain';
 import * as crypto from 'node:crypto';
@@ -55,7 +53,6 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     private readonly mainAgent: MainAgentGraph,
     private readonly sessionManagerService: SessionManagerService,
     private readonly config: ConfigService<ENV>,
-    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
     private readonly checkpointStorageSyncService: UserMatrixSqliteSyncService,
   ) {
     this.matrixManager = this.sessionManagerService.matrixManger;
@@ -63,53 +60,6 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
 
   public onModuleDestroy(): void {
     this.cleanUpMatrixListener();
-  }
-
-  /**
-   * Get cached session or fetch from Matrix if not cached
-   */
-  private async getCachedSession(
-    sessionId: string,
-    did: string,
-    oracleEntityDid: string,
-  ): Promise<ChatSession | undefined> {
-    const cacheKey = `session:${did}:${oracleEntityDid}:${sessionId}`;
-
-    // Try to get from cache first
-    const cachedSession = await this.cacheManager.get<ChatSession>(cacheKey);
-    if (cachedSession) {
-      Logger.debug(`Cache hit for session ${sessionId}`);
-      return cachedSession;
-    }
-
-    // If not in cache, fetch from Matrix
-    Logger.debug(`Cache miss for session ${sessionId}, fetching from Matrix`);
-    const sessions = await this.sessionManagerService.listSessions({
-      did,
-      oracleEntityDid,
-    });
-
-    const session = sessions.sessions.find((s) => s.sessionId === sessionId);
-
-    // Cache the session if found (with 5 minute TTL)
-    if (session) {
-      await this.cacheManager.set(cacheKey, session, 5 * 60 * 1000); // 5 minutes
-    }
-
-    return session;
-  }
-
-  /**
-   * Invalidate session cache when session is updated
-   */
-  private async invalidateSessionCache(
-    sessionId: string,
-    did: string,
-    oracleEntityDid: string,
-  ): Promise<void> {
-    const cacheKey = `session:${did}:${oracleEntityDid}:${sessionId}`;
-    await this.cacheManager.del(cacheKey);
-    Logger.debug(`Invalidated cache for session ${sessionId}`);
   }
 
   private async getThreadRoot(
@@ -384,6 +334,15 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         await runWithSSEContext(
           params.res,
           async () => {
+            // send thinking event to give the user faster feedback
+            const thinkingEvent = ReasoningEvent.createChunk(
+              sessionId,
+              runnableConfig.configurable.requestId ?? '',
+              'Thinking...',
+              undefined,
+              false,
+            );
+
             const stream = await this.mainAgent.streamMessage(
               params.message,
               runnableConfig,
@@ -601,11 +560,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
           },
           abortController,
         );
-        await this.checkpointStorageSyncService.uploadCheckpointToMatrixStorage(
-          {
-            userDid: params.did,
-          },
-        );
+
         return;
       } catch (error) {
         // Handle abort errors gracefully - don't treat as error
@@ -697,43 +652,33 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Performs post-message sync operations in fire-and-forget mode
-   * This includes session sync and async title updates
+   * Fire-and-forget session synchronization after a message is sent.
+   * Loads the latest session messages, persists them (plus oracle metadata and
+   * lastProcessedCount) via SessionManagerService.
    */
   private performPostMessageSync(
     params: SendMessagePayload,
     sessionId: string,
     roomId: string,
-    targetSession: any,
-    messages: any[],
+    targetSession: ChatSession,
+    currentMessages: BaseMessage[],
   ): void {
     // Run in background without blocking
     Promise.resolve().then(async () => {
       try {
-        // Get current messages for sync
-        const { messages: currentMessages } = await this.listMessages({
-          did: params.did,
-          sessionId,
-        });
-
         // Sync session (fire-and-forget)
         await this.sessionManagerService.syncSessionSet({
           sessionId,
           oracleName: this.config.getOrThrow('ORACLE_NAME'),
           did: params.did,
-          messages: currentMessages.map((message) => message.content),
+          messages: currentMessages.map((message) =>
+            message.content.toString(),
+          ),
           oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
           oracleEntityDid: this.config.getOrThrow('ORACLE_ENTITY_DID'),
           lastProcessedCount: targetSession?.lastProcessedCount ?? 0,
           roomId,
         });
-
-        // Invalidate cache after session update
-        await this.invalidateSessionCache(
-          sessionId,
-          params.did,
-          this.config.getOrThrow('ORACLE_ENTITY_DID'),
-        );
 
         // Note: Title updates are now handled by syncSessionSet when messages.length > 2
       } catch (error) {
@@ -827,7 +772,6 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     payload: SendMessagePayload & { req?: Request },
   ): Promise<{
     sessionId: string;
-    config: TMainAgentGraphState['config'];
     roomId: string;
     runnableConfig: IRunnableConfigWithRequiredFields & {
       configurable: {
@@ -835,7 +779,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       };
     };
     userContext?: TMainAgentGraphState['userContext'];
-    targetSession?: ChatSession; // For post-message sync
+    targetSession: ChatSession; // For post-message sync
   }> {
     const did = payload.did;
     const sessionId = payload.sessionId;
@@ -844,17 +788,15 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         ? (payload.requestId as string)
         : crypto.randomUUID();
 
-    // Get cached session and sync checkpoint to matrix storage in parallel
-    const [targetSession] = await Promise.all([
-      this.getCachedSession(
-        sessionId,
-        did,
-        this.config.getOrThrow('ORACLE_ENTITY_DID'),
-      ),
-      this.checkpointStorageSyncService.syncLocalStorageFromMatrixStorage({
-        userDid: did,
-      }),
-    ]);
+    await this.checkpointStorageSyncService.syncLocalStorageFromMatrixStorage({
+      userDid: did,
+    });
+
+    const targetSession = (await this.sessionManagerService.getSession(
+      sessionId,
+      did,
+      true,
+    )) as ChatSession;
 
     // Use cached roomId if available, otherwise fetch it
     let roomId = targetSession?.roomId;
@@ -869,10 +811,6 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         throw new NotFoundException('Room not found or Invalid Session Id');
       }
     }
-
-    const config: TMainAgentGraphState['config'] = {
-      did: payload.did,
-    };
 
     // Extract timezone and calculate current time
     const timezone = this.getTimezoneFromRequest(payload, payload.req);
@@ -906,7 +844,6 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
 
     return {
       roomId,
-      config,
       runnableConfig,
       sessionId,
       userContext: targetSession?.userContext,

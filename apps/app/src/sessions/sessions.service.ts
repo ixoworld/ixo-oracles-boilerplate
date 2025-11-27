@@ -19,6 +19,32 @@ export class SessionsService {
     private readonly sessionHistoryProcessor: SessionHistoryProcessor,
   ) {}
 
+  async processPreviousSessionHistory(data: CreateSessionDto): Promise<void> {
+    const oracleEntityDid = this.configService.getOrThrow('ORACLE_ENTITY_DID');
+
+    // Process previous session history before creating new session
+    const { sessions } = await this.listSessions({
+      did: data.did,
+    });
+
+    if (sessions.length > 0) {
+      const previousSession = sessions[0]; // Most recent session
+      // Fire-and-forget processing of previous session
+      this.sessionHistoryProcessor
+        .processSessionHistory({
+          sessionId: previousSession.sessionId,
+          did: data.did,
+          oracleEntityDid,
+        })
+        .catch((err) =>
+          Logger.error(
+            `Failed to process previous session ${previousSession.sessionId}:`,
+            err,
+          ),
+        );
+    }
+  }
+
   async createSession(
     data: CreateSessionDto,
   ): Promise<CreateChatSessionResponseDto> {
@@ -26,27 +52,12 @@ export class SessionsService {
       const oracleEntityDid =
         this.configService.getOrThrow('ORACLE_ENTITY_DID');
 
-      // Process previous session history before creating new session
-      const { sessions } = await this.listSessions({
-        did: data.did,
-      });
-
-      if (sessions.length > 0) {
-        const previousSession = sessions[0]; // Most recent session
-        // Fire-and-forget processing of previous session
-        this.sessionHistoryProcessor
-          .processSessionHistory({
-            sessionId: previousSession.sessionId,
-            did: data.did,
-            oracleEntityDid,
-          })
-          .catch((err) =>
-            Logger.error(
-              `Failed to process previous session ${previousSession.sessionId}:`,
-              err,
-            ),
-          );
-      }
+      this.processPreviousSessionHistory(data).catch((err) =>
+        Logger.error(
+          `Failed to process previous session history for DID ${data.did}:`,
+          err,
+        ),
+      );
 
       const session = await this.sessionManager.createSession({
         did: data.did,
@@ -74,22 +85,14 @@ export class SessionsService {
       const sessionsResult = await this.sessionManager.listSessions({
         did: data.did,
         oracleEntityDid: this.configService.getOrThrow('ORACLE_ENTITY_DID'),
+        limit: data.limit ?? 20,
+        offset: data.offset ?? 0,
       });
 
-      const oracleDid = this.configService.getOrThrow<string>('ORACLE_DID');
-
-      // Sort sessions by lastUpdatedAt descending
-      const sortedSessions = sessionsResult.sessions
-        .filter((session) => session.oracleDid === oracleDid)
-        .sort((a, b) => {
-          // Assuming lastUpdatedAt is a valid date string or Date object
-          return (
-            new Date(b.lastUpdatedAt).getTime() -
-            new Date(a.lastUpdatedAt).getTime()
-          );
-        });
-
-      return { sessions: sortedSessions };
+      return {
+        sessions: sessionsResult.sessions,
+        total: sessionsResult.total,
+      };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const stack = error instanceof Error ? error.stack : undefined;

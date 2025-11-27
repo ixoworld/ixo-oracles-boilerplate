@@ -16,7 +16,6 @@ import * as fs from 'node:fs/promises';
 import Database, { type Database as DatabaseType } from 'better-sqlite3';
 import path from 'path';
 import { ENV } from 'src/config';
-import { mainAgent } from 'src/graph';
 import {
   getMediaFromRoom,
   getMediaFromRoomByStorageKey,
@@ -425,6 +424,27 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
     );
   }
 
+  @Cron(CronExpression.EVERY_MINUTE)
+  async uploadCheckpointToMatrixStorageTask(): Promise<void> {
+    Logger.log(`Uploading checkpoint to Matrix storage task started`);
+    // list user folders each folder is userDid
+    const userFolders = await fs.readdir(
+      UserMatrixSqliteSyncService.checkpointsFolder,
+    );
+    for (const userDid of userFolders) {
+      Logger.log(`Uploading checkpoint to Matrix storage for user ${userDid}`);
+      const userCheckpointDbPath =
+        UserMatrixSqliteSyncService.getUserCheckpointDbPath(userDid);
+      const exists = await fs
+        .access(userCheckpointDbPath)
+        .then(() => true)
+        .catch(() => false);
+      if (exists) {
+        await this.uploadCheckpointToMatrixStorage({ userDid });
+      }
+    }
+  }
+
   private async saveFileEventToDB({
     eventId,
     storageKey,
@@ -439,227 +459,5 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
         'INSERT OR REPLACE INTO file_events (event_id, storage_key, event) VALUES (?, ?, ?)',
       )
       .run(eventId, storageKey, JSON.stringify(event));
-  }
-
-  // Call CRUD methods
-
-  async addCall(
-    userDid: string,
-    callId: string,
-    sessionId: string,
-  ): Promise<void> {
-    const db = await this.getUserDatabase(userDid);
-
-    db.prepare(
-      `
-      INSERT OR REPLACE INTO calls (call_id, session_id, created_at)
-      VALUES (?, ?, ?)
-    `,
-    ).run(callId, sessionId, new Date().toISOString());
-  }
-
-  async listCalls(
-    userDid: string,
-    sessionId?: string,
-  ): Promise<Array<{ call_id: string; session_id: string }>> {
-    const db = await this.getUserDatabase(userDid);
-
-    if (sessionId) {
-      const rows = db
-        .prepare('SELECT call_id, session_id FROM calls WHERE session_id = ?')
-        .all(sessionId) as Array<{ call_id: string; session_id: string }>;
-      return rows;
-    }
-
-    const rows = db
-      .prepare('SELECT call_id, session_id FROM calls')
-      .all() as Array<{ call_id: string; session_id: string }>;
-    return rows;
-  }
-
-  // Migration method
-
-  async migrateUserDataFromMatrix(
-    userDid: string,
-    roomId: string,
-    oracleEntityDid: string,
-  ): Promise<void> {
-    const db = await this.getUserDatabase(userDid);
-
-    // Check if sessions table is empty
-    const sessionCount = db
-      .prepare('SELECT COUNT(*) as count FROM sessions')
-      .get() as { count: number };
-
-    if (sessionCount.count > 0) {
-      Logger.debug(
-        `Sessions already exist in SQLite for user ${userDid}, skipping migration`,
-      );
-      return;
-    }
-
-    // Check if calls table is empty
-    const callCount = db
-      .prepare('SELECT COUNT(*) as count FROM calls')
-      .get() as { count: number };
-
-    if (callCount.count > 0) {
-      Logger.debug(
-        `Calls already exist in SQLite for user ${userDid}, skipping migration`,
-      );
-      return;
-    }
-
-    const matrixManager = MatrixManager.getInstance();
-    await matrixManager.init();
-
-    if (!matrixManager.stateManager) {
-      Logger.warn(
-        `MatrixStateManager not initialized, cannot migrate data for user ${userDid}`,
-      );
-      return;
-    }
-
-    // Migrate sessions
-    try {
-      const sessionsStateKey = `${oracleEntityDid}_sessions`;
-      const sessionsState = await matrixManager.stateManager.getState<
-        Array<{
-          sessionId: string;
-          oracleEntityDid: string;
-          oracleDid: string;
-          createdAt: string;
-          lastUpdatedAt: string;
-          [key: string]: unknown;
-        }>
-      >(roomId, sessionsStateKey);
-
-      if (
-        sessionsState &&
-        Array.isArray(sessionsState) &&
-        sessionsState.length > 0
-      ) {
-        Logger.debug(
-          `Migrating ${sessionsState.length} sessions from Matrix to SQLite for user ${userDid}`,
-        );
-        const insertStmt = db.prepare(`
-          INSERT INTO sessions (
-            session_id, title, last_updated_at, created_at, oracle_name,
-            oracle_did, oracle_entity_did, last_processed_count,
-            user_context, room_id, slack_thread_ts
-          )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-
-        const insertMany = db.transaction((sessions) => {
-          for (const session of sessions) {
-            insertStmt.run(
-              session.sessionId,
-              (session as any).title ?? null,
-              session.lastUpdatedAt,
-              session.createdAt,
-              (session as any).oracleName ?? '',
-              session.oracleDid,
-              session.oracleEntityDid,
-              (session as any).lastProcessedCount ?? null,
-              (session as any).userContext
-                ? JSON.stringify((session as any).userContext)
-                : null,
-              (session as any).roomId ?? null,
-              (session as any).slackThreadTs ?? null,
-            );
-          }
-        });
-
-        insertMany(sessionsState);
-        Logger.log(
-          `Migrated ${sessionsState.length} sessions from Matrix to SQLite for user ${userDid}`,
-        );
-
-        Logger.log(
-          `Starting chat history migration from Matrix to SQLite for user ${userDid}`,
-        );
-
-        for (const session of sessionsState) {
-          await mainAgent.migrateChatHistoryToSqlite({
-            sessionId: session.sessionId,
-            configurable: {
-              thread_id: session.sessionId,
-              configs: {
-                user: {
-                  did: userDid,
-                },
-                matrix: {
-                  roomId: roomId,
-                  oracleDid: oracleEntityDid,
-                },
-              },
-            },
-          });
-        }
-      }
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        'errcode' in error &&
-        error.errcode === 'M_NOT_FOUND'
-      ) {
-        Logger.debug(
-          `No sessions found in Matrix for user ${userDid}, skipping migration`,
-        );
-      } else {
-        Logger.error(
-          `Failed to migrate sessions from Matrix for user ${userDid}`,
-          error,
-        );
-      }
-    }
-
-    // Migrate calls
-    try {
-      const callsState = await matrixManager.stateManager.getState<{
-        calls: Array<{ callId: string; sessionId: string }>;
-      }>(roomId, '_oracles_calls_list');
-
-      if (callsState?.calls && callsState.calls.length > 0) {
-        Logger.debug(
-          `Migrating ${callsState.calls.length} calls from Matrix to SQLite for user ${userDid}`,
-        );
-        const insertStmt = db.prepare(`
-          INSERT INTO calls (call_id, session_id, created_at)
-          VALUES (?, ?, ?)
-        `);
-
-        const insertMany = db.transaction((calls) => {
-          for (const call of calls) {
-            insertStmt.run(
-              call.callId,
-              call.sessionId,
-              new Date().toISOString(),
-            );
-          }
-        });
-
-        insertMany(callsState.calls);
-        Logger.log(
-          `Migrated ${callsState.calls.length} calls from Matrix to SQLite for user ${userDid}`,
-        );
-      }
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        'errcode' in error &&
-        error.errcode === 'M_NOT_FOUND'
-      ) {
-        Logger.debug(
-          `No calls found in Matrix for user ${userDid}, skipping migration`,
-        );
-      } else {
-        Logger.error(
-          `Failed to migrate calls from Matrix for user ${userDid}`,
-          error,
-        );
-      }
-    }
   }
 }
