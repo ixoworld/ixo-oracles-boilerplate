@@ -424,7 +424,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
     );
   }
 
-  @Cron(CronExpression.EVERY_MINUTE)
+  @Cron(CronExpression.EVERY_10_MINUTES)
   async uploadCheckpointToMatrixStorageTask(): Promise<void> {
     Logger.log(`Uploading checkpoint to Matrix storage task started`);
     // list user folders each folder is userDid

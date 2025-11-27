@@ -180,7 +180,6 @@ export class EditorMatrixClient {
       }
 
       if (state === SyncState.Syncing) {
-        this.logger.debug('Matrix client syncing (background)...');
       }
     };
 
