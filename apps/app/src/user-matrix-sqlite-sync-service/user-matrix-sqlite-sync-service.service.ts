@@ -35,19 +35,19 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
   private constructor() {
     // check if path exists
     const pathExists = fsSync.existsSync(
-      path.join(configService.getOrThrow('MATRIX_STORE_PATH')),
+      path.join(configService.getOrThrow('SQLITE_DATABASE_PATH')),
     );
 
     if (!pathExists) {
       fsSync.mkdirSync(
-        path.join(configService.getOrThrow('MATRIX_STORE_PATH')),
+        path.join(configService.getOrThrow('SQLITE_DATABASE_PATH')),
         { recursive: true },
       );
     }
 
     this.fileEventsDatabase = new Database(
       path.join(
-        configService.getOrThrow('MATRIX_STORE_PATH'),
+        configService.getOrThrow('SQLITE_DATABASE_PATH'),
         'file_events.db',
       ),
     );
@@ -71,7 +71,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
 
   static createUserStorageKey(userDid: string): string {
     const key = `checkpoint_${userDid}_${configService.getOrThrow('ORACLE_DID')}`;
-    return createHash('sha256').update(key).digest('hex').substring(0, 10);
+    return createHash('sha256').update(key).digest('hex').substring(0, 12);
   }
 
   static getUserCheckpointDbPath(userDid: string): string {
@@ -83,7 +83,10 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
     return dbPath;
   }
 
-  static checkpointsFolder = configService.getOrThrow('SQLITE_DATABASE_PATH');
+  static checkpointsFolder = path.join(
+    configService.getOrThrow('SQLITE_DATABASE_PATH'),
+    'user_dbs',
+  );
 
   public async onModuleInit(): Promise<void> {
     // create checkpoints folder if it doesn't exist
@@ -132,26 +135,6 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
 
     // Create new connection
     const db = new Database(dbPath);
-
-    // Network-aware SQLite configuration:
-    // - devnet: Uses shared NVMe (network-like filesystem) → DELETE mode for stability
-    // - testnet/mainnet: Uses local HDD (real block device) → WAL mode for performance
-    const network = configService.get('NETWORK') || 'devnet';
-
-    if (network === 'devnet') {
-      // Shared NVMe doesn't support mmap/locking properly
-      db.pragma('journal_mode=DELETE');
-      db.pragma('locking_mode=EXCLUSIVE');
-      Logger.log(
-        `Using DELETE journal mode for devnet (shared NVMe): ${dbPath}`,
-      );
-    } else {
-      // Local HDD: WAL works perfectly
-      db.pragma('journal_mode=WAL');
-      Logger.log(
-        `Using WAL journal mode for ${network} (local HDD): ${dbPath}`,
-      );
-    }
 
     // Initialize sessions and calls tables if needed
     this.initializeSessionsAndCallsTables(db);
