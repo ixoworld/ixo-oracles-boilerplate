@@ -189,7 +189,6 @@ export class MainAgentGraph {
   public async getGraphState(
     config: IRunnableConfigWithRequiredFields & {
       sessionId: string;
-      checkpointerType?: 'sqlite' | 'matrix';
     },
   ): Promise<Pick<TMainAgentGraphState, 'messages'> | undefined> {
     const agent = await createMainAgent({
@@ -208,7 +207,6 @@ export class MainAgentGraph {
           ...config.configurable,
         },
       },
-      checkpointerType: config.checkpointerType ?? 'sqlite',
     });
     const state =
       (await agent.graph.getState(config)) ?? agent.getState(config);

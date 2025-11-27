@@ -3,10 +3,7 @@ import {
   parserBrowserTool,
   SearchEnhancedResponse,
 } from '@ixo/common';
-import {
-  IRunnableConfigWithRequiredFields,
-  MatrixCheckpointSaver,
-} from '@ixo/matrix';
+import { IRunnableConfigWithRequiredFields } from '@ixo/matrix';
 import { SqliteSaver } from '@ixo/sqlite-saver';
 import { Logger } from '@nestjs/common';
 import { createDeepAgent } from 'deepagents';
@@ -25,10 +22,10 @@ import { EDITOR_DOCUMENTATION_CONTENT_READ_ONLY } from './editor/prompts';
 import { createFirecrawlAgent } from './firecrawl-agent';
 import { createMemoryAgent } from './memory-agent';
 import { createPortalAgent } from './portal-agent';
+
 interface InvokeMainAgentParams {
   state: Partial<TMainAgentGraphState>;
   config: IRunnableConfigWithRequiredFields;
-  checkpointerType?: 'sqlite' | 'matrix';
 }
 
 import fs from 'node:fs';
@@ -50,7 +47,6 @@ const llm = getOpenRouterChatModel({
 export const createMainAgent = async ({
   state,
   config,
-  checkpointerType = 'sqlite',
 }: InvokeMainAgentParams) => {
   const msgFromMatrixRoom = Boolean(
     state.messages?.at(-1)?.additional_kwargs.msgFromMatrixRoom,
@@ -71,7 +67,7 @@ export const createMainAgent = async ({
   if (!configurable?.configs?.user?.did) {
     throw new Error('User DID is required');
   }
-  if(!configurable.thread_id){
+  if (!configurable.thread_id) {
     throw new Error('Thread ID is required');
   }
   const [
@@ -155,14 +151,11 @@ export const createMainAgent = async ({
       createTokenLimiterMiddleware(),
     ],
     systemPrompt,
-    checkpointer:
-      checkpointerType === 'sqlite'
-        ? SqliteSaver.fromConnString(
-            UserMatrixSqliteSyncService.getUserCheckpointDbPath(
-              configurable?.configs?.user?.did,
-            ),
-          )
-        : new MatrixCheckpointSaver(),
+    checkpointer: SqliteSaver.fromConnString(
+      UserMatrixSqliteSyncService.getUserCheckpointDbPath(
+        configurable?.configs?.user?.did,
+      ),
+    ),
     name: 'Companion Agent',
   });
 
