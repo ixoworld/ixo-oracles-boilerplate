@@ -133,6 +133,7 @@ export class MainAgentGraph {
       editorRoomId,
       currentEntityDid,
       client: 'portal',
+      agActions,
       ...(initialUserContext ? { userContext: initialUserContext } : {}),
     } satisfies Partial<TMainAgentGraphState>;
 

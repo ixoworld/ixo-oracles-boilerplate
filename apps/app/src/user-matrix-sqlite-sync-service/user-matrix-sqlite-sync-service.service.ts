@@ -83,7 +83,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
     return dbPath;
   }
 
-  static checkpointsFolder = './checkpoints';
+  static checkpointsFolder = configService.getOrThrow('SQLITE_DATABASE_PATH');
 
   public async onModuleInit(): Promise<void> {
     // create checkpoints folder if it doesn't exist
