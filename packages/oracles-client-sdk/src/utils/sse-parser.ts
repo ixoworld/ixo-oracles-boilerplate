@@ -59,10 +59,18 @@ export interface SSEBrowserToolCallEventData {
   eventId?: string;
 }
 
+/**
+ * SSE event data for AG-UI action calls
+ * @remarks
+ * Args are NOT included in SSE events to avoid data duplication.
+ * Args are sent once via WebSocket where the handler executes and render is called.
+ * SSE events provide status updates only for the chat UI timeline.
+ */
 export interface SSEActionCallEventData {
   sessionId: string;
   requestId: string;
   toolName: string;
+  /** Args excluded from SSE events (sent via WebSocket only) */
   args?: Record<string, unknown>;
   status?: 'isRunning' | 'done' | 'error';
   output?: string;
