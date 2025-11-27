@@ -7,6 +7,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { EditorMatrixClient } from './graph/agents/editor/editor-mx';
+import { UserMatrixSqliteSyncService } from './user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 
 async function bootstrap(): Promise<void> {
   // await migrate();
@@ -120,18 +121,68 @@ function registerGracefulShutdown({
 
   const gracefulShutdown = async (signal: NodeJS.Signals) => {
     Logger.log(`${signal} received, starting graceful shutdown...`, context);
+
     try {
-      Logger.log('Stopping Nest application...', context);
-      await app.close();
-      Logger.log('Nest application stopped', context);
+      // Step 1: Upload checkpoints to Matrix
+      try {
+        const userMatrixSqliteSyncService = app.get(
+          UserMatrixSqliteSyncService,
+        );
+        Logger.log(
+          'Uploading checkpoint to Matrix storage task started',
+          context,
+        );
+        await userMatrixSqliteSyncService.uploadCheckpointToMatrixStorageTask();
+        Logger.log(
+          'Uploading checkpoint to Matrix storage task complete',
+          context,
+        );
+      } catch (error) {
+        Logger.warn(
+          'Failed to upload checkpoint during shutdown (continuing anyway)',
+          error instanceof Error ? error.message : String(error),
+          context,
+        );
+      }
 
-      Logger.log('Stopping MatrixManager client...', context);
-      await matrixManager.shutdown();
-      Logger.log('MatrixManager client stopped', context);
+      // Step 2: Close Nest application
+      try {
+        Logger.log('Stopping Nest application...', context);
+        await app.close();
+        Logger.log('Nest application stopped', context);
+      } catch (error) {
+        Logger.error(
+          'Error stopping Nest application',
+          error instanceof Error ? error.message : String(error),
+          context,
+        );
+      }
 
-      Logger.log('Stopping EditorMatrixClient...', context);
-      await EditorMatrixClient.destroy();
-      Logger.log('EditorMatrixClient stopped', context);
+      // Step 3: Shutdown MatrixManager
+      try {
+        Logger.log('Stopping MatrixManager client...', context);
+        await matrixManager.shutdown();
+        Logger.log('MatrixManager client stopped', context);
+      } catch (error) {
+        Logger.error(
+          'Error stopping MatrixManager',
+          error instanceof Error ? error.message : String(error),
+          context,
+        );
+      }
+
+      // Step 4: Destroy EditorMatrixClient
+      try {
+        Logger.log('Stopping EditorMatrixClient...', context);
+        await EditorMatrixClient.destroy();
+        Logger.log('EditorMatrixClient stopped', context);
+      } catch (error) {
+        Logger.error(
+          'Error stopping EditorMatrixClient',
+          error instanceof Error ? error.message : String(error),
+          context,
+        );
+      }
 
       Logger.log('Graceful shutdown complete', context);
       process.exit(0);

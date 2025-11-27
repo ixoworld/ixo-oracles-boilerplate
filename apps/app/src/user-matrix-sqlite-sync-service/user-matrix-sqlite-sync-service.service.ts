@@ -438,7 +438,10 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
       const exists = await fs
         .access(userCheckpointDbPath)
         .then(() => true)
-        .catch(() => false);
+        .catch(() => {
+          Logger.error(`Checkpoint file not found for user ${userDid} at ${userCheckpointDbPath}`);
+          return false;
+        });
       if (exists) {
         await this.uploadCheckpointToMatrixStorage({ userDid });
       }
