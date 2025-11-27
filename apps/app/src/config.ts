@@ -43,6 +43,8 @@ export const EnvSchema = z.object({
   SLACK_MAX_RECONNECT_ATTEMPTS: z.coerce.number().default(10),
   SLACK_RECONNECT_DELAY_MS: z.coerce.number().default(1000),
 
+  SQLITE_DATABASE_PATH: z.string(),
+
   // Matrix
   MATRIX_BASE_URL: z.string(),
   MATRIX_RECOVERY_PHRASE: z.string(),
