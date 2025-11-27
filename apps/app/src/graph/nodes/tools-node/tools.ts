@@ -1,4 +1,5 @@
 import { MultiServerMCPClient } from '@langchain/mcp-adapters';
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import 'dotenv/config';
 import { type StructuredTool } from 'langchain';
@@ -7,10 +8,9 @@ import {
   domainIndexerSearchTool,
   getDomainCardTool,
 } from './domain-indexer-tool';
-import { truncate } from 'fs';
-import { Logger } from '@nestjs/common';
 
 const configService = new ConfigService<ENV>();
+const logger = new Logger('MemoryEngineMCP');
 
 type SupportedTools =
   | 'memory-engine__search_memory_engine'
@@ -38,7 +38,6 @@ const getMemoryEngineMcpTools = async ({
   ],
 }: GetMemoryEngineMcpToolsParams) => {
   try {
-    
     const client = new MultiServerMCPClient({
       useStandardContentBlocks: true,
       prefixToolNameWithServerName: true,
@@ -67,49 +66,54 @@ const getMemoryEngineMcpTools = async ({
       },
     });
     const allTools = await client.getTools();
-  
+
     const filteredTools = allTools.filter((tool) =>
       selectedTools.includes(tool.name as SupportedTools),
     );
-  
+
     return filteredTools;
   } catch (error) {
-    Logger.error('Error getting memory engine MCP tools', error);
+    logger.error('Error getting memory engine MCP tools:', error);
     return [];
   }
 };
 
 const getFirecrawlMcpTools = async () => {
-  const client = new MultiServerMCPClient({
-    useStandardContentBlocks: true,
-    defaultToolTimeout: 60_000, // 1 minute
+  try {
+    const client = new MultiServerMCPClient({
+      useStandardContentBlocks: true,
+      defaultToolTimeout: 60_000, // 1 minute
 
-    prefixToolNameWithServerName: true,
-    mcpServers: {
-      firecrawl: {
-        type: 'http',
-        transport: 'http',
-        url: configService.getOrThrow('FIRECRAWL_MCP_URL'),
-        reconnect: {
-          enabled: true,
-          maxAttempts: 3,
-          delayMs: 2000,
+      prefixToolNameWithServerName: true,
+      mcpServers: {
+        firecrawl: {
+          type: 'http',
+          transport: 'http',
+          url: configService.getOrThrow('FIRECRAWL_MCP_URL'),
+          reconnect: {
+            enabled: true,
+            maxAttempts: 3,
+            delayMs: 2000,
+          },
         },
       },
-    },
-  });
+    });
 
-  const allTools = await client.getTools();
+    const allTools = await client.getTools();
 
-  const allowedToolNames = [
-    'firecrawl__firecrawl_scrape',
-    'firecrawl__firecrawl_search',
-  ];
+    const allowedToolNames = [
+      'firecrawl__firecrawl_scrape',
+      'firecrawl__firecrawl_search',
+    ];
 
-  const filteredTools = allTools.filter((tool) =>
-    allowedToolNames.includes(tool.name),
-  );
-  return filteredTools;
+    const filteredTools = allTools.filter((tool) =>
+      allowedToolNames.includes(tool.name),
+    );
+    return filteredTools;
+  } catch (error) {
+    logger.error('Error getting firecrawl MCP tools:', error);
+    return [];
+  }
 };
 
 const tools: StructuredTool[] = [domainIndexerSearchTool, getDomainCardTool];

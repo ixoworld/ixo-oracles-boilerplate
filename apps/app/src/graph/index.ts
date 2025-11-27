@@ -6,6 +6,7 @@ import { type BrowserToolCallDto } from 'src/messages/dto/send-message.dto';
 import { createMainAgent } from './agents/main-agent';
 import { type TMainAgentGraphState } from './state';
 
+import { type AgActionDto } from 'src/messages/dto/send-message.dto';
 export class MainAgentGraph {
   async sendMessage(
     input: string,
@@ -101,6 +102,7 @@ export class MainAgentGraph {
     abortController?: AbortController,
     editorRoomId?: string,
     currentEntityDid?: string,
+    agActions?: AgActionDto[],
   ) {
     if (!runnableConfig.configurable.sessionId) {
       throw new Error('sessionId is required');
@@ -162,6 +164,7 @@ export class MainAgentGraph {
           }),
         ],
         browserTools,
+        agActions,
         ...(initialUserContext ? { userContext: initialUserContext } : {}),
         editorRoomId,
         currentEntityDid,
@@ -215,7 +218,6 @@ export class MainAgentGraph {
     }
     return state.values as TMainAgentGraphState;
   }
-
 }
 
 export const mainAgent = new MainAgentGraph();

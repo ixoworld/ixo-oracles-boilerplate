@@ -90,6 +90,7 @@ export interface ISendMessageOptions {
 
   // NEW callbacks for streaming events
   onToolCall?: (toolCallData: SSEToolCallEventData) => Promise<void>;
+  onActionCall?: (actionCallData: any) => Promise<void>;
   onError?: (error: SSEErrorEventData) => Promise<void>;
   onReasoning?: (data: {
     reasoningData: SSEReasoningEventData;

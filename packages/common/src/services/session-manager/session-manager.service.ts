@@ -365,7 +365,7 @@ ___________________________________________________________
         });
       } catch (error) {
         Logger.error('Failed to gather user context:', error);
-        // Continue without user context
+        throw error;
       }
     }
 

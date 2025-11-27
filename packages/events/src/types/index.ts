@@ -1,4 +1,5 @@
 import { type WithRequiredEventProps } from '../events/base-event/base-event';
+import { ActionCallEvent } from '../events/action-call/action-call.event';
 import { BrowserToolCallEvent } from '../events/browser-tool-call/browser-tool-call.event';
 import { MessageCacheInvalidationEvent } from '../events/message-cache-invalidation';
 import { ReasoningEvent } from '../events/reasoning-event';
@@ -7,6 +8,7 @@ import { RouterEvent } from '../events/router-event/router.event';
 import { ToolCallEvent } from '../events/tool-call/tool-call.event';
 
 // Import interfaces to avoid circular references
+import { type IActionCallEvent } from '../events/action-call/types';
 import { type IBrowserToolCallEvent } from '../events/browser-tool-call/types';
 import { type IReasoningEvent } from '../events/reasoning-event/types';
 import { type IToolCallEvent } from '../events/tool-call/types';
@@ -17,7 +19,8 @@ export type AllEvents =
   | RenderComponentEvent
   | MessageCacheInvalidationEvent
   | BrowserToolCallEvent
-  | ReasoningEvent;
+  | ReasoningEvent
+  | ActionCallEvent;
 export const AllEventsAsClass = [
   RouterEvent,
   ToolCallEvent,
@@ -25,6 +28,7 @@ export const AllEventsAsClass = [
   MessageCacheInvalidationEvent,
   BrowserToolCallEvent,
   ReasoningEvent,
+  ActionCallEvent,
 ];
 
 // Fix circular references by using actual interfaces
@@ -42,6 +46,7 @@ export type MessageCacheInvalidationEventPayload = WithRequiredEventProps<{
 export type BrowserToolCallEventPayload =
   WithRequiredEventProps<IBrowserToolCallEvent>;
 export type ReasoningEventPayload = WithRequiredEventProps<IReasoningEvent>;
+export type ActionCallEventPayload = WithRequiredEventProps<IActionCallEvent>;
 
 export type EventNames = {
   ToolCall: ToolCallEvent['eventName'];
@@ -50,11 +55,13 @@ export type EventNames = {
   MessageCacheInvalidation: MessageCacheInvalidationEvent['eventName'];
   BrowserToolCall: BrowserToolCallEvent['eventName'];
   Reasoning: ReasoningEvent['eventName'];
+  ActionCall: ActionCallEvent['eventName'];
 };
 
 export type { WithRequiredEventProps } from '../events/base-event/base-event';
 
 // Export interfaces for external consumers
+export type { IActionCallEvent } from '../events/action-call/types';
 export type { IBrowserToolCallEvent } from '../events/browser-tool-call/types';
 export type { IReasoningEvent } from '../events/reasoning-event/types';
 export type { IToolCallEvent } from '../events/tool-call/types';

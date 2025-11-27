@@ -1,5 +1,6 @@
 import {
   getOpenRouterChatModel,
+  parserActionTool,
   parserBrowserTool,
   SearchEnhancedResponse,
 } from '@ixo/common';
@@ -10,19 +11,19 @@ import { createDeepAgent } from 'deepagents';
 import { createSafetyGuardrailMiddleware } from '../middlewares/safety-guardrail-middleware';
 import { createTokenLimiterMiddleware } from '../middlewares/token-limiter-middelware';
 import { createToolValidationMiddleware } from '../middlewares/tool-validation-middleware';
-import { contextSchema } from '../nodes/chat-node/chat-node';
 import {
+  AG_UI_TOOLS_DOCUMENTATION,
   AI_ASSISTANT_PROMPT,
   SLACK_FORMATTING_CONSTRAINTS_CONTENT,
 } from '../nodes/chat-node/prompt';
 import { TMainAgentGraphState } from '../state';
+import { contextSchema } from '../types';
 import { createDomainIndexerAgent } from './domain-indexer-agent';
 import { createEditorAgent, EditorAgentInstance } from './editor/editor-agent';
 import { EDITOR_DOCUMENTATION_CONTENT_READ_ONLY } from './editor/prompts';
 import { createFirecrawlAgent } from './firecrawl-agent';
 import { createMemoryAgent } from './memory-agent';
 import { createPortalAgent } from './portal-agent';
-
 interface InvokeMainAgentParams {
   state: Partial<TMainAgentGraphState>;
   config: IRunnableConfigWithRequiredFields;
@@ -31,6 +32,7 @@ interface InvokeMainAgentParams {
 import fs from 'node:fs';
 import path from 'node:path';
 import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
+import { createMCPClientAndGetTools } from '../mcp';
 
 const llm = getOpenRouterChatModel({
   model: 'openai/gpt-oss-120b:nitro',
@@ -70,12 +72,19 @@ export const createMainAgent = async ({
   if (!configurable.thread_id) {
     throw new Error('Thread ID is required');
   }
+
+  const agActionTools =
+    state.agActions && state.agActions.length > 0
+      ? state.agActions.map((action) => parserActionTool(action))
+      : [];
+
   const [
     systemPrompt,
     portalAgent,
     memoryAgent,
     firecrawlAgent,
     domainIndexerAgent,
+    mcpTools,
   ] = await Promise.all([
     AI_ASSISTANT_PROMPT.format({
       APP_NAME: 'IXO | IXO Portal',
@@ -94,6 +103,8 @@ export const createMainAgent = async ({
       CURRENT_ENTITY_DID: state.currentEntityDid ?? '',
       SLACK_FORMATTING_CONSTRAINTS:
         state.client === 'slack' ? SLACK_FORMATTING_CONSTRAINTS_CONTENT : '',
+      AG_UI_TOOLS_DOCUMENTATION:
+        agActionTools.length > 0 ? AG_UI_TOOLS_DOCUMENTATION : '',
     }),
     createPortalAgent({
       tools:
@@ -113,6 +124,7 @@ export const createMainAgent = async ({
     }),
     createFirecrawlAgent(),
     createDomainIndexerAgent(),
+    createMCPClientAndGetTools(),
   ]);
 
   // Conditionally create BlockNote tools if editorRoomId is provided
@@ -145,6 +157,7 @@ export const createMainAgent = async ({
     model: llm,
     subagents: agents,
     contextSchema,
+    tools: [...mcpTools, ...agActionTools],
     middleware: [
       createToolValidationMiddleware(),
       createSafetyGuardrailMiddleware(),

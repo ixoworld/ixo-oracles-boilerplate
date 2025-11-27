@@ -1,4 +1,4 @@
-import { BrowserToolCallEvent, rootEventEmitter } from '@ixo/oracles-events';
+import { callFrontendTool } from './frontend-tool-caller.js';
 
 export interface BrowserToolResult {
   result?: any;
@@ -26,41 +26,12 @@ export async function callBrowserTool({
   args,
   timeout = 15000,
 }: IBrowserToolCallerParams): Promise<any> {
-  // Step 1: Emit browser tool call event (automatically goes to client via BaseEvent)
-  new BrowserToolCallEvent({
+  return callFrontendTool({
     sessionId,
-    requestId: toolCallId,
-    toolCallId,
+    toolId: toolCallId,
     toolName,
     args,
-  }).emit();
-
-  // Step 2: Wait for result via rootEventEmitter
-  return new Promise((resolve, reject) => {
-    let timeoutHandle: NodeJS.Timeout;
-
-    const resultHandler = (data: any) => {
-      if (data.toolCallId === toolCallId) {
-        clearTimeout(timeoutHandle);
-        rootEventEmitter.removeListener('browser_tool_result', resultHandler);
-
-        if (data.error) {
-          reject(new Error(data.error));
-        } else {
-          resolve(data.result);
-        }
-      }
-    };
-
-    // Listen for the specific tool result
-    rootEventEmitter.on('browser_tool_result', resultHandler);
-
-    // Set timeout
-    timeoutHandle = setTimeout(() => {
-      rootEventEmitter.removeListener('browser_tool_result', resultHandler);
-      reject(
-        new Error(`Browser tool call timeout after ${timeout}ms: ${toolName}`),
-      );
-    }, timeout);
+    toolType: 'browser',
+    timeout,
   });
 }

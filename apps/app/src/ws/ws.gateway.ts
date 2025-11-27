@@ -106,6 +106,32 @@ export class WsGateway
     });
   }
 
+  /**
+   * Shared handler for tool/action results from frontend
+   * @param client WebSocket client
+   * @param data Result data from frontend
+   * @param eventType Type of result event to emit
+   */
+  private handleFrontendToolResult(
+    client: Socket,
+    data: any,
+    eventType: 'browser_tool_result' | 'action_call_result',
+  ): void {
+    const sessionId = (client.data as ISocketData).sessionId;
+    const toolId = data.toolCallId;
+
+    this.logger.log(
+      `${eventType} received for session: ${sessionId}, toolId: ${toolId}`,
+    );
+
+    // Emit result back to LangGraph via rootEventEmitter
+    rootEventEmitter.emit(eventType, {
+      sessionId,
+      ...data,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   @SubscribeMessage('tool_result')
   @ApiOperation({
     summary: 'Handle Tool Result',
@@ -120,20 +146,25 @@ export class WsGateway
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { toolCallId: string; result: any; error?: string },
   ): void {
-    const sessionId = (client.data as ISocketData).sessionId;
+    this.handleFrontendToolResult(client, data, 'browser_tool_result');
+  }
 
-    this.logger.log(
-      `Tool result received for session: ${sessionId}, toolCallId: ${data.toolCallId}`,
-    );
-
-    // Emit result back to LangGraph via rootEventEmitter
-    rootEventEmitter.emit('browser_tool_result', {
-      sessionId,
-      toolCallId: data.toolCallId,
-      result: data.result,
-      error: data.error,
-      timestamp: new Date().toISOString(),
-    });
+  @SubscribeMessage('action_call_result')
+  @ApiOperation({
+    summary: 'Handle AG-UI Action Result',
+    description:
+      'Receive AG-UI action execution result from client and forward to LangGraph',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Action result received successfully',
+  })
+  handleActionCallResult(
+    @ConnectedSocket() client: Socket,
+    @MessageBody()
+    data: { sessionId: string; toolCallId: string; result: any },
+  ): void {
+    this.handleFrontendToolResult(client, data, 'action_call_result');
   }
 
   @SubscribeMessage('list-events')
@@ -153,6 +184,7 @@ export class WsGateway
         'subscribe',
         'list-events',
         'tool_result',
+        'action_call_result',
       ],
       serverEvents: [
         'connected',
@@ -163,6 +195,7 @@ export class WsGateway
         // LangGraph events
         'render_component',
         'tool_call',
+        'action_call',
         'browser_tool_call',
         'router_update',
         'message_cache_invalidation',

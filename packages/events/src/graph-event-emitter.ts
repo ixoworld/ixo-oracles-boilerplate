@@ -3,6 +3,7 @@ import {
   BrowserToolCallEvent,
   ReasoningEvent,
   RenderComponentEvent,
+  ActionCallEvent,
 } from './events';
 import { MessageCacheInvalidationEvent } from './events/message-cache-invalidation';
 import { RouterEvent } from './events/router-event/router.event';
@@ -18,6 +19,7 @@ export class GraphEventEmitter {
     RenderComponentEvent.registerEventHandlers(server);
     MessageCacheInvalidationEvent.registerEventHandlers(server);
     BrowserToolCallEvent.registerEventHandlers(server);
+    ActionCallEvent.registerEventHandlers(server);
     ReasoningEvent.registerEventHandlers(server);
   }
 }
