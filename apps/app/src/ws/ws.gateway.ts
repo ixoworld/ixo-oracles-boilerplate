@@ -73,7 +73,7 @@ export class WsGateway
   }
 
   handleDisconnect(client: Socket): void {
-    const sessionId = (client.data as ISocketData).sessionId;
+    const sessionId = client.handshake.query.sessionId as string;
 
     if (sessionId) {
       this.logger.log(
@@ -91,7 +91,7 @@ export class WsGateway
   handlePing(@ConnectedSocket() client: Socket): void {
     client.emit('pong', {
       timestamp: new Date().toISOString(),
-      sessionId: (client.data as ISocketData).sessionId,
+      sessionId: client.handshake.query.sessionId as string,
     });
   }
 
@@ -99,7 +99,7 @@ export class WsGateway
   handleStatus(@ConnectedSocket() client: Socket): void {
     client.emit('status', {
       connected: true,
-      sessionId: (client.data as ISocketData).sessionId,
+      sessionId: client.handshake.query.sessionId as string,
       activeSessions: this.wsService.getActiveSessionsCount(),
       totalConnections: this.wsService.getTotalConnectionsCount(),
       timestamp: new Date().toISOString(),
@@ -117,7 +117,7 @@ export class WsGateway
     data: any,
     eventType: 'browser_tool_result' | 'action_call_result',
   ): void {
-    const sessionId = (client.data as ISocketData).sessionId;
+    const sessionId = client.handshake.query.sessionId as string;
     const toolId = data.toolCallId;
 
     this.logger.log(
@@ -200,7 +200,7 @@ export class WsGateway
         'router_update',
         'message_cache_invalidation',
       ],
-      sessionId: (client.data as ISocketData).sessionId,
+      sessionId: client.handshake.query.sessionId as string,
       timestamp: new Date().toISOString(),
     });
   }
