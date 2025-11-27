@@ -11,6 +11,7 @@ import { createHash } from 'crypto';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { hours } from '@nestjs/throttler';
 import { File } from 'node:buffer';
+import fsSync from 'node:fs';
 import * as fs from 'node:fs/promises';
 
 import Database, { type Database as DatabaseType } from 'better-sqlite3';
@@ -30,14 +31,27 @@ const configService = new ConfigService<ENV>();
 export class UserMatrixSqliteSyncService implements OnModuleInit {
   private static instance: UserMatrixSqliteSyncService;
 
-  private constructor(
-    readonly fileEventsDatabase: DatabaseType = new Database(
+  readonly fileEventsDatabase: DatabaseType;
+  private constructor() {
+    // check if path exists
+    const pathExists = fsSync.existsSync(
+      path.join(configService.getOrThrow('MATRIX_STORE_PATH')),
+    );
+
+    if (!pathExists) {
+      fsSync.mkdirSync(
+        path.join(configService.getOrThrow('MATRIX_STORE_PATH')),
+        { recursive: true },
+      );
+    }
+
+    this.fileEventsDatabase = new Database(
       path.join(
         configService.getOrThrow('MATRIX_STORE_PATH'),
         'file_events.db',
       ),
-    ),
-  ) {}
+    );
+  }
 
   private readonly filePathCache = new Map<
     string,
@@ -439,7 +453,9 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
         .access(userCheckpointDbPath)
         .then(() => true)
         .catch(() => {
-          Logger.error(`Checkpoint file not found for user ${userDid} at ${userCheckpointDbPath}`);
+          Logger.error(
+            `Checkpoint file not found for user ${userDid} at ${userCheckpointDbPath}`,
+          );
           return false;
         });
       if (exists) {
