@@ -147,6 +147,26 @@ export function useWebSocketEvents(
         args: any;
         status: string;
       }) => {
+        const tool = actionToolsRef.current?.[data.toolName];
+        if (!tool) {
+          console.error(
+            `[SDK WS] Action tool ${data.toolName} not found in registry`,
+            'Available tools:',
+            Object.keys(actionToolsRef.current || {}),
+          );
+          // Send error back to server
+          newSocket.emit('action_call_result', {
+            toolCallId: data.toolCallId,
+            sessionId: data.sessionId,
+            result: {
+              success: false,
+              error: `Action tool ${data.toolName} not found`,
+            },
+            error: `Action tool ${data.toolName} not found`,
+          });
+          return;
+        }
+
         await executeToolAndEmitResult(
           {
             socket: newSocket,
@@ -155,18 +175,25 @@ export function useWebSocketEvents(
             sessionId: data.sessionId,
           },
           async () => {
-            const tool = actionToolsRef.current?.[data.toolName];
-            if (!tool) {
-              console.error(
-                `[SDK WS] Action tool ${data.toolName} not found in registry`,
-                'Available tools:',
-                Object.keys(actionToolsRef.current || {}),
-              );
-              throw new Error(`Action tool ${data.toolName} not found`);
-            }
             return await tool.handler(data.args);
           },
         );
+
+        // Call render function immediately after successful handler execution
+        // This provides immediate UI feedback without waiting for SSE status update
+        if (tool.render) {
+          try {
+            tool.render({
+              status: 'done',
+              args: data.args,
+            });
+          } catch (renderError) {
+            console.error(
+              `[SDK WS] Error calling render for ${data.toolName}:`,
+              renderError,
+            );
+          }
+        }
       },
     );
 

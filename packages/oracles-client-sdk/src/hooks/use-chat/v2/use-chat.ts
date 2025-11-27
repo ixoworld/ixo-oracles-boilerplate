@@ -169,7 +169,9 @@ export function useChat({
     [uiComponents],
   );
 
-  // Handle AG-UI action call events from streaming (similar to browser tools)
+  // Handle AG-UI action call events from streaming (status updates only)
+  // Note: Render function is called in WebSocket handler immediately after execution
+  // SSE events only update the chat UI timeline with status changes
   const handleActionCall = useCallback(
     async ({
       actionCallData,
@@ -191,7 +193,7 @@ export function useChat({
           {
             id: eventId,
             name: actionCallData.toolName,
-            args: actionCallData.args,
+            args: actionCallData.args, // May be undefined in SSE events (sent via WebSocket instead)
             status: actionCallData.status,
             output: actionCallData.output,
             error: actionCallData.error,
@@ -199,25 +201,10 @@ export function useChat({
         ],
       };
 
+      // Update chat UI with status change
       await chatRef.current?.upsertEventMessage(actionCallMessage);
-
-      // Call the render function when action is done
-      if (actionCallData.status === 'done') {
-        const renderFn = getAgActionRender(actionCallData.toolName);
-        if (renderFn) {
-          renderFn({
-            status: actionCallData.status,
-            args: actionCallData.args || {},
-          });
-        } else {
-          console.warn(
-            '[useChat] No render function found for action:',
-            actionCallData.toolName,
-          );
-        }
-      }
     },
-    [getAgActionRender],
+    [],
   );
 
   // Handle error events from streaming
