@@ -35,7 +35,7 @@ export function useLiveKitAgent(
   const [sessionViewVisible, setSessionViewVisible] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const { authedRequest } = useOraclesContext();
-  const { config } = useOraclesConfig(oracleDid, {
+  const { config, isReady: isConfigReady } = useOraclesConfig(oracleDid, {
     baseUrl: overrides?.baseUrl,
   });
   // Use ref to store current call info without causing re-renders
@@ -142,8 +142,15 @@ export function useLiveKitAgent(
         throw new Error('Call ID is required');
       }
 
+      const apiUrl = overrides?.baseUrl ?? config.apiUrl;
+      if (!apiUrl) {
+        throw new Error(
+          'API URL is not ready. Please wait for oracle config to load.',
+        );
+      }
+
       const response = await authedRequest(
-        `${config.apiUrl}/calls/${callId}/update`,
+        `${apiUrl}/calls/${callId}/update`,
         'PATCH',
         {
           body: JSON.stringify({
@@ -253,8 +260,7 @@ export function useLiveKitAgent(
       existingOrRefreshConnectionDetails,
       idToken,
       toastAlert,
-      config.apiUrl,
-      authedRequest,
+      updateCall,
     ],
   );
 
@@ -281,5 +287,6 @@ export function useLiveKitAgent(
     endCall,
     isConnecting,
     isReady: sessionViewVisible,
+    isConfigReady,
   };
 }
