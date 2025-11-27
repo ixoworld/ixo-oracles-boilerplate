@@ -803,9 +803,12 @@ importers:
       socket.io-client:
         specifier: ^4.8.1
         version: 4.8.1
+      zod:
+        specifier: ^3.22.4
+        version: 3.25.76
       zod-to-json-schema:
         specifier: ^3.24.5
-        version: 3.24.6(zod@4.1.12)
+        version: 3.24.6(zod@3.25.76)
     devDependencies:
       '@ixo/eslint-config':
         specifier: workspace:*
