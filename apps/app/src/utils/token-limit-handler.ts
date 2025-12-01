@@ -3,9 +3,13 @@ import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 import { Serialized } from '@langchain/core/load/serializable';
 import { LLMResult } from '@langchain/core/outputs';
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import crypto from 'node:crypto';
+import { ENV } from 'src/config';
 import z from 'zod';
 import { RedisService } from './redis.service';
+
+const configService = new ConfigService<ENV>();
 
 export class TokenLimiter {
   static readonly KEY_PREFIX = 'token_limit:';
@@ -68,10 +72,12 @@ export class TokenLimiter {
     // GROQ - OSS 120b model
     // Returns credits as float (1 credit = 1 uixo)
 
-    const costPerMillionTokens = 0.75 * 1.3; // 30% markup for profit
-    const tokensPerMillion = 1_000_000;
+    const markup = configService.getOrThrow('NETWORK') === 'mainnet' ? 1.3 : 10;
+    const costPerMillionTokens = 0.75 * markup; // 30% markup for profit
+    const tokensPerMillion =
+      configService.getOrThrow('NETWORK') === 'mainnet' ? 1_000_000 : 1;
 
-    return (tokenCount / tokensPerMillion) * costPerMillionTokens;
+    return Math.round((tokenCount / tokensPerMillion) * costPerMillionTokens);
   }
 
   static async getSubscriptionPayload(

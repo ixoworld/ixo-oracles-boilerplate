@@ -145,7 +145,6 @@ export class SqliteSaver extends BaseCheckpointSaver {
       return;
     }
 
-    this.db.pragma('journal_mode=WAL');
     this.db.exec(`
 CREATE TABLE IF NOT EXISTS checkpoints (
   thread_id TEXT NOT NULL,
@@ -170,15 +169,6 @@ CREATE TABLE IF NOT EXISTS writes (
   PRIMARY KEY (thread_id, checkpoint_ns, checkpoint_id, task_id, idx)
 );`);
 
-    // Add indexes for better query performance
-    this.db.exec(`
-CREATE INDEX IF NOT EXISTS idx_checkpoints_lookup 
-ON checkpoints(thread_id, checkpoint_ns, checkpoint_id);
-`);
-    this.db.exec(`
-CREATE INDEX IF NOT EXISTS idx_writes_lookup 
-ON writes(thread_id, checkpoint_ns, checkpoint_id);
-`);
     this.db.exec(`
 CREATE INDEX IF NOT EXISTS idx_writes_channel 
 ON writes(thread_id, checkpoint_id, channel);
