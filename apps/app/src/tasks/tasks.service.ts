@@ -8,14 +8,18 @@ import { ConfigService } from '@nestjs/config';
 import { ENV } from 'src/config';
 import { submitClaimToSubscriptionApi } from './utils';
 
-type Denom = 'uixo' | 'usdcc';
+type Denom =
+  | 'uixo'
+  | 'ibc/6BBE9BD4246F8E04948D5A4EEE7164B2630263B9EBB5E7DC5F0A46C62A2FF97B';
 
 @Injectable()
 export class TasksService {
   private readonly denom: Denom;
   constructor(private readonly configService: ConfigService<ENV>) {
     this.denom =
-      this.configService.get('NETWORK') === 'mainnet' ? 'usdcc' : 'uixo';
+      this.configService.get('NETWORK') === 'mainnet'
+        ? 'ibc/6BBE9BD4246F8E04948D5A4EEE7164B2630263B9EBB5E7DC5F0A46C62A2FF97B'
+        : 'uixo';
   }
   private readonly logger = new Logger(TasksService.name);
 
@@ -28,8 +32,9 @@ export class TasksService {
     );
     Logger.log(`Processing held amount for ${users.length} users`);
 
-    for (const [userDid, heldAmount] of users) {
+    for (const [userDid, _heldAmount] of users) {
       try {
+        const heldAmount = Math.round(_heldAmount);
         // Skip if held amount is below threshold
         if (heldAmount < MINIMUM_CLAIM_THRESHOLD) {
           Logger.debug(

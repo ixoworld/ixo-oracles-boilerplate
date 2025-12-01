@@ -13,6 +13,8 @@ import { hours } from '@nestjs/throttler';
 import { File } from 'node:buffer';
 import fsSync from 'node:fs';
 import * as fs from 'node:fs/promises';
+import { promisify } from 'node:util';
+import { gunzip, gzip } from 'node:zlib';
 
 import Database, { type Database as DatabaseType } from 'better-sqlite3';
 import path from 'path';
@@ -24,6 +26,9 @@ import {
   MatrixMediaEvent,
   uploadMediaToRoom,
 } from './matrix-upload-utils';
+
+const gzipAsync = promisify(gzip);
+const gunzipAsync = promisify(gunzip);
 
 const configService = new ConfigService<ENV>();
 
@@ -171,7 +176,6 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
       );
 
       CREATE INDEX IF NOT EXISTS idx_sessions_updated ON sessions(last_updated_at);
-      CREATE INDEX IF NOT EXISTS idx_sessions_oracle_entity ON sessions(oracle_entity_did);
       CREATE INDEX IF NOT EXISTS idx_calls_session ON calls(session_id);
     `);
   }
@@ -342,9 +346,20 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
       return;
     }
 
-    Logger.log(
-      `Checkpoint downloaded from Matrix for user ${userDid}, size: ${userDB.mediaBuffer.length} bytes`,
-    );
+    // Decompress the checkpoint
+    let decompressedBuffer: Buffer;
+    try {
+      decompressedBuffer = await gunzipAsync(userDB.mediaBuffer);
+      Logger.log(
+        `Decompressed checkpoint for user ${userDid}: ${bytesToHumanReadable(userDB.mediaBuffer.length)} -> ${bytesToHumanReadable(decompressedBuffer.length)}`,
+      );
+    } catch (error) {
+      // If decompression fails, file might not be compressed (backward compatibility)
+      Logger.warn(
+        `Failed to decompress checkpoint for user ${userDid}, using as-is (might be uncompressed): ${error}`,
+      );
+      decompressedBuffer = userDB.mediaBuffer;
+    }
 
     // save to local cache
     this.filePathCache.set(userDid, {
@@ -356,7 +371,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
       `Saving checkpoint to local cache for user ${userDid} at ${checkpointPath}`,
     );
 
-    await fs.writeFile(checkpointPath, userDB.mediaBuffer, {
+    await fs.writeFile(checkpointPath, decompressedBuffer, {
       flag: 'w', // overwrite
     });
 
@@ -373,8 +388,6 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
    */
   async uploadCheckpointToMatrixStorage(params: BaseSyncArgs): Promise<void> {
     const { userDid } = params;
-
-    // Close database connection if open (flush any pending writes)
 
     const checkpointKey =
       UserMatrixSqliteSyncService.createUserStorageKey(userDid);
@@ -397,13 +410,36 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
       return;
     }
 
+    // Close any open database connections for this user to avoid locks
+    const cached = this.dbConnectionCache.get(userDid);
+    if (cached) {
+      try {
+        cached.db.close();
+        this.dbConnectionCache.delete(userDid);
+        Logger.debug(`Closed cached database connection for user ${userDid}`);
+      } catch (error) {
+        Logger.warn(
+          `Failed to close cached database connection for user ${userDid}: ${error}`,
+        );
+      }
+    }
+
     Logger.debug(
       `Reading checkpoint file for user ${userDid} from ${checkpointPath}`,
     );
     const checkpoint = await fs.readFile(checkpointPath);
+    const originalSize = checkpoint.length;
 
-    Logger.debug(
-      `Checkpoint file read for user ${userDid}, size: ${checkpoint.length} bytes`,
+    // Compress the database file with gzip before upload
+    const compressedCheckpoint = await gzipAsync(checkpoint);
+    const compressedSize = compressedCheckpoint.length;
+    const compressionRatio = (
+      (1 - compressedSize / originalSize) *
+      100
+    ).toFixed(1);
+
+    Logger.log(
+      `Checkpoint for user ${userDid}: ${bytesToHumanReadable(originalSize)} -> ${bytesToHumanReadable(compressedSize)} (${compressionRatio}% reduction)`,
     );
 
     const mxManager = MatrixManager.getInstance();
@@ -417,12 +453,12 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
     }
 
     Logger.debug(
-      `Uploading checkpoint to Matrix room ${roomId} for user ${userDid}`,
+      `Uploading compressed checkpoint to Matrix room ${roomId} for user ${userDid}`,
     );
     const event = await uploadMediaToRoom(
       roomId,
-      new File([checkpoint], `${checkpointKey}.db`, {
-        type: 'application/x-sqlite3',
+      new File([compressedCheckpoint], `${checkpointKey}.db.gz`, {
+        type: 'application/gzip',
         lastModified: Date.now(),
       }),
       checkpointKey,
@@ -480,3 +516,9 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
       .run(eventId, storageKey, JSON.stringify(event));
   }
 }
+
+const bytesToHumanReadable = (bytes: number): string => {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const index = Math.floor(Math.log(bytes) / Math.log(1024));
+  return (bytes / Math.pow(1024, index)).toFixed(2) + ' ' + units[index];
+};
