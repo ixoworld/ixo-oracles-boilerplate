@@ -110,13 +110,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
 
     this.fileEventsDatabase
       .prepare(
-        'CREATE TABLE IF NOT EXISTS file_events (event_id TEXT PRIMARY KEY, storage_key TEXT, event TEXT)',
-      )
-      .run();
-
-    this.fileEventsDatabase
-      .prepare(
-        'CREATE INDEX IF NOT EXISTS idx_storage_key ON file_events (storage_key)',
+        'CREATE TABLE IF NOT EXISTS file_events (storage_key TEXT PRIMARY KEY, event_id TEXT, event TEXT)',
       )
       .run();
   }
@@ -511,9 +505,9 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
   }): Promise<void> {
     this.fileEventsDatabase
       .prepare(
-        'INSERT OR REPLACE INTO file_events (event_id, storage_key, event) VALUES (?, ?, ?)',
+        'INSERT OR REPLACE INTO file_events (storage_key, event_id, event) VALUES (?, ?, ?)',
       )
-      .run(eventId, storageKey, JSON.stringify(event));
+      .run(storageKey, eventId, JSON.stringify(event));
   }
 }
 
