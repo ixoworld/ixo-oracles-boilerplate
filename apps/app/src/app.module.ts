@@ -6,14 +6,14 @@ import {
   type NestModule,
   RequestMethod,
 } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CallsModule } from './calls/calls.module';
-import { EnvSchema } from './config';
+import { type ENV, EnvSchema } from './config';
 import { MessagesModule } from './messages/messages.module';
 import { AuthHeaderMiddleware } from './middleware/auth-header.middleware';
 import { SubscriptionMiddleware } from './middleware/subscription.middleware';
@@ -66,8 +66,30 @@ import { WsModule } from './ws/ws.module';
   controllers: [AppController],
   providers: [
     AppService,
-    RedisService,
-    TasksService,
+    {
+      provide: RedisService,
+      useFactory: (configService: ConfigService<ENV>) => {
+        const disableCredits = configService.get('DISABLE_CREDITS', false);
+        if (disableCredits) {
+          Logger.log('RedisService disabled (DISABLE_CREDITS=true)');
+          return null;
+        }
+        return new RedisService(configService);
+      },
+      inject: [ConfigService],
+    },
+    {
+      provide: TasksService,
+      useFactory: (configService: ConfigService<ENV>) => {
+        const disableCredits = configService.get('DISABLE_CREDITS', false);
+        if (disableCredits) {
+          Logger.log('TasksService disabled (DISABLE_CREDITS=true)');
+          return null;
+        }
+        return new TasksService(configService);
+      },
+      inject: [ConfigService],
+    },
     {
       provide: APP_GUARD, // Apply ThrottlerGuard globally
       useClass: ThrottlerGuard,
@@ -77,14 +99,30 @@ import { WsModule } from './ws/ws.module';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer
-      .apply(AuthHeaderMiddleware, SubscriptionMiddleware)
-      .exclude(
-        { path: '/', method: RequestMethod.ALL },
-        { path: '/health', method: RequestMethod.ALL },
-        { path: '/docs', method: RequestMethod.ALL },
-        { path: '/docs/(.*)', method: RequestMethod.ALL },
-      )
-      .forRoutes('*');
+    const configService = new ConfigService<ENV>();
+    const disableCredits = configService.get('DISABLE_CREDITS', false);
+    
+    if (disableCredits) {
+      Logger.log('Subscription middleware disabled (DISABLE_CREDITS=true)');
+      consumer
+        .apply(AuthHeaderMiddleware)
+        .exclude(
+          { path: '/', method: RequestMethod.ALL },
+          { path: '/health', method: RequestMethod.ALL },
+          { path: '/docs', method: RequestMethod.ALL },
+          { path: '/docs/(.*)', method: RequestMethod.ALL },
+        )
+        .forRoutes('*');
+    } else {
+      consumer
+        .apply(AuthHeaderMiddleware, SubscriptionMiddleware)
+        .exclude(
+          { path: '/', method: RequestMethod.ALL },
+          { path: '/health', method: RequestMethod.ALL },
+          { path: '/docs', method: RequestMethod.ALL },
+          { path: '/docs/(.*)', method: RequestMethod.ALL },
+        )
+        .forRoutes('*');
+    }
   }
 }

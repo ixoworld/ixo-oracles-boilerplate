@@ -80,6 +80,7 @@ export const EnvSchema = z.object({
   MATRIX_VALUE_PIN: z.string(),
   // convert string to boolean
   THROW_ON_INSUFFICIENT_CREDITS: z.string().transform((val) => val === 'true'),
+  DISABLE_CREDITS: z.string().transform((val) => val === 'true').optional(),
 });
 
 export const matrixAccountRoomId = {

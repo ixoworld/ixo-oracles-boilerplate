@@ -7,8 +7,10 @@ import {
 import { IRunnableConfigWithRequiredFields } from '@ixo/matrix';
 import { SqliteSaver } from '@ixo/sqlite-saver';
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { createDeepAgent, FilesystemBackend } from 'deepagents';
 import { toolRetryMiddleware } from 'langchain';
+import { ENV } from 'src/config';
 import { createSafetyGuardrailMiddleware } from '../middlewares/safety-guardrail-middleware';
 import { createTokenLimiterMiddleware } from '../middlewares/token-limiter-middelware';
 import { createToolValidationMiddleware } from '../middlewares/tool-validation-middleware';
@@ -167,17 +169,26 @@ export const createMainAgent = async ({
     fs.mkdirSync(agentFolder, { recursive: true });
   }
 
+  // Build middleware list conditionally
+  const configService = new ConfigService<ENV>();
+  const disableCredits = configService.get('DISABLE_CREDITS', false);
+  
+  const middleware = [
+    createToolValidationMiddleware(),
+    toolRetryMiddleware(),
+    createSafetyGuardrailMiddleware(),
+  ];
+  
+  if (!disableCredits) {
+    middleware.push(createTokenLimiterMiddleware());
+  }
+
   const agent = createDeepAgent({
     model: llm,
     subagents: agents,
     contextSchema,
     tools: [...mcpTools, ...agActionTools],
-    middleware: [
-      createToolValidationMiddleware(),
-      toolRetryMiddleware(),
-      createSafetyGuardrailMiddleware(),
-      createTokenLimiterMiddleware(),
-    ],
+    middleware,
     systemPrompt,
     checkpointer: SqliteSaver.fromConnString(
       UserMatrixSqliteSyncService.getUserCheckpointDbPath(

@@ -101,21 +101,26 @@ async function bootstrap(): Promise<void> {
 
   registerGracefulShutdown({ app, matrixManager });
 
-  Logger.log('Setting up claim signing mnemonics...');
-  Logger.log(`Matrix account room id: ${matrixAccountRoomId}`);
-  const decryptedSigningMnemonic = await setupClaimSigningMnemonics({
-    matrixRoomId: matrixAccountRoomId,
-    matrixAccessToken: configService.getOrThrow(
-      'MATRIX_ORACLE_ADMIN_ACCESS_TOKEN',
-    ),
-    walletMnemonic: configService.getOrThrow('SECP_MNEMONIC'),
-    pin: configService.getOrThrow('MATRIX_VALUE_PIN'),
-    signerDid: configService.getOrThrow('ORACLE_DID'),
-    network: configService.getOrThrow('NETWORK'),
-  });
-  Logger.log('Claim signing mnemonics setup complete', {
-    decryptedSigningMnemonic,
-  });
+  const disableCredits = configService.get('DISABLE_CREDITS', false);
+  if (!disableCredits) {
+    Logger.log('Setting up claim signing mnemonics...');
+    Logger.log(`Matrix account room id: ${matrixAccountRoomId}`);
+    const decryptedSigningMnemonic = await setupClaimSigningMnemonics({
+      matrixRoomId: matrixAccountRoomId,
+      matrixAccessToken: configService.getOrThrow(
+        'MATRIX_ORACLE_ADMIN_ACCESS_TOKEN',
+      ),
+      walletMnemonic: configService.getOrThrow('SECP_MNEMONIC'),
+      pin: configService.getOrThrow('MATRIX_VALUE_PIN'),
+      signerDid: configService.getOrThrow('ORACLE_DID'),
+      network: configService.getOrThrow('NETWORK'),
+    });
+    Logger.log('Claim signing mnemonics setup complete', {
+      decryptedSigningMnemonic,
+    });
+  } else {
+    Logger.log('Signing mnemonic creation skipped (DISABLE_CREDITS=true)');
+  }
 
   await app.listen(port);
   Logger.log(`Application is running on: ${await app.getUrl()}`);

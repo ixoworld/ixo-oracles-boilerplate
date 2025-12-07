@@ -273,6 +273,12 @@ export class TasksService {
 
   @Cron(CronExpression.EVERY_MINUTE)
   async processHeldAmount() {
+    const disableCredits = this.configService.get('DISABLE_CREDITS', false);
+    if (disableCredits) {
+      this.logger.debug('Claims task submission skipped (DISABLE_CREDITS=true)');
+      return;
+    }
+
     // Minimum threshold to submit claims (prevents spam of tiny transactions)
     const MINIMUM_CLAIM_THRESHOLD = 5000; // credits (= 5000 uixo)
     const users = await TokenLimiter.listUsersWithHeldAmount(
