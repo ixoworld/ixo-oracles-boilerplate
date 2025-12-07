@@ -477,8 +477,6 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
                       isChatNode
                     ) {
                       const reasoning = rawResponse.choices[0].delta.reasoning;
-                      const reasoningDetails =
-                        rawResponse.choices[0].delta.reasoning_details;
 
                       if (reasoning && reasoning.trim()) {
                         // Use cleanAdditionalKwargs to extract and clean reasoning details
@@ -908,8 +906,12 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     const targetSession = (await this.sessionManagerService.getSession(
       sessionId,
       did,
-      true,
-    )) as ChatSession;
+      false,
+    )) as ChatSession | undefined;
+
+    if (!targetSession) {
+      throw new NotFoundException('Session not found');
+    }
 
     // Use cached roomId if available, otherwise fetch it
     let roomId = targetSession?.roomId;

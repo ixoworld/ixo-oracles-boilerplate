@@ -46,5 +46,30 @@ export const createToolValidationMiddleware = () => {
         throw error;
       }
     },
+    beforeModel(state, runtime) {
+
+      const toolMessage = state.messages.find((message) => message.type === 'tool');
+      console.log("🚀 ~ createToolValidationMiddleware ~ toolMessage:", toolMessage)
+
+      const agentsTools = [
+        'list_blocks',
+        'read_block_by_id',
+        'edit_block',
+        'create_block',
+        'read_survey',
+        'fill_survey_answers',
+        'validate_survey_answers',
+        "firecrawl",
+      ];
+
+      if (toolMessage && toolMessage.name && agentsTools.includes(toolMessage.name)) {
+        Logger.log(`Tool validation middleware: ${toolMessage.name} is an agent tool, skipping`);
+        return {
+          ...state,
+          messages: state.messages.filter((message) => message.type !== 'tool'),
+        };
+      }
+      return state;
+    },
   });
 };

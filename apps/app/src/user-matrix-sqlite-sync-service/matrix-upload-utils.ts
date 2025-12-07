@@ -240,6 +240,7 @@ export async function getMediaFromRoomByStorageKey(
       `Error retrieving media with storageKey ${storageKey}: ${errorMessage}`,
       error instanceof Error ? error.stack : undefined,
     );
+    
     throw new Error(
       `Error retrieving media with storageKey ${storageKey}: ${errorMessage}`,
     );
@@ -265,7 +266,9 @@ export async function getMediaFromRoom(
   };
 }> {
   if ((!roomId || !eventId) && !cachedEvent) {
-    throw new Error('Either roomId and eventId or cachedEvent must be provided');
+    throw new Error(
+      'Either roomId and eventId or cachedEvent must be provided',
+    );
   }
   const client = getClient();
   const event =
@@ -302,5 +305,85 @@ export async function getMediaFromRoom(
         filename: event.content.filename || 'download',
       },
     };
+  }
+}
+
+/**
+ * Deletes media from a Matrix room by storage key
+ * @param roomId The room ID where the media is located
+ * @param storageKey The storage key of the media to delete
+ * @returns True if deletion was successful, false if not found
+ */
+export async function deleteMediaFromRoom(
+  roomId: string,
+  storageKey: string,
+): Promise<boolean> {
+  const client = getClient();
+
+  try {
+    logger.debug(
+      `Attempting to delete media from room ${roomId} with storageKey ${storageKey}`,
+    );
+
+    // Get the event ID from room state
+    const stateEvent = await client.mxClient.getRoomStateEvent(
+      roomId,
+      EVENTS.MEDIA_STATE,
+      storageKey,
+    );
+
+    if (!stateEvent || !stateEvent.eventId) {
+      logger.warn(
+        `No media state event found with storageKey: ${storageKey} in room ${roomId}`,
+      );
+      return false;
+    }
+
+    logger.debug(
+      `Found media event ${stateEvent.eventId} for storageKey ${storageKey}, attempting to redact`,
+    );
+
+    // Redact the media event to delete the DB file from the server
+    try {
+      await client.mxClient.redactEvent(
+        roomId,
+        stateEvent.eventId,
+        'User requested deletion',
+      );
+      logger.debug(
+        `Successfully redacted media event ${stateEvent.eventId} for storageKey ${storageKey}`,
+      );
+    } catch (redactError) {
+      logger.error(
+        `Failed to redact media event ${stateEvent.eventId}:`,
+        redactError,
+      );
+      throw redactError;
+    }
+
+    return true;
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+
+    // Check if it's an M_NOT_FOUND error
+    if (
+      errorMessage.includes('M_NOT_FOUND') ||
+      errorMessage.includes('Event not found')
+    ) {
+      logger.debug(
+        `Media not found in Matrix for storageKey ${storageKey} (M_NOT_FOUND)`,
+      );
+      return false;
+    }
+
+    // For other errors, log and rethrow
+    logger.error(
+      `Error deleting media with storageKey ${storageKey}: ${errorMessage}`,
+      error instanceof Error ? error.stack : undefined,
+    );
+    throw new Error(
+      `Error deleting media with storageKey ${storageKey}: ${errorMessage}`,
+    );
   }
 }

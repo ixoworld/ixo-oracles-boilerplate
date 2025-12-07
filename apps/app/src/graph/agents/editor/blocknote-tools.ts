@@ -10,15 +10,24 @@ import { ConfigService } from '@nestjs/config';
 import type { MatrixClient } from 'matrix-js-sdk';
 import { randomUUID } from 'node:crypto';
 import { ENV } from 'src/config';
+import * as Y from 'yjs';
 import {
   appendBlock,
   collectAllBlocks,
   editBlock,
+  extractBlockProperties,
+  findBlockById,
   getBlockDetail,
   simplifyBlockForAgent,
   type BlockSnapshot,
 } from './blocknote-helper';
 import { AppConfig, MatrixProviderManager } from './provider';
+import {
+  extractSurveyQuestions,
+  getMissingRequiredFields,
+  getVisibleQuestions,
+  validateAnswersAgainstSchema,
+} from './survey-helpers';
 
 const configService = new ConfigService<ENV>();
 
@@ -122,13 +131,12 @@ export const createBlocknoteTools = async (
           ? blocks.filter((b) => b.blockType === blockType)
           : blocks;
 
-        const simplifiedBlocks = filteredBlocks.map(simplifyBlockForAgent);
 
         return JSON.stringify(
           {
             success: true,
-            count: simplifiedBlocks.length,
-            blocks: simplifiedBlocks,
+            count: filteredBlocks.length,
+            blocks: filteredBlocks,
           },
           null,
           2,
@@ -200,6 +208,13 @@ List blocks without text content (faster):
 - checkbox: Interactive checkboxes
 - apiRequest: API calls (GET/POST/PUT/DELETE)
 - list: Data lists
+- domainCreator: Survey forms with surveySchema and answers (use read_survey, fill_survey_answers, validate_survey_answers tools)
+
+**Note for domainCreator blocks:**
+- surveySchema and answers are automatically parsed as structured JSON
+- Use read_survey tool for detailed survey information
+- Use fill_survey_answers to update answers
+- Use validate_survey_answers to check completeness
 
 **Important:** Block IDs are UUIDs - never guess them. Always extract exact IDs from this tool's response before calling edit_block.`,
       schema: z.object({
@@ -277,20 +292,12 @@ List blocks without text content (faster):
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
         // Create simplified response for agents
-        const {
-          getBlockDetail,
-          simplifyBlockForAgent,
-        } = require('./blocknote-helper');
         const updatedBlock = getBlockDetail(doc, blockId, true);
-        const simplified = updatedBlock
-          ? simplifyBlockForAgent(updatedBlock)
-          : null;
-
         // Changes are automatically synced by your Matrix provider
         return JSON.stringify({
           success: true,
           message: `Successfully updated block ${blockId}`,
-          block: simplified || snapshot,
+          block: updatedBlock,
         });
       } catch (error) {
         Logger.error('Error editing block:', error);
@@ -666,6 +673,15 @@ List blocks without text content (faster):
   - fragmentIdentifier: string (e.g., "assets", "members", "proposals")
   - conditions: string (JSON, default: "")
 
+**domainCreator** - Survey forms
+  - title: string
+  - description: string
+  - icon: string
+  - surveySchema: string (JSON string of SurveyJS schema)
+  - answers: string (JSON string of current answers)
+  - lastSubmission: string
+  - Note: For domainCreator blocks, use read_survey, fill_survey_answers, and validate_survey_answers tools instead of direct edit_block for survey operations
+
 **Returns:**
 \`\`\`json
 {
@@ -715,10 +731,585 @@ The returned block includes the auto-generated UUID that you can use for future 
     },
   );
 
+  const readBlockByIdTool = tool(
+    async ({ blockId }) => {
+      Logger.log(`📄 read_block_by_id tool invoked for block: ${blockId}`);
+      const providerManager = new MatrixProviderManager(matrixClient, config);
+      try {
+        const { doc } = await providerManager.init();
+        const block = getBlockDetail(doc, blockId, true);
+
+        // Parse survey data if it's a domainCreator block
+        if (block) {
+          const simplified = simplifyBlockForAgent(block);
+          // surveySchema and answers are already parsed in extractBlockProperties
+          return JSON.stringify({
+            success: true,
+            block: simplified,
+          });
+        }
+
+        return JSON.stringify({
+          success: true,
+          block: null,
+        });
+      } catch (error) {
+        return JSON.stringify({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        await providerManager.dispose();
+      }
+    },
+    {
+      name: 'read_block_by_id',
+      description: `Reads a block by its ID. For domainCreator blocks, automatically parses surveySchema and answers as structured JSON.`,
+      schema: z.object({
+        blockId: z.string().describe('The ID of the block to read'),
+      }),
+    },
+  );
+
+  // ============================================================================
+  // Tool 5: Read Survey
+  // ============================================================================
+
+  const readSurveyTool = tool(
+    async ({ blockId }) => {
+      Logger.log(`📋 read_survey tool invoked for block: ${blockId}`);
+      const providerManager = new MatrixProviderManager(matrixClient, config);
+
+      try {
+        const { doc } = await providerManager.init();
+
+        const isInRoom = await checkIfInRoomAndJoinPublicRoom(
+          matrixClient,
+          roomId,
+        );
+
+        if (!isInRoom) {
+          return JSON.stringify({
+            success: false,
+            error: `Companion is not in the room ${roomId}, please invite companion to the room. companion user id: ${matrixClient.getUserId()}`,
+          });
+        }
+
+        const block = getBlockDetail(doc, blockId, true);
+        console.log("🚀 ~ createBlocknoteTools ~ block:", block)
+        if (!block) {
+          return JSON.stringify({
+            success: false,
+            error: `Block with id ${blockId} not found`,
+          });
+        }
+
+        const properties = extractBlockProperties(block);
+        const surveySchema = properties.surveySchema;
+        const answers = properties.answers || {};
+
+        if (!surveySchema) {
+          Logger.error('Block does not contain a surveySchema:', block);
+          return JSON.stringify({
+            success: false,
+            error: `Block ${blockId} does not contain a surveySchema. This tool is only for domainCreator blocks.`,
+          });
+        }
+
+        // Extract all questions with visibility computed inline
+        const allQuestions = await extractSurveyQuestions(
+          surveySchema,
+          answers,
+        );
+
+        const missingRequired = await getMissingRequiredFields(
+          answers,
+          surveySchema,
+        );
+
+      
+        return JSON.stringify(
+          {
+            success: true,
+            survey: {
+              title: surveySchema.title,
+              description: surveySchema.description,
+            },
+            questions: allQuestions,
+            answers,
+            missingRequiredFields: missingRequired,
+            totalQuestions: allQuestions.length,
+          },
+          null,
+          2,
+        );
+      } catch (error) {
+        Logger.error('Error reading survey:', error);
+        return JSON.stringify({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        await providerManager.dispose();
+      }
+    },
+    {
+      name: 'read_survey',
+      description: `Reads survey schema and current answers from a domainCreator block in structured format.
+
+**Purpose:**
+- View complete survey structure (ALL questions including hidden ones)
+- See current answers as structured JSON
+- Identify which questions are currently visible vs hidden
+- Understand why fields are hidden (via visibleIf conditions)
+- Find missing required fields (only for visible questions)
+- Automatically fetches choices from choicesByUrl for dropdown questions
+
+**Important:**
+- ALL questions are returned (both visible and hidden), not just visible ones
+- \`isVisible: true\` means the field is currently shown in the UI
+- \`isVisible: false\` means the field is hidden by a \`visibleIf\` condition
+- \`visibleIf\` field shows the condition that controls visibility (e.g., \`"{ixo:advancedDomainSettings} = true"\`)
+- Hidden fields can be made visible by changing the controlling answer (e.g., set \`ixo:advancedDomainSettings: true\`)
+- Nested dynamic panel template elements are included in the questions array
+
+**Example:**
+\`\`\`json
+{
+  "blockId": "271fc5de-bcd8-4de0-8dd7-fb3dd5c13785"
+}
+\`\`\`
+
+**Returns:**
+\`\`\`json
+{
+  "success": true,
+  "survey": {
+    "title": "Domain Card Creation",
+    "description": "Survey description"
+  },
+  "questions": [
+    {
+      "name": "schema:name",
+      "title": "Domain Name",
+      "type": "text",
+      "isRequired": true,
+      "isVisible": true,
+      "visibleIf": undefined,
+      "pageName": "domainDetails",
+      "pageTitle": "Domain Information"
+    },
+    {
+      "name": "schema:itemOffered.type",
+      "title": "Category",
+      "type": "dropdown",
+      "isRequired": false,
+      "isVisible": false,
+      "visibleIf": "{ixo:advancedDomainSettings} = true",
+      "pageName": "composition",
+      "pageTitle": "Composition",
+      "choices": [
+        {"value": "product", "text": "Product"},
+        {"value": "service", "text": "Service"}
+      ]
+    }
+  ],
+  "answers": {
+    "schema:name": "My Domain",
+    "schema:makesOffer": [{"schema:itemOffered.type": "product"}]
+  },
+  "missingRequiredFields": ["schema.description"],
+  "totalQuestions": 150,
+  "visibleQuestionsCount": 28
+}
+\`\`\`
+
+**Note:** 
+- Only works with domainCreator blocks. Use list_blocks to find domainCreator block IDs.
+- Choices from choicesByUrl are automatically fetched and included in the choices array for dropdown questions.
+- The \`answers\` object may contain data for hidden fields - use the \`questions\` array to understand the schema for those fields.`,
+      schema: z.object({
+        blockId: z
+          .string()
+          .describe('The ID of the domainCreator block containing the survey'),
+      }),
+    },
+  );
+
+  // ============================================================================
+  // Tool 6: Fill Survey Answers
+  // ============================================================================
+
+  const fillSurveyAnswersTool = tool(
+    async ({ blockId, answers, merge = true }) => {
+      Logger.log(`✏️ fill_survey_answers tool invoked for block: ${blockId}`);
+      const providerManager = new MatrixProviderManager(matrixClient, config);
+
+      try {
+        const { doc } = await providerManager.init();
+
+        const isInRoom = await checkIfInRoomAndJoinPublicRoom(
+          matrixClient,
+          roomId,
+        );
+
+        if (!isInRoom) {
+          return JSON.stringify({
+            success: false,
+            error: `Companion is not in the room ${roomId}, please invite companion to the room. companion user id: ${matrixClient.getUserId()}`,
+          });
+        }
+
+        const block = getBlockDetail(doc, blockId, true);
+        if (!block) {
+          return JSON.stringify({
+            success: false,
+            error: `Block with id ${blockId} not found`,
+          });
+        }
+
+        const properties = extractBlockProperties(block);
+        const surveySchema = properties.surveySchema;
+
+        if (!surveySchema) {
+          return JSON.stringify({
+            success: false,
+            error: `Block ${blockId} does not contain a surveySchema. This tool is only for domainCreator blocks.`,
+          });
+        }
+
+        // Get current answers
+        const currentAnswers = properties.answers || {};
+
+        // Merge or replace answers
+        const updatedAnswers = merge
+          ? { ...currentAnswers, ...answers }
+          : answers;
+
+        // Validate the updated answers
+        const validation = await validateAnswersAgainstSchema(
+          updatedAnswers,
+          surveySchema,
+        );
+
+        // Update the block's answers attribute
+        // The answers need to be stored as a JSON string in the domainCreator child element
+        // Use Y.js transaction to update the answers attribute
+        const fragment = doc.getXmlFragment('document');
+        const blockContainer = findBlockById(fragment, blockId);
+
+        if (!blockContainer) {
+          return JSON.stringify({
+            success: false,
+            error: `Block container not found`,
+          });
+        }
+
+        // Use Y.js transaction to update the answers
+        doc.transact(() => {
+          // Find the domainCreator child element
+          const domainCreatorElement = blockContainer
+            .toArray()
+            .find(
+              (node): node is Y.XmlElement =>
+                node instanceof Y.XmlElement &&
+                node.nodeName === 'domainCreator',
+            );
+
+          if (domainCreatorElement) {
+            // Update the answers attribute as JSON string directly on the child element
+            domainCreatorElement.setAttribute(
+              'answers',
+              JSON.stringify(updatedAnswers),
+            );
+          } else {
+            logger.error(
+              'DomainCreator element not found, falling back to edit_block helper',
+            );
+            // This will update via the props mechanism');
+            // Fallback: use edit_block helper which handles the structure properly
+            // This will update via the props mechanism
+            editBlock(doc, {
+              blockId,
+              attributes: {
+                props: { answers: JSON.stringify(updatedAnswers) },
+              },
+              docName: 'document',
+            });
+          }
+        }, 'blocknote-crdt-playground');
+
+        // Wait for sync
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        return JSON.stringify(
+          {
+            success: true,
+            message: `Successfully ${merge ? 'merged' : 'replaced'} survey answers`,
+            answers: updatedAnswers,
+            validation,
+            missingRequiredFields: await getMissingRequiredFields(
+              updatedAnswers,
+              surveySchema,
+            ),
+          },
+          null,
+          2,
+        );
+      } catch (error) {
+        Logger.error('Error filling survey answers:', error);
+        return JSON.stringify({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        await providerManager.dispose();
+      }
+    },
+    {
+      name: 'fill_survey_answers',
+      description: `Fills in survey answers for a domainCreator block. Intelligently merges with existing answers and validates against schema.
+
+**Purpose:**
+- Fill in partial or complete survey answers
+- Merge with existing answers (default) or replace them
+- Automatically validates answers against schema
+- Respects visibility conditions
+
+**Example 1 - Fill single answer:**
+\`\`\`json
+{
+  "blockId": "271fc5de-bcd8-4de0-8dd7-fb3dd5c13785",
+  "answers": {
+    "schema:name": "My New Domain",
+    "schema.description": "A description of my domain"
+  },
+  "merge": true
+}
+\`\`\`
+
+**Example 2 - Replace all answers:**
+\`\`\`json
+{
+  "blockId": "271fc5de-bcd8-4de0-8dd7-fb3dd5c13785",
+  "answers": {
+    "schema:name": "New Domain",
+    "type_2": "dao",
+    "schema:validFrom": "2025-01-01"
+  },
+  "merge": false
+}
+\`\`\`
+
+**Returns:**
+\`\`\`json
+{
+  "success": true,
+  "message": "Successfully merged survey answers",
+  "answers": {
+    "schema:name": "My New Domain",
+    "schema.description": "A description",
+    "type_2": "dao"
+  },
+  "validation": {
+    "valid": false,
+    "errors": [
+      {
+        "field": "schema:validFrom",
+        "message": "Valid From is required",
+        "type": "required"
+      }
+    ],
+    "warnings": []
+  },
+  "missingRequiredFields": ["schema:validFrom", "schema:validUntil"]
+}
+\`\`\`
+
+**Note:** 
+- Use merge=true (default) to keep existing answers and only update specified fields
+- Use merge=false to replace all answers
+- Answers are validated automatically
+- Only visible questions (based on visibility conditions) are considered`,
+      schema: z.object({
+        blockId: z.string().describe('The ID of the domainCreator block'),
+        answers: z
+          .record(z.any(), z.any())
+          .describe(
+            'Object with answer key-value pairs. Keys should match question names from the schema.',
+          ),
+        merge: z
+          .boolean()
+          .optional()
+          .default(true)
+          .describe(
+            'If true, merge with existing answers. If false, replace all answers.',
+          ),
+      }),
+    },
+  );
+
+  // ============================================================================
+  // Tool 7: Validate Survey Answers
+  // ============================================================================
+
+  const validateSurveyAnswersTool = tool(
+    async ({ blockId }) => {
+      Logger.log(
+        `✅ validate_survey_answers tool invoked for block: ${blockId}`,
+      );
+      const providerManager = new MatrixProviderManager(matrixClient, config);
+
+      try {
+        const { doc } = await providerManager.init();
+
+        const isInRoom = await checkIfInRoomAndJoinPublicRoom(
+          matrixClient,
+          roomId,
+        );
+
+        if (!isInRoom) {
+          return JSON.stringify({
+            success: false,
+            error: `Companion is not in the room ${roomId}, please invite companion to the room. companion user id: ${matrixClient.getUserId()}`,
+          });
+        }
+
+        const block = getBlockDetail(doc, blockId, true);
+        if (!block) {
+          return JSON.stringify({
+            success: false,
+            error: `Block with id ${blockId} not found`,
+          });
+        }
+
+        const properties = extractBlockProperties(block);
+        const surveySchema = properties.surveySchema;
+        const answers = properties.answers || {};
+
+        if (!surveySchema) {
+          return JSON.stringify({
+            success: false,
+            error: `Block ${blockId} does not contain a surveySchema. This tool is only for domainCreator blocks.`,
+          });
+        }
+
+        const validation = await validateAnswersAgainstSchema(
+          answers,
+          surveySchema,
+        );
+        const missingRequired = await getMissingRequiredFields(
+          answers,
+          surveySchema,
+        );
+        const visibleQuestions = await getVisibleQuestions(
+          answers,
+          surveySchema,
+        );
+
+        return JSON.stringify(
+          {
+            success: true,
+            valid: validation.valid,
+            errors: validation.errors,
+            warnings: validation.warnings,
+            missingRequiredFields: missingRequired,
+            answeredQuestions: Object.keys(answers).length,
+            visibleQuestionsCount: visibleQuestions.length,
+            totalRequiredFields: visibleQuestions.filter((q) => q.isRequired)
+              .length,
+            completionPercentage:
+              visibleQuestions.length > 0
+                ? Math.round(
+                    ((visibleQuestions.length - missingRequired.length) /
+                      visibleQuestions.length) *
+                      100,
+                  )
+                : 0,
+          },
+          null,
+          2,
+        );
+      } catch (error) {
+        Logger.error('Error validating survey answers:', error);
+        return JSON.stringify({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        await providerManager.dispose();
+      }
+    },
+    {
+      name: 'validate_survey_answers',
+      description: `Validates current survey answers against the schema requirements.
+
+**Purpose:**
+- Check if all required fields are filled
+- Validate answer types and formats
+- Identify validation errors and warnings
+- Calculate completion percentage
+
+**Example:**
+\`\`\`json
+{
+  "blockId": "271fc5de-bcd8-4de0-8dd7-fb3dd5c13785"
+}
+\`\`\`
+
+**Returns:**
+\`\`\`json
+{
+  "success": true,
+  "valid": false,
+  "errors": [
+    {
+      "field": "schema:name",
+      "message": "Domain Name is required",
+      "type": "required"
+    },
+    {
+      "field": "schema:url",
+      "message": "URL must be a valid URL",
+      "type": "format"
+    }
+  ],
+  "warnings": [
+    {
+      "field": "unknown_field",
+      "message": "Answer for 'unknown_field' does not correspond to any question"
+    }
+  ],
+  "missingRequiredFields": ["schema:name", "schema.description"],
+  "answeredQuestions": 5,
+  "visibleQuestionsCount": 10,
+  "totalRequiredFields": 7,
+  "completionPercentage": 71
+}
+\`\`\`
+
+**Validation Types:**
+- required: Field is required but missing or empty
+- type: Answer type doesn't match expected type (e.g., boolean vs string)
+- choice: Answer value not in allowed choices (for dropdowns)
+- format: Answer format is invalid (e.g., invalid email or URL)
+
+**Note:** Only validates visible questions based on current answers and visibility conditions.`,
+      schema: z.object({
+        blockId: z
+          .string()
+          .describe('The ID of the domainCreator block to validate'),
+      }),
+    },
+  );
+
   // Return only read-only tool if readOnly mode is enabled
   if (readOnly) {
     return {
       listBlocksTool,
+      readBlockByIdTool,
+      readSurveyTool,
+      validateSurveyAnswersTool,
     };
   }
 
@@ -726,6 +1317,10 @@ The returned block includes the auto-generated UUID that you can use for future 
     listBlocksTool,
     editBlockTool,
     createBlockTool,
+    readBlockByIdTool,
+    readSurveyTool,
+    fillSurveyAnswersTool,
+    validateSurveyAnswersTool,
   };
 };
 

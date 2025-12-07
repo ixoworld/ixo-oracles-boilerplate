@@ -12,6 +12,7 @@ import * as Y from 'yjs';
 
 import type { AppConfig } from './config';
 import { MatrixProviderManager } from './provider';
+import { parseSurveyAnswers, parseSurveySchema } from './survey-helpers';
 
 // Re-export helpers from blockActions for consistency
 export { appendBlock, editBlock, type BlockSnapshot } from './block-actions';
@@ -167,28 +168,45 @@ function extractBlockDetail(
 export function extractBlockProperties(
   detail: BlockDetail,
 ): Record<string, any> {
-  const attrs = detail.attributes?.attrs as Record<string, any> | undefined;
+  const merged: Record<string, any> = {};
 
-  if (!attrs) {
-    return {};
+  // Special handling for domainCreator blocks: parse surveySchema and answers
+  // Check if this is a domainCreator block (either by blockType or by checking children)
+  const isDomainCreator =
+    detail.blockType === 'domainCreator' ||
+    detail.nodeName === 'domainCreator' ||
+    detail.children?.some((c) => c.nodeName === 'domainCreator');
+
+  if (isDomainCreator) {
+    // Check both direct attributes and props for surveySchema and answers
+    // Also check child element attributes (domainCreator is typically a child of blockContainer)
+    const directAttrs = detail.attributes || {};
+    const childAttrs =
+      detail.children?.find((c) => c.nodeName === 'domainCreator')
+        ?.attributes || {};
+
+    const surveySchemaString =
+      merged.surveySchema ||
+      directAttrs.surveySchema ||
+      childAttrs.surveySchema;
+
+    const answersString =
+      merged.answers || directAttrs.answers || childAttrs.answers;
+
+    if (typeof surveySchemaString === 'string') {
+      const parsedSchema = parseSurveySchema(surveySchemaString);
+      if (parsedSchema) {
+        merged.surveySchema = parsedSchema;
+      }
+    }
+
+    if (typeof answersString === 'string') {
+      const parsedAnswers = parseSurveyAnswers(answersString);
+      if (parsedAnswers && Object.keys(parsedAnswers).length > 0) {
+        merged.answers = parsedAnswers;
+      }
+    }
   }
-
-  // Priority: props (edit storage) > top-level attrs (old create storage)
-  const props = attrs.props as Record<string, any> | undefined;
-
-  // Merge top-level and props, with props taking priority
-  const merged = { ...attrs };
-  delete merged.props; // Remove the nested props object
-
-  if (props) {
-    Object.assign(merged, props);
-  }
-
-  // Clean up internal metadata that agents don't need
-  delete merged.id;
-  delete merged.type;
-  delete merged.textColor;
-  delete merged.backgroundColor;
 
   return merged;
 }
@@ -221,10 +239,12 @@ export function simplifyBlockForAgent(detail: BlockDetail): {
     blockType = detail.nodeName;
   }
 
+  const properties = extractBlockProperties(detail);
+
   return {
     id: detail.id,
     type: blockType,
-    properties: extractBlockProperties(detail),
+    properties,
     ...(detail.text && { text: detail.text }),
   };
 }
@@ -278,80 +298,4 @@ export function getBlockDetail(
   }
 
   return extractBlockDetail(blockContainer);
-}
-
-/**
- * Validate block type
- */
-export function isValidBlockType(blockType: string): boolean {
-  const validTypes = [
-    'paragraph',
-    'heading',
-    'proposal',
-    'checkbox',
-    'apiRequest',
-    'list',
-    'notification',
-    'proposalVote',
-    'bulletListItem',
-    'numberedListItem',
-  ];
-
-  return validTypes.includes(blockType);
-}
-
-/**
- * Get block type-specific default attributes
- */
-export function getDefaultAttributes(blockType: string): Record<string, any> {
-  const defaults: Record<string, Record<string, any>> = {
-    proposal: {
-      status: 'draft',
-      title: '',
-      description: '',
-      icon: 'square-check',
-      proposalId: '',
-      actions: '[]',
-      voteEnabled: false,
-      voteTitle: '',
-      voteSubtitle: '',
-      voteIcon: 'checklist',
-      daysLeft: 0,
-      proposalContractAddress: '',
-      coreAddress: '',
-      conditions: '',
-    },
-    checkbox: {
-      checked: false,
-      title: '',
-      description: '',
-      icon: 'square-check',
-      allowedCheckers: 'all',
-      initialChecked: false,
-      conditions: '',
-    },
-    apiRequest: {
-      title: '',
-      description: '',
-      endpoint: '',
-      method: 'GET',
-      headers: '[]',
-      body: '[]',
-      response: '',
-      status: 'idle',
-      conditions: '',
-    },
-    list: {
-      title: '',
-      did: '',
-      fragmentIdentifier: '',
-      conditions: '',
-    },
-    paragraph: {},
-    heading: {
-      level: 1,
-    },
-  };
-
-  return defaults[blockType] || {};
 }

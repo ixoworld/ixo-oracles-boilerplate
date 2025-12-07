@@ -9,6 +9,7 @@ import {
 import type { AppConfig, MatrixRoomConfig } from './config';
 import { EditorMatrixClient } from './editor-mx';
 import { editorAgentPrompt, editorAgentReadOnlyPrompt } from './prompts';
+import { Logger } from '@nestjs/common';
 
 const llm = getOpenRouterChatModel({
   model: 'openai/gpt-oss-120b:nitro',
@@ -76,11 +77,16 @@ const buildAppConfig = (
 type BlocknoteToolset =
   | {
       listBlocksTool: StructuredTool;
+      readBlockByIdTool: StructuredTool;
     }
   | {
       listBlocksTool: StructuredTool;
       editBlockTool: StructuredTool;
       createBlockTool: StructuredTool;
+    readBlockByIdTool: StructuredTool;
+    readSurveyTool: StructuredTool;
+    fillSurveyAnswersTool: StructuredTool;
+    validateSurveyAnswersTool: StructuredTool;
     };
 
 export type EditorAgentMode = 'edit' | 'readOnly';
@@ -100,7 +106,7 @@ const resolveTools = (
   toolset: BlocknoteToolset,
 ): StructuredTool[] => {
   if (mode === 'readOnly') {
-    return [toolset.listBlocksTool];
+    return [toolset.listBlocksTool, toolset.readBlockByIdTool];
   }
 
   const writableToolset = toolset as Extract<
@@ -109,6 +115,10 @@ const resolveTools = (
       listBlocksTool: StructuredTool;
       editBlockTool: StructuredTool;
       createBlockTool: StructuredTool;
+      readBlockByIdTool: StructuredTool;
+      readSurveyTool: StructuredTool;
+      fillSurveyAnswersTool: StructuredTool;
+      validateSurveyAnswersTool: StructuredTool;
     }
   >;
 
@@ -120,6 +130,10 @@ const resolveTools = (
     writableToolset.listBlocksTool,
     writableToolset.editBlockTool,
     writableToolset.createBlockTool,
+    writableToolset.readBlockByIdTool,
+    writableToolset.readSurveyTool,
+    writableToolset.fillSurveyAnswersTool,
+    writableToolset.validateSurveyAnswersTool,
   ];
 };
 
@@ -145,6 +159,8 @@ export const createEditorAgent = async ({
 
   const agentTools = resolveTools(mode, blocknoteTools);
 
+  Logger.log(`Created editor agent with Mode: ${mode}`);
+  Logger.log(`Tools: ${agentTools.map((t) => t.name).join(', ')}`);
   return {
     name,
     description,

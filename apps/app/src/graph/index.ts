@@ -51,7 +51,7 @@ export class MainAgentGraph {
       state: state,
       config: {
         ...runnableConfig,
-        recursionLimit: 50,
+        recursionLimit: 150,
         configurable: {
           ...runnableConfig.configurable,
           thread_id: runnableConfig.configurable.sessionId,
@@ -133,15 +133,15 @@ export class MainAgentGraph {
       editorRoomId,
       currentEntityDid,
       client: 'portal',
-      agActions,
       ...(initialUserContext ? { userContext: initialUserContext } : {}),
+      agActions,
     } satisfies Partial<TMainAgentGraphState>;
 
     const agent = await createMainAgent({
       state: state,
       config: {
         ...runnableConfig,
-        recursionLimit: 50,
+        recursionLimit: 150,
         configurable: {
           ...runnableConfig.configurable,
         },
@@ -175,7 +175,7 @@ export class MainAgentGraph {
         version: 'v2',
         ...runnableConfig,
         streamMode: 'messages',
-        recursionLimit: 50,
+        recursionLimit: 150,
         configurable: {
           ...runnableConfig.configurable,
         },
@@ -206,7 +206,7 @@ export class MainAgentGraph {
       } satisfies Partial<TMainAgentGraphState>,
       config: {
         ...config,
-        recursionLimit: 50,
+        recursionLimit: 150,
         configurable: {
           ...config.configurable,
         },
