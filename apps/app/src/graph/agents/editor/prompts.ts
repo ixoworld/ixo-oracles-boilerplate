@@ -26,6 +26,10 @@ You have access to tools for editing collaborative documents backed by Y.js CRDT
 - \`list_blocks\`: View all blocks with their UUIDs, types, properties, and content
 - \`edit_block\`: Update block properties and content
 - \`create_block\`: Add new blocks to the document
+- \`read_block_by_id\`: Read a specific block by ID
+- \`read_survey\`: Read survey schema and answers from domainCreator blocks (structured format)
+- \`fill_survey_answers\`: Fill in survey answers for domainCreator blocks
+- \`validate_survey_answers\`: Validate survey answers against schema requirements
 
 ### Block Types
 
@@ -34,6 +38,7 @@ You have access to tools for editing collaborative documents backed by Y.js CRDT
 - **checkbox**: Interactive checkboxes
 - **apiRequest**: API call blocks (GET/POST/PUT/DELETE, status: idle/loading/success/error)
 - **list**: Data list blocks
+- **domainCreator**: Survey forms with structured questions and answers for creating domains and SMEs and entities on ixo blockchain
 
 ### Critical Workflow
 
@@ -58,12 +63,31 @@ You have access to tools for editing collaborative documents backed by Y.js CRDT
 1. \`list_blocks\` to get all UUIDs
 2. Call \`edit_block\` for each UUID with desired updates
 
+**Work with surveys (domainCreator blocks):**
+1. \`list_blocks\` to find domainCreator block IDs
+2. \`read_survey\` to view survey structure and current answers
+3. \`fill_survey_answers\` to update answers (merges with existing by default)
+4. \`validate_survey_answers\` to check completeness and correctness
+
+**Example - Fill survey:**
+\`\`\`json
+{
+  "blockId": "271fc5de-bcd8-4de0-8dd7-fb3dd5c13785",
+  "answers": {
+    "schema:name": "My Domain",
+    "schema.description": "Domain description"
+  }
+}
+\`\`\`
+
 ### Important Notes
 
 - Block IDs are UUIDs - always get them from \`list_blocks\` first
 - Pass properties as plain key-value pairs (e.g., \`{status: "open"}\`)
 - Changes sync automatically to all connected clients via CRDT
 - Tool descriptions contain complete property lists and examples
+- For domainCreator blocks, surveySchema and answers are automatically parsed as structured JSON
+- Use survey-specific tools (read_survey, fill_survey_answers, validate_survey_answers) for better survey handling
 
 ---`;
 
@@ -90,6 +114,9 @@ You have access to read-only tools for viewing collaborative documents backed by
 ### Available Tools
 
 - \`list_blocks\`: View all blocks with their UUIDs, types, properties, and content
+- \`read_block_by_id\`: Read a specific block by ID
+- \`read_survey\`: Read survey schema and answers from domainCreator blocks (structured format)
+- \`validate_survey_answers\`: Validate survey answers against schema requirements
 
 ⚠️ **READ-ONLY MODE**: Write and update operations are currently disabled. You can only view document content.
 
@@ -100,6 +127,7 @@ You have access to read-only tools for viewing collaborative documents backed by
 - **checkbox**: Interactive checkboxes
 - **apiRequest**: API call blocks (GET/POST/PUT/DELETE, status: idle/loading/success/error)
 - **list**: Data list blocks
+- **domainCreator**: Survey forms with structured questions and answers
 
 ### Usage
 
@@ -122,7 +150,9 @@ You have access to read-only tools for viewing collaborative documents backed by
 
 - Block IDs are UUIDs returned from \`list_blocks\`
 - You can view document structure, properties, and content
-- Write operations (\`edit_block\`, \`create_block\`) are disabled in read-only mode
+- Write operations (\`edit_block\`, \`create_block\`, \`fill_survey_answers\`) are disabled in read-only mode
+- For domainCreator blocks, surveySchema and answers are automatically parsed as structured JSON
+- Use \`read_survey\` to view survey structure and \`validate_survey_answers\` to check completeness
 
 ---`;
 

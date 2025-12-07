@@ -41,6 +41,12 @@ export class SubscriptionMiddleware implements NestMiddleware {
   private checkCanContinue(
     subscription: GetMySubscriptionsResponseDto,
   ): boolean {
+    const shouldThrowOnInsufficientCredits = this.configService.get(
+      'THROW_ON_INSUFFICIENT_CREDITS',
+    );
+    if (!shouldThrowOnInsufficientCredits) {
+      return true;
+    }
     if (subscription.status !== 'active' && subscription.status !== 'trial') {
       throw new HttpException(
         'User has inactive subscription, please subscribe to continue',
@@ -84,7 +90,10 @@ export class SubscriptionMiddleware implements NestMiddleware {
         req.subscriptionData = cachedSubscription;
         this.checkCanContinue(cachedSubscription);
         await TokenLimiter.setSubscriptionPayload(did, cachedSubscription);
-        await TokenLimiter.overrideUserBalance(did, cachedSubscription.totalCredits);
+        await TokenLimiter.overrideUserBalance(
+          did,
+          cachedSubscription.totalCredits,
+        );
         next();
         return;
       }

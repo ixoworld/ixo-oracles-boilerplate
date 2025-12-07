@@ -7,20 +7,22 @@ import {
 import { IRunnableConfigWithRequiredFields } from '@ixo/matrix';
 import { SqliteSaver } from '@ixo/sqlite-saver';
 import { Logger } from '@nestjs/common';
-import { createDeepAgent } from 'deepagents';
+import { createDeepAgent, FilesystemBackend } from 'deepagents';
+import { toolRetryMiddleware } from 'langchain';
 import { createSafetyGuardrailMiddleware } from '../middlewares/safety-guardrail-middleware';
 import { createTokenLimiterMiddleware } from '../middlewares/token-limiter-middelware';
 import { createToolValidationMiddleware } from '../middlewares/tool-validation-middleware';
 import {
   AG_UI_TOOLS_DOCUMENTATION,
   AI_ASSISTANT_PROMPT,
+  DOMAIN_CREATION_WORKFLOW_CONTENT,
   SLACK_FORMATTING_CONSTRAINTS_CONTENT,
 } from '../nodes/chat-node/prompt';
 import { TMainAgentGraphState } from '../state';
 import { contextSchema } from '../types';
 import { createDomainIndexerAgent } from './domain-indexer-agent';
 import { createEditorAgent, EditorAgentInstance } from './editor/editor-agent';
-import { EDITOR_DOCUMENTATION_CONTENT_READ_ONLY } from './editor/prompts';
+import { EDITOR_DOCUMENTATION_CONTENT } from './editor/prompts';
 import { createFirecrawlAgent } from './firecrawl-agent';
 import { createMemoryAgent } from './memory-agent';
 import { createPortalAgent } from './portal-agent';
@@ -98,13 +100,16 @@ export const createMainAgent = async ({
       RECENT_CONTEXT: formatContextData(state.userContext?.recent),
       TIME_CONTEXT: timeContext,
       EDITOR_DOCUMENTATION: state.editorRoomId
-        ? EDITOR_DOCUMENTATION_CONTENT_READ_ONLY
+        ? EDITOR_DOCUMENTATION_CONTENT
         : '',
       CURRENT_ENTITY_DID: state.currentEntityDid ?? '',
       SLACK_FORMATTING_CONSTRAINTS:
         state.client === 'slack' ? SLACK_FORMATTING_CONSTRAINTS_CONTENT : '',
       AG_UI_TOOLS_DOCUMENTATION:
         agActionTools.length > 0 ? AG_UI_TOOLS_DOCUMENTATION : '',
+      DOMAIN_CREATION_WORKFLOW: state.editorRoomId
+        ? DOMAIN_CREATION_WORKFLOW_CONTENT
+        : '',
     }),
     createPortalAgent({
       tools:
@@ -135,7 +140,7 @@ export const createMainAgent = async ({
 
     blockNoteAgent = await createEditorAgent({
       room: state.editorRoomId,
-      mode: 'readOnly',
+      mode: 'edit',
     });
   }
 
@@ -153,6 +158,15 @@ export const createMainAgent = async ({
     fs.mkdirSync(dbFolder, { recursive: true });
   }
 
+  // create agent_folder
+  const agentFolder = path.join(
+    'agent_folders',
+    configurable?.configs?.user?.did,
+  );
+  if (fs.existsSync(agentFolder)) {
+    fs.mkdirSync(agentFolder, { recursive: true });
+  }
+
   const agent = createDeepAgent({
     model: llm,
     subagents: agents,
@@ -160,6 +174,7 @@ export const createMainAgent = async ({
     tools: [...mcpTools, ...agActionTools],
     middleware: [
       createToolValidationMiddleware(),
+      toolRetryMiddleware(),
       createSafetyGuardrailMiddleware(),
       createTokenLimiterMiddleware(),
     ],
@@ -169,6 +184,11 @@ export const createMainAgent = async ({
         configurable?.configs?.user?.did,
       ),
     ),
+    backend: new FilesystemBackend({
+      rootDir: agentFolder,
+      virtualMode: true,
+    }),
+
     name: 'Companion Agent',
   });
 

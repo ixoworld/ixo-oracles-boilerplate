@@ -2,7 +2,7 @@ import { GetMySubscriptionsResponseDto } from '@ixo/common';
 import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 import { Serialized } from '@langchain/core/load/serializable';
 import { LLMResult } from '@langchain/core/outputs';
-import { Logger } from '@nestjs/common';
+import { HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import crypto from 'node:crypto';
 import { ENV } from 'src/config';
@@ -161,14 +161,20 @@ export class TokenLimiter {
     // Validate for negative balance (indicates sync issue)
     if (newBalance < 0) {
       Logger.error(
-        `CRITICAL: Held amount (${heldAmount}) exceeds chain balance (${balance}) for user ${userDid}. ` +
-          `This indicates a sync issue between Redis and blockchain. Setting balance to 0 and flagging for review.`,
+        `CRITICAL: Held amount (${heldAmount}) exceeds chain balance (${balance}) for user ${userDid}. `,
       );
       // Set to 0 to prevent negative balance corruption
       await RedisService.getClient().set(
         TokenLimiter.getUserBalanceKey(userDid),
         '0',
       );
+
+      if (configService.getOrThrow('THROW_ON_INSUFFICIENT_CREDITS')) {
+        throw new HttpException(
+          `It looks like you have some usage pending that’s higher than your current balance (${balance / 1000}). Please add more credits to your account to continue. If you think this is a mistake, please contact support. (Held: ${heldAmount / 1000})`,
+          HttpStatus.PAYMENT_REQUIRED,
+        );
+      }
       return '0';
     }
 
@@ -229,6 +235,8 @@ export class TokenLimiter {
           `Insufficient balance. Current balance: ${balance}`,
           'token',
           credits,
+          undefined,
+          balance,
         );
       }
 
@@ -416,6 +424,7 @@ class TokenLimiterError extends Error {
   type: 'token' | 'request';
 
   limit?: number;
+  currentBalance?: number;
 
   reset?: number;
 
@@ -430,6 +439,7 @@ class TokenLimiterError extends Error {
     type: 'token' | 'request',
     limit?: number,
     reset?: number,
+    currentBalance?: number,
   ) {
     super(message);
     this.type = type;

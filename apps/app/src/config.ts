@@ -43,8 +43,6 @@ export const EnvSchema = z.object({
   SLACK_MAX_RECONNECT_ATTEMPTS: z.coerce.number().default(10),
   SLACK_RECONNECT_DELAY_MS: z.coerce.number().default(1000),
 
-  SQLITE_DATABASE_PATH: z.string(),
-
   // Matrix
   MATRIX_BASE_URL: z.string(),
   MATRIX_RECOVERY_PHRASE: z.string(),
@@ -67,7 +65,7 @@ export const EnvSchema = z.object({
   SUBSCRIPTION_ORACLE_MCP_URL: z.url().optional(),
   NETWORK: z.enum(['mainnet', 'testnet', 'devnet']),
   DATABASE_USE_SSL: z.string().default('false'),
-
+  SQLITE_DATABASE_PATH: z.string(),
   LIVE_AGENT_AUTH_API_KEY: z.string().optional().default(''),
   MEMORY_MCP_URL: z.url(),
   MEMORY_ENGINE_URL: z.url(),
@@ -77,10 +75,18 @@ export const EnvSchema = z.object({
   FIRECRAWL_MCP_URL: z.url(),
   DOMAIN_INDEXER_URL: z.url(),
   REDIS_URL: z.string(),
-
   SECP_MNEMONIC: z.string(),
   RPC_URL: z.string(),
+  MATRIX_VALUE_PIN: z.string(),
+  // convert string to boolean
+  THROW_ON_INSUFFICIENT_CREDITS: z.string().transform((val) => val === 'true'),
 });
+
+export const matrixAccountRoomId = {
+  mainnet: '!ekfOXRmXCdBkDaRDDr:mx.ixo.earth',
+  testnet: '!HLRUpfYhwoLYDSEVcX:testmx.ixo.earth',
+  devnet: '!RHtTYnmThqJKAPqYXR:devmx.ixo.earth',
+}[(process.env.NETWORK as keyof typeof matrixAccountRoomId) ?? 'devnet'];
 
 export type ENV = z.infer<typeof EnvSchema> & {
   ORACLE_DID: string;

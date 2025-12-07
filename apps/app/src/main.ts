@@ -1,19 +1,20 @@
 import { getSubscriptionUrlByNetwork } from '@ixo/common';
 import { MatrixManager } from '@ixo/matrix';
+import { setupClaimSigningMnemonics } from '@ixo/oracles-chain-client';
 import { INestApplication, Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { ENV, matrixAccountRoomId } from './config';
 import { EditorMatrixClient } from './graph/agents/editor/editor-mx';
 import { UserMatrixSqliteSyncService } from './user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
-
 async function bootstrap(): Promise<void> {
   // await migrate();
 
   const app = await NestFactory.create(AppModule);
-  const configService = app.get(ConfigService);
+  const configService = app.get(ConfigService<ENV>);
   const port = configService.get<number>('PORT', 3000); // Default to 3000 if PORT not set
 
   // Security Headers
@@ -100,12 +101,31 @@ async function bootstrap(): Promise<void> {
 
   registerGracefulShutdown({ app, matrixManager });
 
+  Logger.log('Setting up claim signing mnemonics...');
+  Logger.log(`Matrix account room id: ${matrixAccountRoomId}`);
+  const decryptedSigningMnemonic = await setupClaimSigningMnemonics({
+    matrixRoomId: matrixAccountRoomId,
+    matrixAccessToken: configService.getOrThrow(
+      'MATRIX_ORACLE_ADMIN_ACCESS_TOKEN',
+    ),
+    walletMnemonic: configService.getOrThrow('SECP_MNEMONIC'),
+    pin: configService.getOrThrow('MATRIX_VALUE_PIN'),
+    signerDid: configService.getOrThrow('ORACLE_DID'),
+    network: configService.getOrThrow('NETWORK'),
+  });
+  Logger.log('Claim signing mnemonics setup complete', {
+    decryptedSigningMnemonic,
+  });
+
   await app.listen(port);
   Logger.log(`Application is running on: ${await app.getUrl()}`);
   Logger.log(`Swagger UI available at: ${await app.getUrl()}/docs`);
   Logger.log(`Oracle: ${matrixManager.getClient()?.userId}`);
   Logger.log(
     `subscription: ${configService.get('SUBSCRIPTION_URL') ?? getSubscriptionUrlByNetwork(configService.getOrThrow('NETWORK'))}`,
+  );
+  Logger.log(
+    `Throw on insufficient credits: ${configService.get('THROW_ON_INSUFFICIENT_CREDITS')}. type: ${typeof configService.get('THROW_ON_INSUFFICIENT_CREDITS')}`,
   );
 }
 void bootstrap();

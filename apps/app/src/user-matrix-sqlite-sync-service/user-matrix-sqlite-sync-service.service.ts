@@ -20,6 +20,7 @@ import Database, { type Database as DatabaseType } from 'better-sqlite3';
 import path from 'path';
 import { ENV } from 'src/config';
 import {
+  deleteMediaFromRoom,
   getMediaFromRoom,
   getMediaFromRoomByStorageKey,
   GetMediaFromRoomByStorageKeyResult,
@@ -76,7 +77,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
 
   static createUserStorageKey(userDid: string): string {
     const key = `checkpoint_${userDid}_${configService.getOrThrow('ORACLE_DID')}`;
-    return createHash('sha256').update(key).digest('hex').substring(0, 12);
+    return createHash('sha256').update(key).digest('hex').substring(0, 17);
   }
 
   static getUserCheckpointDbPath(userDid: string): string {
@@ -301,10 +302,10 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
 
     const cachedEventText = this.fileEventsDatabase
       .prepare('SELECT event FROM file_events WHERE storage_key = ?')
-      .get(storageKey);
+      .get(storageKey) as { event: string } | undefined;
 
     const cachedEvent = cachedEventText
-      ? (JSON.parse(cachedEventText as string) as MatrixMediaEvent)
+      ? (JSON.parse(cachedEventText.event) as MatrixMediaEvent)
       : undefined;
     if (cachedEvent) {
       const result = await getMediaFromRoom(undefined, undefined, cachedEvent);
@@ -492,6 +493,101 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
         await this.uploadCheckpointToMatrixStorage({ userDid });
       }
     }
+  }
+
+  /**
+   * Deletes user storage from Matrix and cleans up local cache
+   * @param userDid The user DID
+   * @param storageKey Optional storage key. If not provided, uses the default user storage key
+   * @returns True if deletion was successful, false if not found
+   */
+  async deleteUserStorageFromMatrix(
+    userDid: string,
+    storageKey?: string,
+  ): Promise<boolean> {
+    const key =
+      storageKey || UserMatrixSqliteSyncService.createUserStorageKey(userDid);
+
+    Logger.debug(`Deleting storage for user ${userDid} with storageKey ${key}`);
+
+    // Get the user's Matrix room
+    const mxManager = MatrixManager.getInstance();
+    const { roomId } = await mxManager.getOracleRoomId({
+      userDid,
+      oracleEntityDid: configService.getOrThrow('ORACLE_ENTITY_DID'),
+    });
+
+    if (!roomId) {
+      Logger.warn(
+        `No Matrix room found for user ${userDid}, cannot delete storage`,
+      );
+      return false;
+    }
+
+    // Delete from Matrix
+    const deleted = await deleteMediaFromRoom(roomId, key);
+
+    if (deleted) {
+      // Clean up local cache
+      try {
+        // Delete from file events database
+        this.fileEventsDatabase
+          .prepare('DELETE FROM file_events WHERE storage_key = ?')
+          .run(key);
+        Logger.debug(
+          `Deleted file event cache for storageKey ${key} from database`,
+        );
+      } catch (error) {
+        Logger.warn(
+          `Failed to delete file event cache for storageKey ${key}:`,
+          error,
+        );
+      }
+
+      // Delete local file if it exists
+      try {
+        const dbPath =
+          UserMatrixSqliteSyncService.getUserCheckpointDbPath(userDid);
+        const exists = await fs
+          .access(dbPath)
+          .then(() => true)
+          .catch(() => false);
+
+        if (exists) {
+          await fs.unlink(dbPath);
+          Logger.debug(`Deleted local checkpoint file at ${dbPath}`);
+        }
+      } catch (error) {
+        Logger.warn(
+          `Failed to delete local checkpoint file for user ${userDid}:`,
+          error,
+        );
+      }
+
+      // Clear database connection cache
+      const cached = this.dbConnectionCache.get(userDid);
+      if (cached) {
+        try {
+          cached.db.close();
+          this.dbConnectionCache.delete(userDid);
+          Logger.debug(`Closed and cleared database connection for ${userDid}`);
+        } catch (error) {
+          Logger.warn(
+            `Failed to close database connection for ${userDid}:`,
+            error,
+          );
+        }
+      }
+
+      // Clear file path cache
+      this.filePathCache.delete(userDid);
+
+      Logger.log(
+        `Successfully deleted storage for user ${userDid} with storageKey ${key}`,
+      );
+    }
+
+    return deleted;
   }
 
   private async saveFileEventToDB({
