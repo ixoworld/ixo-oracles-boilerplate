@@ -165,7 +165,7 @@ export const createMainAgent = async ({
     'agent_folders',
     configurable?.configs?.user?.did,
   );
-  if (fs.existsSync(agentFolder)) {
+  if (!fs.existsSync(agentFolder)) {
     fs.mkdirSync(agentFolder, { recursive: true });
   }
 
