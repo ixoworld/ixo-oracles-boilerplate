@@ -712,7 +712,7 @@ ON writes(thread_id, checkpoint_id, channel);
             message.additional_kwargs,
             msgFromMatrixRoom ?? false,
           );
-    
+
           message.additional_kwargs = {
             ...cleanedAdditionalKwargs,
             reasoning:
@@ -785,20 +785,30 @@ ON writes(thread_id, checkpoint_id, channel);
       console.error('Missing thread_id field in config.configurable.', {
         configurable: config.configurable,
       });
-      
+
       // get thread id using the checkpoint_id
-      const threadId = this.db.prepare('SELECT thread_id FROM checkpoints WHERE checkpoint_id = ?').get(config.configurable?.checkpoint_id);
+      const threadId = this.db
+        .prepare('SELECT thread_id FROM checkpoints WHERE checkpoint_id = ?')
+        .get(config.configurable?.checkpoint_id) as
+        | { thread_id: string }
+        | undefined;
       if (!threadId) {
-        throw new Error('Missing thread_id field in config.configurable. config: ' + JSON.stringify(config.configurable));
+        throw new Error(
+          'Missing thread_id field in config.configurable. config: ' +
+            JSON.stringify(config.configurable),
+        );
       }
-      config.configurable.thread_id = threadId;
+      config.configurable.thread_id = threadId.thread_id;
     }
 
     if (!config.configurable?.checkpoint_id) {
       console.error('Missing checkpoint_id field in config.configurable.', {
         configurable: config.configurable,
       });
-      throw new Error('Missing checkpoint_id field in config.configurable. config: ' + JSON.stringify(config.configurable));
+      throw new Error(
+        'Missing checkpoint_id field in config.configurable. config: ' +
+          JSON.stringify(config.configurable),
+      );
     }
 
     const transaction = this.db.transaction((rows) => {
