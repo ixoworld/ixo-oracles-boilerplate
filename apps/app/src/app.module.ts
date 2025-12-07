@@ -98,9 +98,9 @@ import { WsModule } from './ws/ws.module';
   exports: [RedisService],
 })
 export class AppModule implements NestModule {
+  constructor(private readonly configService: ConfigService<ENV>) {}
   configure(consumer: MiddlewareConsumer) {
-    const configService = new ConfigService<ENV>();
-    const disableCredits = configService.get('DISABLE_CREDITS', false);
+    const disableCredits = this.configService.get('DISABLE_CREDITS', false);
     
     if (disableCredits) {
       Logger.log('Subscription middleware disabled (DISABLE_CREDITS=true)');
