@@ -133,7 +133,6 @@ async function bootstrap(): Promise<void> {
     `Throw on insufficient credits: ${configService.get('THROW_ON_INSUFFICIENT_CREDITS')}. type: ${typeof configService.get('THROW_ON_INSUFFICIENT_CREDITS')}`,
   );
 }
-void bootstrap();
 
 function registerGracefulShutdown({
   app,
@@ -225,3 +224,44 @@ function registerGracefulShutdown({
     process.once(signal, () => void gracefulShutdown(signal as NodeJS.Signals));
   });
 }
+
+
+// Handle unhandled promise rejections
+process.on(
+  'unhandledRejection',
+  (reason: unknown, promise: Promise<unknown>) => {
+    const context = 'UnhandledRejection';
+    Logger.error(
+      `Unhandled Promise Rejection: ${reason instanceof Error ? reason.message : String(reason)}`,
+      reason instanceof Error ? reason.stack : String(reason),
+      context,
+    );
+    // Log the promise for debugging (but don't log the full promise object as it may be circular)
+    Logger.error(`Promise: ${promise}`, context);
+    // Don't exit - let the server continue running, but log the error
+  },
+);
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error: Error) => {
+  const context = 'UncaughtException';
+  Logger.error(`Uncaught Exception: ${error.message}`, error.stack, context);
+  // For uncaught exceptions, we should exit gracefully
+  // But give it a moment to log and clean up
+  setTimeout(() => {
+    Logger.error('Exiting due to uncaught exception', context);
+    process.exit(1);
+  }, 1000);
+});
+
+// Wrap bootstrap in try-catch to handle initialization errors
+bootstrap().catch((error) => {
+  Logger.error(
+    'Failed to start application',
+    error instanceof Error ? error.stack : String(error),
+    'Bootstrap',
+  );
+  process.exit(1);
+});
+
+
