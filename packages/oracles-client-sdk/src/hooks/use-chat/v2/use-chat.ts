@@ -4,14 +4,12 @@ import {
   type MutableRefObject,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useSyncExternalStore,
 } from 'react';
 import { useOraclesContext } from '../../../providers/oracles-provider/oracles-context.js';
 import { RequestError } from '../../../utils/request.js';
 import {
-  type SSEActionCallEventData,
   type SSEErrorEvent,
   type SSEReasoningEventData,
   type SSEToolCallPayload,
@@ -78,13 +76,11 @@ export function useChat({
     oracleDid,
     overrides,
   );
-  const { config, isReady: isConfigReady } = useOraclesConfig(
-    oracleDid,
-    overrides,
-  );
-  const { authedRequest, executeAgAction, getAgActionRender, agActions } =
-    useOraclesContext();
-  const getApiUrl = () => overrides?.baseUrl ?? config.apiUrl;
+  const { config } = useOraclesConfig(oracleDid);
+  const { authedRequest } = useOraclesContext();
+  const { apiUrl: baseUrl } = config;
+  const { baseUrl: overridesUrl } = overrides ?? {};
+  const apiUrl = overridesUrl ?? baseUrl;
 
   // React Query for initial data fetch
   const {
@@ -98,13 +94,20 @@ export function useChat({
     queryFn: async () => {
       const result = await authedRequest<{
         messages: IMessage[];
-      }>(`${getApiUrl()}/messages/${sessionId}`, 'GET', {});
+      }>(`${apiUrl}/messages/${sessionId}`, 'GET', {});
 
-      // Don't transform here - return raw messages
-      // Transformation will happen in useEffect when agActions is available
-      return result.messages;
+      const transformedMessages = transformToMessagesMap({
+        messages: result.messages,
+        uiComponents,
+      });
+
+      // Convert map to array and set initial messages
+      const messagesArray = Object.values(transformedMessages);
+      await chatRef.current?.setInitialMessages(messagesArray);
+
+      return transformedMessages;
     },
-    enabled: Boolean(sessionId && getApiUrl()),
+    enabled: Boolean(sessionId && apiUrl),
     retry: false,
   });
 
@@ -113,41 +116,20 @@ export function useChat({
   }, [refetchMessages, refetchOracleSessions]);
 
   // Sync React Query data with OracleChat state when data changes
-  // Transform messages here when agActions is available
   useEffect(() => {
     if (data && chatRef.current && queryStatus === 'success') {
-      // Don't overwrite messages if we're currently streaming
-      const currentStatus = chatRef.current.status;
-      if (currentStatus === 'streaming' || currentStatus === 'submitted') {
-        return;
-      }
-
-      const transformedMessages = transformToMessagesMap({
-        messages: data,
-        uiComponents,
-        agActionNames: agActions.map((action) => action.name),
-      });
-
-      const messagesArray = Object.values(transformedMessages);
+      const messagesArray = Object.values(data);
       void chatRef.current.setInitialMessages(messagesArray);
     }
-  }, [data, queryStatus, agActions, uiComponents]);
+  }, [data, queryStatus]);
 
   // Handle tool call events from streaming
   const handleToolCall = useCallback(
-    async ({
-      toolCallData,
-      requestId,
-    }: {
-      toolCallData: SSEToolCallPayload;
-      requestId: string;
-    }) => {
+    async (toolCallData: SSEToolCallPayload) => {
       if (!uiComponents) return;
 
-      const eventId = toolCallData.eventId ?? requestId;
-
       const toolCallMessage: IMessage = {
-        id: `${requestId}-ToolCall-${eventId}`,
+        id: `${toolCallData.requestId}-ToolCall-${toolCallData.eventId}`,
         type: 'ai',
         content: resolveContent({
           eventName: 'tool_call',
@@ -155,7 +137,7 @@ export function useChat({
         }),
         toolCalls: [
           {
-            id: eventId,
+            id: toolCallData.eventId ?? toolCallData.requestId,
             name: toolCallData.toolName,
             args: toolCallData.args,
             status: toolCallData.status,
@@ -169,57 +151,13 @@ export function useChat({
     [uiComponents],
   );
 
-  // Handle AG-UI action call events from streaming (status updates only)
-  // Note: Render function is called in WebSocket handler immediately after execution
-  // SSE events only update the chat UI timeline with status changes
-  const handleActionCall = useCallback(
-    async ({
-      actionCallData,
-      requestId,
-    }: {
-      actionCallData: SSEActionCallEventData;
-      requestId: string;
-    }) => {
-      const eventId = actionCallData.toolCallId ?? requestId;
-
-      const actionCallMessage: IMessage = {
-        id: `${requestId}-ActionCall-${eventId}`,
-        type: 'ai',
-        content: resolveContent({
-          eventName: 'action_call',
-          payload: actionCallData as any,
-        }),
-        toolCalls: [
-          {
-            id: eventId,
-            name: actionCallData.toolName,
-            args: actionCallData.args, // May be undefined in SSE events (sent via WebSocket instead)
-            status: actionCallData.status,
-            output: actionCallData.output,
-            error: actionCallData.error,
-          },
-        ],
-      };
-
-      // Update chat UI with status change
-      await chatRef.current?.upsertEventMessage(actionCallMessage);
-    },
-    [],
-  );
-
   // Handle error events from streaming
   const handleError = useCallback(
-    async ({
-      error: errorData,
-      requestId,
-    }: {
-      error: SSEErrorEvent;
-      requestId: string;
-    }) => {
+    async (errorData: SSEErrorEvent) => {
       if (!uiComponents) return;
 
       const errorMessage: IMessage = {
-        id: `${requestId}-error`,
+        id: `${crypto.randomUUID()}-error`,
         type: 'ai',
         content: resolveContent({ eventName: 'error', payload: errorData }),
       };
@@ -258,7 +196,27 @@ export function useChat({
     [],
   );
 
-  // WebSocket events handling
+  // Send message functionality
+  const {
+    sendMessage,
+    abortStream,
+    isSending,
+    error: sendMessageError,
+  } = useSendMessage({
+    oracleDid,
+    sessionId,
+    overrides,
+    onPaymentRequiredError,
+    browserTools,
+    chatRef: chatRef as MutableRefObject<OracleChat>,
+    refetchQueries: revalidate,
+    onToolCall: handleToolCall, // NEW
+    onError: handleError, // NEW
+    onReasoning: handleReasoning,
+  });
+
+  // WebSocket events handling (keep your existing logic)
+
   const handleNewEvent = useCallback(
     (event: AnyEvent) => {
       if (!uiComponents) return;
@@ -293,44 +251,7 @@ export function useChat({
     [sessionId, uiComponents],
   );
 
-  // Handle new events from streaming or WebSocket
-  const {
-    sendMessage,
-    abortStream,
-    isSending,
-    error: sendMessageError,
-  } = useSendMessage({
-    oracleDid,
-    sessionId,
-    overrides,
-    onPaymentRequiredError,
-    browserTools,
-    chatRef: chatRef as MutableRefObject<OracleChat>,
-    refetchQueries: revalidate,
-    onToolCall: handleToolCall,
-    onActionCall: handleActionCall,
-    onError: handleError,
-    onReasoning: handleReasoning,
-  });
-
   // useLiveEvents removed - all events now come through streaming
-
-  // Build actionTools from registered AG-UI actions
-  const actionTools = useMemo(() => {
-    const tools: Record<string, any> = {};
-    agActions.forEach((action) => {
-      tools[action.name] = {
-        toolName: action.name,
-        description: action.description,
-        schema: action.parameters,
-        handler: async (args: any) => {
-          return await executeAgAction(action.name, args);
-        },
-        render: getAgActionRender(action.name),
-      };
-    });
-    return tools;
-  }, [agActions, executeAgAction, getAgActionRender]);
 
   const { isConnected: isWebSocketConnected } = useWebSocketEvents({
     oracleDid,
@@ -344,7 +265,6 @@ export function useChat({
       handleNewEvent(event as AnyEvent);
     },
     browserTools,
-    actionTools,
   });
 
   // Cleanup on unmount to ensure garbage collection
@@ -374,6 +294,5 @@ export function useChat({
     sendMessageError,
     isRealTimeConnected: isWebSocketConnected,
     status,
-    isConfigReady,
   };
 }

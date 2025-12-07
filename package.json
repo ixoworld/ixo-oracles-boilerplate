@@ -37,16 +37,18 @@
       "@typescript-eslint/eslint-plugin": "6.17.0",
       "@typescript-eslint/parser": "6.17.0",
       "ws": "8.18.2",
-      "@langchain/core": "1.0.0-alpha.6",
-      "@langchain/langgraph": "1.0.0-alpha.5"
+      "@langchain/core": "^1.0.5",
+      "@langchain/langgraph": "^1.0.2",
+      "@digitalbazaar/http-client": "4.2.0"
     },
     "onlyBuiltDependencies": [
-      "@matrix-org/matrix-sdk-crypto-nodejs",
       "@nestjs/core",
+      "@matrix-org/matrix-sdk-crypto-nodejs",
       "@scarf/scarf",
       "@swc/core",
       "better-sqlite3",
       "cpu-features",
+      "@veramo/credential-ld",
       "esbuild",
       "msgpackr-extract",
       "protobufjs",
@@ -54,6 +56,9 @@
       "sharp",
       "ssh2",
       "unrs-resolver"
-    ]
+    ],
+    "patchedDependencies": {
+      "@veramo/credential-ld@6.0.0": "patches/@veramo__credential-ld@6.0.0.patch"
+    }
   }
 }

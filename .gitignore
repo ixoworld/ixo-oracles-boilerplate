@@ -6,7 +6,9 @@ node_modules
 .pnp.js
 
 # Local env files
-.env
+.env.*
+.env.main
+.env.testnet
 .env.local
 .env.development.local
 .env.test.local

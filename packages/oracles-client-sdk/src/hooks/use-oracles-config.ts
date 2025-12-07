@@ -26,7 +26,7 @@ export const useOraclesConfig = (
     },
   });
 
-  const { data: authConfig, isLoading: isLoadingAuthConfig } = useQuery({
+  const { data: authConfig } = useQuery({
     queryKey: ['oracles-config', oracleId, 'authConfig'],
     queryFn: () =>
       Authz.getOracleAuthZConfig({
@@ -80,20 +80,12 @@ export const useOraclesConfig = (
     }
   }, [data?.service]);
 
-  // Config is ready when we have an API URL AND queries are not loading
-  const isReady = useMemo(() => {
-    const hasUrl = Boolean(overrides?.baseUrl || apiUrl);
-    const notLoading = !isLoading && !isLoadingAuthConfig;
-    return hasUrl && notLoading;
-  }, [overrides?.baseUrl, apiUrl, isLoading, isLoadingAuthConfig]);
-
   return {
     config: {
       authConfig,
       apiUrl,
       socketUrl,
     },
-    isLoading: isLoading || isLoadingAuthConfig,
-    isReady,
+    isLoading,
   };
 };

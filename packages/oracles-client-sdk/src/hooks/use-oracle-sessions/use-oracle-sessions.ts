@@ -21,13 +21,9 @@ export const useOracleSessions = (
   const queryClient = useQueryClient();
   const { authedRequest } = useOraclesContext();
 
-  const { config, isReady: isConfigReady } = useOraclesConfig(
-    oracleDid,
-    overrides,
-  );
+  const { config } = useOraclesConfig(oracleDid);
 
-  const getApiUrl = () => overrides?.baseUrl ?? config.apiUrl ?? '';
-
+  const apiUrl = overrides?.baseUrl ?? config.apiUrl ?? '';
   const limit = overrides?.limit ?? 20;
 
   const {
@@ -54,7 +50,7 @@ export const useOracleSessions = (
       const params = new URLSearchParams();
       params.set('limit', limit.toString());
       params.set('offset', offset.toString());
-      const url = `${getApiUrl()}/sessions?${params.toString()}`;
+      const url = `${apiUrl}/sessions?${params.toString()}`;
       return authedRequest<{ sessions: IChatSession[]; total?: number }>(
         url,
         'GET',
@@ -91,15 +87,8 @@ export const useOracleSessions = (
     isPending: isCreatingSession,
     isError: isCreateSessionError,
   } = useMutation({
-    mutationFn: () => {
-      const apiUrl = getApiUrl();
-      if (!apiUrl) {
-        throw new Error(
-          'API URL is not ready. Please wait for oracle config to load.',
-        );
-      }
-      return authedRequest<IChatSession>(`${apiUrl}/sessions`, 'POST', {});
-    },
+    mutationFn: () =>
+      authedRequest<IChatSession>(`${apiUrl}/sessions`, 'POST', {}),
     onSettled: async () => {
       // Invalidate and refetch to get the new session
       await queryClient.invalidateQueries({
@@ -113,19 +102,8 @@ export const useOracleSessions = (
     isPending: isDeletingSession,
     isError: isDeleteSessionError,
   } = useMutation({
-    mutationFn: (sessionId: string) => {
-      const apiUrl = getApiUrl();
-      if (!apiUrl) {
-        throw new Error(
-          'API URL is not ready. Please wait for oracle config to load.',
-        );
-      }
-      return authedRequest<void>(
-        `${apiUrl}/sessions/${sessionId}`,
-        'DELETE',
-        {},
-      );
-    },
+    mutationFn: (sessionId: string) =>
+      authedRequest<void>(`${apiUrl}/sessions/${sessionId}`, 'DELETE', {}),
     onSettled: async () => {
       // Invalidate and refetch to remove the deleted session
       await queryClient.invalidateQueries({
@@ -151,6 +129,5 @@ export const useOracleSessions = (
     isDeletingSession,
     isDeleteSessionError,
     refetch,
-    isConfigReady,
   };
 };

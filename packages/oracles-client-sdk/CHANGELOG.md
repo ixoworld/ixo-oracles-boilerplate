@@ -1,5 +1,30 @@
 # @ixo/oracles-client-sdk
 
+## 1.0.11
+
+### Patch Changes
+
+- [`c643779`](https://github.com/ixoworld/companion/commit/c6437794acd28c833074763449502daf61e40a4c) Thanks [@youssefhany-ixo](https://github.com/youssefhany-ixo)! - matrix fix
+
+- Updated dependencies [[`c643779`](https://github.com/ixoworld/companion/commit/c6437794acd28c833074763449502daf61e40a4c)]:
+  - @ixo/oracles-chain-client@1.1.3
+
+## 1.0.10
+
+### Patch Changes
+
+- [`b5799ee`](https://github.com/ixoworld/companion/commit/b5799ee19a0957ad38e2374ae18e11278295a1ab) Thanks [@youssefhany-ixo](https://github.com/youssefhany-ixo)! - Fix testnet signed mnemonics
+
+- Updated dependencies [[`b5799ee`](https://github.com/ixoworld/companion/commit/b5799ee19a0957ad38e2374ae18e11278295a1ab)]:
+  - @ixo/oracles-chain-client@1.1.2
+
+## 1.0.9
+
+### Patch Changes
+
+- Updated dependencies [[`3117e8d`](https://github.com/ixoworld/companion/commit/3117e8d2f753811511de4eda8e99b18c3888e083)]:
+  - @ixo/oracles-chain-client@1.1.1
+
 ## 0.2.0
 
 ### Minor Changes
@@ -9,7 +34,6 @@
   This major release introduces **Live Agent Mode** - enabling real-time voice and video conversations with AI oracles through ultra-secure, end-to-end encrypted calls.
 
   ## ✨ Key Features
-
   - **Double Encryption Security**: Asymmetric key encryption + Matrix E2EE for maximum security
   - **Real-time Communication**: LiveKit integration for professional-grade WebRTC infrastructure
   - **Frontend-Controlled Keys**: True E2EE with user-generated encryption keys
@@ -17,28 +41,24 @@
   - **Per-Call Key Rotation**: Unique encryption keys for each call session
 
   ## 🏗️ New Components
-
   - `useLiveAgent` hook for voice chat integration
   - `useLiveKitAgent` for E2EE connection management
   - Complete call lifecycle with state validation
   - Enhanced Matrix integration for encrypted events
 
   ## 🛡️ Security Enhancements
-
   - ECIES-based encryption/decryption utilities
   - Cryptographically secure key generation
   - Live Agent authentication via API keys
   - Enhanced wallet generation with public key encoding
 
   ## 📡 New API Endpoints
-
   - `POST /calls/:callId/sync` - Sync call state from Matrix event
   - `GET /calls/:callId/key` - Get encrypted key for Live Agent
   - `PATCH /calls/:callId/update` - Update call status with validation
   - `GET /calls/session/:sessionId` - List user's call history
 
   ## ⚠️ Breaking Changes
-
   - **Backend only**: New environment variables required in your backend configuration:
     - `LIVE_AGENT_AUTH_API_KEY` - Authentication for Live Agent
     - `MEMORY_MCP_URL` - Memory management service URL
@@ -46,7 +66,6 @@
   - Updated dependencies for LiveKit and enhanced Matrix client
 
   ## 📚 Documentation
-
   - [Live Agent Architecture](./docs/architecture/calls.md) - Complete technical documentation
   - [Crypto Utilities](./packages/oracles-chain-client/docs/crypto.md) - Encryption implementation details
 

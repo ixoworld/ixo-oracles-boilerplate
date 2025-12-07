@@ -17,9 +17,10 @@ Complete guide to handling tool calls and implementing browser-side tools.
 
 Tool calls allow the AI oracle to invoke functions and display rich, interactive results.
 
-### Three Types of Tools
+### Two Types of Tools
 
 1. **Server-side Tools** - Run on the oracle backend
+
    - Web search, database queries, API calls
    - Results sent via events/WebSocket
    - Displayed using UI components
@@ -28,13 +29,6 @@ Tool calls allow the AI oracle to invoke functions and display rich, interactive
    - Access user's location, camera, local storage
    - Run immediately without server roundtrip
    - Results sent back to oracle
-
-3. **AG-UI Actions** - Dynamic UI generation tools
-   - Run in the user's browser
-   - Orchestrated by the AI oracle
-   - Have both handler (logic) and render (UI) functions
-   - Can maintain state across operations
-   - See [AG-UI Tools Guide](./AG_UI_TOOLS.md) for complete documentation
 
 ---
 
@@ -563,6 +557,5 @@ const browserTools = {
 
 ## Next Steps
 
-- [AG-UI Tools Guide](./AG_UI_TOOLS.md) - Dynamic UI generation with AG-UI actions
 - [Usage Guide](./USAGE_GUIDE.md) - General SDK usage
 - [API Reference](./API_REFERENCE.md) - Complete API docs

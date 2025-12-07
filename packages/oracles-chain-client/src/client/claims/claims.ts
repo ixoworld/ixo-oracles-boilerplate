@@ -1,8 +1,12 @@
 import { Coin } from '@cosmjs/proto-signing';
 import { cosmos, ixo } from '@ixo/impactxclient-sdk';
+import { ICreateVerifiableCredentialArgs } from '@veramo/core';
+import { MatrixBotService } from 'src/matrix-bot/matrix-bot.service.js';
+import { setupClaimSigningMnemonics } from 'src/matrix-bot/setup-claim-signing-mnemonics.js';
 import { gqlClient } from '../../gql/index.js';
 import { ValidationError } from '../../utils/validation-error.js';
 import { walletClient } from '../client.js';
+import { createCredential, createVeramoAgent } from '../create-credentials.js';
 import { Entities } from '../entities/entity.js';
 
 export class Claims {
@@ -125,6 +129,85 @@ export class Claims {
     const claim = await gqlClient.ClaimById({ claimId });
     return claim;
   }
+
+  public async saveSignedClaimToMatrix({
+    claim,
+    collectionId,
+    accessToken,
+    matrixRoomId,
+    secpMnemonic,
+    matrixValuePin,
+    oracleDid,
+    network,
+  }: SubmitAndSaveSignedClaimParams) {
+    const credentialArgs: ICreateVerifiableCredentialArgs = {
+      credential: {
+        '@context': ['https://www.w3.org/2018/credentials/v1'],
+        type: ['VerifiableCredential'],
+        credentialSubject: claim.body,
+        issuer: '', // This will be set by the createCredential function
+      },
+      proofFormat: 'lds',
+    };
+    const matrixBotService = new MatrixBotService(accessToken);
+    const decryptedSigningMnemonic = await setupClaimSigningMnemonics({
+      matrixRoomId,
+      matrixAccessToken: accessToken,
+      walletMnemonic: secpMnemonic,
+      pin: matrixValuePin,
+      signerDid: oracleDid,
+      network,
+    });
+
+    const agent = await createVeramoAgent(network);
+    if (!agent || !agent.verifyCredential) {
+      throw new Error('Agent not found');
+    }
+
+    const claimCredentials = await createCredential({
+      credential: credentialArgs,
+      mnemonic: decryptedSigningMnemonic,
+      issuerDid: oracleDid,
+      agent,
+    });
+
+    // Verify the credential
+    const verificationResult = await agent.verifyCredential({
+      credential: claimCredentials,
+    });
+
+    if (!verificationResult?.verified)
+      throw new Error('Claim verification failed');
+
+    await matrixBotService.sourceRoomAndJoin(oracleDid);
+
+    if (!collectionId) {
+      throw new ValidationError('Collection ID not found');
+    }
+
+    const {
+      data: { cid },
+    } = await matrixBotService.saveClaimToMatrix(collectionId, {
+      ...claim.body,
+      credentials: claimCredentials,
+    });
+
+    return cid;
+  }
 }
+
+type SubmitAndSaveSignedClaimParams = {
+  claim: {
+    body: object;
+    amount: Coin[];
+  };
+  accessToken: string;
+  matrixRoomId: string;
+  secpMnemonic: string;
+  collectionId: string;
+  matrixValuePin: string;
+  oracleDid: string;
+  network: 'devnet' | 'testnet' | 'mainnet';
+};
 
 export const claimsClient = Claims.getInstance();

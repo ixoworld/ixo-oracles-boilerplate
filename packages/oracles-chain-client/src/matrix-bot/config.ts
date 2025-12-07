@@ -2,9 +2,10 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-export const chainNetwork: 'devnet' | 'testnet' | 'mainnet' = process.env
-  .CHAIN_NETWORK as 'devnet' | 'testnet' | 'mainnet' ??
+export const chainNetwork: 'devnet' | 'testnet' | 'mainnet' =
+  (process.env.CHAIN_NETWORK as 'devnet' | 'testnet' | 'mainnet') ??
   (process.env.NEXT_PUBLIC_CHAIN_NETWORK as 'devnet' | 'testnet' | 'mainnet') ??
+  (process.env.NETWORK as 'devnet' | 'testnet' | 'mainnet') ??
   'devnet';
 if (!chainNetwork) {
   throw new Error('CHAIN_NETWORK is not set: ' + process.env.CHAIN_NETWORK);
@@ -44,3 +45,11 @@ export const MatrixHomeServerUrlCroppedByNetwork =
   MatrixHomeServerUrlCropped[chainNetwork];
 export const MatrixRoomBotServerUrlByNetwork =
   MatrixRoomBotServerUrl[chainNetwork];
+
+const MatrixClaimBotServerUrl: Record<typeof chainNetwork, string> = {
+  devnet: 'https://claim.bot.devmx.ixo.earth',
+  testnet: 'https://claim.bot.testmx.ixo.earth',
+  mainnet: 'https://claim.bot.mx.ixo.earth',
+};
+export const getMatrixClaimBotServerUrlByNetwork = () =>
+  MatrixClaimBotServerUrl[chainNetwork];

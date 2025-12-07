@@ -5,13 +5,45 @@ import {
   type CheckpointListOptions,
   type CheckpointMetadata,
   type CheckpointTuple,
+  copyCheckpoint,
+  maxChannelVersion,
   type PendingWrite,
   type SerializerProtocol,
   TASKS,
-  copyCheckpoint,
-  maxChannelVersion,
 } from '@langchain/langgraph-checkpoint';
 import Database, { Database as DatabaseType, Statement } from 'better-sqlite3';
+import { BaseMessage } from 'langchain';
+import migration001 from './migrations/001_add_created_at_to_messages';
+import {
+  _default,
+  CleanAdditionalKwargs,
+  cleanAdditionalKwargs,
+  stringify,
+} from './utils';
+
+type ChannelValues<C extends string = string> = {
+  [key in C]: unknown;
+};
+
+interface CheckpointWithMessages<
+  N extends string = string,
+  C extends string = string,
+> extends Checkpoint<N, C> {
+  channel_values: ChannelValues<C> & {
+    messages?: BaseMessage[];
+  };
+}
+
+interface MessageRow {
+  thread_id: string;
+  checkpoint_ns: string;
+  checkpoint_id: string;
+  message_id: string;
+  message_type: string;
+  message_content: string;
+  message: string;
+  created_at: string;
+}
 
 interface CheckpointRow {
   checkpoint: string;
@@ -34,6 +66,12 @@ interface PendingWriteColumn {
 interface PendingSendColumn {
   type: string;
   value: string;
+}
+
+interface Migration {
+  version: number;
+  name: string;
+  up: (db: DatabaseType) => void;
 }
 
 // In the `SqliteSaver.list` method, we need to sanitize the `options.filter` argument to ensure it only contains keys
@@ -127,6 +165,9 @@ export class SqliteSaver extends BaseCheckpointSaver {
   protected putWritesStmt: Statement;
 
   protected deleteCheckpointsStmt: Statement;
+  protected putMessageStmt: Statement;
+
+  protected getMessageStmt: Statement;
 
   protected deleteWritesStmt: Statement;
 
@@ -140,11 +181,111 @@ export class SqliteSaver extends BaseCheckpointSaver {
     return new SqliteSaver(new Database(connStringOrLocalPath));
   }
 
+  /**
+   * Create schema_migrations table to track applied migrations
+   */
+  protected createSchemaMigrationsTable(): void {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        version INTEGER NOT NULL PRIMARY KEY,
+        name TEXT NOT NULL,
+        applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+  }
+
+  /**
+   * Get list of applied migration versions
+   */
+  protected getAppliedMigrations(): number[] {
+    try {
+      const rows = this.db
+        .prepare('SELECT version FROM schema_migrations ORDER BY version')
+        .all() as Array<{ version: number }>;
+      return rows.map((row) => row.version);
+    } catch {
+      // Table doesn't exist yet, return empty array
+      return [];
+    }
+  }
+
+  /**
+   * Record that a migration has been applied
+   */
+  protected recordMigration(migration: Migration): void {
+    this.db
+      .prepare(
+        'INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, CURRENT_TIMESTAMP)',
+      )
+      .run(migration.version, migration.name);
+  }
+
+  /**
+   * Load all migration files from the migrations folder
+   *
+   * Note: When adding new migrations:
+   * 1. Import them at the top of this file
+   * 2. Add them to the migrations array below
+   */
+  protected loadMigrations(): Migration[] {
+    const migrations: Migration[] = [
+      migration001,
+      // Add future migrations here:
+      // migration002,
+      // migration003,
+    ];
+
+    // Sort by version to ensure correct order
+    migrations.sort((a, b) => a.version - b.version);
+
+    return migrations;
+  }
+
+  /**
+   * Run pending migrations
+   */
+  protected runMigrations(): void {
+    this.createSchemaMigrationsTable();
+
+    const appliedVersions = this.getAppliedMigrations();
+    const allMigrations = this.loadMigrations();
+
+    const pendingMigrations = allMigrations.filter(
+      (migration) => !appliedVersions.includes(migration.version),
+    );
+
+    if (pendingMigrations.length === 0) {
+      return;
+    }
+
+    console.log(`Running ${pendingMigrations.length} pending migration(s)...`);
+
+    for (const migration of pendingMigrations) {
+      try {
+        console.log(
+          `Applying migration ${migration.version}: ${migration.name}`,
+        );
+        migration.up(this.db);
+        this.recordMigration(migration);
+        console.log(
+          `✓ Migration ${migration.version}: ${migration.name} applied successfully`,
+        );
+      } catch (error) {
+        console.error(
+          `✗ Failed to apply migration ${migration.version}: ${migration.name}`,
+          error,
+        );
+        throw error;
+      }
+    }
+  }
+
   protected setup(): void {
     if (this.isSetup) {
       return;
     }
 
+    // Create base tables
     this.db.exec(`
 CREATE TABLE IF NOT EXISTS checkpoints (
   thread_id TEXT NOT NULL,
@@ -169,6 +310,47 @@ CREATE TABLE IF NOT EXISTS writes (
   PRIMARY KEY (thread_id, checkpoint_ns, checkpoint_id, task_id, idx)
 );`);
 
+    // Create messages table
+    // For new databases, created_at is included
+    // For existing databases, the migration will add it if missing
+    this.db.exec(`
+CREATE TABLE IF NOT EXISTS messages (
+  thread_id TEXT NOT NULL,
+  checkpoint_ns TEXT NOT NULL DEFAULT '',
+  checkpoint_id TEXT NOT NULL,
+  message_id TEXT NOT NULL,
+  message_type TEXT NOT NULL,
+  message_content TEXT NOT NULL,
+  message BLOB,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY  (message_id)
+    );
+`);
+
+    // Create schema_migrations table and run migrations
+    this.runMigrations();
+
+    // Create indexes (after migrations have run)
+    this.db.exec(`
+CREATE INDEX IF NOT EXISTS idx_messages_thread_id 
+ON messages(thread_id);
+`);
+    this.db.exec(`
+CREATE INDEX IF NOT EXISTS idx_messages_checkpoint_id 
+ON messages(checkpoint_id);
+`);
+
+    this.db.exec(`
+CREATE INDEX IF NOT EXISTS idx_messages_lookup 
+ON messages(thread_id, checkpoint_ns, checkpoint_id);
+`);
+
+    // Create index on created_at (migration ensures column exists)
+    this.db.exec(`
+CREATE INDEX IF NOT EXISTS idx_messages_thread_created 
+ON messages(thread_id, created_at);
+`);
+
     this.db.exec(`
 CREATE INDEX IF NOT EXISTS idx_writes_channel 
 ON writes(thread_id, checkpoint_id, channel);
@@ -191,6 +373,14 @@ ON writes(thread_id, checkpoint_id, channel);
     );
     this.deleteWritesStmt = this.db.prepare(
       `DELETE FROM writes WHERE thread_id = ?`,
+    );
+
+    this.putMessageStmt = this.db.prepare(
+      `INSERT OR REPLACE INTO messages (thread_id, checkpoint_ns, checkpoint_id, message_id, message_type, message_content, message, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+
+    this.getMessageStmt = this.db.prepare(
+      `SELECT * FROM messages WHERE thread_id = ? AND checkpoint_ns = ? AND checkpoint_id = ?`,
     );
 
     this.isSetup = true;
@@ -230,6 +420,12 @@ ON writes(thread_id, checkpoint_id, channel);
       throw new Error('Missing thread_id or checkpoint_id');
     }
 
+    const messages = this.getMessageStmt.all(
+      finalConfig.configurable?.thread_id,
+      finalConfig.configurable?.checkpoint_ns,
+      finalConfig.configurable?.checkpoint_id,
+    ) as MessageRow[];
+
     const pendingWrites = await Promise.all(
       (JSON.parse(row.pending_writes) as PendingWriteColumn[]).map(
         async (write) => {
@@ -245,10 +441,20 @@ ON writes(thread_id, checkpoint_id, channel);
       ),
     );
 
+    const parsedMessages: BaseMessage[] = await Promise.all(
+      messages.map(async (message) => {
+        return this.serde.loadsTyped('json', message.message);
+      }),
+    );
+
     const checkpoint = (await this.serde.loadsTyped(
       row.type ?? 'json',
       row.checkpoint,
     )) as Checkpoint;
+
+    if (parsedMessages.length > 0) {
+      checkpoint.channel_values.messages = parsedMessages;
+    }
 
     if (checkpoint.v < 4 && row.parent_checkpoint_id != null) {
       await this.migratePendingSends(
@@ -394,10 +600,25 @@ ON writes(thread_id, checkpoint_id, channel);
           ),
         );
 
+        const messages = this.getMessageStmt.all(
+          row.thread_id,
+          row.checkpoint_ns,
+          row.checkpoint_id,
+        ) as MessageRow[];
+        const parsedMessages: BaseMessage[] = await Promise.all(
+          messages.map(async (message) => {
+            return this.serde.loadsTyped('json', message.message);
+          }),
+        );
+
         const checkpoint = (await this.serde.loadsTyped(
           row.type ?? 'json',
           row.checkpoint,
         )) as Checkpoint;
+
+        if (parsedMessages.length > 0) {
+          checkpoint.channel_values.messages = parsedMessages;
+        }
 
         if (checkpoint.v < 4 && row.parent_checkpoint_id != null) {
           await this.migratePendingSends(
@@ -437,7 +658,7 @@ ON writes(thread_id, checkpoint_id, channel);
 
   async put(
     config: RunnableConfig,
-    checkpoint: Checkpoint,
+    _checkpoint: Checkpoint,
     metadata: CheckpointMetadata,
   ): Promise<RunnableConfig> {
     this.setup();
@@ -456,11 +677,11 @@ ON writes(thread_id, checkpoint_id, channel);
       );
     }
 
-    const preparedCheckpoint: Partial<Checkpoint> = copyCheckpoint(checkpoint);
+    const { checkpoint, messages } = removeMessagesFromCheckpoint(_checkpoint);
 
     const [[type1, serializedCheckpoint], [type2, serializedMetadata]] =
       await Promise.all([
-        this.serde.dumpsTyped(preparedCheckpoint),
+        this.serde.dumpsTyped(checkpoint),
         this.serde.dumpsTyped(metadata),
       ]);
 
@@ -481,6 +702,62 @@ ON writes(thread_id, checkpoint_id, channel);
 
     const transaction = this.db.transaction(() => {
       this.putCheckpointStmt.run(...row);
+      if (messages) {
+        for (const message of messages) {
+          const encoder = new TextEncoder();
+          const msgFromMatrixRoom = message.additional_kwargs
+            .msgFromMatrixRoom as boolean;
+          const _additionalKwargs = message.additional_kwargs;
+          const cleanedAdditionalKwargs = cleanAdditionalKwargs(
+            message.additional_kwargs,
+            msgFromMatrixRoom ?? false,
+          );
+    
+          message.additional_kwargs = {
+            ...cleanedAdditionalKwargs,
+            reasoning:
+              cleanedAdditionalKwargs.reasoning ?? _additionalKwargs.reasoning,
+            reasoningDetails:
+              cleanedAdditionalKwargs.reasoningDetails ??
+              _additionalKwargs.reasoningDetails,
+          };
+
+          if (message.type !== 'ai') {
+            delete message.additional_kwargs.reasoning;
+            delete message.additional_kwargs.reasoningDetails;
+          }
+
+          const serializedMessage = encoder.encode(
+            stringify(message, (_: string, value: any) => {
+              return _default(value);
+            }),
+          );
+
+          const messageRow: MessageRow = {
+            thread_id,
+            checkpoint_ns,
+            checkpoint_id: checkpoint.id,
+            message_id: message.id ?? message.lc_kwargs?.id,
+            message_type: message.type,
+            message_content: message.content.toString(),
+            message: serializedMessage as unknown as string,
+            created_at:
+              (message.additional_kwargs as CleanAdditionalKwargs)?.timestamp ??
+              new Date().toISOString(),
+          };
+
+          this.putMessageStmt.run(
+            messageRow.thread_id,
+            messageRow.checkpoint_ns,
+            messageRow.checkpoint_id,
+            messageRow.message_id,
+            messageRow.message_type,
+            messageRow.message_content,
+            messageRow.message,
+            messageRow.created_at,
+          );
+        }
+      }
     });
     transaction();
 
@@ -505,11 +782,23 @@ ON writes(thread_id, checkpoint_id, channel);
     }
 
     if (!config.configurable?.thread_id) {
-      throw new Error('Missing thread_id field in config.configurable.');
+      console.error('Missing thread_id field in config.configurable.', {
+        configurable: config.configurable,
+      });
+      
+      // get thread id using the checkpoint_id
+      const threadId = this.db.prepare('SELECT thread_id FROM checkpoints WHERE checkpoint_id = ?').get(config.configurable?.checkpoint_id);
+      if (!threadId) {
+        throw new Error('Missing thread_id field in config.configurable. config: ' + JSON.stringify(config.configurable));
+      }
+      config.configurable.thread_id = threadId;
     }
 
     if (!config.configurable?.checkpoint_id) {
-      throw new Error('Missing checkpoint_id field in config.configurable.');
+      console.error('Missing checkpoint_id field in config.configurable.', {
+        configurable: config.configurable,
+      });
+      throw new Error('Missing checkpoint_id field in config.configurable. config: ' + JSON.stringify(config.configurable));
     }
 
     const transaction = this.db.transaction((rows) => {
@@ -588,3 +877,29 @@ ON writes(thread_id, checkpoint_id, channel);
         : this.getNextVersion(undefined);
   }
 }
+
+const isCheckpointWithMessages = (
+  checkpoint: Checkpoint,
+): checkpoint is CheckpointWithMessages => {
+  return 'messages' in checkpoint.channel_values;
+};
+
+const removeMessagesFromCheckpoint = (
+  checkpoint: Checkpoint,
+): {
+  checkpoint: Checkpoint;
+  messages?: BaseMessage[];
+} => {
+  if (isCheckpointWithMessages(checkpoint)) {
+    const newCheckpoint = copyCheckpoint(checkpoint);
+    delete newCheckpoint.channel_values.messages;
+    return {
+      checkpoint: newCheckpoint,
+      messages: checkpoint.channel_values.messages,
+    };
+  }
+  return {
+    checkpoint,
+    messages: undefined,
+  };
+};

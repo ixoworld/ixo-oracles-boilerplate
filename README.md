@@ -1,4 +1,4 @@
-# IXO Oracles Framework
+# IXO Oracles Framework 
 
 ![IXO Oracles Framework](./cover.jpg)
 
