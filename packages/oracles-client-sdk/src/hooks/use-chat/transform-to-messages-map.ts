@@ -7,23 +7,18 @@ import {
 
 export type MessagesMap = Record<string, IMessage>;
 
-export const DEFAULT_TOOL_CALL_COMPONENT_NAME = 'ToolCall';
-
 export default function transformToMessagesMap({
   messages,
   uiComponents,
-  agActionNames,
 }: {
   messages: IMessage[];
   uiComponents?: UIComponents;
-  agActionNames?: string[]; // List of AG action names to identify AG-UI tools
 }): MessagesMap {
   const messagesMap: MessagesMap = {};
 
   messages.forEach((message) => {
     const isToolCall = message.toolCalls && message.toolCalls.length > 0;
     if (!isToolCall) {
-      console.log();
       messagesMap[message.id] = message;
       return;
     }
@@ -46,43 +41,22 @@ export default function transformToMessagesMap({
 
     // Add component metadata for each tool call
     message.toolCalls?.forEach((toolCall) => {
-      // Check if this tool name is in the list of AG actions
-      const isAgAction = agActionNames?.includes(toolCall.name) ?? false;
+      // Check if there's a custom UI component for this specific tool
+      // If not, fall back to generic "ToolCall" component
+      const hasCustomComponent = uiComponents && toolCall.name in uiComponents;
 
-      if (isAgAction) {
-        // For AG-UI actions, create metadata with isAgAction flag
-        const componentMetadata: IComponentMetadata = {
-          name: toolCall.name,
-          props: {
-            id: toolCall.id,
-            args: toolCall.args,
-            status: toolCall.status,
-            output: toolCall.output,
-            isAgAction: true,
-            toolName: toolCall.name,
-          },
-        };
-        content.push(componentMetadata);
-      } else {
-        // For browser tools and regular tool calls
-        const hasCustomComponent =
-          uiComponents && toolCall.name in uiComponents;
-
-        const componentMetadata: IComponentMetadata = {
-          name: hasCustomComponent
-            ? toolCall.name
-            : DEFAULT_TOOL_CALL_COMPONENT_NAME,
-          props: {
-            id: toolCall.id,
-            args: toolCall.args,
-            status: toolCall.status,
-            output: toolCall.output,
-            isToolCall: true,
-            toolName: toolCall.name,
-          },
-        };
-        content.push(componentMetadata);
-      }
+      const componentMetadata: IComponentMetadata = {
+        name: hasCustomComponent ? toolCall.name : 'ToolCall',
+        props: {
+          id: toolCall.id,
+          args: toolCall.args,
+          status: toolCall.status,
+          output: toolCall.output,
+          isToolCall: true,
+          toolName: toolCall.name, // Pass original tool name for generic component
+        },
+      };
+      content.push(componentMetadata);
     });
 
     messagesMap[message.id] = {

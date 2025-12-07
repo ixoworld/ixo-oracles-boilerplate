@@ -1033,24 +1033,24 @@ export type Claim = Node & {
 export type ClaimCollection = Node & {
   __typename?: 'ClaimCollection';
   admin: Scalars['String']['output'];
-  approved: Scalars['Int']['output'];
+  approved: Scalars['BigFloat']['output'];
   /** Checks if there are any claims with null schemaType */
   claimSchemaTypesLoaded: Scalars['Boolean']['output'];
   /** Reads and enables pagination through a set of `Claim`. */
   claimsByCollectionId: ClaimsConnection;
-  count: Scalars['Int']['output'];
-  disputed: Scalars['Int']['output'];
+  count: Scalars['BigFloat']['output'];
+  disputed: Scalars['BigFloat']['output'];
   endDate: Maybe<Scalars['Datetime']['output']>;
   entity: Scalars['String']['output'];
-  evaluated: Scalars['Int']['output'];
+  evaluated: Scalars['BigFloat']['output'];
   id: Scalars['String']['output'];
-  invalidated: Scalars['Int']['output'];
+  invalidated: Scalars['BigFloat']['output'];
   /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
   nodeId: Scalars['ID']['output'];
   payments: Scalars['JSON']['output'];
   protocol: Scalars['String']['output'];
-  quota: Scalars['Int']['output'];
-  rejected: Scalars['Int']['output'];
+  quota: Scalars['BigFloat']['output'];
+  rejected: Scalars['BigFloat']['output'];
   startDate: Maybe<Scalars['Datetime']['output']>;
   state: Scalars['Int']['output'];
 };
@@ -1074,29 +1074,29 @@ export type ClaimCollectionCondition = {
   /** Checks for equality with the object’s `admin` field. */
   admin: InputMaybe<Scalars['String']['input']>;
   /** Checks for equality with the object’s `approved` field. */
-  approved: InputMaybe<Scalars['Int']['input']>;
+  approved: InputMaybe<Scalars['BigFloat']['input']>;
   /** Checks for equality with the object’s `count` field. */
-  count: InputMaybe<Scalars['Int']['input']>;
+  count: InputMaybe<Scalars['BigFloat']['input']>;
   /** Checks for equality with the object’s `disputed` field. */
-  disputed: InputMaybe<Scalars['Int']['input']>;
+  disputed: InputMaybe<Scalars['BigFloat']['input']>;
   /** Checks for equality with the object’s `endDate` field. */
   endDate: InputMaybe<Scalars['Datetime']['input']>;
   /** Checks for equality with the object’s `entity` field. */
   entity: InputMaybe<Scalars['String']['input']>;
   /** Checks for equality with the object’s `evaluated` field. */
-  evaluated: InputMaybe<Scalars['Int']['input']>;
+  evaluated: InputMaybe<Scalars['BigFloat']['input']>;
   /** Checks for equality with the object’s `id` field. */
   id: InputMaybe<Scalars['String']['input']>;
   /** Checks for equality with the object’s `invalidated` field. */
-  invalidated: InputMaybe<Scalars['Int']['input']>;
+  invalidated: InputMaybe<Scalars['BigFloat']['input']>;
   /** Checks for equality with the object’s `payments` field. */
   payments: InputMaybe<Scalars['JSON']['input']>;
   /** Checks for equality with the object’s `protocol` field. */
   protocol: InputMaybe<Scalars['String']['input']>;
   /** Checks for equality with the object’s `quota` field. */
-  quota: InputMaybe<Scalars['Int']['input']>;
+  quota: InputMaybe<Scalars['BigFloat']['input']>;
   /** Checks for equality with the object’s `rejected` field. */
-  rejected: InputMaybe<Scalars['Int']['input']>;
+  rejected: InputMaybe<Scalars['BigFloat']['input']>;
   /** Checks for equality with the object’s `startDate` field. */
   startDate: InputMaybe<Scalars['Datetime']['input']>;
   /** Checks for equality with the object’s `state` field. */
@@ -1110,25 +1110,25 @@ export type ClaimCollectionFilter = {
   /** Checks for all expressions in this list. */
   and: InputMaybe<Array<ClaimCollectionFilter>>;
   /** Filter by the object’s `approved` field. */
-  approved: InputMaybe<IntFilter>;
+  approved: InputMaybe<BigFloatFilter>;
   /** Filter by the object’s `claimsByCollectionId` relation. */
   claimsByCollectionId: InputMaybe<ClaimCollectionToManyClaimFilter>;
   /** Some related `claimsByCollectionId` exist. */
   claimsByCollectionIdExist: InputMaybe<Scalars['Boolean']['input']>;
   /** Filter by the object’s `count` field. */
-  count: InputMaybe<IntFilter>;
+  count: InputMaybe<BigFloatFilter>;
   /** Filter by the object’s `disputed` field. */
-  disputed: InputMaybe<IntFilter>;
+  disputed: InputMaybe<BigFloatFilter>;
   /** Filter by the object’s `endDate` field. */
   endDate: InputMaybe<DatetimeFilter>;
   /** Filter by the object’s `entity` field. */
   entity: InputMaybe<StringFilter>;
   /** Filter by the object’s `evaluated` field. */
-  evaluated: InputMaybe<IntFilter>;
+  evaluated: InputMaybe<BigFloatFilter>;
   /** Filter by the object’s `id` field. */
   id: InputMaybe<StringFilter>;
   /** Filter by the object’s `invalidated` field. */
-  invalidated: InputMaybe<IntFilter>;
+  invalidated: InputMaybe<BigFloatFilter>;
   /** Negates the expression. */
   not: InputMaybe<ClaimCollectionFilter>;
   /** Checks for any expressions in this list. */
@@ -1138,9 +1138,9 @@ export type ClaimCollectionFilter = {
   /** Filter by the object’s `protocol` field. */
   protocol: InputMaybe<StringFilter>;
   /** Filter by the object’s `quota` field. */
-  quota: InputMaybe<IntFilter>;
+  quota: InputMaybe<BigFloatFilter>;
   /** Filter by the object’s `rejected` field. */
-  rejected: InputMaybe<IntFilter>;
+  rejected: InputMaybe<BigFloatFilter>;
   /** Filter by the object’s `startDate` field. */
   startDate: InputMaybe<DatetimeFilter>;
   /** Filter by the object’s `state` field. */
@@ -1629,7 +1629,7 @@ export type Evaluation = Node & {
   /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
   nodeId: Scalars['ID']['output'];
   oracle: Scalars['String']['output'];
-  reason: Scalars['Int']['output'];
+  reason: Scalars['BigFloat']['output'];
   status: Scalars['Int']['output'];
   verificationProof: Maybe<Scalars['String']['output']>;
 };
@@ -1654,7 +1654,7 @@ export type EvaluationCondition = {
   /** Checks for equality with the object’s `oracle` field. */
   oracle: InputMaybe<Scalars['String']['input']>;
   /** Checks for equality with the object’s `reason` field. */
-  reason: InputMaybe<Scalars['Int']['input']>;
+  reason: InputMaybe<Scalars['BigFloat']['input']>;
   /** Checks for equality with the object’s `status` field. */
   status: InputMaybe<Scalars['Int']['input']>;
   /** Checks for equality with the object’s `verificationProof` field. */
@@ -1686,7 +1686,7 @@ export type EvaluationFilter = {
   /** Filter by the object’s `oracle` field. */
   oracle: InputMaybe<StringFilter>;
   /** Filter by the object’s `reason` field. */
-  reason: InputMaybe<IntFilter>;
+  reason: InputMaybe<BigFloatFilter>;
   /** Filter by the object’s `status` field. */
   status: InputMaybe<IntFilter>;
   /** Filter by the object’s `verificationProof` field. */
@@ -6205,7 +6205,7 @@ export type ClaimsQuery = {
         agentDid: string;
         agentAddress: string;
         status: number;
-        reason: number;
+        reason: any;
         verificationProof: string | null;
         amount: any;
         evaluationDate: any;
@@ -6359,16 +6359,28 @@ export type GetClaimCollectionQuery = {
     protocol: string;
     startDate: any | null;
     endDate: any | null;
-    quota: number;
-    count: number;
-    evaluated: number;
-    approved: number;
-    rejected: number;
-    disputed: number;
-    invalidated: number;
+    quota: any;
+    count: any;
+    evaluated: any;
+    approved: any;
+    rejected: any;
+    disputed: any;
+    invalidated: any;
     state: number;
     payments: any;
     entityId: string;
+  } | null;
+};
+
+export type GetIidVerificationMethodQueryVariables = Exact<{
+  did: Scalars['String']['input'];
+}>;
+
+export type GetIidVerificationMethodQuery = {
+  __typename?: 'Query';
+  iids: {
+    __typename?: 'IidsConnection';
+    nodes: Array<{ __typename?: 'Iid'; id: string; verificationMethod: any }>;
   } | null;
 };
 
@@ -6529,6 +6541,16 @@ export const GetClaimCollectionDocument = gql`
     }
   }
 `;
+export const GetIidVerificationMethodDocument = gql`
+  query GetIidVerificationMethod($did: String!) {
+    iids(filter: { id: { equalTo: $did } }) {
+      nodes {
+        id
+        verificationMethod
+      }
+    }
+  }
+`;
 
 export type SdkFunctionWrapper = <T>(
   action: (requestHeaders?: Record<string, string>) => Promise<T>,
@@ -6552,12 +6574,15 @@ export function getSdk(
     Claims(
       variables?: ClaimsQueryVariables,
       requestHeaders?: GraphQLClientRequestHeaders,
+      signal?: RequestInit['signal'],
     ): Promise<ClaimsQuery> {
       return withWrapper(
         (wrappedRequestHeaders) =>
-          client.request<ClaimsQuery>(ClaimsDocument, variables, {
-            ...requestHeaders,
-            ...wrappedRequestHeaders,
+          client.request<ClaimsQuery>({
+            document: ClaimsDocument,
+            variables,
+            requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders },
+            signal,
           }),
         'Claims',
         'query',
@@ -6567,12 +6592,15 @@ export function getSdk(
     ClaimById(
       variables: ClaimByIdQueryVariables,
       requestHeaders?: GraphQLClientRequestHeaders,
+      signal?: RequestInit['signal'],
     ): Promise<ClaimByIdQuery> {
       return withWrapper(
         (wrappedRequestHeaders) =>
-          client.request<ClaimByIdQuery>(ClaimByIdDocument, variables, {
-            ...requestHeaders,
-            ...wrappedRequestHeaders,
+          client.request<ClaimByIdQuery>({
+            document: ClaimByIdDocument,
+            variables,
+            requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders },
+            signal,
           }),
         'ClaimById',
         'query',
@@ -6582,12 +6610,15 @@ export function getSdk(
     GetEntities(
       variables?: GetEntitiesQueryVariables,
       requestHeaders?: GraphQLClientRequestHeaders,
+      signal?: RequestInit['signal'],
     ): Promise<GetEntitiesQuery> {
       return withWrapper(
         (wrappedRequestHeaders) =>
-          client.request<GetEntitiesQuery>(GetEntitiesDocument, variables, {
-            ...requestHeaders,
-            ...wrappedRequestHeaders,
+          client.request<GetEntitiesQuery>({
+            document: GetEntitiesDocument,
+            variables,
+            requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders },
+            signal,
           }),
         'GetEntities',
         'query',
@@ -6597,12 +6628,15 @@ export function getSdk(
     GetEntityById(
       variables: GetEntityByIdQueryVariables,
       requestHeaders?: GraphQLClientRequestHeaders,
+      signal?: RequestInit['signal'],
     ): Promise<GetEntityByIdQuery> {
       return withWrapper(
         (wrappedRequestHeaders) =>
-          client.request<GetEntityByIdQuery>(GetEntityByIdDocument, variables, {
-            ...requestHeaders,
-            ...wrappedRequestHeaders,
+          client.request<GetEntityByIdQuery>({
+            document: GetEntityByIdDocument,
+            variables,
+            requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders },
+            signal,
           }),
         'GetEntityById',
         'query',
@@ -6612,14 +6646,16 @@ export function getSdk(
     GetEntityByType(
       variables: GetEntityByTypeQueryVariables,
       requestHeaders?: GraphQLClientRequestHeaders,
+      signal?: RequestInit['signal'],
     ): Promise<GetEntityByTypeQuery> {
       return withWrapper(
         (wrappedRequestHeaders) =>
-          client.request<GetEntityByTypeQuery>(
-            GetEntityByTypeDocument,
+          client.request<GetEntityByTypeQuery>({
+            document: GetEntityByTypeDocument,
             variables,
-            { ...requestHeaders, ...wrappedRequestHeaders },
-          ),
+            requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders },
+            signal,
+          }),
         'GetEntityByType',
         'query',
         variables,
@@ -6628,14 +6664,16 @@ export function getSdk(
     GetEntitiesByOwnerAddress(
       variables: GetEntitiesByOwnerAddressQueryVariables,
       requestHeaders?: GraphQLClientRequestHeaders,
+      signal?: RequestInit['signal'],
     ): Promise<GetEntitiesByOwnerAddressQuery> {
       return withWrapper(
         (wrappedRequestHeaders) =>
-          client.request<GetEntitiesByOwnerAddressQuery>(
-            GetEntitiesByOwnerAddressDocument,
+          client.request<GetEntitiesByOwnerAddressQuery>({
+            document: GetEntitiesByOwnerAddressDocument,
             variables,
-            { ...requestHeaders, ...wrappedRequestHeaders },
-          ),
+            requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders },
+            signal,
+          }),
         'GetEntitiesByOwnerAddress',
         'query',
         variables,
@@ -6644,14 +6682,16 @@ export function getSdk(
     GetEntityIdByClaimCollectionId(
       variables: GetEntityIdByClaimCollectionIdQueryVariables,
       requestHeaders?: GraphQLClientRequestHeaders,
+      signal?: RequestInit['signal'],
     ): Promise<GetEntityIdByClaimCollectionIdQuery> {
       return withWrapper(
         (wrappedRequestHeaders) =>
-          client.request<GetEntityIdByClaimCollectionIdQuery>(
-            GetEntityIdByClaimCollectionIdDocument,
+          client.request<GetEntityIdByClaimCollectionIdQuery>({
+            document: GetEntityIdByClaimCollectionIdDocument,
             variables,
-            { ...requestHeaders, ...wrappedRequestHeaders },
-          ),
+            requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders },
+            signal,
+          }),
         'GetEntityIdByClaimCollectionId',
         'query',
         variables,
@@ -6660,15 +6700,35 @@ export function getSdk(
     getClaimCollection(
       variables: GetClaimCollectionQueryVariables,
       requestHeaders?: GraphQLClientRequestHeaders,
+      signal?: RequestInit['signal'],
     ): Promise<GetClaimCollectionQuery> {
       return withWrapper(
         (wrappedRequestHeaders) =>
-          client.request<GetClaimCollectionQuery>(
-            GetClaimCollectionDocument,
+          client.request<GetClaimCollectionQuery>({
+            document: GetClaimCollectionDocument,
             variables,
-            { ...requestHeaders, ...wrappedRequestHeaders },
-          ),
+            requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders },
+            signal,
+          }),
         'getClaimCollection',
+        'query',
+        variables,
+      );
+    },
+    GetIidVerificationMethod(
+      variables: GetIidVerificationMethodQueryVariables,
+      requestHeaders?: GraphQLClientRequestHeaders,
+      signal?: RequestInit['signal'],
+    ): Promise<GetIidVerificationMethodQuery> {
+      return withWrapper(
+        (wrappedRequestHeaders) =>
+          client.request<GetIidVerificationMethodQuery>({
+            document: GetIidVerificationMethodDocument,
+            variables,
+            requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders },
+            signal,
+          }),
+        'GetIidVerificationMethod',
         'query',
         variables,
       );

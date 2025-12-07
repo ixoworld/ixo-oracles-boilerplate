@@ -1,0 +1,8 @@
+query GetIidVerificationMethod($did: String!) {
+  iids(filter: { id: { equalTo: $did } }) {
+    nodes {
+      id
+      verificationMethod
+    }
+  }
+}

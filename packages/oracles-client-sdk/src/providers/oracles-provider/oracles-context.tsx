@@ -5,13 +5,16 @@ import {
   type PropsWithChildren,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
-  useRef,
-  useState,
 } from 'react';
-import { useGetOpenIdToken } from '../../hooks/index.js';
+import { getOpenIdToken } from '../../hooks/index.js';
 import { request } from '../../utils/request.js';
-import type { AgAction } from '../../hooks/use-ag-action.js';
+import {
+  clearTokenCache,
+  decryptAndRetrieve,
+  encryptAndStore,
+} from '../../utils/token-cache.js';
 import {
   type IOraclesContextProps,
   type IOraclesProviderProps,
@@ -29,26 +32,39 @@ export const useOraclesContext = () => {
   return context;
 };
 
-const OraclesProviderInner = ({
+export const OraclesProvider = ({
   children,
   initialWallet,
   transactSignX,
 }: PropsWithChildren<IOraclesProviderProps>) => {
-  const {
-    openIdToken: openIdTokenFromHook,
-    isLoading: isTokenLoading,
-    error: tokenError,
-    refetch,
-  } = useGetOpenIdToken(initialWallet);
+  if ((!initialWallet as unknown) || (!transactSignX as unknown)) {
+    throw new Error('initialWallet and transactSignX are required');
+  }
 
-  // AG-UI action state management
-  const [agActions, setAgActions] = useState<AgAction[]>([]);
-  const agActionHandlers = useRef<
-    Map<string, (args: any) => Promise<any> | any>
-  >(new Map());
-  const agActionRenders = useRef<
-    Map<string, (props: any) => React.ReactElement | null>
-  >(new Map());
+  // Clear token cache when wallet/DID changes
+  useEffect(() => {
+    try {
+      // Check if cached token exists and if DID matches
+      const cachedToken = localStorage.getItem('oracles_openid_token');
+      if (cachedToken) {
+        // Try to decrypt and check DID - if it doesn't match, clear it
+        decryptAndRetrieve({
+          did: initialWallet.did,
+          matrixAccessToken: initialWallet.matrix.accessToken,
+        }).catch(() => {
+          // If decryption fails or DID doesn't match, clear the cache
+          clearTokenCache();
+          console.debug(
+            'Cleared token cache due to DID mismatch or decryption failure',
+          );
+        });
+      }
+    } catch (error) {
+      console.warn('Failed to check cached token:', error);
+      // Clear cache on any error
+      clearTokenCache();
+    }
+  }, [initialWallet.did]);
 
   const authedRequest = useCallback(
     async (
@@ -56,18 +72,35 @@ const OraclesProviderInner = ({
       method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
       options?: RequestInit,
     ) => {
-      // Get fresh or cached token from React Query
-      let openIdToken = openIdTokenFromHook?.access_token;
+      const matrixAccessToken = initialWallet.matrix.accessToken;
 
-      // If no token available or there's an error, refetch
-      if (!openIdToken || tokenError) {
-        const { data: token } = await refetch();
-        openIdToken = token?.access_token;
-
-        if (!openIdToken) {
-          const errorMessage = tokenError?.message || 'Unknown error';
-          throw new Error(`Failed to get openIdToken: ${errorMessage}`);
+      let openIdToken = undefined;
+      // If no openIdToken provided, try to get from cache
+      try {
+        const cachedToken = await decryptAndRetrieve({
+          did: initialWallet.did,
+          matrixAccessToken,
+        });
+        if (cachedToken?.access_token) {
+          openIdToken = cachedToken.access_token;
         }
+      } catch (error) {
+        console.warn('Failed to retrieve cached token:', error);
+      }
+
+      if (!openIdToken) {
+        const token = await getOpenIdToken({
+          userId: initialWallet.did,
+          matrixAccessToken,
+          did: initialWallet.did,
+        });
+        openIdToken = token.access_token;
+
+        await encryptAndStore({
+          token,
+          matrixAccessToken,
+          did: initialWallet.did,
+        });
       }
 
       return request(url, method, {
@@ -79,52 +112,8 @@ const OraclesProviderInner = ({
         },
       });
     },
-    [initialWallet.did, openIdTokenFromHook, refetch, tokenError],
+    [initialWallet],
   );
-
-  // AG-UI action management functions
-  const registerAgAction = useCallback(
-    (
-      action: AgAction,
-      handler: (args: any) => Promise<any> | any,
-      render?: (props: any) => React.ReactElement | null,
-    ) => {
-      setAgActions((prev) => {
-        // Check if action already exists
-        const exists = prev.some((a) => a.name === action.name);
-        if (exists) {
-          // Update existing action
-          return prev.map((a) => (a.name === action.name ? action : a));
-        }
-        // Add new action
-        return [...prev, action];
-      });
-
-      agActionHandlers.current.set(action.name, handler);
-      if (render) {
-        agActionRenders.current.set(action.name, render);
-      }
-    },
-    [],
-  );
-
-  const unregisterAgAction = useCallback((name: string) => {
-    setAgActions((prev) => prev.filter((a) => a.name !== name));
-    agActionHandlers.current.delete(name);
-    agActionRenders.current.delete(name);
-  }, []);
-
-  const executeAgAction = useCallback(async (name: string, args: any) => {
-    const handler = agActionHandlers.current.get(name);
-    if (!handler) {
-      throw new Error(`AG-UI action '${name}' not found`);
-    }
-    return await handler(args);
-  }, []);
-
-  const getAgActionRender = useCallback((name: string) => {
-    return agActionRenders.current.get(name);
-  }, []);
 
   const value: IOraclesContextProps = useMemo(
     () => ({
@@ -135,49 +124,14 @@ const OraclesProviderInner = ({
         method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
         options?: RequestInit,
       ) => Promise<T>,
-      agActions,
-      registerAgAction,
-      unregisterAgAction,
-      executeAgAction,
-      getAgActionRender,
     }),
-    [
-      initialWallet,
-      transactSignX,
-      authedRequest,
-      agActions,
-      registerAgAction,
-      unregisterAgAction,
-      executeAgAction,
-      getAgActionRender,
-    ],
+    [initialWallet, transactSignX, authedRequest],
   );
 
+  const queryClient = new QueryClient();
   return (
-    <OraclesContext.Provider value={value}>{children}</OraclesContext.Provider>
-  );
-};
-
-// Outer component that sets up QueryClient
-export const OraclesProvider = ({
-  children,
-  initialWallet,
-  transactSignX,
-}: PropsWithChildren<IOraclesProviderProps>) => {
-  if ((!initialWallet as unknown) || (!transactSignX as unknown)) {
-    throw new Error('initialWallet and transactSignX are required');
-  }
-
-  const queryClient = useMemo(() => new QueryClient(), []);
-
-  return (
-    <QueryClientProvider client={queryClient}>
-      <OraclesProviderInner
-        initialWallet={initialWallet}
-        transactSignX={transactSignX}
-      >
-        {children}
-      </OraclesProviderInner>
-    </QueryClientProvider>
+    <OraclesContext.Provider value={value}>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    </OraclesContext.Provider>
   );
 };

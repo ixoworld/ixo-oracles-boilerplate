@@ -1,4 +1,5 @@
 import { request } from '../utils/request.js';
+import { decryptAndRetrieve, encryptAndStore } from '../utils/token-cache.js';
 import {
   IOpenIDToken,
   SourceSpaceResponse,
@@ -232,6 +233,22 @@ class MatrixClient {
         throw new Error('DID not found');
       }
 
+      // Try to get cached token first (if caching is enabled)
+      if (useCache) {
+        try {
+          const cachedToken = await decryptAndRetrieve({
+            did,
+            matrixAccessToken: this.params.userAccessToken,
+          });
+          if (cachedToken) {
+            console.debug('Using cached OpenID token for user:', userId);
+            return cachedToken;
+          }
+        } catch (error) {
+          console.warn('Failed to retrieve cached token:', error);
+        }
+      }
+
       // Generate new token from Matrix server
       console.debug('Generating new OpenID token for user:', userId);
       const response = await fetch(
@@ -248,6 +265,28 @@ class MatrixClient {
 
       if (response.ok) {
         const openIdToken = (await response.json()) as IOpenIDToken;
+
+        // Cache the new token (if caching is enabled)
+        if (useCache) {
+          try {
+            await encryptAndStore({
+              token: openIdToken,
+              matrixAccessToken: this.params.userAccessToken,
+              did,
+            });
+            console.debug(
+              'OpenID token generated and cached for user:',
+              userId,
+            );
+          } catch (error) {
+            console.warn('Failed to cache token:', error);
+          }
+        } else {
+          console.debug(
+            'OpenID token generated (caching disabled) for user:',
+            userId,
+          );
+        }
 
         return openIdToken;
       } else {

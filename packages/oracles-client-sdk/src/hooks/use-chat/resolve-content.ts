@@ -5,17 +5,11 @@ import {
   type WithRequiredEventProps,
 } from '@ixo/oracles-events/types';
 
-import { getToolName } from '../../utils/get-tool-name.js';
 import { SSEErrorEvent } from '../../utils/sse-parser.js';
 import { type IComponentMetadata } from './v2/types.js';
 
 export type Event<T = Record<string, any>> = {
-  eventName:
-    | 'tool_call'
-    | 'render_component'
-    | 'browser_tool_call'
-    | 'action_call'
-    | 'error';
+  eventName: 'tool_call' | 'render_component' | 'browser_tool_call' | 'error';
   payload: WithRequiredEventProps<T> | SSEErrorEvent;
 };
 
@@ -29,7 +23,7 @@ export const resolveContent = (
     case 'tool_call': {
       const payload = event.payload as ToolCallEventPayload;
       return {
-        name: getToolName(payload.toolName, (payload.args as any)?.toolName),
+        name: payload.toolName,
         props: {
           args: payload.args,
           id: payload.eventId ?? payload.requestId,
@@ -37,7 +31,7 @@ export const resolveContent = (
           output: payload.output,
           payload: payload,
           isToolCall: true,
-          toolName: getToolName(payload.toolName, (payload.args as any)?.toolName),
+          toolName: payload.toolName,
           event: event,
         },
       };
@@ -68,22 +62,6 @@ export const resolveContent = (
         },
       };
     }
-    case 'action_call': {
-      const payload = event.payload as any;
-      return {
-        name: payload.toolName,
-        props: {
-          args: payload.args,
-          id: payload.toolCallId ?? payload.requestId,
-          status: payload.status,
-          output: payload.output,
-          payload: payload,
-          isAgAction: true,
-          toolName: payload.toolName,
-          event: event,
-        },
-      };
-    }
     case 'error': {
       const payload = event.payload as SSEErrorEvent;
       return {
@@ -99,4 +77,6 @@ export const resolveContent = (
       };
     }
   }
+
+  return 'Thinking...';
 };

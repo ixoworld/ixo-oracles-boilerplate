@@ -1,47 +1,48 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: postgres:14-alpine
-    container_name: ixo-knowledge-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: knowledge
-    ports:
-      - '5432:5432'
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U postgres']
-      interval: 5s
-      timeout: 5s
-      retries: 5
-  chroma:
-    image: chromadb/chroma:latest
-    container_name: ixo-knowledge-chroma
-    restart: unless-stopped
-    ports:
-      - '8000:8000'
-    volumes:
-      - chroma_data:/chroma/chroma
-    environment:
-      - CHROMA_PERSIST_DIRECTORY=/chroma/chroma
-  app:
+   app:
     image: api:latest # whatever image you built
+    expose:
+      - '5678'
     ports:
-      - '3000:3000'
+      - '5678:5678'
     env_file:
       - apps/app/.env
     environment:
       - CHROMA_URL=http://chroma:8000
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./apps/app/matrix-storage:/app/matrix-storage
+
+  redis:
+    image: redis:alpine
+    container_name: ixo-redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+
+  redis-insight:
+    image: redis/redisinsight:latest
+    container_name: ixo-redis-insight
+    ports:
+      - '8001:8001'
+    volumes:
+      - redis-data:/db
+    environment:
+      - REDIS_HOST=redis
+
+  nginx:
+    image: nginx:alpine
+    container_name: ixo-nginx
+    ports:
+      - '5678:80'
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - postgres
-      - chroma
+      - app
 
 volumes:
-  pg_data:
-    name: ixo-postgres-data
-  chroma_data:
-    name: ixo-chroma-data
+  redis-data:

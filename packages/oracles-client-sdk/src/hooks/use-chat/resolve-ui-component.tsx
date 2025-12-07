@@ -1,27 +1,14 @@
+import {
+  type RenderComponentEventPayload,
+  type ToolCallEventPayload,
+} from '@ixo/oracles-events';
 import { createElement, type ComponentProps } from 'react';
 
 import { Event } from './resolve-content.js';
-import { DEFAULT_TOOL_CALL_COMPONENT_NAME } from './transform-to-messages-map.js';
-import {
-  IComponentMetadata,
-  type ToolCallEvent,
-  type UIComponentProps,
-} from './v2/types.js';
+import { type ToolCallEvent, type UIComponentProps } from './v2/types.js';
 
 export type UIComponents = {
   ToolCall: React.FC<UIComponentProps<ToolCallEvent> & { key: string }>;
-  AgActionToolCall?: React.FC<{
-    id: string;
-    actionName: string;
-    args?: Record<string, unknown>;
-    output?: string;
-    status?: 'isRunning' | 'done' | 'error';
-    error?: string;
-    isLoading?: boolean;
-    isCurrentlyRendered?: boolean;
-    onRenderClick?: () => void;
-    key: string;
-  }>;
   Error: React.FC<{
     id: string;
     args: Record<string, unknown>;
@@ -32,12 +19,23 @@ export type UIComponents = {
     payload?: any;
     key: string;
   }>;
-  [key: string]: React.FC<any> | undefined;
+  [key: string]: React.FC<any>;
 };
 
 export const resolveUIComponent = (
   componentsMap: UIComponents,
-  component: IComponentMetadata,
+  component: {
+    name: string;
+    props: {
+      id: string;
+      args: unknown;
+      status?: 'isRunning' | 'done';
+      output?: string;
+      event?: Event;
+      payload?: ToolCallEventPayload | RenderComponentEventPayload;
+      isToolCall?: boolean;
+    };
+  },
 ): React.ReactElement | undefined => {
   if (!isValidProps(component.props.args)) {
     return undefined;
@@ -68,7 +66,7 @@ export const resolveUIComponent = (
       payload: component.props.payload,
       key: `${component.name}${component.props.id}`,
     };
-    return createElement(Component!, errorComponentProps);
+    return createElement(Component, errorComponentProps);
   }
 
   if (component.props.isToolCall) {
@@ -77,52 +75,16 @@ export const resolveUIComponent = (
     } = {
       id: component.props.id,
       args: component.props.args,
-      status: component.props.status as 'isRunning' | 'done' | undefined,
+      status: component.props.status,
       output: component.props.output,
       isLoading: isRunning,
-      requestId: component.props.payload
-        ? 'requestId' in component.props.payload
-          ? component.props.payload.requestId
-          : ''
-        : '',
-      sessionId: component.props.payload
-        ? 'sessionId' in component.props.payload
-          ? component.props.payload.sessionId
-          : ''
-        : '',
-      toolName:
-        component.name === DEFAULT_TOOL_CALL_COMPONENT_NAME
-          ? (component.props.toolName ?? component.name)
-          : component.name,
-      eventId: component.props.payload
-        ? 'eventId' in component.props.payload
-          ? component.props.payload.eventId
-          : ''
-        : '',
+      requestId: component.props.payload?.requestId ?? '',
+      sessionId: component.props.payload?.sessionId ?? '',
+      toolName: component.name,
+      eventId: component.props.payload?.eventId ?? '',
       key: `${component.name}${component.props.id}`,
     };
     return createElement(Component, toolCallComponentProps);
-  }
-
-  if (component.props.isAgAction) {
-    // Use AgActionToolCall if available, otherwise fallback to ToolCall
-    const AgActionComponent =
-      componentsMap.AgActionToolCall || componentsMap.ToolCall;
-
-    const agActionComponentProps = {
-      id: component.props.id,
-      actionName: component.name,
-      args: component.props.args,
-      output: component.props.output,
-      status: component.props.status,
-      error: component.props.error,
-      isLoading: isRunning,
-      key: `${component.name}${component.props.id}`,
-    };
-    return createElement(
-      AgActionComponent as React.FC<any>,
-      agActionComponentProps,
-    );
   }
 
   // For other components, use generic props
@@ -135,6 +97,8 @@ export const resolveUIComponent = (
   });
 };
 
-const isValidProps = (props: unknown): props is ComponentProps<any> => {
+const isValidProps = (
+  props: unknown,
+): props is ComponentProps<UIComponents[keyof UIComponents]> => {
   return typeof props === 'object' && props !== null;
 };
