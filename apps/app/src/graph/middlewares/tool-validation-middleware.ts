@@ -49,7 +49,6 @@ export const createToolValidationMiddleware = () => {
     beforeModel(state, runtime) {
 
       const toolMessage = state.messages.find((message) => message.type === 'tool');
-      console.log("🚀 ~ createToolValidationMiddleware ~ toolMessage:", toolMessage)
 
       const agentsTools = [
         'list_blocks',
