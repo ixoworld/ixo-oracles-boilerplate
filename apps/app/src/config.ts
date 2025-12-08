@@ -80,14 +80,13 @@ export const EnvSchema = z.object({
   MATRIX_VALUE_PIN: z.string(),
   // convert string to boolean
   THROW_ON_INSUFFICIENT_CREDITS: z.string().transform((val) => val === 'true'),
-  DISABLE_CREDITS: z.string().transform((val) => val === 'true').optional(),
-});
+  DISABLE_CREDITS: z
+    .string()
+    .transform((val) => val === 'true')
+    .optional(),
 
-export const matrixAccountRoomId = {
-  mainnet: '!ekfOXRmXCdBkDaRDDr:mx.ixo.earth',
-  testnet: '!HLRUpfYhwoLYDSEVcX:testmx.ixo.earth',
-  devnet: '!RHtTYnmThqJKAPqYXR:devmx.ixo.earth',
-}[(process.env.NETWORK as keyof typeof matrixAccountRoomId) ?? 'devnet'];
+  MATRIX_ACCOUNT_ROOM_ID: z.string(),
+});
 
 export type ENV = z.infer<typeof EnvSchema> & {
   ORACLE_DID: string;
