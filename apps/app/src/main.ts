@@ -7,7 +7,7 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
-import { ENV, matrixAccountRoomId } from './config';
+import { ENV } from './config';
 import { EditorMatrixClient } from './graph/agents/editor/editor-mx';
 import { UserMatrixSqliteSyncService } from './user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 async function bootstrap(): Promise<void> {
@@ -101,7 +101,8 @@ async function bootstrap(): Promise<void> {
 
   registerGracefulShutdown({ app, matrixManager });
 
-  const disableCredits = configService.get('DISABLE_CREDITS', false);
+  const matrixAccountRoomId = configService.get('MATRIX_ACCOUNT_ROOM_ID');
+  const disableCredits = configService.get('DISABLE_CREDITS', false) || !matrixAccountRoomId;
   if (!disableCredits) {
     Logger.log('Setting up claim signing mnemonics...');
     Logger.log(`Matrix account room id: ${matrixAccountRoomId}`);

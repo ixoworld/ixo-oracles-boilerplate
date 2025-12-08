@@ -9,7 +9,7 @@ import { entrypoint, task } from '@langchain/langgraph';
 import { ConfigService } from '@nestjs/config';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { ENV, matrixAccountRoomId } from 'src/config';
+import { ENV } from 'src/config';
 import { submitClaimToSubscriptionApi } from './utils';
 
 export interface UsageClaim {
@@ -98,11 +98,15 @@ export class TasksService {
 
       const hasActiveIntent = await paymentsClient.checkForActiveIntent({
         userClaimCollection: collectionId,
-        granteeAddress: params.configService.getOrThrow<string>('ORACLE_DID').replace('did:ixo:', ''),
+        granteeAddress: params.configService
+          .getOrThrow<string>('ORACLE_DID')
+          .replace('did:ixo:', ''),
       });
 
       if (hasActiveIntent) {
-        this.logger.log(`User ${params.userDid} already has an active intent, skipping`);
+        this.logger.log(
+          `User ${params.userDid} already has an active intent, skipping`,
+        );
         return { success: true, transactionHash: null };
       }
 
@@ -167,7 +171,7 @@ export class TasksService {
           } satisfies UsageClaim,
         },
         collectionId,
-        matrixRoomId: matrixAccountRoomId,
+        matrixRoomId: params.configService.get('MATRIX_ACCOUNT_ROOM_ID') ?? '',
         secpMnemonic: params.configService.getOrThrow('SECP_MNEMONIC'),
         matrixValuePin: params.configService.getOrThrow('MATRIX_VALUE_PIN'),
         oracleDid: params.configService.getOrThrow('ORACLE_DID'),
@@ -273,9 +277,12 @@ export class TasksService {
 
   @Cron(CronExpression.EVERY_MINUTE)
   async processHeldAmount() {
-    const disableCredits = this.configService.get('DISABLE_CREDITS', false);
+    const matrixAccountRoomId = this.configService.get('MATRIX_ACCOUNT_ROOM_ID');
+    const disableCredits = this.configService.get('DISABLE_CREDITS', false) || !matrixAccountRoomId;
     if (disableCredits) {
-      this.logger.debug('Claims task submission skipped (DISABLE_CREDITS=true)');
+      this.logger.debug(
+        'Claims task submission skipped (DISABLE_CREDITS=true)',
+      );
       return;
     }
 
