@@ -5,6 +5,12 @@ name: NPM Package Release
 
 on:
   workflow_dispatch:
+    inputs:
+      packages:
+        description: 'Comma-separated list of packages to override default ("@ixo/oracles-chain-client,@ixo/oracles-client-sdk")'
+        required: false
+        default: '@ixo/oracles-chain-client,@ixo/oracles-client-sdk,@ixo/oracles-events'
+        type: string
 
 jobs:
   publish-npm:
@@ -23,7 +29,20 @@ jobs:
       - name: Install dependencies pnpm
         run: pnpm install --frozen-lockfile
       - name: Build packages
-        run: pnpm build --filter=@ixo/oracles-chain-client --filter=@ixo/oracles-client-sdk --filter=@ixo/oracles-events
-      - run: pnpm publish --filter=@ixo/oracles-chain-client --filter=@ixo/oracles-client-sdk --filter=@ixo/oracles-events
+        run: |
+          FILTERS=""
+          IFS=',' read -ra PACKAGES <<< "${{ github.event.inputs.packages }}"
+          for pkg in "${PACKAGES[@]}"; do
+            FILTERS="$FILTERS --filter=$pkg"
+          done
+          pnpm build $FILTERS
+      - name: Publish packages
+        run: |
+          FILTERS=""
+          IFS=',' read -ra PACKAGES <<< "${{ github.event.inputs.packages }}"
+          for pkg in "${PACKAGES[@]}"; do
+            FILTERS="$FILTERS --filter=$pkg"
+          done
+          pnpm publish $FILTERS
         env:
           NODE_AUTH_TOKEN: ${{secrets.npm_token}}
