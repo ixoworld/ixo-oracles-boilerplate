@@ -3,6 +3,9 @@
   "description": "UCAN authorization for any service - built on ucanto",
   "version": "1.0.0",
   "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
