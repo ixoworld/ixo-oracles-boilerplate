@@ -28,15 +28,22 @@ import { EDITOR_DOCUMENTATION_CONTENT } from './editor/prompts';
 import { createFirecrawlAgent } from './firecrawl-agent';
 import { createMemoryAgent } from './memory-agent';
 import { createPortalAgent } from './portal-agent';
+import { UcanService } from 'src/ucan/ucan.service';
+
 interface InvokeMainAgentParams {
   state: Partial<TMainAgentGraphState>;
   config: IRunnableConfigWithRequiredFields;
+  /** Optional UCAN service for MCP tool authorization */
+  ucanService?: UcanService;
 }
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
-import { createMCPClientAndGetTools } from '../mcp';
+import {
+  createMCPClientAndGetTools,
+  createMCPClientAndGetToolsWithUCAN,
+} from '../mcp';
 
 const llm = getOpenRouterChatModel({
   model: 'openai/gpt-oss-120b:nitro',
@@ -53,6 +60,7 @@ const llm = getOpenRouterChatModel({
 export const createMainAgent = async ({
   state,
   config,
+  ucanService,
 }: InvokeMainAgentParams) => {
   const msgFromMatrixRoom = Boolean(
     state.messages?.at(-1)?.additional_kwargs.msgFromMatrixRoom,
@@ -81,6 +89,19 @@ export const createMainAgent = async ({
     state.agActions && state.agActions.length > 0
       ? state.agActions.map((action) => parserActionTool(action))
       : [];
+
+  // Create MCP tools - use UCAN-wrapped version if service is available
+  const getMcpTools = async () => {
+    if (ucanService) {
+      // Use UCAN-wrapped tools that validate invocations
+      return createMCPClientAndGetToolsWithUCAN(
+        ucanService,
+        () => state.mcpUcanContext,
+      );
+    }
+    // Fallback to non-UCAN tools
+    return createMCPClientAndGetTools();
+  };
 
   const [
     systemPrompt,
@@ -131,7 +152,7 @@ export const createMainAgent = async ({
     }),
     createFirecrawlAgent(),
     createDomainIndexerAgent(),
-    createMCPClientAndGetTools(),
+    getMcpTools(),
   ]);
 
   // Conditionally create BlockNote tools if editorRoomId is provided
@@ -172,13 +193,13 @@ export const createMainAgent = async ({
   // Build middleware list conditionally
   const configService = new ConfigService<ENV>();
   const disableCredits = configService.get('DISABLE_CREDITS', false);
-  
+
   const middleware = [
     createToolValidationMiddleware(),
     toolRetryMiddleware(),
     createSafetyGuardrailMiddleware(),
   ];
-  
+
   if (!disableCredits) {
     middleware.push(createTokenLimiterMiddleware());
   }

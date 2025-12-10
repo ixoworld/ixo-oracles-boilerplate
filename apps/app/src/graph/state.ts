@@ -5,6 +5,7 @@ import {
   type AgActionDto,
   type BrowserToolCallDto,
 } from 'src/messages/dto/send-message.dto';
+import { type MCPUCANContext } from './mcp';
 
 export const MainAgentGraphState = Annotation.Root({
   config: Annotation<{
@@ -59,6 +60,15 @@ export const MainAgentGraphState = Annotation.Root({
       recent: undefined,
     }),
     reducer: (prev, curr) => ({ ...prev, ...curr }),
+  }),
+
+  /**
+   * UCAN context for MCP tool authorization
+   * Contains invocations for protected MCP tools
+   */
+  mcpUcanContext: Annotation<MCPUCANContext | undefined>({
+    default: () => undefined,
+    reducer: (_, curr) => curr,
   }),
 });
 

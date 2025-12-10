@@ -20,6 +20,7 @@ import { SubscriptionMiddleware } from './middleware/subscription.middleware';
 import { SessionsModule } from './sessions/sessions.module';
 import { SlackModule } from './slack/slack.module';
 import { TasksService } from './tasks/tasks.service';
+import { UcanModule } from './ucan/ucan.module';
 import { normalizeDid } from './utils/header.utils';
 import { RedisService } from './utils/redis.service';
 import { WsModule } from './ws/ws.module';
@@ -57,6 +58,7 @@ import { WsModule } from './ws/ws.module';
     // ChromaDbModule.forRoot(),
     SessionsModule,
     MessagesModule,
+    UcanModule,
     // QueueModule,
     // KnowledgeModule,
     ScheduleModule.forRoot(),
@@ -101,7 +103,7 @@ export class AppModule implements NestModule {
   constructor(private readonly configService: ConfigService<ENV>) {}
   configure(consumer: MiddlewareConsumer) {
     const disableCredits = this.configService.get('DISABLE_CREDITS', false);
-    
+
     if (disableCredits) {
       Logger.log('Subscription middleware disabled (DISABLE_CREDITS=true)');
       consumer

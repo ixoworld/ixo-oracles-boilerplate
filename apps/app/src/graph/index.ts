@@ -3,10 +3,23 @@ import { Logger } from '@nestjs/common';
 import 'dotenv/config';
 import { HumanMessage } from 'langchain';
 import { type BrowserToolCallDto } from 'src/messages/dto/send-message.dto';
+import { type UcanService } from 'src/ucan/ucan.service';
 import { createMainAgent } from './agents/main-agent';
+import { type MCPUCANContext } from './mcp';
 import { type TMainAgentGraphState } from './state';
 
 import { type AgActionDto } from 'src/messages/dto/send-message.dto';
+
+/**
+ * Options for agent methods that support UCAN
+ */
+interface UCANOptions {
+  /** UCAN service for MCP tool authorization */
+  ucanService?: UcanService;
+  /** Map of tool names to serialized invocations */
+  mcpInvocations?: Record<string, string>;
+}
+
 export class MainAgentGraph {
   async sendMessage(
     input: string,
@@ -21,6 +34,7 @@ export class MainAgentGraph {
     editorRoomId?: string,
     currentEntityDid?: string,
     clientType?: 'matrix' | 'slack',
+    ucanOptions?: UCANOptions,
   ): Promise<Pick<TMainAgentGraphState, 'messages'>> {
     if (!runnableConfig.configurable.sessionId) {
       throw new Error('sessionId is required');
@@ -28,6 +42,12 @@ export class MainAgentGraph {
     Logger.log(
       `[sendMessage]: msgFromMatrixRoom: ${msgFromMatrixRoom} input: ${input}`,
     );
+
+    // Build UCAN context if invocations are provided
+    const mcpUcanContext: MCPUCANContext | undefined =
+      ucanOptions?.mcpInvocations
+        ? { invocations: ucanOptions.mcpInvocations }
+        : undefined;
 
     const state = {
       messages: [
@@ -44,6 +64,7 @@ export class MainAgentGraph {
       editorRoomId,
       currentEntityDid,
       client: clientType ?? 'portal',
+      mcpUcanContext,
       ...(initialUserContext ? { userContext: initialUserContext } : {}),
     } satisfies Partial<TMainAgentGraphState>;
 
@@ -61,6 +82,7 @@ export class MainAgentGraph {
           langfuseUserId: runnableConfig.configurable.configs?.user.did,
         },
       },
+      ucanService: ucanOptions?.ucanService,
     });
 
     const result = await agent.invoke(
@@ -103,6 +125,7 @@ export class MainAgentGraph {
     editorRoomId?: string,
     currentEntityDid?: string,
     agActions?: AgActionDto[],
+    ucanOptions?: UCANOptions,
   ) {
     if (!runnableConfig.configurable.sessionId) {
       throw new Error('sessionId is required');
@@ -117,6 +140,12 @@ export class MainAgentGraph {
         Logger.debug('[streamMessage] Abort signal fired!');
       });
     }
+
+    // Build UCAN context if invocations are provided
+    const mcpUcanContext: MCPUCANContext | undefined =
+      ucanOptions?.mcpInvocations
+        ? { invocations: ucanOptions.mcpInvocations }
+        : undefined;
 
     const state = {
       messages: [
@@ -133,6 +162,7 @@ export class MainAgentGraph {
       editorRoomId,
       currentEntityDid,
       client: 'portal',
+      mcpUcanContext,
       ...(initialUserContext ? { userContext: initialUserContext } : {}),
       agActions,
     } satisfies Partial<TMainAgentGraphState>;
@@ -150,6 +180,7 @@ export class MainAgentGraph {
           langfuseUserId: runnableConfig.configurable.configs?.user.did,
         },
       },
+      ucanService: ucanOptions?.ucanService,
     });
 
     const stream = agent.streamEvents(
@@ -166,6 +197,7 @@ export class MainAgentGraph {
         ],
         browserTools,
         agActions,
+        mcpUcanContext,
         ...(initialUserContext ? { userContext: initialUserContext } : {}),
         editorRoomId,
         currentEntityDid,

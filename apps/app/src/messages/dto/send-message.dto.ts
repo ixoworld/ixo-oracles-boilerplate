@@ -138,6 +138,20 @@ export class SendMessageDto {
   @IsOptional()
   @IsString()
   timezone?: string;
+
+  @ApiProperty({
+    description:
+      'UCAN invocations for protected MCP tools. Map of tool names to base64-encoded CAR invocations.',
+    required: false,
+    type: Object,
+    example: {
+      postgres__query:
+        'OqJlcm9vdHOB2CpYJQABcRIg... (base64-encoded CAR invocation)',
+    },
+  })
+  @IsOptional()
+  @IsObject()
+  mcpInvocations?: Record<string, string>;
 }
 
 export class SendMessagePayload {
@@ -154,6 +168,12 @@ export class SendMessagePayload {
     editorRoomId?: string;
     currentEntityDid?: string;
   };
+
+  /**
+   * UCAN invocations for protected MCP tools
+   * Map of tool names (e.g., "postgres__query") to base64-encoded CAR invocations
+   */
+  mcpInvocations?: Record<string, string>;
 }
 
 export class AbortRequestDto {
