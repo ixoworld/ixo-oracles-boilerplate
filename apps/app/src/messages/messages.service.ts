@@ -18,9 +18,11 @@ import {
 
 import {
   BadRequestException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   type OnModuleDestroy,
   type OnModuleInit,
 } from '@nestjs/common';
@@ -32,6 +34,7 @@ import { MainAgentGraph } from 'src/graph';
 import { cleanAdditionalKwargs } from 'src/graph/nodes/chat-node/utils';
 import { type TMainAgentGraphState } from 'src/graph/state';
 import { type ENV } from 'src/types';
+import { UcanService } from 'src/ucan/ucan.service';
 import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 import { normalizeDid } from 'src/utils/header.utils';
 import { runWithSSEContext } from 'src/utils/sse-context';
@@ -58,6 +61,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     private readonly sessionManagerService: SessionManagerService,
     private readonly config: ConfigService<ENV>,
     private readonly checkpointStorageSyncService: UserMatrixSqliteSyncService,
+    @Optional() private readonly ucanService?: UcanService,
   ) {
     this.matrixManager = this.sessionManagerService.matrixManger;
   }
@@ -357,6 +361,11 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
               params.metadata?.editorRoomId,
               params.metadata?.currentEntityDid,
               params.agActions ?? [],
+              // UCAN options for MCP tool authorization
+              {
+                ucanService: this.ucanService,
+                mcpInvocations: params.mcpInvocations,
+              },
             );
 
             let fullContent = '';
