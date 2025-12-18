@@ -452,6 +452,225 @@ function AuthStatus() {
 
 ---
 
+### useAgAction
+
+Register AG-UI actions that the AI oracle can invoke to generate dynamic user interfaces.
+
+#### Signature
+
+```typescript
+function useAgAction<TSchema extends z.ZodTypeAny>(
+  config: AgActionConfig<TSchema>,
+): void;
+```
+
+#### Parameters
+
+```typescript
+interface AgActionConfig<TSchema extends z.ZodTypeAny> {
+  name: string;
+  description: string;
+  parameters: TSchema;
+  handler: (args: z.infer<TSchema>) => Promise<any> | any;
+  render?: (props: {
+    status?: 'isRunning' | 'done' | 'error';
+    args?: z.infer<TSchema>;
+    result?: any;
+    isLoading?: boolean;
+  }) => React.ReactElement | null;
+}
+```
+
+| Parameter     | Type        | Required | Description                                                             |
+| ------------- | ----------- | -------- | ----------------------------------------------------------------------- |
+| `name`        | `string`    | Yes      | Unique identifier for the action                                        |
+| `description` | `string`    | Yes      | Description visible to the AI (include schema hints for better results) |
+| `parameters`  | `ZodSchema` | Yes      | Zod schema for automatic validation                                     |
+| `handler`     | `function`  | Yes      | Async function that executes the action logic                           |
+| `render`      | `function`  | No       | Optional React component renderer for custom UI                         |
+
+#### Type Definitions
+
+```typescript
+// Registered action metadata
+export interface AgAction {
+  name: string;
+  description: string;
+  parameters: z.ZodTypeAny;
+  hasRender: boolean;
+}
+```
+
+#### Basic Example
+
+```typescript
+import { useAgAction } from '@ixo/oracles-client-sdk';
+import { z } from 'zod';
+
+const createDataTableSchema = z.object({
+  title: z.string().optional().describe('Table title'),
+  columns: z.array(
+    z.object({
+      key: z.string(),
+      label: z.string(),
+      type: z.enum(['string', 'number', 'boolean']).optional(),
+    })
+  ),
+  data: z.array(z.record(z.any())),
+});
+
+function ChatInterface() {
+  useAgAction({
+    name: 'create_data_table',
+    description: 'Create a data table with columns and rows',
+    parameters: createDataTableSchema,
+
+    handler: async (args) => {
+      // TypeScript knows the exact shape of args!
+      console.log('Creating table with', args.data.length, 'rows');
+      return { success: true, rowCount: args.data.length };
+    },
+
+    render: ({ status, args }) => {
+      if (status === 'done' && args) {
+        return <DataTable {...args} />;
+      }
+      return null;
+    },
+  });
+
+  // ... rest of chat interface
+}
+```
+
+#### Advanced Example: Multi-Operation Dashboard
+
+```typescript
+const manageDashboardSchema = z.discriminatedUnion('operation', [
+  z.object({
+    operation: z.literal('create'),
+    components: z.array(componentSchema),
+  }),
+  z.object({
+    operation: z.literal('update_layout'),
+    changes: z.array(z.object({ id: z.string(), position: positionSchema })),
+  }),
+  z.object({
+    operation: z.literal('add_component'),
+    component: componentSchema,
+  }),
+  z.object({
+    operation: z.literal('remove_component'),
+    componentId: z.string(),
+  }),
+]);
+
+function ChatInterface() {
+  const dashboardStateRef = useRef<DashboardState>({
+    layout: { type: 'grid', columns: 12, gap: 'md' },
+    components: new Map(),
+  });
+
+  useAgAction({
+    name: 'manage_dashboard',
+    description:
+      'Create and manage multi-component dashboards with operations: ' +
+      'create, update_layout, add_component, remove_component',
+    parameters: manageDashboardSchema,
+
+    handler: async (args) => {
+      const currentState = dashboardStateRef.current;
+
+      switch (args.operation) {
+        case 'create':
+          // Create new dashboard
+          dashboardStateRef.current = {
+            layout: currentState.layout,
+            components: new Map(
+              args.components.map(c => [c.id, c])
+            ),
+          };
+          return { success: true, operation: 'create' };
+
+        case 'add_component':
+          // Add component to existing dashboard
+          currentState.components.set(args.component.id, args.component);
+          return { success: true, operation: 'add_component' };
+
+        // ... other operations
+      }
+    },
+
+    render: ({ status }) => {
+      if (status === 'done') {
+        return <DashboardCanvas state={dashboardStateRef.current} />;
+      }
+      return null;
+    },
+  });
+}
+```
+
+#### Integration
+
+AG-UI actions integrate seamlessly with the `OraclesProvider` context:
+
+1. **Registration** - Actions are registered on component mount
+2. **Discovery** - AI oracle receives list of available actions
+3. **Validation** - SDK automatically validates arguments against Zod schema
+4. **Execution** - Handler runs with validated, type-safe arguments
+5. **Rendering** - Optional render function creates UI when action completes
+6. **Cleanup** - Actions are unregistered on component unmount
+
+#### Lifecycle
+
+```typescript
+// Mount → Register
+useEffect(() => {
+  registerAgAction(action, handler, render);
+  return () => unregisterAgAction(action.name);
+}, [action.name]);
+
+// AI Invocation → Validation → Handler → Render
+1. AI calls action with arguments
+2. SDK validates args against schema
+3. Handler executes if valid
+4. Render function called with status='done'
+5. Result displayed in chat
+```
+
+#### Error Handling
+
+The SDK provides automatic schema validation with detailed error messages:
+
+```typescript
+// If validation fails
+{
+  error: "Schema validation failed for action 'create_table'. " +
+    'columns: Required. ' +
+    'data: Expected array, received string. ' +
+    'Required format: { full JSON schema }';
+}
+```
+
+Throw errors in your handler for business logic failures:
+
+```typescript
+handler: async (args) => {
+  if (args.data.length === 0) {
+    throw new Error('Cannot create table with empty data');
+  }
+  return { success: true };
+};
+```
+
+#### See Also
+
+- [AG-UI Tools Guide](./AG_UI_TOOLS.md) - Complete guide with examples
+- [Usage Guide](./USAGE_GUIDE.md#ag-ui-actions) - Getting started
+
+---
+
 ### useLiveAgent
 
 Enable voice and video calls with AI agents.
@@ -661,8 +880,9 @@ interface IMessage {
     name: string;
     id: string;
     args: unknown;
-    status?: 'isRunning' | 'done';
+    status?: 'isRunning' | 'done' | 'error';
     output?: string;
+    error?: string;
   }>;
 }
 
@@ -678,11 +898,13 @@ interface IComponentMetadata {
   props: {
     id: string;
     args: unknown;
-    status?: 'isRunning' | 'done';
+    status?: 'isRunning' | 'done' | 'error';
     output?: string;
+    error?: string;
     event?: any;
     payload?: any;
     isToolCall?: boolean;
+    isAgAction?: boolean;
   };
 }
 
@@ -695,6 +917,43 @@ interface IChatSession {
 
 // Chat status
 type ChatStatus = 'ready' | 'submitted' | 'streaming' | 'error';
+```
+
+### AG-UI Action Types
+
+```typescript
+// AG-UI action configuration
+interface AgActionConfig<TSchema extends z.ZodTypeAny = z.ZodTypeAny> {
+  name: string;
+  description: string;
+  parameters: TSchema;
+  handler: (args: z.infer<TSchema>) => Promise<any> | any;
+  render?: (props: {
+    status?: 'isRunning' | 'done' | 'error';
+    args?: z.infer<TSchema>;
+    result?: any;
+    isLoading?: boolean;
+  }) => React.ReactElement | null;
+}
+
+// Registered AG action metadata
+interface AgAction {
+  name: string;
+  description: string;
+  parameters: z.ZodTypeAny;
+  hasRender: boolean;
+}
+
+// Handler function type
+type AgActionHandler<T = any> = (args: T) => Promise<any> | any;
+
+// Render function type
+type AgActionRender<T = any> = (props: {
+  status?: 'isRunning' | 'done' | 'error';
+  args?: T;
+  result?: any;
+  isLoading?: boolean;
+}) => React.ReactElement | null;
 ```
 
 ### Event Types

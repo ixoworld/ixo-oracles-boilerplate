@@ -1,14 +1,17 @@
-import dotenv from 'dotenv';
 import { GraphQLClient } from 'graphql-request';
 import { getSdk } from './generated/sdk.js';
 
-dotenv.config();
 /**
  * GraphQL endpoint URL for the IXO Blocksync API
  * This points to the testnet environment
+ *
+ * Note: dotenv.config() is not needed here as environment variables
+ * are already loaded by the runtime (Next.js, Node.js, etc.)
  */
 const GRAPHQL_ENDPOINT =
-  process.env.BLOCKSYNC_GRAPHQL_URL || process.env.NEXT_PUBLIC_GRAPHQL_URL;
+  typeof process !== 'undefined' && process.env
+    ? process.env.BLOCKSYNC_GRAPHQL_URL || process.env.NEXT_PUBLIC_GRAPHQL_URL
+    : undefined;
 if (!GRAPHQL_ENDPOINT) {
   throw new Error(
     'BLOCKSYNC_GRAPHQL_URL or NEXT_PUBLIC_GRAPHQL_URL is not set',

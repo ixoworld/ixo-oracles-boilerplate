@@ -21,7 +21,10 @@ export const useOracleSessions = (
   const queryClient = useQueryClient();
   const { authedRequest } = useOraclesContext();
 
-  const { config } = useOraclesConfig(oracleDid);
+  const { config, isReady: isConfigReady } = useOraclesConfig(
+    oracleDid,
+    overrides,
+  );
 
   const apiUrl = overrides?.baseUrl ?? config.apiUrl ?? '';
   const limit = overrides?.limit ?? 20;
@@ -129,5 +132,6 @@ export const useOracleSessions = (
     isDeletingSession,
     isDeleteSessionError,
     refetch,
+    isConfigReady,
   };
 };

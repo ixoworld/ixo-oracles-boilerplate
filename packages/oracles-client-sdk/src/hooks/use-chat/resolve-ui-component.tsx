@@ -1,9 +1,14 @@
 import {
+  type BrowserToolCallEventPayload,
   type RenderComponentEventPayload,
   type ToolCallEventPayload,
 } from '@ixo/oracles-events';
 import { createElement, type ComponentProps } from 'react';
 
+import {
+  type SSEActionCallEventData,
+  type SSEErrorEvent,
+} from '../../utils/sse-parser.js';
 import { Event } from './resolve-content.js';
 import { type ToolCallEvent, type UIComponentProps } from './v2/types.js';
 
@@ -29,11 +34,18 @@ export const resolveUIComponent = (
     props: {
       id: string;
       args: unknown;
-      status?: 'isRunning' | 'done';
+      status?: 'isRunning' | 'done' | 'error';
       output?: string;
       event?: Event;
-      payload?: ToolCallEventPayload | RenderComponentEventPayload;
+      payload?:
+        | ToolCallEventPayload
+        | RenderComponentEventPayload
+        | BrowserToolCallEventPayload
+        | SSEErrorEvent
+        | SSEActionCallEventData;
       isToolCall?: boolean;
+      isAgAction?: boolean;
+      error?: string;
     };
   },
 ): React.ReactElement | undefined => {
@@ -75,16 +87,43 @@ export const resolveUIComponent = (
     } = {
       id: component.props.id,
       args: component.props.args,
-      status: component.props.status,
+      status: component.props.status as 'isRunning' | 'done' | undefined,
       output: component.props.output,
       isLoading: isRunning,
-      requestId: component.props.payload?.requestId ?? '',
-      sessionId: component.props.payload?.sessionId ?? '',
+      requestId: component.props.payload && 'requestId' in component.props.payload
+        ? component.props.payload.requestId
+        : '',
+      sessionId: component.props.payload && 'sessionId' in component.props.payload
+        ? component.props.payload.sessionId
+        : '',
       toolName: component.name,
-      eventId: component.props.payload?.eventId ?? '',
+      eventId: component.props.payload && 'eventId' in component.props.payload
+        ? component.props.payload.eventId
+        : '',
       key: `${component.name}${component.props.id}`,
     };
     return createElement(Component, toolCallComponentProps);
+  }
+
+  if (component.props.isAgAction) {
+    // Use AgActionToolCall if available, otherwise fallback to ToolCall
+    const AgActionComponent =
+      componentsMap.AgActionToolCall || componentsMap.ToolCall;
+
+    const agActionComponentProps = {
+      id: component.props.id,
+      actionName: component.name,
+      args: component.props.args,
+      output: component.props.output,
+      status: component.props.status,
+      error: component.props.error,
+      isLoading: isRunning,
+      key: `${component.name}${component.props.id}`,
+    };
+    return createElement(
+      AgActionComponent as React.FC<any>,
+      agActionComponentProps,
+    );
   }
 
   // For other components, use generic props

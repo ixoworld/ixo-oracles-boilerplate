@@ -35,7 +35,7 @@ export function useLiveKitAgent(
   const [sessionViewVisible, setSessionViewVisible] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const { authedRequest } = useOraclesContext();
-  const { config } = useOraclesConfig(oracleDid, {
+  const { config, isReady: isConfigReady } = useOraclesConfig(oracleDid, {
     baseUrl: overrides?.baseUrl,
   });
   // Use ref to store current call info without causing re-renders
@@ -281,5 +281,6 @@ export function useLiveKitAgent(
     endCall,
     isConnecting,
     isReady: sessionViewVisible,
+    isConfigReady,
   };
 }
