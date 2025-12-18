@@ -21,7 +21,7 @@ export const useLiveAgent = (
 ) => {
   const { wallet, authedRequest } = useOraclesContext();
 
-  const { config } = useOraclesConfig(oracleDid, {
+  const { config, isReady: isConfigReady } = useOraclesConfig(oracleDid, {
     baseUrl: overrides?.baseUrl,
   });
   const matrixClientRef = useMemo(
@@ -113,5 +113,6 @@ export const useLiveAgent = (
     ...liveKitAgent,
     isCalling,
     callAgent,
+    isConfigReady,
   };
 };

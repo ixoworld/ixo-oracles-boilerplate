@@ -5,14 +5,11 @@ import store from 'store';
 
 import { GasPrice, StdFee } from '@cosmjs/stargate';
 import { TxResponse } from '@ixo/impactxclient-sdk/types/codegen/cosmos/base/abci/v1beta1/abci.js';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 export type SigningClientType = Awaited<ReturnType<typeof createSigningClient>>;
 export type QueryClientType = Awaited<ReturnType<typeof createQueryClient>>;
-const RPC_URL = process.env.RPC_URL;
-const SECP_MNEMONIC = process.env.SECP_MNEMONIC;
+const RPC_URL = typeof process !== 'undefined' ? process.env.RPC_URL : undefined;
+const SECP_MNEMONIC = typeof process !== 'undefined' ? process.env.SECP_MNEMONIC : undefined;
 
 export class Client {
   public queryClient!: QueryClientType;

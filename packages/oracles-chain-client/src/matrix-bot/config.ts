@@ -1,14 +1,14 @@
-import dotenv from 'dotenv';
-
-dotenv.config();
-
 export const chainNetwork: 'devnet' | 'testnet' | 'mainnet' =
-  (process.env.CHAIN_NETWORK as 'devnet' | 'testnet' | 'mainnet') ??
-  (process.env.NEXT_PUBLIC_CHAIN_NETWORK as 'devnet' | 'testnet' | 'mainnet') ??
-  (process.env.NETWORK as 'devnet' | 'testnet' | 'mainnet') ??
-  'devnet';
+  (typeof process !== 'undefined' && process.env
+    ? (process.env.CHAIN_NETWORK as 'devnet' | 'testnet' | 'mainnet') ??
+      (process.env.NEXT_PUBLIC_CHAIN_NETWORK as 'devnet' | 'testnet' | 'mainnet') ??
+      (process.env.NETWORK as 'devnet' | 'testnet' | 'mainnet')
+    : undefined) ?? 'devnet';
 if (!chainNetwork) {
-  throw new Error('CHAIN_NETWORK is not set: ' + process.env.CHAIN_NETWORK);
+  throw new Error(
+    'CHAIN_NETWORK is not set: ' +
+      (typeof process !== 'undefined' ? process.env.CHAIN_NETWORK : 'process undefined'),
+  );
 }
 
 if (!['devnet', 'testnet', 'mainnet'].includes(chainNetwork)) {
