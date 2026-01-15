@@ -1,5 +1,9 @@
 import { Claims, Client, Payments } from '@ixo/oracles-chain-client';
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { TokenLimiter } from 'src/utils/token-limit-handler';
 
@@ -37,6 +41,12 @@ interface ProcessClaimParams {
   internalClaimId: string;
   denom: Denom;
   configService: ConfigService<ENV>;
+}
+
+interface SplitContext {
+  index: number;
+  total: number;
+  originalAmount: number;
 }
 
 @Injectable()
@@ -80,6 +90,29 @@ export class TasksService {
     backoffFactor: 2,
     initialInterval: 1000,
   };
+
+  /**
+   * Calculate splits for held amount that exceeds max allowed claim amount
+   * @param heldAmount - Total held amount to split
+   * @param maxAmount - Maximum allowed amount per claim
+   * @returns Array of amounts, each not exceeding maxAmount
+   */
+  private calculateSplits(heldAmount: number, maxAmount: number): number[] {
+    if (heldAmount <= maxAmount) {
+      return [heldAmount];
+    }
+
+    const splits: number[] = [];
+    let remaining = heldAmount;
+
+    while (remaining > 0) {
+      const chunk = Math.min(remaining, maxAmount);
+      splits.push(chunk);
+      remaining -= chunk;
+    }
+
+    return splits;
+  }
 
   // Task: Submit intent (payment to escrow)
   private submitIntentTask = task(
@@ -277,8 +310,11 @@ export class TasksService {
 
   @Cron(CronExpression.EVERY_MINUTE)
   async processHeldAmount() {
-    const matrixAccountRoomId = this.configService.get('MATRIX_ACCOUNT_ROOM_ID');
-    const disableCredits = this.configService.get('DISABLE_CREDITS', false) || !matrixAccountRoomId;
+    const matrixAccountRoomId = this.configService.get(
+      'MATRIX_ACCOUNT_ROOM_ID',
+    );
+    const disableCredits =
+      this.configService.get('DISABLE_CREDITS', false) || !matrixAccountRoomId;
     if (disableCredits) {
       this.logger.debug(
         'Claims task submission skipped (DISABLE_CREDITS=true)',
@@ -326,55 +362,83 @@ export class TasksService {
           continue;
         }
 
-        // Get or create pending claim (handles amount updates and retries automatically)
-        const internalClaimId = await TokenLimiter.getOrCreatePendingClaim(
-          userDid,
-          heldAmount,
+        // Get max allowed claim amount from oracle pricing list
+        const oraclePricingList = await Payments.getOraclePricingList(
+          this.configService.getOrThrow('ORACLE_DID'),
         );
+        const maxAllowedClaimAmount = oraclePricingList.find(
+          (item) => item.denom === this.denom,
+        )?.amount;
 
-        // Create workflow params
-        const workflowParams: ProcessClaimParams = {
-          userDid,
-          heldAmount,
-          subscription: {
+        if (!maxAllowedClaimAmount) {
+          throw new InternalServerErrorException(
+            `Max allowed claim amount not found for denom: ${this.denom}`,
+          );
+        }
+
+        const maxAmount = parseInt(maxAllowedClaimAmount, 10);
+
+        // Check if splitting is needed
+        const splits = this.calculateSplits(heldAmount, maxAmount);
+
+        if (splits.length > 1) {
+          this.logger.log(
+            `Held amount ${heldAmount} for user ${userDid} exceeds max allowed ${maxAmount}. Splitting into ${splits.length} chunks: ${splits.join(', ')}`,
+          );
+
+          // Process each split sequentially
+          for (let i = 0; i < splits.length; i++) {
+            const splitAmount = splits[i];
+            try {
+              await this.processAmount(
+                userDid,
+                splitAmount,
+                {
+                  adminAddress: subscription.adminAddress,
+                  claimCollections: {
+                    oracleClaimsCollectionId:
+                      subscription.claimCollections.oracleClaimsCollectionId,
+                  },
+                  totalCredits: subscription.totalCredits,
+                },
+                {
+                  index: i + 1,
+                  total: splits.length,
+                  originalAmount: heldAmount,
+                },
+              );
+            } catch (error) {
+              this.logger.error(
+                `Error processing split ${i + 1}/${splits.length} for user ${userDid}:`,
+                error instanceof Error ? error.message : String(error),
+                error instanceof Error ? error.stack : undefined,
+              );
+              // Stop processing remaining splits on failure
+              throw new Error(
+                `Failed to process split ${i + 1}/${splits.length}: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+              );
+            }
+          }
+
+          this.logger.log(
+            `Successfully processed all ${splits.length} splits for user: ${userDid}`,
+          );
+        } else {
+          // No splitting needed - process normally
+          this.logger.log(
+            `Processing held amount ${heldAmount} for user ${userDid} (no splitting needed)`,
+          );
+
+          await this.processAmount(userDid, heldAmount, {
             adminAddress: subscription.adminAddress,
             claimCollections: {
               oracleClaimsCollectionId:
                 subscription.claimCollections.oracleClaimsCollectionId,
             },
             totalCredits: subscription.totalCredits,
-          },
-          internalClaimId,
-          denom: this.denom,
-          configService: this.configService,
-        };
-
-        // Create workflow config with thread_id
-        const threadId = `${userDid}:${internalClaimId}`;
-        const config = {
-          configurable: {
-            thread_id: threadId,
-          },
-        };
-
-        // Invoke the workflow
-        const workflow = this.getProcessClaimWorkflow();
-        const result = await workflow.invoke(workflowParams, config);
-
-        if (result.success && result.cid) {
-          // Clear both pending claim and held amount atomically
-          await Promise.all([
-            TokenLimiter.clearPendingClaim(userDid),
-            TokenLimiter.deleteUserHeldAmount(userDid),
-          ]);
-
-          this.logger.log(
-            `Successfully processed claim ${result.cid} and cleared held amount and pending claim for user: ${userDid}`,
-          );
-        } else {
-          this.logger.warn(
-            `Workflow completed but result indicates failure for user: ${userDid}`,
-          );
+          });
         }
       } catch (error) {
         this.logger.error(
@@ -384,6 +448,95 @@ export class TasksService {
         );
         // Don't clear held amount or pending claim - will retry next run
       }
+    }
+  }
+
+  private async processAmount(
+    userDid: string,
+    heldAmount: number,
+    subscription: {
+      adminAddress: string;
+      claimCollections: { oracleClaimsCollectionId: string };
+      totalCredits: number;
+    },
+    splitContext?: SplitContext,
+  ) {
+    // Validate held amount
+    if (heldAmount <= 0) {
+      throw new Error(
+        `Invalid held amount: ${heldAmount}. Must be greater than 0.`,
+      );
+    }
+
+    // Log split context if this is a split
+    if (splitContext) {
+      this.logger.log(
+        `Processing split ${splitContext.index}/${splitContext.total} (amount: ${heldAmount}, original: ${splitContext.originalAmount}) for user: ${userDid}`,
+      );
+    }
+
+    const internalClaimId = await TokenLimiter.getOrCreatePendingClaim(
+      userDid,
+      heldAmount,
+    );
+
+    // Create workflow params
+    const workflowParams: ProcessClaimParams = {
+      userDid,
+      heldAmount,
+      subscription: {
+        adminAddress: subscription.adminAddress,
+        claimCollections: {
+          oracleClaimsCollectionId:
+            subscription.claimCollections.oracleClaimsCollectionId,
+        },
+        totalCredits: subscription.totalCredits,
+      },
+      internalClaimId,
+      denom: this.denom,
+      configService: this.configService,
+    };
+
+    // Create workflow config with thread_id
+    // Use unique thread ID for splits to avoid state collision
+    const threadId = splitContext
+      ? `${userDid}:${internalClaimId}:split${splitContext.index}`
+      : `${userDid}:${internalClaimId}`;
+    const config = {
+      configurable: {
+        thread_id: threadId,
+      },
+    };
+
+    // Invoke the workflow
+    const workflow = this.getProcessClaimWorkflow();
+    const result = await workflow.invoke(workflowParams, config);
+
+    if (result.success && result.cid) {
+      // Clear pending claim
+      await TokenLimiter.clearPendingClaim(userDid);
+
+      // For splits, incrementally decrement held amount
+      // For normal processing, delete all held amount
+      if (splitContext) {
+        await TokenLimiter.incrementUserHeldAmount(userDid, -heldAmount);
+        this.logger.log(
+          `Successfully processed split ${splitContext.index}/${splitContext.total} (claim ${result.cid}) and decremented held amount by ${heldAmount} for user: ${userDid}`,
+        );
+      } else {
+        await TokenLimiter.deleteUserHeldAmount(userDid);
+        this.logger.log(
+          `Successfully processed claim ${result.cid} and cleared held amount and pending claim for user: ${userDid}`,
+        );
+      }
+    } else {
+      this.logger.warn(
+        `Workflow completed but result indicates failure for user: ${userDid}${
+          splitContext
+            ? ` (split ${splitContext.index}/${splitContext.total})`
+            : ''
+        }`,
+      );
     }
   }
 }
