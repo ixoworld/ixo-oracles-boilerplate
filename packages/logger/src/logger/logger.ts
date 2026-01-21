@@ -5,7 +5,7 @@ import {
   transports,
   type Logger as WinstonLogger,
 } from 'winston';
-import { getEmoji } from './utils';
+import { getEmoji } from './utils.js';
 
 export interface ILoggerOptions {
   context?: string;

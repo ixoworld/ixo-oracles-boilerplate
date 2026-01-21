@@ -9,7 +9,7 @@ on:
       packages:
         description: 'Comma-separated list of packages to override default ("@ixo/oracles-chain-client,@ixo/oracles-client-sdk")'
         required: false
-        default: '@ixo/oracles-chain-client,@ixo/oracles-client-sdk,@ixo/oracles-events'
+        default: "@ixo/logger,@ixo/oracles-chain-client,@ixo/oracles-client-sdk,@ixo/oracles-events"
         type: string
 
 jobs:
