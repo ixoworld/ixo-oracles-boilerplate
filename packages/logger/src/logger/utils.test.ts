@@ -1,4 +1,4 @@
-import { flattenArray, getEmoji } from './utils';
+import { flattenArray, getEmoji } from './utils.js';
 
 describe('flattenArray', () => {
   it('should flatten a nested array', () => {
