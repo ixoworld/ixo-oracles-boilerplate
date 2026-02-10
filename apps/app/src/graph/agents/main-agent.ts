@@ -1,5 +1,6 @@
 import {
   getOpenRouterChatModel,
+  jsonToYaml,
   parserActionTool,
   parserBrowserTool,
   SearchEnhancedResponse,
@@ -8,27 +9,40 @@ import { IRunnableConfigWithRequiredFields } from '@ixo/matrix';
 import { SqliteSaver } from '@ixo/sqlite-saver';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createDeepAgent, FilesystemBackend } from 'deepagents';
-import { toolRetryMiddleware } from 'langchain';
+import { createAgent, toolRetryMiddleware } from 'langchain';
 import { ENV } from 'src/config';
+import { UcanService } from 'src/ucan/ucan.service';
 import { createSafetyGuardrailMiddleware } from '../middlewares/safety-guardrail-middleware';
 import { createTokenLimiterMiddleware } from '../middlewares/token-limiter-middelware';
 import { createToolValidationMiddleware } from '../middlewares/tool-validation-middleware';
 import {
   AG_UI_TOOLS_DOCUMENTATION,
   AI_ASSISTANT_PROMPT,
-  DOMAIN_CREATION_WORKFLOW_CONTENT,
   SLACK_FORMATTING_CONSTRAINTS_CONTENT,
 } from '../nodes/chat-node/prompt';
 import { TMainAgentGraphState } from '../state';
 import { contextSchema } from '../types';
 import { createDomainIndexerAgent } from './domain-indexer-agent';
-import { createEditorAgent, EditorAgentInstance } from './editor/editor-agent';
+import { createEditorAgent } from './editor/editor-agent';
 import { EDITOR_DOCUMENTATION_CONTENT } from './editor/prompts';
 import { createFirecrawlAgent } from './firecrawl-agent';
 import { createMemoryAgent } from './memory-agent';
 import { createPortalAgent } from './portal-agent';
-import { UcanService } from 'src/ucan/ucan.service';
+import { createSubagentAsTool } from './subagent-as-tool';
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
+import {
+  createMCPClient,
+  createMCPClientAndGetTools,
+  createMCPClientAndGetToolsWithUCAN,
+} from '../mcp';
+import {
+  listSkillsTool,
+  searchSkillsTool,
+} from '../nodes/tools-node/skills-tools';
+import { presentFilesTool } from './skills-agent/present-files-tool';
 
 interface InvokeMainAgentParams {
   state: Partial<TMainAgentGraphState>;
@@ -36,14 +50,6 @@ interface InvokeMainAgentParams {
   /** Optional UCAN service for MCP tool authorization */
   ucanService?: UcanService;
 }
-
-import fs from 'node:fs';
-import path from 'node:path';
-import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
-import {
-  createMCPClientAndGetTools,
-  createMCPClientAndGetToolsWithUCAN,
-} from '../mcp';
 
 const llm = getOpenRouterChatModel({
   model: 'openai/gpt-oss-120b:nitro',
@@ -56,7 +62,18 @@ const llm = getOpenRouterChatModel({
     effort: 'low',
   },
 });
-
+const sandboxMCP = createMCPClient({
+  mcpServers: {
+    sandbox: {
+      type: 'http',
+      url: 'http://localhost:8787/mcp',
+      transport: 'http',
+      headers: {
+        Authorization: `Bearer ${process.env.SANDBOX_API_KEY}`,
+      },
+    },
+  },
+});
 export const createMainAgent = async ({
   state,
   config,
@@ -110,17 +127,18 @@ export const createMainAgent = async ({
     firecrawlAgent,
     domainIndexerAgent,
     mcpTools,
+    sandboxTools,
   ] = await Promise.all([
     AI_ASSISTANT_PROMPT.format({
       APP_NAME: 'IXO | IXO Portal',
-      IDENTITY_CONTEXT: formatContextData(state.userContext?.identity),
-      WORK_CONTEXT: formatContextData(state.userContext?.work),
-      GOALS_CONTEXT: formatContextData(state.userContext?.goals),
-      INTERESTS_CONTEXT: formatContextData(state.userContext?.interests),
-      RELATIONSHIPS_CONTEXT: formatContextData(
-        state.userContext?.relationships,
+      IDENTITY_CONTEXT: jsonToYaml(state?.userContext?.identity ?? {}),
+      WORK_CONTEXT: jsonToYaml(state?.userContext?.work ?? {}),
+      GOALS_CONTEXT: jsonToYaml(state?.userContext?.goals ?? {}),
+      INTERESTS_CONTEXT: jsonToYaml(state?.userContext?.interests ?? {}),
+      RELATIONSHIPS_CONTEXT: jsonToYaml(
+        state?.userContext?.relationships ?? {},
       ),
-      RECENT_CONTEXT: formatContextData(state.userContext?.recent),
+      RECENT_CONTEXT: jsonToYaml(state?.userContext?.recent ?? {}),
       TIME_CONTEXT: timeContext,
       EDITOR_DOCUMENTATION: state.editorRoomId
         ? EDITOR_DOCUMENTATION_CONTENT
@@ -130,9 +148,6 @@ export const createMainAgent = async ({
         state.client === 'slack' ? SLACK_FORMATTING_CONSTRAINTS_CONTENT : '',
       AG_UI_TOOLS_DOCUMENTATION:
         agActionTools.length > 0 ? AG_UI_TOOLS_DOCUMENTATION : '',
-      DOMAIN_CREATION_WORKFLOW: state.editorRoomId
-        ? DOMAIN_CREATION_WORKFLOW_CONTENT
-        : '',
     }),
     createPortalAgent({
       tools:
@@ -153,24 +168,29 @@ export const createMainAgent = async ({
     createFirecrawlAgent(),
     createDomainIndexerAgent(),
     getMcpTools(),
+    sandboxMCP?.getTools() ?? Promise.resolve([]),
   ]);
 
-  // Conditionally create BlockNote tools if editorRoomId is provided
-  let blockNoteAgent: EditorAgentInstance | undefined = undefined;
+  // Conditionally create BlockNote (editor) agent tool if editorRoomId is provided
+  let blockNoteAgentSpec:
+    | Awaited<ReturnType<typeof createEditorAgent>>
+    | undefined;
   if (state.editorRoomId) {
     Logger.log(`📝 Editor room ID provided: ${state.editorRoomId}`);
     Logger.log('🔧 Initializing BlockNote tools...');
-
-    blockNoteAgent = await createEditorAgent({
+    blockNoteAgentSpec = await createEditorAgent({
       room: state.editorRoomId,
       mode: 'edit',
     });
   }
 
-  const agents = [portalAgent, domainIndexerAgent, memoryAgent, firecrawlAgent];
-  if (blockNoteAgent) {
-    agents.push(blockNoteAgent);
-  }
+  const callPortalAgentTool = createSubagentAsTool(portalAgent);
+  const callMemoryAgentTool = createSubagentAsTool(memoryAgent);
+  const callFirecrawlAgentTool = createSubagentAsTool(firecrawlAgent);
+  const callDomainIndexerAgentTool = createSubagentAsTool(domainIndexerAgent);
+  const callEditorAgentTool = blockNoteAgentSpec
+    ? createSubagentAsTool(blockNoteAgentSpec)
+    : null;
 
   // check db folder if not exists, create it
   const dbFolder = path.join(
@@ -179,15 +199,6 @@ export const createMainAgent = async ({
   );
   if (!fs.existsSync(dbFolder)) {
     fs.mkdirSync(dbFolder, { recursive: true });
-  }
-
-  // create agent_folder
-  const agentFolder = path.join(
-    'agent_folders',
-    configurable?.configs?.user?.did,
-  );
-  if (!fs.existsSync(agentFolder)) {
-    fs.mkdirSync(agentFolder, { recursive: true });
   }
 
   // Build middleware list conditionally
@@ -204,11 +215,22 @@ export const createMainAgent = async ({
     middleware.push(createTokenLimiterMiddleware());
   }
 
-  const agent = createDeepAgent({
+  const agent = createAgent({
     model: llm,
-    subagents: agents,
-    contextSchema,
-    tools: [...mcpTools, ...agActionTools],
+    contextSchema: contextSchema as any,
+    tools: [
+      ...mcpTools,
+      ...sandboxTools,
+      ...agActionTools,
+      presentFilesTool,
+      listSkillsTool,
+      searchSkillsTool,
+      callPortalAgentTool,
+      callMemoryAgentTool,
+      callFirecrawlAgentTool,
+      callDomainIndexerAgentTool,
+      ...(callEditorAgentTool ? [callEditorAgentTool] : []),
+    ],
     middleware,
     systemPrompt,
     checkpointer: SqliteSaver.fromConnString(
@@ -216,11 +238,6 @@ export const createMainAgent = async ({
         configurable?.configs?.user?.did,
       ),
     ),
-    backend: new FilesystemBackend({
-      rootDir: agentFolder,
-      virtualMode: true,
-    }),
-
     name: 'Companion Agent',
   });
 

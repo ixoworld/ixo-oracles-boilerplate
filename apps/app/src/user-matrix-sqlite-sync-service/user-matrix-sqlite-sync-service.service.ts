@@ -76,7 +76,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
   >();
 
   static createUserStorageKey(userDid: string): string {
-    const key = `checkpoint_${userDid}_${configService.getOrThrow('ORACLE_DID')}`;
+    const key = `checkpoint1_${userDid}_${configService.getOrThrow('ORACLE_DID')}`;
     return createHash('sha256').update(key).digest('hex').substring(0, 17);
   }
 
@@ -194,8 +194,8 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
           Logger.log(`Closed idle database connection for user ${userDid}`);
         } catch (error) {
           Logger.error(
-            `Failed to cleanup DB connection for user ${userDid}`,
-            error,
+            `Failed to sync checkpoint file to matrix storage for user ${userDid}`,
+            error.message,
           );
         }
       }
@@ -210,9 +210,12 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
         try {
           await this.uploadCheckpointToMatrixStorage({ userDid });
         } catch (error) {
+          const fileSize = filePath
+            ? await fs.stat(filePath).then((stats) => stats.size)
+            : undefined;
           Logger.error(
-            `Failed to sync checkpoint file to matrix storage for user ${userDid}`,
-            error,
+            `Failed to sync checkpoint file to matrix storage for user ${userDid} file size: ${fileSize ? bytesToHumanReadable(fileSize) : 'unknown'}`,
+            error.message,
           );
           // failed to sync, continue to next user so we can retry next hour
           continue;

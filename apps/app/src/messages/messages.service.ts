@@ -13,12 +13,12 @@ import {
 import {
   ActionCallEvent,
   ReasoningEvent,
+  RenderComponentEvent,
   ToolCallEvent,
 } from '@ixo/oracles-events';
 
 import {
   BadRequestException,
-  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -469,6 +469,36 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
                           ),
                         );
                       }
+                      // If present_files tool: also dispatch render_component for artifactPreview
+                      if (
+                        toolMessage.name === 'present_files' &&
+                        !params.res.writableEnded &&
+                        !abortController.signal.aborted
+                      ) {
+                        const toolArgs = toolCallEvent.payload.args as Record<
+                          string,
+                          unknown
+                        >;
+                        const renderPayload = {
+                          sessionId,
+                          requestId:
+                            runnableConfig.configurable.requestId ?? '',
+                          componentName: 'ArtifactPreview',
+                          args: {
+                            title: toolArgs.title,
+                            fileType: toolArgs.fileType,
+                            url: toolArgs.artifactUrl,
+                          },
+                          status: 'done' as const,
+                          eventId: toolMessage.tool_call_id,
+                        };
+                        params.res.write(
+                          formatSSE(
+                            RenderComponentEvent.eventName,
+                            renderPayload,
+                          ),
+                        );
+                      }
                       toolCallMap.delete(toolMessage.tool_call_id);
                       continue;
                     }
@@ -494,6 +524,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
                           params.msgFromMatrixRoom ?? false,
                         );
 
+                        process.stdout.write(reasoning);
                         const reasoningEvent = ReasoningEvent.createChunk(
                           sessionId,
                           runnableConfig.configurable.requestId ?? '',

@@ -51,7 +51,7 @@ ALWAYS mark as SAFE if the response:
 - Provides how-to instructions or workflows
 - Describes general system functionality or capabilities
 - Mentions tool names or agent names in the context of explaining features
-
+- ALLOW AWS pre-signed url to be used in the response
 `;
 
         const result = await safetyModel.invoke([

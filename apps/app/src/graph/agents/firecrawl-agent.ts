@@ -1,8 +1,8 @@
 import { getOpenRouterChatModel } from '@ixo/common';
-import { SubAgent } from 'deepagents';
 import { type StructuredTool } from 'langchain';
 
 import { getFirecrawlMcpTools } from '../nodes/tools-node';
+import type { AgentSpec } from './subagent-as-tool';
 
 const llm = getOpenRouterChatModel({
   model: 'openai/gpt-oss-120b:nitro',
@@ -80,7 +80,7 @@ const buildFirecrawlDescription = (tools: StructuredTool[]): string => {
   return `Firecrawl Agent specialized in web search & scraping via (${names}).`;
 };
 
-export type FirecrawlAgentInstance = Awaited<SubAgent>;
+export type FirecrawlAgentInstance = AgentSpec;
 
 export interface CreateFirecrawlAgentParams {
   extraInstructions?: string;

@@ -1,6 +1,7 @@
 import { getOpenRouterChatModel } from '@ixo/common';
-import { SubAgent } from 'deepagents';
 import { DynamicStructuredTool, type StructuredTool } from 'langchain';
+
+import type { AgentSpec } from './subagent-as-tool';
 
 const llm = getOpenRouterChatModel({
   model: 'openai/gpt-oss-120b:nitro',
@@ -78,7 +79,7 @@ const buildPortalDescription = (tools: StructuredTool[]): string => {
   return `Specialized Portal Agent that executes user-facing portal/UI supported actions are (${names}).`;
 };
 
-export type PortalAgentInstance = Awaited<SubAgent>;
+export type PortalAgentInstance = AgentSpec;
 
 export interface CreatePortalAgentParams {
   tools: (StructuredTool | DynamicStructuredTool)[];
