@@ -1,9 +1,10 @@
 import { getOpenRouterChatModel } from '@ixo/common';
-import { SubAgent } from 'deepagents';
 import {
   getFirecrawlMcpTools,
   getMemoryEngineMcpTools,
 } from '../nodes/tools-node';
+
+import type { AgentSpec } from './subagent-as-tool';
 
 const sharedExpectations = `
 You are the Knowledge Agent for this workspace. Your entire job is to keep the Memory Engine useful and consistent.
@@ -86,8 +87,6 @@ const llm = getOpenRouterChatModel({
   },
 });
 
-type MemoryAgentInstance = Awaited<SubAgent>;
-
 export const createMemoryAgent = async ({
   userDid,
   oracleDid,
@@ -98,7 +97,7 @@ export const createMemoryAgent = async ({
   oracleDid: string;
   roomId: string;
   mode: 'user' | 'orgOwner';
-}): Promise<MemoryAgentInstance> => {
+}): Promise<AgentSpec> => {
   const memoryEngineTools = await getMemoryEngineMcpTools({
     userDid,
     oracleDid,

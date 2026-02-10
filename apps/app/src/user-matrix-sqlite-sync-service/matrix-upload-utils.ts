@@ -246,7 +246,7 @@ export async function getMediaFromRoomByStorageKey(
       `Error retrieving media with storageKey ${storageKey}: ${errorMessage}`,
       error instanceof Error ? error.stack : undefined,
     );
-    
+
     throw new Error(
       `Error retrieving media with storageKey ${storageKey}: ${errorMessage}`,
     );

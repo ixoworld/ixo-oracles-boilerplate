@@ -1,3 +1,4 @@
+import type { InteropZodObject } from '@langchain/core/utils/types';
 import { Logger } from '@nestjs/common';
 import { AgentMiddleware, AIMessageChunk, createMiddleware } from 'langchain';
 import { TokenLimiter, TokenLimiterError } from 'src/utils/token-limit-handler';
@@ -6,7 +7,7 @@ import { contextSchema, TChatNodeContext } from '../types';
 const createTokenLimiterMiddleware = (): AgentMiddleware => {
   return createMiddleware({
     name: 'TokenLimiterMiddleware',
-    contextSchema,
+    contextSchema: contextSchema as unknown as InteropZodObject,
     beforeModel: async (state, runtime) => {
       if (!runtime.context) {
         throw new Error('Runtime context required for token limiting');
