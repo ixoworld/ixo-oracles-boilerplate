@@ -2,13 +2,14 @@ import { type IRunnableConfigWithRequiredFields } from '@ixo/matrix';
 import { Logger } from '@nestjs/common';
 import 'dotenv/config';
 import { HumanMessage } from 'langchain';
-import { type BrowserToolCallDto } from 'src/messages/dto/send-message.dto';
+import {
+  type AgActionDto,
+  type BrowserToolCallDto,
+} from 'src/messages/dto/send-message.dto';
 import { type UcanService } from 'src/ucan/ucan.service';
 import { createMainAgent } from './agents/main-agent';
 import { type MCPUCANContext } from './mcp';
 import { type TMainAgentGraphState } from './state';
-
-import { type AgActionDto } from 'src/messages/dto/send-message.dto';
 
 /**
  * Options for agent methods that support UCAN
@@ -195,14 +196,7 @@ export class MainAgentGraph {
             },
           }),
         ],
-        browserTools,
-        agActions,
-        mcpUcanContext,
-        ...(initialUserContext ? { userContext: initialUserContext } : {}),
-        editorRoomId,
-        currentEntityDid,
-      } satisfies Partial<TMainAgentGraphState>,
-
+      },
       {
         version: 'v2',
         ...runnableConfig,

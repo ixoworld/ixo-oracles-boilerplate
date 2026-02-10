@@ -10,6 +10,7 @@ import { AppModule } from './app.module';
 import { ENV } from './config';
 import { EditorMatrixClient } from './graph/agents/editor/editor-mx';
 import { UserMatrixSqliteSyncService } from './user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
+
 async function bootstrap(): Promise<void> {
   // await migrate();
 
@@ -101,7 +102,8 @@ async function bootstrap(): Promise<void> {
   registerGracefulShutdown({ app, matrixManager });
 
   const matrixAccountRoomId = configService.get('MATRIX_ACCOUNT_ROOM_ID');
-  const disableCredits = configService.get('DISABLE_CREDITS', false) || !matrixAccountRoomId;
+  const disableCredits =
+    configService.get('DISABLE_CREDITS', false) || !matrixAccountRoomId;
   if (!disableCredits) {
     Logger.log('Setting up claim signing mnemonics...');
     Logger.log(`Matrix account room id: ${matrixAccountRoomId}`);
@@ -223,7 +225,6 @@ function registerGracefulShutdown({
   });
 }
 
-
 // Handle unhandled promise rejections
 process.on(
   'unhandledRejection',
@@ -261,5 +262,3 @@ bootstrap().catch((error) => {
   );
   process.exit(1);
 });
-
-

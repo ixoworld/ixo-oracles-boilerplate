@@ -1,7 +1,7 @@
 import { getOpenRouterChatModel } from '@ixo/common';
-import { SubAgent } from 'deepagents';
 import { type StructuredTool } from 'langchain';
 
+import type { AgentSpec } from '../subagent-as-tool';
 import {
   BLOCKNOTE_TOOLS_CONFIG,
   createBlocknoteTools,
@@ -91,7 +91,7 @@ type BlocknoteToolset =
 
 export type EditorAgentMode = 'edit' | 'readOnly';
 
-export type EditorAgentInstance = Awaited<SubAgent>;
+export type EditorAgentInstance = AgentSpec;
 
 export interface CreateEditorAgentParams {
   room: string | MatrixRoomConfig;

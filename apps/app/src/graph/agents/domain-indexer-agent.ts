@@ -1,11 +1,11 @@
 import { getOpenRouterChatModel } from '@ixo/common';
-import { SubAgent } from 'deepagents';
 import { type StructuredTool } from 'langchain';
 
 import {
   domainIndexerSearchTool,
   getDomainCardTool,
 } from 'src/graph/nodes/tools-node/domain-indexer-tool';
+import type { AgentSpec } from './subagent-as-tool';
 
 const llm = getOpenRouterChatModel({
   model: 'openai/gpt-oss-120b:nitro',
@@ -53,7 +53,7 @@ const buildDescription = (tools: StructuredTool[]) => {
   return `Domain Indexer specialist using (${names}) to discover IXO entities, summaries, overviews, and FAQs.`;
 };
 
-export type DomainIndexerAgentInstance = Awaited<SubAgent>;
+export type DomainIndexerAgentInstance = AgentSpec;
 
 export const createDomainIndexerAgent =
   async (): Promise<DomainIndexerAgentInstance> => {
