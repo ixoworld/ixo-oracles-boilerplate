@@ -11,6 +11,7 @@ import {
 } from '../../utils/sse-parser.js';
 import { Event } from './resolve-content.js';
 import { type ToolCallEvent, type UIComponentProps } from './v2/types.js';
+import { getToolName } from '../../utils/get-tool-name.js';
 
 export type UIComponents = {
   ToolCall: React.FC<UIComponentProps<ToolCallEvent> & { key: string }>;
@@ -36,6 +37,7 @@ export const resolveUIComponent = (
       args: unknown;
       status?: 'isRunning' | 'done' | 'error';
       output?: string;
+      toolName?: string;
       event?: Event;
       payload?:
         | ToolCallEventPayload
@@ -90,16 +92,19 @@ export const resolveUIComponent = (
       status: component.props.status as 'isRunning' | 'done' | undefined,
       output: component.props.output,
       isLoading: isRunning,
-      requestId: component.props.payload && 'requestId' in component.props.payload
-        ? component.props.payload.requestId
-        : '',
-      sessionId: component.props.payload && 'sessionId' in component.props.payload
-        ? component.props.payload.sessionId
-        : '',
-      toolName: component.name,
-      eventId: component.props.payload && 'eventId' in component.props.payload
-        ? component.props.payload.eventId
-        : '',
+      requestId:
+        component.props.payload && 'requestId' in component.props.payload
+          ? component.props.payload.requestId
+          : '',
+      sessionId:
+        component.props.payload && 'sessionId' in component.props.payload
+          ? component.props.payload.sessionId
+          : '',
+      toolName: getToolName(component.name, component.props.toolName),
+      eventId:
+        component.props.payload && 'eventId' in component.props.payload
+          ? component.props.payload.eventId
+          : '',
       key: `${component.name}${component.props.id}`,
     };
     return createElement(Component, toolCallComponentProps);
