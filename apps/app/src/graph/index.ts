@@ -201,7 +201,7 @@ export class MainAgentGraph {
         ...(initialUserContext ? { userContext: initialUserContext } : {}),
         editorRoomId,
         currentEntityDid,
-      } as Partial<TMainAgentGraphState>,
+      } satisfies Partial<TMainAgentGraphState>,
 
       {
         version: 'v2',
@@ -235,7 +235,7 @@ export class MainAgentGraph {
         currentEntityDid: undefined,
         client: 'portal',
         userContext: undefined,
-      } as Partial<TMainAgentGraphState>,
+      } satisfies Partial<TMainAgentGraphState>,
       config: {
         ...config,
         recursionLimit: 150,
