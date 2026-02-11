@@ -1,0 +1,39 @@
+---
+description: When the user is setting up their oracle or configuring goal and skills, fetch skills from the IXO API and update oracle config and main agent prompt.
+alwaysApply: false
+globs: apps/app/src/graph/**/*.ts
+---
+
+# Oracle setup and skills configuration
+
+When the user says they want to **set up their oracle**, **configure their oracle's goal and skills**, or **align the AI with their oracle**, follow this workflow.
+
+## 1. Fetch available skills from the API
+
+- **List skills**: `GET https://capsules.skills.ixo.earth/capsules?limit=100` (no auth).
+- **Search skills** (optional): `GET https://capsules.skills.ixo.earth/capsules/search?q=<query>&limit=20` to focus on specific domains.
+- Response shape: `{ capsules: Array<{ name, cid, description, ... }>, pagination?: { total, limit, offset, hasMore } }` for list; `{ query, count, capsules }` for search.
+- Use this list to suggest or derive skill names for the user (e.g. docx, pptx, xlsx, pdf, frontend-design, etc.).
+
+## 2. Get the user's oracle goal and skill selection
+
+- Ask the user for their **oracle goal** in one short sentence (e.g. "Help my team create professional reports and presentations").
+- Optionally ask which **skill names** they want to prioritize, or suggest a subset from the fetched list. If they don't specify, you may choose a sensible default set (e.g. docx, pptx, xlsx) or use the full list from the API.
+
+## 3. Update oracle config (no code edits for goal/skills)
+
+- Write or update **`apps/app/oracle-config.json`** with:
+  - `oracleGoal`: string (user's one-sentence goal).
+  - `skillNames`: string[] (e.g. `["docx", "pptx", "xlsx"]`).
+- Do **not** hard-code goal/skills in prompt template or main-agent; they must come from this config file so non-technical users can change them later via Cursor or by editing the JSON.
+
+## 4. Ensure prompt and main-agent use the config
+
+- **Prompt**: The file `apps/app/src/graph/nodes/chat-node/prompt.ts` must define template variables `ORACLE_GOAL` and `AVAILABLE_SKILLS_NAMES` and include a short **"Oracle goal & skills"** block near the top of the system prompt (after the opening line) that instructs the model to prioritize this goal and the listed skills.
+- **Main agent**: The file `apps/app/src/graph/agents/main-agent.ts` must read `apps/app/oracle-config.json` (with safe defaults if the file is missing: `oracleGoal: ""`, `skillNames: []`) and pass `ORACLE_GOAL` and `AVAILABLE_SKILLS_NAMES` (e.g. formatted as a comma-separated or bullet list string) into `AI_ASSISTANT_PROMPT.format(...)`.
+
+If these variables or the config read are already present, only update the config file when the user changes their goal or skills. Do not remove or duplicate the existing prompt structure (identity, work, goals, skills system, etc.).
+
+## 5. Summary for the user
+
+After updating, briefly confirm what you did: e.g. "I fetched N skills from the IXO skills API, saved your oracle goal and selected skills to `oracle-config.json`, and the main agent prompt will now use them. Restart the app if it's running to pick up changes."

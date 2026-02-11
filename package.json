@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "turbo dev --filter=app",
     "build": "turbo build",
+    "token": "tsx scripts/get-openid-token.ts",
     "test": "turbo test",
     "test:e2e": "turbo test:e2e",
     "lint": "turbo lint",
@@ -25,7 +26,8 @@
     "tsc-alias": "^1.8.16",
     "tsconfig-paths": "^4.2.0",
     "turbo": "^2.5.8",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "tsx": "^4.7.0"
   },
   "packageManager": "pnpm@10.23.0",
   "engines": {
