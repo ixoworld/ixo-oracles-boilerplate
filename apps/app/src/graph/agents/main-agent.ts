@@ -76,7 +76,6 @@ export const createMainAgent = async ({
   const { configurable } = config as IRunnableConfigWithRequiredFields;
   const { matrix } = configurable?.configs ?? {};
   Logger.log(`[createMainAgent] homeServerName: ${configurable.configs?.matrix.homeServerName}`);
-  Logger.log(`[createMainAgent] matrixOpenIdToken: ${configurable.configs?.user.matrixOpenIdToken}`);
   const sandboxMCP = configurable.configs?.user.matrixOpenIdToken ? createMCPClient({
     mcpServers: {
       sandbox: {
