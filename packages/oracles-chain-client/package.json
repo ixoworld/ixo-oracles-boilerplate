@@ -16,15 +16,59 @@
       "require": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./*": {
-      "types": "./dist/*.d.ts",
-      "import": "./dist/*.js",
-      "require": "./dist/*.js"
+    "./client": {
+      "types": "./dist/client/client-public.d.ts",
+      "import": "./dist/client/client-public.js",
+      "require": "./dist/client/client-public.js",
+      "default": "./dist/client/client-public.js"
+    },
+    "./claims": {
+      "types": "./dist/client/claims/index.d.ts",
+      "import": "./dist/client/claims/index.js",
+      "require": "./dist/client/claims/index.js",
+      "default": "./dist/client/claims/index.js"
+    },
+    "./credentials": {
+      "types": "./dist/credentials.d.ts",
+      "import": "./dist/credentials.js",
+      "require": "./dist/credentials.js",
+      "default": "./dist/credentials.js"
+    },
+    "./payments": {
+      "types": "./dist/client/payments/index.d.ts",
+      "import": "./dist/client/payments/index.js",
+      "require": "./dist/client/payments/index.js",
+      "default": "./dist/client/payments/index.js"
+    },
+    "./authz": {
+      "types": "./dist/client/authz/index.d.ts",
+      "import": "./dist/client/authz/index.js",
+      "require": "./dist/client/authz/index.js",
+      "default": "./dist/client/authz/index.js"
+    },
+    "./entities": {
+      "types": "./dist/client/entities/index.d.ts",
+      "import": "./dist/client/entities/index.js",
+      "require": "./dist/client/entities/index.js",
+      "default": "./dist/client/entities/index.js"
+    },
+    "./gql": {
+      "types": "./dist/gql/index.d.ts",
+      "import": "./dist/gql/index.js",
+      "require": "./dist/gql/index.js",
+      "default": "./dist/gql/index.js"
+    },
+    "./matrix-bot": {
+      "types": "./dist/matrix-bot/index.d.ts",
+      "import": "./dist/matrix-bot/index.js",
+      "require": "./dist/matrix-bot/index.js",
+      "default": "./dist/matrix-bot/index.js"
     },
     "./react": {
       "types": "./dist/react/index.d.ts",
       "import": "./dist/react/index.js",
-      "require": "./dist/react/index.js"
+      "require": "./dist/react/index.js",
+      "default": "./dist/react/index.js"
     }
   },
   "scripts": {
