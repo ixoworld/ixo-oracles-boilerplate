@@ -1,6 +1,6 @@
 {
   "name": "@ixo/oracles-chain-client",
-  "version": "1.1.4",
+  "version": "1.2.0",
   "private": false,
   "publishConfig": {
     "access": "public"
@@ -63,7 +63,7 @@
     "@ixo/did-provider-x": "^0.0.2",
     "@ixo/impactxclient-sdk": "2.4.1",
     "@ixo/logger": "workspace:*",
-    "@ixo/matrixclient-sdk": "^0.3.4",
+    "@ixo/matrixclient-sdk": "^1.0.0",
     "@veramo/core": "^6.0.0",
     "@veramo/credential-ld": "^6.0.0",
     "@veramo/credential-w3c": "^6.0.0",

@@ -158,6 +158,7 @@ export class Payments {
   static async getOraclePricingList(
     oracleDid: string,
     matrixAccessToken?: string,
+    matrixHomeServer?: string,
   ) {
     const settingsResource = await getSettingsResource<TOraclePricingLisJSONLD>(
       {
@@ -165,6 +166,7 @@ export class Payments {
         id: '{id}#fee',
       },
       matrixAccessToken,
+      matrixHomeServer,
     );
     const pricingList: TOraclePricingListSchemaResponse = [
       {

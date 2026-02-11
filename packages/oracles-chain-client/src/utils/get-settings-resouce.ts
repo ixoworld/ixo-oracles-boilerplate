@@ -2,9 +2,20 @@ import { LinkedResource } from '@ixo/impactxclient-sdk/types/codegen/ixo/iid/v1b
 import { gqlClient } from 'src/gql/index.js';
 import { TGetSettingsResourceSchema } from '../client/entities/types.js';
 
+function rewriteMatrixMediaUrl(url: string, matrixHomeServer: string): string {
+  const mediaMatch = url.match(
+    /https?:\/\/[^/]+\/_matrix\/media\/[^/]+\/download\/([^/]+)\/(.+)/,
+  );
+  if (!mediaMatch) return url;
+
+  const [, serverName, mediaId] = mediaMatch;
+  return `https://${matrixHomeServer}/_matrix/client/v1/media/download/${serverName}/${mediaId}`;
+}
+
 export async function getSettingsResource<T>(
   settingsResourceParams: TGetSettingsResourceSchema,
   matrixAccessToken?: string,
+  matrixHomeServer?: string,
 ): Promise<T> {
   const protocol = (
     await gqlClient.GetEntityById({ id: settingsResourceParams.protocolDid })
@@ -22,11 +33,15 @@ export async function getSettingsResource<T>(
     throw new Error('Resource not found');
   }
 
-  const url = resource.serviceEndpoint;
+  const url = matrixHomeServer
+    ? rewriteMatrixMediaUrl(resource.serviceEndpoint, matrixHomeServer)
+    : resource.serviceEndpoint;
   const response = await fetch(url, {
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${matrixAccessToken}`,
+      ...(matrixAccessToken
+        ? { Authorization: `Bearer ${matrixAccessToken}` }
+        : {}),
     },
   });
   const data = await response.json();

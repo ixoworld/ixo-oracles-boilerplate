@@ -1,6 +1,7 @@
 import { GraphQLClient } from 'graphql-request';
 import { getSdk } from './generated/sdk.js';
 
+
 /**
  * GraphQL endpoint URL for the IXO Blocksync API
  * This points to the testnet environment

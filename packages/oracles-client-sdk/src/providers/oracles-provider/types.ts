@@ -3,6 +3,7 @@ import type { AgAction } from '../../hooks/use-ag-action.js';
 
 export interface IMatrixLoginProps {
   accessToken: string;
+  homeServer: string;
 }
 
 export interface IWalletProps {

@@ -35,6 +35,7 @@ export class SessionsService {
           sessionId: previousSession.sessionId,
           did: data.did,
           oracleEntityDid,
+          homeServer: data.homeServer,
         })
         .catch((err) =>
           Logger.error(
@@ -61,6 +62,7 @@ export class SessionsService {
 
       const session = await this.sessionManager.createSession({
         did: data.did,
+        homeServer: data.homeServer,
         oracleName: this.configService.getOrThrow('ORACLE_NAME'),
         oracleEntityDid,
         oracleDid: this.configService.getOrThrow('ORACLE_DID'),
@@ -115,6 +117,7 @@ export class SessionsService {
           sessionId: data.sessionId,
           did: data.did,
           oracleEntityDid,
+          homeServer: data.homeServer,
         })
         .catch((err) =>
           Logger.error(

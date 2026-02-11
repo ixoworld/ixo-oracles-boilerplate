@@ -1,6 +1,6 @@
 {
   "name": "@ixo/logger",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": false,
   "publishConfig": {
     "access": "public"
@@ -14,9 +14,10 @@
   },
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "default": "./dist/index.js"
     }
   },
   "devDependencies": {

@@ -2,6 +2,8 @@ import { Coin } from '@cosmjs/proto-signing';
 import { cosmos, ixo } from '@ixo/impactxclient-sdk';
 import { ICreateVerifiableCredentialArgs } from '@veramo/core';
 import { MatrixBotService } from 'src/matrix-bot/matrix-bot.service.js';
+import { getMatrixHomeServerForDid } from 'src/matrix-bot/did-matrix-batcher.js';
+import { createOpenIdTokenProvider } from 'src/matrix-bot/openid-token-provider.js';
 import { setupClaimSigningMnemonics } from 'src/matrix-bot/setup-claim-signing-mnemonics.js';
 import { gqlClient } from '../../gql/index.js';
 import { ValidationError } from '../../utils/validation-error.js';
@@ -149,7 +151,12 @@ export class Claims {
       },
       proofFormat: 'lds',
     };
-    const matrixBotService = new MatrixBotService(accessToken);
+    const oracleHomeServerUrl = await getMatrixHomeServerForDid(oracleDid);
+    const getOpenIdToken = createOpenIdTokenProvider({
+      matrixAccessToken: accessToken,
+      homeServerUrl: oracleHomeServerUrl,
+    });
+    const matrixBotService = new MatrixBotService(accessToken, getOpenIdToken, oracleDid);
     const decryptedSigningMnemonic = await setupClaimSigningMnemonics({
       matrixRoomId,
       matrixAccessToken: accessToken,
@@ -179,7 +186,7 @@ export class Claims {
     if (!verificationResult?.verified)
       throw new Error('Claim verification failed');
 
-    await matrixBotService.sourceRoomAndJoin(oracleDid);
+    await matrixBotService.sourceRoomAndJoinWithDid(oracleDid);
 
     if (!collectionId) {
       throw new ValidationError('Collection ID not found');
@@ -187,7 +194,7 @@ export class Claims {
 
     const {
       data: { cid },
-    } = await matrixBotService.saveClaimToMatrix(collectionId, {
+    } = await matrixBotService.saveClaimToMatrixWithDid(oracleDid, collectionId, {
       ...claim.body,
       credentials: claimCredentials,
     });

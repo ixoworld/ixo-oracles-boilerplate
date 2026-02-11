@@ -1,9 +1,9 @@
 import { Logger } from '@nestjs/common';
-import { AIMessageChunk, createMiddleware } from 'langchain';
+import { AgentMiddleware, AIMessageChunk, createMiddleware } from 'langchain';
 import { TokenLimiter, TokenLimiterError } from 'src/utils/token-limit-handler';
 import { contextSchema, TChatNodeContext } from '../types';
 
-const createTokenLimiterMiddleware = () => {
+const createTokenLimiterMiddleware = (): AgentMiddleware => {
   return createMiddleware({
     name: 'TokenLimiterMiddleware',
     contextSchema,

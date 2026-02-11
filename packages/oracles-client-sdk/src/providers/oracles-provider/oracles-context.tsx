@@ -101,8 +101,9 @@ export const OraclesProvider = ({
       }
 
       if (!openIdToken) {
+        const matrixUserId = `@did-ixo-${initialWallet.address}:${initialWallet.matrix.homeServer}`;
         const token = await getOpenIdToken({
-          userId: initialWallet.did,
+          userId: matrixUserId,
           matrixAccessToken,
           did: initialWallet.did,
         });
@@ -119,7 +120,7 @@ export const OraclesProvider = ({
         ...options,
         headers: {
           ...options?.headers,
-          'x-did': initialWallet.did,
+          'x-matrix-homeserver': initialWallet.matrix.homeServer,
           'x-matrix-access-token': openIdToken,
         },
       });

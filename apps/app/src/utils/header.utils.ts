@@ -2,25 +2,36 @@ import { MatrixError, MatrixManager } from '@ixo/matrix';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { type IncomingHttpHeaders } from 'node:http';
 
-export async function getAuthHeaders(headers: IncomingHttpHeaders): Promise<{
+export interface AuthHeaders {
   matrixAccessToken: string;
-}> {
+  matrixHomeServer?: string;
+}
+
+export async function getAuthHeaders(headers: IncomingHttpHeaders): Promise<AuthHeaders> {
   const matrixAccessTokenHeader = headers['x-matrix-access-token'];
+  const matrixHomeServerHeader = headers['x-matrix-homeserver'];
 
-  if (typeof matrixAccessTokenHeader !== 'string') {
-    const matrixAccessToken = Array.isArray(matrixAccessTokenHeader)
-      ? matrixAccessTokenHeader[0]
-      : matrixAccessTokenHeader;
+  let matrixAccessToken: string | undefined;
 
-    if (!matrixAccessToken) {
-      throw new BadRequestException(
-        'Missing or invalid required authentication headers: x-matrix-access-token',
-      );
-    }
-    return { matrixAccessToken };
+  if (typeof matrixAccessTokenHeader === 'string') {
+    matrixAccessToken = matrixAccessTokenHeader;
+  } else if (Array.isArray(matrixAccessTokenHeader)) {
+    matrixAccessToken = matrixAccessTokenHeader[0];
   }
 
-  return { matrixAccessToken: matrixAccessTokenHeader };
+  if (!matrixAccessToken) {
+    throw new BadRequestException(
+      'Missing or invalid required authentication headers: x-matrix-access-token',
+    );
+  }
+
+  const matrixHomeServer = typeof matrixHomeServerHeader === 'string'
+    ? matrixHomeServerHeader
+    : Array.isArray(matrixHomeServerHeader)
+      ? matrixHomeServerHeader[0]
+      : undefined;
+
+  return { matrixAccessToken, matrixHomeServer };
 }
 
 /**

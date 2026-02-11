@@ -1,5 +1,6 @@
 import { Logger } from '@ixo/logger';
 import { MatrixManager } from '@ixo/matrix';
+import { getMatrixHomeServerCroppedForDid } from '@ixo/oracles-chain-client';
 import { Database } from 'better-sqlite3';
 import { getChatOpenAiModel } from '../../ai/index.js';
 import { MemoryEngineService } from '../memory-engine/memory-engine.service.js';
@@ -346,9 +347,11 @@ ___________________________________________________________
   public async createSession(
     createSessionDto: CreateChatSessionDto,
   ): Promise<CreateChatSessionResponseDto> {
-    const { roomId } = await this.matrixManger.getOracleRoomId({
+    const userHomeServer = createSessionDto.homeServer || await getMatrixHomeServerCroppedForDid(createSessionDto.did);
+    const { roomId } = await this.matrixManger.getOracleRoomIdWithHomeServer({
       userDid: createSessionDto.did,
       oracleEntityDid: createSessionDto.oracleEntityDid,
+      userHomeServer,
     });
 
     if (!roomId) {

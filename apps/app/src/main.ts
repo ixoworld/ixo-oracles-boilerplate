@@ -29,6 +29,7 @@ async function bootstrap(): Promise<void> {
       'Content-Type',
       'Authorization',
       'x-matrix-access-token',
+      'x-matrix-homeserver',
       'x-did',
       'x-request-id',
       'x-timezone',
@@ -61,19 +62,17 @@ async function bootstrap(): Promise<void> {
       },
       'matrix-token',
     )
-    // Define the DID header as an API key security scheme
     .addApiKey(
       {
         type: 'apiKey',
         in: 'header',
-        name: 'x-did',
-        description: "User's DID (Required for most endpoints)",
+        name: 'x-matrix-homeserver',
+        description: "User's Matrix homeserver domain (e.g. devmx.ixo.earth)",
       },
-      'did',
+      'matrix-homeserver',
     )
-    // Apply both security requirements globally
     .addSecurityRequirements('matrix-token')
-    .addSecurityRequirements('did')
+    .addSecurityRequirements('matrix-homeserver')
     // Remove the duplicate global parameters
     .build();
   const document = SwaggerModule.createDocument(app, config);
@@ -106,7 +105,7 @@ async function bootstrap(): Promise<void> {
   if (!disableCredits) {
     Logger.log('Setting up claim signing mnemonics...');
     Logger.log(`Matrix account room id: ${matrixAccountRoomId}`);
-    const decryptedSigningMnemonic = await setupClaimSigningMnemonics({
+    await setupClaimSigningMnemonics({
       matrixRoomId: matrixAccountRoomId,
       matrixAccessToken: configService.getOrThrow(
         'MATRIX_ORACLE_ADMIN_ACCESS_TOKEN',
@@ -116,9 +115,7 @@ async function bootstrap(): Promise<void> {
       signerDid: configService.getOrThrow('ORACLE_DID'),
       network: configService.getOrThrow('NETWORK'),
     });
-    Logger.log('Claim signing mnemonics setup complete', {
-      decryptedSigningMnemonic,
-    });
+    Logger.log('Claim signing mnemonics setup complete');
   } else {
     Logger.log('Signing mnemonic creation skipped (DISABLE_CREDITS=true)');
   }

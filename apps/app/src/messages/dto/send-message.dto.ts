@@ -140,6 +140,15 @@ export class SendMessageDto {
   timezone?: string;
 
   @ApiProperty({
+    description: 'The user home server',
+    required: false,
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  homeServer?: string;
+
+  @ApiProperty({
     description:
       'UCAN invocations for protected MCP tools. Map of tool names to base64-encoded CAR invocations.',
     required: false,
@@ -163,6 +172,7 @@ export class SendMessagePayload {
   agActions?: AgActionDto[];
   userMatrixOpenIdToken: string;
   timezone?: string;
+  homeServer?: string;
 
   metadata?: {
     editorRoomId?: string;

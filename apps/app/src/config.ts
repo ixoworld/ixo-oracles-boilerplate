@@ -64,6 +64,7 @@ export const EnvSchema = z.object({
 
   SUBSCRIPTION_ORACLE_MCP_URL: z.url().optional(),
   NETWORK: z.enum(['mainnet', 'testnet', 'devnet']),
+  BLOCKSYNC_URI: z.string().optional(),
   DATABASE_USE_SSL: z.string().default('false'),
   SQLITE_DATABASE_PATH: z.string(),
   LIVE_AGENT_AUTH_API_KEY: z.string().optional().default(''),

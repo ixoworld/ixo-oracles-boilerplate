@@ -32,6 +32,8 @@ export const useOraclesConfig = (
       Authz.getOracleAuthZConfig({
         oracleDid: oracleId,
         granterAddress: wallet?.address ?? '',
+        matrixAccessToken: wallet?.matrix.accessToken,
+        matrixHomeServer: wallet?.matrix.homeServer,
       }),
     enabled: Boolean(wallet?.address),
   });

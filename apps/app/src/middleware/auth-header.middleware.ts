@@ -15,7 +15,6 @@ import * as crypto from 'node:crypto';
 import { ENV } from 'src/config';
 import { getAuthHeaders, normalizeDid } from '../utils/header.utils';
 
-// Extend Express Request interface to include our custom property
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace -- Required for declaration merging
   namespace Express {
@@ -24,13 +23,18 @@ declare global {
       authData: {
         did: string;
         userOpenIdToken: string;
+        homeServer: string;
       };
     }
   }
 }
 
-// Cache for 3 minutes (consistent with subscription middleware)
 const THREE_MINUTES = minutes(3);
+
+interface CachedUser {
+  did: string;
+  homeServer: string;
+}
 
 @Injectable()
 export class AuthHeaderMiddleware implements NestMiddleware {
@@ -41,9 +45,28 @@ export class AuthHeaderMiddleware implements NestMiddleware {
     private readonly configService: ConfigService<ENV>,
   ) {}
 
-  private async validateToken(matrixToken: string): Promise<{
+  private resolveHomeServer(matrixHomeServer?: string): string {
+    if (matrixHomeServer) {
+      const url = matrixHomeServer.startsWith('http')
+        ? matrixHomeServer
+        : `https://${matrixHomeServer}`;
+      return url;
+    }
+
+    return this.configService.getOrThrow('MATRIX_BASE_URL');
+  }
+
+  private cropHomeServer(url: string): string {
+    return url.replace(/^https?:\/\//, '').split('/')[0];
+  }
+
+  private async validateToken(
+    matrixToken: string,
+    matrixHomeServer?: string,
+  ): Promise<{
     isValid: boolean;
     userDid: string;
+    homeServer: string;
   }> {
     try {
       const isOpenIdToken = !matrixToken.startsWith('syt_');
@@ -53,21 +76,28 @@ export class AuthHeaderMiddleware implements NestMiddleware {
           HttpStatus.UNAUTHORIZED,
         );
       }
-      this.logger.debug(`Validating OpenID token`);
+
+      const homeServerUrl = this.resolveHomeServer(matrixHomeServer);
+      this.logger.debug(`Validating OpenID token against ${homeServerUrl}`);
+
       const { isValid, userId } = await verifyMatrixOpenIdToken(
         matrixToken,
-        this.configService.getOrThrow('MATRIX_BASE_URL'),
+        homeServerUrl,
       );
       if (!userId) {
-        return { isValid: false, userDid: '' };
+        return { isValid: false, userDid: '', homeServer: '' };
       }
-      return { isValid, userDid: normalizeDid(userId) };
+      return {
+        isValid,
+        userDid: normalizeDid(userId),
+        homeServer: this.cropHomeServer(homeServerUrl),
+      };
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : undefined;
       this.logger.error(`Error validating token: ${errorMessage}`, errorStack);
-      return { isValid: false, userDid: '' };
+      return { isValid: false, userDid: '', homeServer: '' };
     }
   }
 
@@ -75,15 +105,15 @@ export class AuthHeaderMiddleware implements NestMiddleware {
     return crypto.createHash('sha256').update(token, 'utf8').digest('hex');
   }
 
-  async use(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async use(req: Request, _res: Response, next: NextFunction): Promise<void> {
     this.logger.debug(
       `AuthHeaderMiddleware processing request for: ${req.originalUrl}`,
     );
     try {
-      // Extract headers using the utility function
-      const { matrixAccessToken } = await getAuthHeaders(req.headers);
+      const { matrixAccessToken, matrixHomeServer } =
+        await getAuthHeaders(req.headers);
 
-      const cachedUser = await this.cacheManager.get<{ did: string }>(
+      const cachedUser = await this.cacheManager.get<CachedUser>(
         `user_${this.hashToken(matrixAccessToken)}`,
       );
 
@@ -91,27 +121,33 @@ export class AuthHeaderMiddleware implements NestMiddleware {
         req.authData = {
           did: cachedUser.did,
           userOpenIdToken: matrixAccessToken,
+          homeServer: cachedUser.homeServer,
         };
         next();
         return;
       }
 
-      const { isValid, userDid } = await this.validateToken(matrixAccessToken);
+      const { isValid, userDid, homeServer } = await this.validateToken(
+        matrixAccessToken,
+        matrixHomeServer,
+      );
       if (!isValid) {
         throw new HttpException('Invalid token', HttpStatus.UNAUTHORIZED);
       }
 
-      // Attach extracted data to the request object
-      req.authData = { did: userDid, userOpenIdToken: matrixAccessToken };
+      req.authData = {
+        did: userDid,
+        userOpenIdToken: matrixAccessToken,
+        homeServer,
+      };
       await this.cacheManager.set(
         `user_${this.hashToken(matrixAccessToken)}`,
-        { did: userDid },
+        { did: userDid, homeServer } satisfies CachedUser,
         THREE_MINUTES,
       );
       this.logger.debug(`Auth headers validated for DID: ${userDid}`);
-      next(); // Proceed to the next middleware or route handler
+      next();
     } catch (error) {
-      // Pass the original error if it's likely an Http Exception, otherwise wrap it
       if (error instanceof HttpException) {
         next(error);
       } else {

@@ -1,7 +1,7 @@
 import { getOpenRouterChatModel } from '@ixo/common';
 import { RemoveMessage } from '@langchain/core/messages';
 import { Logger } from '@nestjs/common';
-import { AIMessage, createMiddleware } from 'langchain';
+import { AgentMiddleware, AIMessage, createMiddleware } from 'langchain';
 
 const safetyModel = getOpenRouterChatModel({
   model: 'openai/gpt-oss-safeguard-20b:nitro',
@@ -11,7 +11,7 @@ const safetyModel = getOpenRouterChatModel({
   },
 });
 
-export const createSafetyGuardrailMiddleware = () => {
+export const createSafetyGuardrailMiddleware = (): AgentMiddleware => {
   return createMiddleware({
     name: 'SafetyGuardrailMiddleware',
     afterAgent: {

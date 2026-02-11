@@ -12,6 +12,10 @@ export class UserAuthDto {
   @IsString()
   @IsNotEmpty()
   did: string;
+
+  @IsString()
+  @IsOptional()
+  homeServer?: string;
 }
 
 export class ListChatSessionsDto extends UserAuthDto {

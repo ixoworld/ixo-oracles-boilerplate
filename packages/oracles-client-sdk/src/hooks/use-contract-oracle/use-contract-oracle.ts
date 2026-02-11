@@ -1,4 +1,4 @@
-import { Authz, Payments } from '@ixo/oracles-chain-client/react';
+import { Authz, Payments, getMatrixUrlsForDid } from '@ixo/oracles-chain-client/react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import MatrixClient from '../../matrix/matrix-client.js';
@@ -36,6 +36,8 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
       const config = await Authz.getOracleAuthZConfig({
         oracleDid: params.oracleDid,
         granterAddress: wallet?.address ?? '',
+        matrixAccessToken: wallet?.matrix.accessToken,
+        matrixHomeServer: wallet?.matrix.homeServer,
       });
       return config;
     },
@@ -43,9 +45,10 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
   });
 
   const { data: oracleRoomId, isLoading: isLoadingOracleRoomId } = useQuery({
-    queryKey: ['oracle-room-id', params.oracleDid],
+    queryKey: ['oracle-room-id', params.oracleDid, wallet?.did],
     queryFn: async () => {
-      const roomId = await matrixClientRef.getOracleRoomId({
+      // Use DID-based resolution for decoupled Matrix infrastructure
+      const roomId = await matrixClientRef.getOracleRoomIdWithDid({
         userDid: wallet?.did ?? '',
         oracleEntityDid: params.oracleDid,
       });
@@ -58,7 +61,11 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
   const { data: pricingList, isLoading: isLoadingPricingList } = useQuery({
     queryKey: ['pricing-list', params.oracleDid],
     queryFn: async () => {
-      const list = await payments.getOraclePricingList(params.oracleDid);
+      const list = await payments.getOraclePricingList(
+        params.oracleDid,
+        wallet?.matrix.accessToken,
+        wallet?.matrix.homeServer,
+      );
       return list;
     },
   });
@@ -71,6 +78,8 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
           (await Authz.getOracleAuthZConfig({
             oracleDid: params.oracleDid,
             granterAddress: wallet?.address ?? '',
+            matrixAccessToken: wallet?.matrix.accessToken,
+            matrixHomeServer: wallet?.matrix.homeServer,
           }));
 
         if (pricingList?.length === 0 && !params.maxAmount) {
@@ -85,25 +94,28 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
           throw new Error('Wallet or matrix access token not found');
         }
 
-        const mainSpaceId = await matrixClientRef.sourceMainSpace({
-          userDID: wallet.did,
+        // Use DID-based resolution for decoupled Matrix infrastructure
+        const mainSpaceId = await matrixClientRef.sourceMainSpaceWithDid({
+          userDid: wallet.did,
         });
 
-        await matrixClientRef.joinSpaceOrRoom({
+        await matrixClientRef.joinSpaceOrRoomWithDid({
           roomId: mainSpaceId.mainSpaceId,
+          userDid: wallet.did,
         });
 
         await Promise.all(
           mainSpaceId.subSpaces.map(async (subSpaceId) => {
-            await matrixClientRef.joinSpaceOrRoom({
+            await matrixClientRef.joinSpaceOrRoomWithDid({
               roomId: subSpaceId,
+              userDid: wallet.did,
             });
           }),
         );
 
-        await matrixClientRef.createAndJoinOracleRoom({
+        await matrixClientRef.createAndJoinOracleRoomWithDid({
           oracleEntityDid: params.oracleDid,
-          userDID: wallet.did,
+          userDid: wallet.did,
         });
         void refetchOracleInRoom();
         if (useAuthz) {
@@ -150,7 +162,8 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
     },
   });
 
-  // check if if the oracle is in the room with the user
+  // check if the oracle is in the room with the user
+  // The oracle's Matrix user ID uses the oracle's homeserver (from oracle entity DID)
   const {
     data: isOracleInRoom,
     isLoading: isLoadingOracleInRoom,
@@ -168,10 +181,12 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
       if (!authzConfig?.granteeAddress) {
         return false;
       }
-      const members = await matrixClientRef.listRoomMembers(oracleRoomId);
-      return members.includes(
-        `@did-ixo-${authzConfig?.granteeAddress}:${new URL(matrixClientRef.params.homeserverUrl ?? '').host}`,
-      );
+      // Resolve oracle's homeserver from oracle entity DID
+      const oracleMatrixUrls = await getMatrixUrlsForDid(params.oracleDid);
+      const oracleMatrixUserId = `@did-ixo-${authzConfig.granteeAddress}:${oracleMatrixUrls.homeServerCropped}`;
+
+      const members = await matrixClientRef.listRoomMembersWithDid(oracleRoomId, wallet?.did ?? '');
+      return members.includes(oracleMatrixUserId);
     },
     enabled: Boolean(
       wallet?.did &&
@@ -184,17 +199,14 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
   const { mutateAsync: inviteOracle, isPending: isInvitingOracle } =
     useMutation({
       mutationFn: async () => {
-        if (
-          !oracleRoomId ||
-          !authzConfig?.granteeAddress ||
-          !matrixClientRef.params.homeserverUrl
-        ) {
+        if (!oracleRoomId || !authzConfig?.granteeAddress || !wallet?.did) {
           throw new Error('Oracle room id not found');
         }
-        await matrixClientRef.inviteUser(
-          oracleRoomId,
-          `@did-ixo-${authzConfig?.granteeAddress}:${new URL(matrixClientRef.params.homeserverUrl).host}`,
-        );
+        // Resolve oracle's homeserver from oracle entity DID
+        const oracleMatrixUrls = await getMatrixUrlsForDid(params.oracleDid);
+        const oracleMatrixUserId = `@did-ixo-${authzConfig.granteeAddress}:${oracleMatrixUrls.homeServerCropped}`;
+
+        await matrixClientRef.inviteUserWithDid(oracleRoomId, oracleMatrixUserId, wallet.did);
         await refetchOracleInRoom();
       },
     });

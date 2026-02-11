@@ -20,6 +20,8 @@ export const useMemoryEngine = (oracleDid: string) => {
       const config = await Authz.getOracleAuthZConfig({
         oracleDid,
         granterAddress: wallet?.address ?? '',
+        matrixAccessToken: wallet?.matrix.accessToken,
+        matrixHomeServer: wallet?.matrix.homeServer,
       });
       return config;
     },
@@ -27,9 +29,9 @@ export const useMemoryEngine = (oracleDid: string) => {
   });
 
   const { data: oracleRoomId, isLoading: isLoadingOracleRoomId } = useQuery({
-    queryKey: ['oracle-room-id', authzConfig?.granteeAddress],
+    queryKey: ['oracle-room-id', authzConfig?.granteeAddress, wallet?.did],
     queryFn: async () => {
-      const roomId = await matrixClientRef.getOracleRoomId({
+      const roomId = await matrixClientRef.getOracleRoomIdWithDid({
         userDid: wallet?.did ?? '',
         oracleEntityDid: oracleDid,
       });
@@ -49,29 +51,29 @@ export const useMemoryEngine = (oracleDid: string) => {
     isLoading: isLoadingMembers,
     refetch: refetchMembers,
   } = useQuery({
-    queryKey: ['members', authzConfig?.granteeAddress],
+    queryKey: ['members', authzConfig?.granteeAddress, wallet?.did],
     queryFn: async () => {
-      if (!oracleRoomId) {
+      if (!oracleRoomId || !wallet?.did) {
         return [];
       }
-      const m = await matrixClientRef.listRoomMembers(oracleRoomId);
+      const m = await matrixClientRef.listRoomMembersWithDid(oracleRoomId, wallet.did);
       return m;
     },
-    enabled: Boolean(oracleRoomId),
+    enabled: Boolean(oracleRoomId && wallet?.did),
   });
 
   const inviteUserFn = useCallback(
     async (userId: string) => {
       const roomId =
         oracleRoomId ??
-        (await matrixClientRef.getOracleRoomId({
+        (await matrixClientRef.getOracleRoomIdWithDid({
           userDid: wallet?.did ?? '',
           oracleEntityDid: oracleDid,
         }));
       if (!roomId) {
         throw new Error('Oracle room id not found');
       }
-      await matrixClientRef.inviteUser(roomId, userId);
+      await matrixClientRef.inviteUserWithDid(roomId, userId, wallet?.did ?? '');
       await refetchMembers();
     },
     [oracleRoomId, authzConfig?.granteeAddress, wallet?.did, oracleDid],
@@ -85,15 +87,15 @@ export const useMemoryEngine = (oracleDid: string) => {
     async (memoryEngineUserId: string) => {
       const roomId =
         oracleRoomId ??
-        (await matrixClientRef.getOracleRoomId({
+        (await matrixClientRef.getOracleRoomIdWithDid({
           userDid: wallet?.did ?? '',
           oracleEntityDid: oracleDid,
         }));
       if (!roomId) {
         throw new Error('Oracle room id not found');
       }
-      await matrixClientRef.inviteUser(roomId, memoryEngineUserId);
-      await matrixClientRef.setPowerLevel(roomId, memoryEngineUserId, 50);
+      await matrixClientRef.inviteUserWithDid(roomId, memoryEngineUserId, wallet?.did ?? '');
+      await matrixClientRef.setPowerLevelWithDid(roomId, memoryEngineUserId, 50, wallet?.did ?? '');
       await refetchMembers();
     },
     [oracleRoomId, authzConfig?.granteeAddress, wallet?.did, oracleDid],

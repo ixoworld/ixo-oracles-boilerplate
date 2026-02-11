@@ -1,4 +1,5 @@
 import { MemoryEngineService, SessionManagerService } from '@ixo/common';
+import { getMatrixHomeServerCroppedForDid } from '@ixo/oracles-chain-client';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -10,6 +11,7 @@ export interface ProcessSessionHistoryParams {
   sessionId: string;
   did: string;
   oracleEntityDid: string;
+  homeServer?: string;
 }
 
 @Injectable()
@@ -28,12 +30,10 @@ export class SessionHistoryProcessor {
    * Process session history by sending messages to memory engine
    * Uses cache locking to prevent concurrent processing
    */
-  async processSessionHistory({
-    sessionId,
-    did,
-    oracleEntityDid,
-  }: ProcessSessionHistoryParams): Promise<void> {
-    const cacheKey = `processing:session:${sessionId}`;
+  async processSessionHistory(
+    params: ProcessSessionHistoryParams,
+  ): Promise<void> {
+    const cacheKey = `processing:session:${params.sessionId}`;
     const lockTtl = 5 * 60 * 1000; // 5 minutes
     const maxRetries = 3;
     const retryDelay = 10 * 1000; // 10 seconds
@@ -42,7 +42,7 @@ export class SessionHistoryProcessor {
     const existingLock = await this.cacheManager.get(cacheKey);
     if (existingLock) {
       this.logger.debug(
-        `Session ${sessionId} is already being processed, skipping`,
+        `Session ${params.sessionId} is already being processed, skipping`,
       );
       return;
     }
@@ -52,7 +52,7 @@ export class SessionHistoryProcessor {
 
     try {
       await this.processSessionHistoryWithRetry(
-        { sessionId, did, oracleEntityDid },
+        params,
         maxRetries,
         retryDelay,
       );
@@ -70,7 +70,7 @@ export class SessionHistoryProcessor {
     maxRetries: number,
     retryDelay: number,
   ): Promise<void> {
-    const { sessionId, did, oracleEntityDid } = params;
+    const { sessionId } = params;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -106,6 +106,7 @@ export class SessionHistoryProcessor {
     sessionId,
     did,
     oracleEntityDid,
+    homeServer,
   }: ProcessSessionHistoryParams): Promise<void> {
     this.logger.debug(`Processing session history for session ${sessionId}`);
 
@@ -121,10 +122,12 @@ export class SessionHistoryProcessor {
     }
 
     // Get room ID
+    const userHomeServer = homeServer || await getMatrixHomeServerCroppedForDid(did);
     const { roomId } =
-      await this.sessionManagerService.matrixManger.getOracleRoomId({
+      await this.sessionManagerService.matrixManger.getOracleRoomIdWithHomeServer({
         userDid: did,
         oracleEntityDid,
+        userHomeServer,
       });
 
     if (!roomId) {
@@ -138,6 +141,7 @@ export class SessionHistoryProcessor {
     const messagesResponse = await this.messagesService.listMessages({
       sessionId,
       did,
+      homeServer,
     });
 
     if (!messagesResponse.messages || messagesResponse.messages.length === 0) {

@@ -40,9 +40,10 @@ export class SessionsController {
   async createSession(
     @Req() req: Request,
   ): Promise<CreateChatSessionResponseDto> {
-    const { userOpenIdToken, did } = req.authData;
+    const { did, homeServer } = req.authData;
     return this.sessionsService.createSession({
       did,
+      homeServer,
     });
   }
 
@@ -71,9 +72,10 @@ export class SessionsController {
     @Query('limit') limit?: number,
     @Query('offset') offset?: number,
   ): Promise<ListChatSessionsResponseDto> {
-    const { did } = req.authData;
+    const { did, homeServer } = req.authData;
     return this.sessionsService.listSessions({
       did,
+      homeServer,
       limit: limit ? Number(limit) : undefined,
       offset: offset ? Number(offset) : undefined,
     });
@@ -101,11 +103,12 @@ export class SessionsController {
     @Req() req: Request,
     @Param('sessionId') sessionId: string,
   ): Promise<{ message: string }> {
-    const { userOpenIdToken: matrixAccessToken, did } = req.authData;
+    const { userOpenIdToken: matrixAccessToken, did, homeServer } = req.authData;
     return this.sessionsService.deleteSession({
       matrixAccessToken,
       did,
       sessionId,
+      homeServer,
     });
   }
 }

@@ -5,7 +5,7 @@ type MatrixClientConstructorParams = {
 };
 
 type SourceSpacePayload = {
-  userDID: string;
+  userDid: string;
 };
 
 type JoinSpaceOrRoomPayload = {
@@ -14,7 +14,7 @@ type JoinSpaceOrRoomPayload = {
 
 type CreateAndJoinOracleRoomPayload = {
   oracleEntityDid: string;
-  userDID: string;
+  userDid: string;
 };
 
 type MatrixRoomMember = {

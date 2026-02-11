@@ -436,10 +436,14 @@ export class Authz {
   static async getOracleAuthZConfig(
     params: GetOracleAuthZConfigParams,
   ): Promise<IAuthzConfig> {
-    const config = await getSettingsResource({
-      protocolDid: params.oracleDid,
-      id: '{id}#orz',
-    });
+    const config = await getSettingsResource(
+      {
+        protocolDid: params.oracleDid,
+        id: '{id}#orz',
+      },
+      params.matrixAccessToken,
+      params.matrixHomeServer,
+    );
     if (!params.granterAddress) {
       throw new ValidationError(
         'Missing granterAddress: Please provide a granterAddress.',

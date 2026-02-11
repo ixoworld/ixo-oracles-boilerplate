@@ -38,8 +38,9 @@ export class Entities {
   static async getSettingsResource<T>(
     settingsResourceParams: TGetSettingsResourceSchema,
     matrixAccessToken?: string,
+    matrixHomeServer?: string,
   ): Promise<T> {
-    return getSettingsResource<T>(settingsResourceParams, matrixAccessToken);
+    return getSettingsResource<T>(settingsResourceParams, matrixAccessToken, matrixHomeServer);
   }
 
   public async getEntityIdFromTx(txHash: string): Promise<string | undefined> {

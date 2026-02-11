@@ -9,7 +9,7 @@ import {
   loadIssuerDid,
 } from 'src/client/create-credentials.js';
 import { gqlClient } from 'src/gql/index.js';
-import { MatrixHomeServerUrlByNetwork } from './config.js';
+import { getMatrixHomeServerForDid } from './did-matrix-batcher.js';
 export function encrypt(text: string, password: string) {
   const iv = randomBytes(16);
   const cipher = createCipheriv(
@@ -39,14 +39,15 @@ export function decrypt(text: string, password: string) {
 async function getEncryptedSigningMnemonic(
   userRoomId: string,
   accessToken: string,
+  homeServerUrl: string,
 ) {
   try {
-    console.log(
-      '🚀 ~ getEncryptedSigningMnemonic ~ MatrixHomeServerUrlByNetwork:',
-      MatrixHomeServerUrlByNetwork,
+    Logger.debug(
+      '🚀 ~ getEncryptedSigningMnemonic ~ homeServerUrl:',
+      homeServerUrl,
     );
     const response = await fetch(
-      `${MatrixHomeServerUrlByNetwork}/_matrix/client/r0/rooms/${userRoomId}/state/ixo.room.state.secure/encrypted_mnemonic_ed_signing`,
+      `${homeServerUrl}/_matrix/client/v3/rooms/${userRoomId}/state/ixo.room.state.secure/encrypted_mnemonic_ed_signing`,
       {
         headers: { Authorization: `Bearer ${accessToken}` },
       },
@@ -78,10 +79,11 @@ async function storeEncryptedSigningMnemonic(
   userRoomId: string,
   accessToken: string,
   encryptedMnemonic: string,
+  homeServerUrl: string,
 ) {
   try {
     const response = await fetch(
-      `${MatrixHomeServerUrlByNetwork}/_matrix/client/r0/rooms/${userRoomId}/state/ixo.room.state.secure/encrypted_mnemonic_ed_signing`,
+      `${homeServerUrl}/_matrix/client/v3/rooms/${userRoomId}/state/ixo.room.state.secure/encrypted_mnemonic_ed_signing`,
       {
         method: 'PUT',
         headers: {
@@ -187,9 +189,13 @@ export async function setupClaimSigningMnemonics({
     network,
   });
 
+  const homeServerUrl = await getMatrixHomeServerForDid(signerDid);
+  // Logger.info('Resolved homeserver for signer DID', { signerDid, homeServerUrl });
+
   let existingSigningMnemonic = await getEncryptedSigningMnemonic(
     matrixRoomId,
     matrixAccessToken,
+    homeServerUrl,
   );
 
   if (!existingSigningMnemonic && walletMnemonic) {
@@ -202,6 +208,7 @@ export async function setupClaimSigningMnemonics({
       matrixRoomId,
       matrixAccessToken,
       encryptedSigningMnemonic,
+      homeServerUrl,
     );
 
     Logger.info('Encrypted signing mnemonic stored in matrix room state');
@@ -209,6 +216,7 @@ export async function setupClaimSigningMnemonics({
     existingSigningMnemonic = await getEncryptedSigningMnemonic(
       matrixRoomId,
       matrixAccessToken,
+      homeServerUrl,
     );
 
     Logger.info('Encrypted signing mnemonic retrieved from matrix room state');

@@ -18,18 +18,16 @@ export const useGetOpenIdToken = () => {
     error,
   } = useQuery({
     queryKey: ['openIdToken', wallet?.did],
-    queryFn: () => {
-      if (!wallet?.did) {
+    queryFn: async () => {
+      if (!wallet?.did || !wallet?.address || !wallet?.matrix.homeServer) {
         return;
       }
-      return matrixClientRef.getOpenIdToken(
-        `@did-ixo-${wallet?.address}:${new URL(matrixClientRef.params.homeserverUrl ?? '').hostname}`,
-        wallet.did,
-      );
+      const matrixUserId = `@did-ixo-${wallet.address}:${wallet.matrix.homeServer}`;
+      return matrixClientRef.getOpenIdTokenWithDid(matrixUserId, wallet.did);
     },
-    enabled: !!wallet?.did && !!wallet?.matrix.accessToken,
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 5, // 5 minutes
+    enabled: !!wallet?.did && !!wallet?.matrix.accessToken && !!wallet?.matrix.homeServer,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 5,
   });
 
   return { openIdToken, isLoading, error };

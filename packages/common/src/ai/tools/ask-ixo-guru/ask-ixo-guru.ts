@@ -3,7 +3,6 @@ import  z from 'zod';
 import { jsonToYaml } from '../../utils/json-to-yaml.js';
 
 export type RequestPayload = {
-  matrixAccessToken: string;
   message: string;
   did: string;
   sessionId: string;
@@ -36,7 +35,6 @@ const callGuruApi = async ({
     throw new Error('Oracle DID is not set');
   }
   const payload: RequestPayload = {
-    matrixAccessToken: process.env.MATRIX_ORACLE_ADMIN_ACCESS_TOKEN ?? '',
     message: question,
     did: process.env.ORACLE_DID ?? '',
     sessionId,
