@@ -44,6 +44,28 @@ import {
 } from '../nodes/tools-node/skills-tools';
 import { presentFilesTool } from './skills-agent/present-files-tool';
 
+const ORACLE_CONFIG_PATH = path.join(process.cwd(), 'oracle-config.json');
+
+type OracleConfig = { oracleGoal?: string; skillNames?: string[] };
+
+async function loadOracleConfig(): Promise<{
+  oracleGoal: string;
+  availableSkillsNames: string;
+}> {
+  try {
+    const raw = await fs.promises.readFile(ORACLE_CONFIG_PATH, 'utf-8');
+    const config = JSON.parse(raw) as OracleConfig;
+    const goal = typeof config.oracleGoal === 'string' ? config.oracleGoal : '';
+    const names = Array.isArray(config.skillNames) ? config.skillNames : [];
+    return {
+      oracleGoal: goal,
+      availableSkillsNames: names.join(', '),
+    };
+  } catch {
+    return { oracleGoal: '', availableSkillsNames: '' };
+  }
+}
+
 interface InvokeMainAgentParams {
   state: Partial<TMainAgentGraphState>;
   config: IRunnableConfigWithRequiredFields;
@@ -120,6 +142,8 @@ export const createMainAgent = async ({
     return createMCPClientAndGetTools();
   };
 
+  const oracleConfig = await loadOracleConfig();
+
   const [
     systemPrompt,
     portalAgent,
@@ -131,6 +155,8 @@ export const createMainAgent = async ({
   ] = await Promise.all([
     AI_ASSISTANT_PROMPT.format({
       APP_NAME: 'IXO | IXO Portal',
+      ORACLE_GOAL: oracleConfig.oracleGoal,
+      AVAILABLE_SKILLS_NAMES: oracleConfig.availableSkillsNames,
       IDENTITY_CONTEXT: jsonToYaml(state?.userContext?.identity ?? {}),
       WORK_CONTEXT: jsonToYaml(state?.userContext?.work ?? {}),
       GOALS_CONTEXT: jsonToYaml(state?.userContext?.goals ?? {}),

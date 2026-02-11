@@ -2,6 +2,7 @@ import { cosmos, ixo, utils } from '@ixo/impactxclient-sdk';
 import { claimsClient } from '../claims/claims.js';
 import { Client } from '../client.js';
 import { Authz } from './authz.js';
+import type { TransactionFn } from './types.js';
 const client = Client.getInstance();
 
 const userAddress = 'ixo1xpww6379u29ydvh54vmn6na2eyxyp8rk7fsrr0';
@@ -224,7 +225,8 @@ describe('Authz', () => {
         oracleName: 'test',
         agentQuota: 1000,
       },
-      (msgs, memo) => client.signAndBroadcast(msgs, memo),
+      ((msgs, memo) =>
+        client.signAndBroadcast(msgs, memo)) as TransactionFn,
     );
     console.log(tx);
     expect(tx).toBeDefined();

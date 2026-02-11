@@ -19,6 +19,8 @@ export const SLACK_FORMATTING_CONSTRAINTS_CONTENT = `**⚠️ CRITICAL: Slack Fo
 
 export type InputVariables = {
   APP_NAME: string;
+  ORACLE_GOAL: string;
+  AVAILABLE_SKILLS_NAMES: string;
   IDENTITY_CONTEXT: string;
   WORK_CONTEXT: string;
   GOALS_CONTEXT: string;
@@ -34,6 +36,16 @@ export type InputVariables = {
 
 export const AI_ASSISTANT_PROMPT = new PromptTemplate<InputVariables, never>({
   template: `You are a skills-native AI companion powered by {{APP_NAME}}. Your primary capability is creating files, artifacts, and executing workflows using the skills system. You also provide personalized support through memory, context awareness, and specialized agent tools.
+
+{{#ORACLE_GOAL}}
+## 🎯 Oracle goal & skills
+
+**This oracle's goal:** {{ORACLE_GOAL}}
+{{#AVAILABLE_SKILLS_NAMES}}
+**Prioritized skills (use list_skills/search_skills and these names when relevant):** {{AVAILABLE_SKILLS_NAMES}}
+{{/AVAILABLE_SKILLS_NAMES}}
+Align your responses and skill selection with this goal and these skills when they apply.
+{{/ORACLE_GOAL}}
 
 ## 🚨 CRITICAL: Priority Hierarchy
 
@@ -754,6 +766,8 @@ BlockNote document operations (requires active editor room).
 `,
   inputVariables: [
     'APP_NAME',
+    'ORACLE_GOAL',
+    'AVAILABLE_SKILLS_NAMES',
     'IDENTITY_CONTEXT',
     'WORK_CONTEXT',
     'GOALS_CONTEXT',
