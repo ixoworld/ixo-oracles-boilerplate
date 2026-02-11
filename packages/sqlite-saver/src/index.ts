@@ -181,6 +181,16 @@ export class SqliteSaver extends BaseCheckpointSaver {
     return new SqliteSaver(new Database(connStringOrLocalPath));
   }
 
+  static fromDatabase(db: DatabaseType, serde?: SerializerProtocol): SqliteSaver {
+    return new SqliteSaver(db, serde);
+  }
+
+  close(): void {
+    if (this.db.open) {
+      this.db.close();
+    }
+  }
+
   /**
    * Create schema_migrations table to track applied migrations
    */
@@ -284,6 +294,10 @@ export class SqliteSaver extends BaseCheckpointSaver {
     if (this.isSetup) {
       return;
     }
+
+    // Enable WAL mode for concurrent read/write support and set busy timeout
+    this.db.pragma('journal_mode = WAL');
+    this.db.pragma('busy_timeout = 5000');
 
     // Create base tables
     this.db.exec(`

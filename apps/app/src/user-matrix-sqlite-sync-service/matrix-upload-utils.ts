@@ -53,7 +53,9 @@ export async function uploadMediaToRoom(
     `Uploading media to room ${roomId} with storageKey ${storageKey}, file size: ${file.size} bytes`,
   );
 
-  // Check if existing media exists for this storageKey and delete it
+  // Look up the old media event ID (if any) so we can redact it AFTER the new upload succeeds.
+  // This avoids data loss if the upload fails — the old checkpoint stays intact until replaced.
+  let oldEventId: string | undefined;
   try {
     const existingMedia = await client.mxClient.getRoomStateEvent(
       roomId,
@@ -61,27 +63,10 @@ export async function uploadMediaToRoom(
       storageKey,
     );
     if (existingMedia && existingMedia.eventId) {
+      oldEventId = existingMedia.eventId;
       logger.debug(
-        `Found existing media event ${existingMedia.eventId} for storageKey ${storageKey}, attempting to redact`,
+        `Found existing media event ${oldEventId} for storageKey ${storageKey}, will redact after successful upload`,
       );
-      // Redact the old media event to delete it from the server
-      try {
-        await client.mxClient.redactEvent(
-          roomId,
-          existingMedia.eventId,
-          'Replacing with updated file',
-        );
-        logger.debug(
-          `Successfully redacted old media event ${existingMedia.eventId}`,
-        );
-      } catch (redactError) {
-        // Log but don't fail if redaction fails (e.g., permissions)
-        // We'll still proceed with the upload to ensure the new file is available
-        logger.warn(
-          `Failed to redact old media event ${existingMedia.eventId}:`,
-          redactError,
-        );
-      }
     }
   } catch (error) {
     // State event doesn't exist, proceed with upload
@@ -158,6 +143,27 @@ export async function uploadMediaToRoom(
   await client.mxClient.sendStateEvent(roomId, EVENTS.MEDIA_STATE, storageKey, {
     eventId,
   });
+
+  // Now that the new upload is live and the state pointer is updated,
+  // redact the old media event to reclaim storage. This is safe — if
+  // redaction fails, we just have a dangling old blob (no data loss).
+  if (oldEventId) {
+    try {
+      await client.mxClient.redactEvent(
+        roomId,
+        oldEventId,
+        'Replacing with updated file',
+      );
+      logger.debug(
+        `Successfully redacted old media event ${oldEventId}`,
+      );
+    } catch (redactError) {
+      logger.warn(
+        `Failed to redact old media event ${oldEventId}:`,
+        redactError,
+      );
+    }
+  }
 
   logger.debug(
     `Successfully uploaded media to room ${roomId} with storageKey ${storageKey}, eventId: ${eventId}`,

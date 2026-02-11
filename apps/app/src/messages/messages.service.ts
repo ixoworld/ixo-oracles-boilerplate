@@ -240,7 +240,9 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('Invalid parameters');
     }
 
-    const userHomeServer = homeServer || await getMatrixHomeServerCroppedForDid(did);
+    this.checkpointStorageSyncService.markUserActive(did);
+    try {
+      const userHomeServer = homeServer || await getMatrixHomeServerCroppedForDid(did);
     const { roomId } =
       await this.sessionManagerService.matrixManger.getOracleRoomIdWithHomeServer({
         userDid: did,
@@ -273,7 +275,10 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     if (!state) {
       return transformGraphStateMessageToListMessageResponse([]);
     }
-    return transformGraphStateMessageToListMessageResponse(state.messages);
+      return transformGraphStateMessageToListMessageResponse(state.messages);
+    } finally {
+      this.checkpointStorageSyncService.markUserInactive(did);
+    }
   }
 
   public async sendMessage(
@@ -294,6 +299,11 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         sessionId: string;
       }
   > {
+    // Mark user as active to prevent cron from closing their DB connection
+    // Must be set BEFORE prepareForQuery which calls getUserDatabase
+    this.checkpointStorageSyncService.markUserActive(params.did);
+
+    try {
     const { runnableConfig, sessionId, roomId, userContext, targetSession } =
       await this.prepareForQuery(params);
 
@@ -678,7 +688,10 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
 
               sendSSEDone(params.res);
 
-              // Fire-and-forget post-message sync operations for streaming
+              // Increment ref count BEFORE firing background task so
+              // the outer finally's markUserInactive doesn't drop to 0
+              // while performPostMessageSync still accesses the DB.
+              this.checkpointStorageSyncService.markUserActive(params.did);
               this.performPostMessageSync(
                 params,
                 sessionId,
@@ -703,6 +716,9 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
             '[MessagesService] Stream aborted by client, exiting cleanly',
           );
 
+          if (!params.res.writableEnded) {
+            sendSSEDone(params.res);
+          }
           return;
         }
 
@@ -716,6 +732,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
             params.res,
             error instanceof Error ? error : 'Something went wrong',
           );
+          sendSSEDone(params.res);
         }
       } finally {
         // Clear heartbeat and end response
@@ -761,7 +778,10 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         });
     }
 
-    // Fire-and-forget post-message sync operations
+    // Increment ref count BEFORE firing background task so
+    // the outer finally's markUserInactive doesn't drop to 0
+    // while performPostMessageSync still accesses the DB.
+    this.checkpointStorageSyncService.markUserActive(params.did);
     this.performPostMessageSync(params, sessionId, roomId, targetSession);
 
     return {
@@ -772,6 +792,11 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       },
       sessionId,
     };
+    } finally {
+      // Mark user inactive so cron can safely manage their DB
+      // Covers both streaming and non-streaming paths
+      this.checkpointStorageSyncService.markUserInactive(params.did);
+    }
   }
 
   /**
@@ -811,6 +836,8 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       } catch (error) {
         Logger.error('Failed to perform post-message sync:', error);
         // Don't throw - this is fire-and-forget
+      } finally {
+        this.checkpointStorageSyncService.markUserInactive(params.did);
       }
     });
   }
