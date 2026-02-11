@@ -1,4 +1,5 @@
 import { MatrixManager } from '@ixo/matrix';
+import { getMatrixHomeServerCroppedForDid } from '@ixo/oracles-chain-client';
 import {
   Injectable,
   Logger,
@@ -318,9 +319,11 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
       };
     } else {
       const mxManager = MatrixManager.getInstance();
-      const { roomId } = await mxManager.getOracleRoomId({
+      const userHomeServer = await getMatrixHomeServerCroppedForDid(userDid);
+      const { roomId } = await mxManager.getOracleRoomIdWithHomeServer({
         userDid: userDid,
         oracleEntityDid: configService.getOrThrow('ORACLE_ENTITY_DID'),
+        userHomeServer,
       });
 
       if (!roomId) {
@@ -438,9 +441,11 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
     );
 
     const mxManager = MatrixManager.getInstance();
-    const { roomId } = await mxManager.getOracleRoomId({
+    const userHomeServer = await getMatrixHomeServerCroppedForDid(userDid);
+    const { roomId } = await mxManager.getOracleRoomIdWithHomeServer({
       userDid: userDid,
       oracleEntityDid: configService.getOrThrow('ORACLE_ENTITY_DID'),
+      userHomeServer,
     });
 
     if (!roomId) {
@@ -490,7 +495,14 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
           return false;
         });
       if (exists) {
-        await this.uploadCheckpointToMatrixStorage({ userDid });
+        try {
+          await this.uploadCheckpointToMatrixStorage({ userDid });
+        } catch (error) {
+          Logger.error(
+            `Failed to upload checkpoint to Matrix storage for user ${userDid}`,
+            error,
+          );
+        }
       }
     }
   }
@@ -512,9 +524,11 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
 
     // Get the user's Matrix room
     const mxManager = MatrixManager.getInstance();
-    const { roomId } = await mxManager.getOracleRoomId({
+    const userHomeServer = await getMatrixHomeServerCroppedForDid(userDid);
+    const { roomId } = await mxManager.getOracleRoomIdWithHomeServer({
       userDid,
       oracleEntityDid: configService.getOrThrow('ORACLE_ENTITY_DID'),
+      userHomeServer,
     });
 
     if (!roomId) {

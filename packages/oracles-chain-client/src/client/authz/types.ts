@@ -145,6 +145,8 @@ export type GetOracleAuthZConfigParams = {
   oracleDid: string;
   granterAddress: string;
   customConfigName?: string;
+  matrixAccessToken?: string;
+  matrixHomeServer?: string;
 };
 
 export type GrantClaimSubmitAuthorizationParams = {

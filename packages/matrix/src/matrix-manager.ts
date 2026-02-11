@@ -239,6 +239,9 @@ export class MatrixManager {
     };
   }
 
+  /**
+   * @deprecated Use getOracleRoomIdWithHomeServer for decoupled Matrix infrastructure support
+   */
   public async getOracleRoomId({
     userDid,
     oracleEntityDid,
@@ -250,12 +253,34 @@ export class MatrixManager {
     roomAlias: string;
     oracleRoomFullAlias: string;
   }> {
+    return this.getOracleRoomIdWithHomeServer({ userDid, oracleEntityDid, userHomeServer: this.homeserverName });
+  }
+
+  /**
+   * Get oracle room ID with explicit homeserver support for decoupled Matrix infrastructure.
+   * @param userDid The user's DID
+   * @param oracleEntityDid The oracle entity's DID
+   * @param userHomeServer The user's homeserver (resolved from DID or provided)
+   */
+  public async getOracleRoomIdWithHomeServer({
+    userDid,
+    oracleEntityDid,
+    userHomeServer,
+  }: {
+    userDid: string;
+    oracleEntityDid: string;
+    userHomeServer: string;
+  }): Promise<{
+    roomId: string | undefined;
+    roomAlias: string;
+    oracleRoomFullAlias: string;
+  }> {
     if (!this.mxClient) {
       throw new Error('Simple client not initialized');
     }
 
     const oracleRoomAlias = `${getEntityRoomAliasFromDid(userDid)}_${getEntityRoomAliasFromDid(oracleEntityDid)}`;
-    const oracleRoomFullAlias = `#${oracleRoomAlias}:${this.homeserverName}`;
+    const oracleRoomFullAlias = `#${oracleRoomAlias}:${userHomeServer}`;
 
     // Check cache first
     const cachedRoomId = this.roomCache.get(oracleRoomFullAlias);

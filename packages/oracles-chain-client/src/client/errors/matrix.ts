@@ -66,7 +66,7 @@ export class InvalidMatrixTokenError extends MatrixAuthenticationError {
   /**
    * Type guard to check if an error is an InvalidMatrixTokenError
    */
-  static InvalidisMatrixTokenError(error: unknown): error is InvalidMatrixTokenError {
+  static isInvalidMatrixTokenError(error: unknown): error is InvalidMatrixTokenError {
     return (
       error instanceof InvalidMatrixTokenError &&
       error.code === MatrixAuthenticationErrorCodes.INVALID_TOKEN

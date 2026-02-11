@@ -54,10 +54,11 @@ export class MessagesController {
     @Req() req: Request,
     @Param('sessionId') sessionId: string,
   ) {
-    const { did } = req.authData;
+    const { did, homeServer } = req.authData;
     return this.messagesService.listMessages({
       sessionId,
       did,
+      homeServer,
     });
   }
 
@@ -80,7 +81,7 @@ export class MessagesController {
     @Param('sessionId') sessionId: string,
     @Res() res: Response,
   ) {
-    const { did, userOpenIdToken } = req.authData;
+    const { did, userOpenIdToken, homeServer } = req.authData;
 
     // Build the payload
     const payload = {
@@ -89,6 +90,7 @@ export class MessagesController {
       userMatrixOpenIdToken: userOpenIdToken,
       did,
       sessionId,
+      homeServer,
     };
 
     // Handle streaming response if stream is true

@@ -70,7 +70,7 @@ export function useSendMessage({
       // Also abort locally for immediate UI feedback
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
-      chatRef?.current.setStatus('ready');
+      chatRef?.current?.setStatus('ready');
     }
   }, [sessionId, chatRef, apiUrl]);
 
@@ -102,7 +102,7 @@ export function useSendMessage({
       }
 
       // Set status to streaming
-      chatRef?.current.setStatus('submitted');
+      chatRef?.current?.setStatus('submitted');
 
       try {
         // 1. Add optimistic user message immediately
@@ -111,17 +111,17 @@ export function useSendMessage({
           content: message,
           type: 'human',
         };
-        await chatRef?.current.addUserMessage(userMessage);
+        await chatRef?.current?.addUserMessage(userMessage);
 
         // 2. Stream AI response
-        chatRef?.current.setStatus('streaming');
+        chatRef?.current?.setStatus('streaming');
 
         // Create abort controller for this request
         abortControllerRef.current = new AbortController();
 
         const results = await askOracleStream({
           apiURL: apiUrl,
-          did: wallet.did,
+          homeServer: wallet.matrix.homeServer,
           message,
           matrixAccessToken: openIdToken.access_token,
           sessionId,
@@ -146,7 +146,7 @@ export function useSendMessage({
 
           // Message chunks (existing pattern)
           onMessage: async ({ chunk, requestId }) => {
-            await chatRef?.current.upsertAIMessage(requestId, chunk);
+            await chatRef?.current?.upsertAIMessage(requestId, chunk);
           },
 
           onToolCall: onToolCall
@@ -174,12 +174,12 @@ export function useSendMessage({
             : undefined,
 
           onDone: () => {
-            chatRef?.current.setStatus('ready');
+            chatRef?.current?.setStatus('ready');
             abortControllerRef.current = null;
           },
         });
 
-        chatRef?.current.setStatus('ready');
+        chatRef?.current?.setStatus('ready');
 
         return { requestId: results.requestId };
       } catch (err) {
@@ -192,16 +192,16 @@ export function useSendMessage({
           (err.name === 'AbortError' ||
             (err instanceof DOMException && err.name === 'AbortError'))
         ) {
-          chatRef?.current.setStatus('ready');
+          chatRef?.current?.setStatus('ready');
           return;
         }
 
         if (RequestError.isRequestError(err) && err.claims) {
           onPaymentRequiredError(err.claims as string[]);
-          chatRef?.current.setStatus('ready');
+          chatRef?.current?.setStatus('ready');
           return;
         }
-        chatRef?.current.setStatus(
+        chatRef?.current?.setStatus(
           'error',
           err instanceof Error ? err : new Error('Unknown error'),
         );
@@ -237,7 +237,7 @@ export function useSendMessage({
 // Stream AI responses from the oracle
 const askOracleStream = async (props: {
   apiURL: string;
-  did: string;
+  homeServer: string;
   message: string;
   sessionId: string;
   matrixAccessToken: string;
@@ -282,7 +282,7 @@ const askOracleStream = async (props: {
     headers: {
       'x-matrix-access-token': props.matrixAccessToken,
       'Content-Type': 'application/json',
-      'x-did': props.did,
+      'x-matrix-homeserver': props.homeServer,
     },
     body: JSON.stringify({
       message: props.message,

@@ -5,6 +5,7 @@ type GetOpenIdTokenParams = {
   matrixAccessToken: string;
   did: string;
 };
+
 export const getOpenIdToken = async ({
   userId,
   matrixAccessToken,
@@ -14,6 +15,6 @@ export const getOpenIdToken = async ({
     userAccessToken: matrixAccessToken,
   });
 
-  const openIdToken = await matrixClient.getOpenIdToken(userId, did);
+  const openIdToken = await matrixClient.getOpenIdTokenWithDid(userId, did);
   return openIdToken;
 };

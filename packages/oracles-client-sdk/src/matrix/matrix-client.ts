@@ -1,5 +1,6 @@
 import { request } from '../utils/request.js';
 import { decryptAndRetrieve, encryptAndStore } from '../utils/token-cache.js';
+import { getMatrixUrlsForDid } from '@ixo/oracles-chain-client/react';
 import {
   IOpenIDToken,
   SourceSpaceResponse,
@@ -14,6 +15,22 @@ import {
 function getEntityRoomAliasFromDid(did: string) {
   return did.replace(/:/g, '-');
 }
+
+function extractHomeServerFromUserId(userId: string): string {
+  const colonIndex = userId.indexOf(':');
+  if (colonIndex === -1) {
+    throw new Error(`Invalid Matrix user ID format: ${userId}`);
+  }
+  return `https://${userId.substring(colonIndex + 1)}`;
+}
+
+/**
+ * MatrixClient for user operations in the browser.
+ *
+ * Methods support DID-based URL resolution for decoupled Matrix infrastructure.
+ * When a userDid is provided, the homeserver is resolved from the DID document.
+ * When no userDid is provided, constructor defaults are used (backwards compatible).
+ */
 class MatrixClient {
   constructor(public readonly params: MatrixClientConstructorParams) {
     this.params.appServiceBotUrl =
@@ -28,15 +45,31 @@ class MatrixClient {
     }
   }
 
-  // source space
-  public async sourceMainSpace(payload: SourceSpacePayload): Promise<{
+  private async resolveHomeServerUrl(userDid?: string): Promise<string> {
+    if (userDid) {
+      const matrixUrls = await getMatrixUrlsForDid(userDid);
+      return matrixUrls.homeServer;
+    }
+    return this.params.homeserverUrl!;
+  }
+
+  private async resolveRoomsBotUrl(userDid?: string): Promise<string> {
+    if (userDid) {
+      const matrixUrls = await getMatrixUrlsForDid(userDid);
+      return matrixUrls.roomsBot;
+    }
+    return this.params.appServiceBotUrl!;
+  }
+
+  public async sourceMainSpaceWithDid(payload: SourceSpacePayload): Promise<{
     mainSpaceId: string;
     subSpaces: string[];
   }> {
-    const url = `${this.params.appServiceBotUrl}/spaces/source`;
+    const roomsBotUrl = await this.resolveRoomsBotUrl(payload.userDid);
+    const url = `${roomsBotUrl}/spaces/source`;
     const response = await request<SourceSpaceResponse>(url, 'POST', {
       body: JSON.stringify({
-        did: payload.userDID,
+        did: payload.userDid,
       }),
     });
 
@@ -56,22 +89,14 @@ class MatrixClient {
     };
   }
 
-  /**
-   * Join a Matrix room using the room ID or alias
-   * @param roomIdOrAlias - The room ID (!example:server.com) or alias (#example:server.com)
-   * @param accessToken - The user's Matrix access token
-   * @param homeserverUrl - The homeserver URL (defaults to matrix.org)
-   * @returns The joined room ID
-   */
-  public async joinSpaceOrRoom(
-    payload: JoinSpaceOrRoomPayload,
+  public async joinSpaceOrRoomWithDid(
+    payload: JoinSpaceOrRoomPayload & { userDid?: string },
   ): Promise<string> {
     try {
-      // Use the join endpoint with room ID or alias
-      const url = `${this.params.homeserverUrl}/_matrix/client/v3/join/${payload.roomId}`;
+      const homeServerUrl = await this.resolveHomeServerUrl(payload.userDid);
+      const url = `${homeServerUrl}/_matrix/client/v3/join/${payload.roomId}`;
 
       const response = await request<{ room_id: string }>(url, 'POST', {
-        method: 'POST',
         headers: {
           Authorization: `Bearer ${this.params.userAccessToken}`,
           'Content-Type': 'application/json',
@@ -86,13 +111,14 @@ class MatrixClient {
     }
   }
 
-  public async createAndJoinOracleRoom(
+  public async createAndJoinOracleRoomWithDid(
     payload: CreateAndJoinOracleRoomPayload,
   ): Promise<string> {
-    const url = `${this.params.appServiceBotUrl}/spaces/oracle/create`;
+    const roomsBotUrl = await this.resolveRoomsBotUrl(payload.userDid);
+    const url = `${roomsBotUrl}/spaces/oracle/create`;
     const response = await request<{ roomId: string }>(url, 'POST', {
       body: JSON.stringify({
-        did: payload.userDID,
+        did: payload.userDid,
         oracleDid: payload.oracleEntityDid,
       }),
       headers: {
@@ -101,11 +127,19 @@ class MatrixClient {
       },
     });
 
-    return this.joinSpaceOrRoom({ roomId: response.roomId });
+    return this.joinSpaceOrRoomWithDid({
+      roomId: response.roomId,
+      userDid: payload.userDid,
+    });
   }
 
-  public async inviteUser(roomId: string, userId: string): Promise<void> {
-    const url = `${this.params.homeserverUrl}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/invite`;
+  public async inviteUserWithDid(
+    roomId: string,
+    userId: string,
+    userDid?: string,
+  ): Promise<void> {
+    const homeServerUrl = await this.resolveHomeServerUrl(userDid);
+    const url = `${homeServerUrl}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/invite`;
     const res = await fetch(url, {
       method: 'POST',
       headers: {
@@ -122,13 +156,15 @@ class MatrixClient {
     }
   }
 
-  public async setPowerLevel(
+  public async setPowerLevelWithDid(
     roomId: string,
     userId: string,
     powerLevel: number,
+    userDid?: string,
   ): Promise<void> {
-    // 1. Fetch current power levels
-    const getUrl = `${this.params.homeserverUrl}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/state/m.room.power_levels`;
+    const homeServerUrl = await this.resolveHomeServerUrl(userDid);
+
+    const getUrl = `${homeServerUrl}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/state/m.room.power_levels`;
     let res = await fetch(getUrl, {
       method: 'GET',
       headers: {
@@ -142,12 +178,10 @@ class MatrixClient {
     }
     const plEvent = (await res.json()) as MatrixPowerLevels;
 
-    // 2. Update only the specific user's power level
     plEvent.users = plEvent.users || {};
     plEvent.users[userId] = powerLevel;
 
-    // 3. Publish updated power levels
-    const putUrl = `${this.params.homeserverUrl}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/state/m.room.power_levels`;
+    const putUrl = `${homeServerUrl}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/state/m.room.power_levels`;
     res = await fetch(putUrl, {
       method: 'PUT',
       headers: {
@@ -162,21 +196,19 @@ class MatrixClient {
     }
   }
 
-  public async getOracleRoomId({
+  public async getOracleRoomIdWithDid({
     userDid,
     oracleEntityDid,
   }: {
     userDid: string;
     oracleEntityDid: string;
-  }): Promise<string> {
-    if (!this.params.homeserverUrl) {
-      throw new Error('Homeserver URL not found');
-    }
-    const hostname = new URL(this.params.homeserverUrl).hostname;
+  }): Promise<string | null> {
+    const matrixUrls = await getMatrixUrlsForDid(userDid);
+    const hostname = matrixUrls.homeServerCropped;
     const oracleRoomAlias = `${getEntityRoomAliasFromDid(userDid)}_${getEntityRoomAliasFromDid(oracleEntityDid)}`;
     const oracleRoomFullAlias = `#${oracleRoomAlias}:${hostname}`;
 
-    const url = `${this.params.homeserverUrl}/_matrix/client/v3/directory/room/${encodeURIComponent(oracleRoomFullAlias)}`;
+    const url = `${matrixUrls.homeServer}/_matrix/client/v3/directory/room/${encodeURIComponent(oracleRoomFullAlias)}`;
     const res = await fetch(url, {
       method: 'GET',
       headers: {
@@ -186,6 +218,7 @@ class MatrixClient {
     });
 
     if (!res.ok) {
+      if (res.status === 404) return null;
       const errText = await res.text();
       throw new Error(`Failed to get oracle room id: ${res.status} ${errText}`);
     }
@@ -193,9 +226,13 @@ class MatrixClient {
     const data = (await res.json()) as { room_id: string; servers: string[] };
     return data.room_id;
   }
-  // list room members
-  public async listRoomMembers(roomId: string): Promise<string[]> {
-    const url = `${this.params.homeserverUrl}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/members`;
+
+  public async listRoomMembersWithDid(
+    roomId: string,
+    userDid?: string,
+  ): Promise<string[]> {
+    const homeServerUrl = await this.resolveHomeServerUrl(userDid);
+    const url = `${homeServerUrl}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/members`;
     const res = await fetch(url, {
       method: 'GET',
       headers: {
@@ -211,9 +248,9 @@ class MatrixClient {
     return data.chunk.map((member) => member.user_id);
   }
 
-  public async getOpenIdToken(
+  public async getOpenIdTokenWithDid(
     userId: string,
-    did: string,
+    userDid: string,
     useCache: boolean = true,
   ): Promise<IOpenIDToken> {
     try {
@@ -221,23 +258,18 @@ class MatrixClient {
         throw new Error('User access token not found');
       }
 
-      if (!this.params.homeserverUrl) {
-        throw new Error('Homeserver URL not found');
-      }
-
       if (!userId) {
         throw new Error('User ID not found');
       }
 
-      if (!did) {
-        throw new Error('DID not found');
+      if (!userDid) {
+        throw new Error('User DID not found');
       }
 
-      // Try to get cached token first (if caching is enabled)
       if (useCache) {
         try {
           const cachedToken = await decryptAndRetrieve({
-            did,
+            did: userDid,
             matrixAccessToken: this.params.userAccessToken,
           });
           if (cachedToken) {
@@ -249,10 +281,11 @@ class MatrixClient {
         }
       }
 
-      // Generate new token from Matrix server
+      const homeServerUrl = extractHomeServerFromUserId(userId);
+
       console.debug('Generating new OpenID token for user:', userId);
       const response = await fetch(
-        `${this.params.homeserverUrl}/_matrix/client/v3/user/${encodeURIComponent(userId)}/openid/request_token`,
+        `${homeServerUrl}/_matrix/client/v3/user/${encodeURIComponent(userId)}/openid/request_token`,
         {
           method: 'POST',
           body: JSON.stringify({}),
@@ -266,13 +299,12 @@ class MatrixClient {
       if (response.ok) {
         const openIdToken = (await response.json()) as IOpenIDToken;
 
-        // Cache the new token (if caching is enabled)
         if (useCache) {
           try {
             await encryptAndStore({
               token: openIdToken,
               matrixAccessToken: this.params.userAccessToken,
-              did,
+              did: userDid,
             });
             console.debug(
               'OpenID token generated and cached for user:',

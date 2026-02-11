@@ -38,6 +38,8 @@ export const useLiveAgent = (
       const config = await Authz.getOracleAuthZConfig({
         oracleDid,
         granterAddress: wallet?.address ?? '',
+        matrixAccessToken: wallet?.matrix.accessToken,
+        matrixHomeServer: wallet?.matrix.homeServer,
       });
       return config;
     },
@@ -45,9 +47,9 @@ export const useLiveAgent = (
   });
 
   const { data: oracleRoomId } = useQuery({
-    queryKey: ['oracle-room-id', authzConfig?.granteeAddress],
+    queryKey: ['oracle-room-id', authzConfig?.granteeAddress, wallet?.did],
     queryFn: async () => {
-      const roomId = await matrixClientRef.getOracleRoomId({
+      const roomId = await matrixClientRef.getOracleRoomIdWithDid({
         userDid: wallet?.did ?? '',
         oracleEntityDid: oracleDid,
       });

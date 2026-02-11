@@ -1,12 +1,12 @@
 import { Logger } from '@nestjs/common';
-import { createMiddleware, ToolMessage } from 'langchain';
+import { AgentMiddleware, createMiddleware, ToolMessage } from 'langchain';
 
 /**
  * Middleware that catches tool validation errors and handles them gracefully.
  * This prevents the FilesystemMiddleware from throwing unhandled errors when
  * tool inputs don't match their expected schemas.
  */
-export const createToolValidationMiddleware = () => {
+export const createToolValidationMiddleware = (): AgentMiddleware => {
   return createMiddleware({
     name: 'ToolValidationMiddleware',
     wrapToolCall: async (toolCallRequest, handler) => {

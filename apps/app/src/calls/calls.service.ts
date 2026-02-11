@@ -1,4 +1,5 @@
 import { EncryptedRoomEvent, MatrixManager } from '@ixo/matrix';
+import { getMatrixHomeServerCroppedForDid } from '@ixo/oracles-chain-client';
 import {
   BadRequestException,
   ConflictException,
@@ -139,9 +140,11 @@ export class CallsService {
       // Check SQLite first
       const callsRows = await this.listCallsFromDB(dto.userDid, dto.sessionId);
 
-      const { roomId } = await this.matrixManager.getOracleRoomId({
+      const userHomeServer = dto.homeServer || await getMatrixHomeServerCroppedForDid(dto.userDid);
+      const { roomId } = await this.matrixManager.getOracleRoomIdWithHomeServer({
         userDid: dto.userDid,
         oracleEntityDid: this.configService.getOrThrow('ORACLE_ENTITY_DID'),
+        userHomeServer,
       });
 
       if (!roomId) {

@@ -130,6 +130,7 @@ export class CallsController {
     return this.callsService.listCalls({
       sessionId,
       userDid: req.authData.did,
+      homeServer: req.authData.homeServer,
     });
   }
 }
