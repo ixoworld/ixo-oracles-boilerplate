@@ -6,6 +6,7 @@ import {
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { type ENV } from 'src/types';
+import { UserMatrixSqliteSyncService } from '../user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 import { type CreateSessionDto } from './dto/create-session.dto'; // Import DTO
 import { type DeleteSessionDto } from './dto/delete-session.dto'; // Import DTO
 import { type ListSessionsDto } from './dto/list-sessions.dto'; // Import DTO
@@ -17,6 +18,7 @@ export class SessionsService {
     private readonly sessionManager: SessionManagerService,
     private readonly configService: ConfigService<ENV>,
     private readonly sessionHistoryProcessor: SessionHistoryProcessor,
+    private readonly syncService: UserMatrixSqliteSyncService,
   ) {}
 
   async processPreviousSessionHistory(data: CreateSessionDto): Promise<void> {
@@ -29,7 +31,10 @@ export class SessionsService {
 
     if (sessions.length > 0) {
       const previousSession = sessions[0]; // Most recent session
-      // Fire-and-forget processing of previous session
+      // Guard the inner fire-and-forget separately — the outer guard on
+      // processPreviousSessionHistory drops when this method resolves,
+      // but processSessionHistory continues running in the background.
+      this.syncService.markUserActive(data.did);
       this.sessionHistoryProcessor
         .processSessionHistory({
           sessionId: previousSession.sessionId,
@@ -42,23 +47,34 @@ export class SessionsService {
             `Failed to process previous session ${previousSession.sessionId}:`,
             err,
           ),
-        );
+        )
+        .finally(() => {
+          this.syncService.markUserInactive(data.did);
+        });
     }
   }
 
   async createSession(
     data: CreateSessionDto,
   ): Promise<CreateChatSessionResponseDto> {
+    this.syncService.markUserActive(data.did);
     try {
       const oracleEntityDid =
         this.configService.getOrThrow('ORACLE_ENTITY_DID');
 
-      this.processPreviousSessionHistory(data).catch((err) =>
-        Logger.error(
-          `Failed to process previous session history for DID ${data.did}:`,
-          err,
-        ),
-      );
+      // Increment ref count BEFORE firing background task so the outer
+      // finally's markUserInactive doesn't drop to 0 while the task runs.
+      this.syncService.markUserActive(data.did);
+      this.processPreviousSessionHistory(data)
+        .catch((err) =>
+          Logger.error(
+            `Failed to process previous session history for DID ${data.did}:`,
+            err,
+          ),
+        )
+        .finally(() => {
+          this.syncService.markUserInactive(data.did);
+        });
 
       const session = await this.sessionManager.createSession({
         did: data.did,
@@ -77,12 +93,15 @@ export class SessionsService {
         stack,
       );
       throw new BadRequestException(`Session creation failed: ${message}`);
+    } finally {
+      this.syncService.markUserInactive(data.did);
     }
   }
 
   async listSessions(
     data: ListSessionsDto,
   ): Promise<ListChatSessionsResponseDto> {
+    this.syncService.markUserActive(data.did);
     try {
       const sessionsResult = await this.sessionManager.listSessions({
         did: data.did,
@@ -103,15 +122,20 @@ export class SessionsService {
         stack,
       );
       throw new BadRequestException(`Failed to list sessions: ${message}`);
+    } finally {
+      this.syncService.markUserInactive(data.did);
     }
   }
 
   async deleteSession(data: DeleteSessionDto): Promise<{ message: string }> {
+    this.syncService.markUserActive(data.did);
     try {
       const oracleEntityDid =
         this.configService.getOrThrow('ORACLE_ENTITY_DID');
 
-      // Process session history before deletion
+      // Increment ref count BEFORE firing background task so the outer
+      // finally's markUserInactive doesn't drop to 0 while the task runs.
+      this.syncService.markUserActive(data.did);
       this.sessionHistoryProcessor
         .processSessionHistory({
           sessionId: data.sessionId,
@@ -124,7 +148,10 @@ export class SessionsService {
             `Failed to process deleted session ${data.sessionId}:`,
             err,
           ),
-        );
+        )
+        .finally(() => {
+          this.syncService.markUserInactive(data.did);
+        });
 
       await this.sessionManager.deleteSession({
         did: data.did,
@@ -140,6 +167,8 @@ export class SessionsService {
         stack,
       );
       throw new BadRequestException(`Failed to delete session: ${message}`);
+    } finally {
+      this.syncService.markUserInactive(data.did);
     }
   }
 }

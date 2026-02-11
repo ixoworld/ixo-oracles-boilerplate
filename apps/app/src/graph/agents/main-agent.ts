@@ -211,8 +211,8 @@ export const createMainAgent = async ({
     tools: [...mcpTools, ...agActionTools],
     middleware,
     systemPrompt,
-    checkpointer: SqliteSaver.fromConnString(
-      UserMatrixSqliteSyncService.getUserCheckpointDbPath(
+    checkpointer: SqliteSaver.fromDatabase(
+      await UserMatrixSqliteSyncService.getInstance().getUserDatabase(
         configurable?.configs?.user?.did,
       ),
     ),
