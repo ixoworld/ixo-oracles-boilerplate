@@ -6,10 +6,10 @@ import { useOraclesContext } from '../../../providers/oracles-provider/oracles-c
 import { RequestError } from '../../../utils/request.js';
 import {
   parseSSEStream,
+  type SSEActionCallEventData,
   type SSEErrorEventData,
   type SSEReasoningEventData,
   type SSEToolCallEventData,
-  type SSEActionCallEventData,
 } from '../../../utils/sse-parser.js';
 import { useGetOpenIdToken } from '../../use-get-openid-token/use-get-openid-token.js';
 import { useOraclesConfig } from '../../use-oracles-config.js';
@@ -49,6 +49,7 @@ export function useSendMessage({
     openIdToken,
     isLoading: isTokenLoading,
     error: tokenError,
+    refetch: refetchOpenIdToken,
   } = useGetOpenIdToken();
 
   // Abort controller for canceling requests
@@ -83,6 +84,7 @@ export function useSendMessage({
       message: string;
       metadata?: Record<string, unknown>;
     }) => {
+      const openidToken = openIdToken ?? (await refetchOpenIdToken());
       if (!apiUrl) {
         throw new Error('API URL is required');
       }
@@ -97,7 +99,7 @@ export function useSendMessage({
       if (tokenError) {
         throw new Error(`OpenID token fetch failed: ${tokenError.message}`);
       }
-      if (!openIdToken?.access_token) {
+      if (!openidToken?.access_token) {
         throw new Error('Matrix access token is required');
       }
 
@@ -123,7 +125,7 @@ export function useSendMessage({
           apiURL: apiUrl,
           homeServer: wallet.matrix.homeServer,
           message,
-          matrixAccessToken: openIdToken.access_token,
+          matrixAccessToken: openidToken.access_token,
           sessionId,
           metadata,
           browserTools: browserTools
@@ -282,7 +284,7 @@ const askOracleStream = async (props: {
     headers: {
       'x-matrix-access-token': props.matrixAccessToken,
       'Content-Type': 'application/json',
-      'x-matrix-homeserver': props.homeServer,
+      ...(props.homeServer ? { 'x-matrix-homeserver': props.homeServer } : {}),
     },
     body: JSON.stringify({
       message: props.message,

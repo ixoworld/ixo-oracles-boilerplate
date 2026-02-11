@@ -261,6 +261,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
           matrix: {
             roomId,
             oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
+            homeServerName: userHomeServer,
           },
           user: {
             did,
@@ -1022,6 +1023,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
           matrix: {
             roomId,
             oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
+            homeServerName: payload.homeServer || await getMatrixHomeServerCroppedForDid(did),
           },
           user: {
             did,

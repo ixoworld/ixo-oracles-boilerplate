@@ -17,6 +17,7 @@ interface IRunnableConfigWithRequiredFields extends RunnableConfig {
       matrix: {
         roomId: string;
         oracleDid: string;
+        homeServerName: string;
       };
       user: {
         did: string;

@@ -46,7 +46,10 @@ export class AuthHeaderMiddleware implements NestMiddleware {
   ) {}
 
   private resolveHomeServer(matrixHomeServer?: string): string {
-    if (matrixHomeServer) {
+    this.logger.debug(
+      `[resolveHomeServer]: matrixHomeServer: ${matrixHomeServer} -> ${this.configService.getOrThrow('MATRIX_BASE_URL')}`,
+    );
+    if (matrixHomeServer?.trim()) {
       const url = matrixHomeServer.startsWith('http')
         ? matrixHomeServer
         : `https://${matrixHomeServer}`;
@@ -110,8 +113,9 @@ export class AuthHeaderMiddleware implements NestMiddleware {
       `AuthHeaderMiddleware processing request for: ${req.originalUrl}`,
     );
     try {
-      const { matrixAccessToken, matrixHomeServer } =
-        await getAuthHeaders(req.headers);
+      const { matrixAccessToken, matrixHomeServer } = await getAuthHeaders(
+        req.headers,
+      );
 
       const cachedUser = await this.cacheManager.get<CachedUser>(
         `user_${this.hashToken(matrixAccessToken)}`,

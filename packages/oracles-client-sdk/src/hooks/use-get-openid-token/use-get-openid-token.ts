@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import MatrixClient from '../../matrix/matrix-client.js';
 import { useOraclesContext } from '../../providers/oracles-provider/oracles-context.js';
 
@@ -16,6 +16,7 @@ export const useGetOpenIdToken = () => {
     data: openIdToken,
     isLoading,
     error,
+    refetch,
   } = useQuery({
     queryKey: ['openIdToken', wallet?.did],
     queryFn: async () => {
@@ -25,10 +26,18 @@ export const useGetOpenIdToken = () => {
       const matrixUserId = `@did-ixo-${wallet.address}:${wallet.matrix.homeServer}`;
       return matrixClientRef.getOpenIdTokenWithDid(matrixUserId, wallet.did);
     },
-    enabled: !!wallet?.did && !!wallet?.matrix.accessToken && !!wallet?.matrix.homeServer,
+    enabled:
+      !!wallet?.did &&
+      !!wallet?.matrix.accessToken &&
+      !!wallet?.matrix.homeServer,
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 5,
   });
 
-  return { openIdToken, isLoading, error };
+  const refetchOpenIdToken = useCallback(async () => {
+    const token = await refetch();
+    return token.data;
+  }, [refetch]);
+
+  return { openIdToken, isLoading, error, refetch: refetchOpenIdToken };
 };

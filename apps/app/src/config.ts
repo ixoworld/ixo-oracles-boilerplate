@@ -87,6 +87,7 @@ export const EnvSchema = z.object({
     .optional(),
 
   MATRIX_ACCOUNT_ROOM_ID: z.string(),
+  SANDBOX_MCP_URL: z.url(),
 });
 
 export type ENV = z.infer<typeof EnvSchema> & {

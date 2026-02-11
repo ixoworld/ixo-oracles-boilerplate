@@ -901,8 +901,10 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
           await this.uploadCheckpointToMatrixStorage({ userDid });
         } catch (error) {
           Logger.error(
-            `Failed to upload checkpoint to Matrix for user ${userDid}, continuing with next user`,
-            error,
+            `Failed to upload checkpoint to Matrix storage for user ${userDid}`,
+            error.message,
+            "File path: " + UserMatrixSqliteSyncService.getUserCheckpointDbPath(userDid),
+            "File Size before gzip: " + bytesToHumanReadable(await fs.stat(UserMatrixSqliteSyncService.getUserCheckpointDbPath(userDid)).then((stats) => stats.size)),
           );
         }
       }
