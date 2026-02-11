@@ -30,8 +30,8 @@
     "clean": "rm -rf dist node_modules"
   },
   "dependencies": {
-    "@ixo/oracles-chain-client": "file:../oracles-chain-client",
-    "@ixo/oracles-events": "file:../events",
+    "@ixo/oracles-chain-client": "workspace:*",
+    "@ixo/oracles-events": "workspace:*",
     "@tanstack/react-query": "^5.29.0",
     "eventsource": "^3.0.6",
     "jose": "^6.1.0",
