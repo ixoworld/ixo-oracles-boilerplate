@@ -51,6 +51,7 @@ interface InvokeMainAgentParams {
   ucanService?: UcanService;
 }
 
+const configService = new ConfigService<ENV>();
 const llm = getOpenRouterChatModel({
   model: 'openai/gpt-oss-120b:nitro',
   __includeRawResponse: true,
@@ -62,18 +63,7 @@ const llm = getOpenRouterChatModel({
     effort: 'low',
   },
 });
-const sandboxMCP = createMCPClient({
-  mcpServers: {
-    sandbox: {
-      type: 'http',
-      url: 'http://localhost:8787/mcp',
-      transport: 'http',
-      headers: {
-        Authorization: `Bearer ${process.env.SANDBOX_API_KEY}`,
-      },
-    },
-  },
-});
+
 export const createMainAgent = async ({
   state,
   config,
@@ -85,6 +75,23 @@ export const createMainAgent = async ({
 
   const { configurable } = config as IRunnableConfigWithRequiredFields;
   const { matrix } = configurable?.configs ?? {};
+  Logger.log(`[createMainAgent] homeServerName: ${configurable.configs?.matrix.homeServerName}`);
+  Logger.log(`[createMainAgent] matrixOpenIdToken: ${configurable.configs?.user.matrixOpenIdToken}`);
+  const sandboxMCP = configurable.configs?.user.matrixOpenIdToken ? createMCPClient({
+    mcpServers: {
+      sandbox: {
+        type: 'http',
+        url: configService.getOrThrow('SANDBOX_MCP_URL'),
+        transport: 'http',
+        headers: {
+          Authorization: `Bearer ${configurable.configs?.user.matrixOpenIdToken}`,
+          'x-matrix-homeserver':
+            configurable.configs?.matrix.homeServerName ?? '',
+        },
+        },
+      },
+    })
+  : undefined;
   Logger.log(`msgFromMatrixRoom: ${msgFromMatrixRoom}`);
 
   // Extract timezone and current time from config
@@ -202,7 +209,6 @@ export const createMainAgent = async ({
   }
 
   // Build middleware list conditionally
-  const configService = new ConfigService<ENV>();
   const disableCredits = configService.get('DISABLE_CREDITS', false);
 
   const middleware = [

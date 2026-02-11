@@ -120,7 +120,10 @@ export const OraclesProvider = ({
         ...options,
         headers: {
           ...options?.headers,
-          'x-matrix-homeserver': initialWallet.matrix.homeServer,
+          ...(initialWallet.matrix.homeServer
+            ? { 'x-matrix-homeserver': initialWallet.matrix.homeServer }
+            : {}),
+
           'x-matrix-access-token': openIdToken,
         },
       });

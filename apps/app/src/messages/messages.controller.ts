@@ -82,6 +82,7 @@ export class MessagesController {
     @Res() res: Response,
   ) {
     const { did, userOpenIdToken, homeServer } = req.authData;
+    console.log("🚀 ~ MessagesController ~ sendMessage ~ userOpenIdToken:", userOpenIdToken)
 
     // Build the payload
     const payload = {
