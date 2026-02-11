@@ -242,40 +242,44 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
 
     this.checkpointStorageSyncService.markUserActive(did);
     try {
-      const userHomeServer = homeServer || await getMatrixHomeServerCroppedForDid(did);
-    const { roomId } =
-      await this.sessionManagerService.matrixManger.getOracleRoomIdWithHomeServer({
-        userDid: did,
-        oracleEntityDid: this.config.getOrThrow('ORACLE_ENTITY_DID'),
-        userHomeServer,
-      });
-
-    if (!roomId) {
-      throw new NotFoundException('Room not found or Invalid Session Id');
-    }
-
-    const config: IRunnableConfigWithRequiredFields & { sessionId: string } = {
-      configurable: {
-        thread_id: sessionId,
-        configs: {
-          matrix: {
-            roomId,
-            oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
-            homeServerName: userHomeServer,
+      const userHomeServer =
+        homeServer || (await getMatrixHomeServerCroppedForDid(did));
+      const { roomId } =
+        await this.sessionManagerService.matrixManger.getOracleRoomIdWithHomeServer(
+          {
+            userDid: did,
+            oracleEntityDid: this.config.getOrThrow('ORACLE_ENTITY_DID'),
+            userHomeServer,
           },
-          user: {
-            did,
+        );
+
+      if (!roomId) {
+        throw new NotFoundException('Room not found or Invalid Session Id');
+      }
+
+      const config: IRunnableConfigWithRequiredFields & { sessionId: string } =
+        {
+          configurable: {
+            thread_id: sessionId,
+            configs: {
+              matrix: {
+                roomId,
+                oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
+                homeServerName: userHomeServer,
+              },
+              user: {
+                did,
+              },
+            },
           },
-        },
-      },
-      sessionId,
-    };
+          sessionId,
+        };
 
-    const state = await this.mainAgent.getGraphState(config);
+      const state = await this.mainAgent.getGraphState(config);
 
-    if (!state) {
-      return transformGraphStateMessageToListMessageResponse([]);
-    }
+      if (!state) {
+        return transformGraphStateMessageToListMessageResponse([]);
+      }
       return transformGraphStateMessageToListMessageResponse(state.messages);
     } finally {
       this.checkpointStorageSyncService.markUserInactive(did);
@@ -305,296 +309,144 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     this.checkpointStorageSyncService.markUserActive(params.did);
 
     try {
-    const { runnableConfig, sessionId, roomId, userContext, targetSession } =
-      await this.prepareForQuery(params);
+      const { runnableConfig, sessionId, roomId, userContext, targetSession } =
+        await this.prepareForQuery(params);
 
-    if (!params.msgFromMatrixRoom) {
-      this.sessionManagerService.matrixManger
-        .sendMessage({
-          message: params.message,
-          roomId,
-          threadId: sessionId,
-          isOracleAdmin: false,
-        })
-        .catch((err) => {
-          Logger.error('Failed to replay API message to matrix room', err);
-        });
-    }
-    if (params.stream && params.res) {
-      // Set SSE headers
-      setSSEHeaders(params.res, runnableConfig.configurable.requestId);
-      params.res.flushHeaders();
-
-      // Start heartbeat to keep connection alive
-      const heartbeat = startSSEHeartbeat(params.res);
-
-      // Create abort signal for request cancellation
-      const abortController = new AbortController();
-
-      // Abort any existing request for this session (only one request per session at a time)
-      const existingController = this.abortControllers.get(sessionId);
-      if (existingController) {
-        Logger.debug(`Aborting existing request for session ${sessionId}`);
-        existingController.abort();
+      if (!params.msgFromMatrixRoom) {
+        this.sessionManagerService.matrixManger
+          .sendMessage({
+            message: params.message,
+            roomId,
+            threadId: sessionId,
+            isOracleAdmin: false,
+          })
+          .catch((err) => {
+            Logger.error('Failed to replay API message to matrix room', err);
+          });
       }
+      if (params.stream && params.res) {
+        // Set SSE headers
+        setSSEHeaders(params.res, runnableConfig.configurable.requestId);
+        params.res.flushHeaders();
 
-      // Register abort controller for this session
-      this.abortControllers.set(sessionId, abortController);
+        // Start heartbeat to keep connection alive
+        const heartbeat = startSSEHeartbeat(params.res);
 
-      // Listen for client disconnection - Response 'close' event is most reliable
-      const onClose = () => {
-        Logger.debug(
-          `[MessagesService] Client disconnected, aborting stream. Signal already aborted: ${abortController.signal.aborted}`,
-        );
-        abortController.abort();
-        Logger.debug(
-          `[MessagesService] After abort(), signal.aborted: ${abortController.signal.aborted}`,
-        );
-      };
+        // Create abort signal for request cancellation
+        const abortController = new AbortController();
 
-      // Listen to response close event (fires when client disconnects/aborts)
-      params.res.on('close', onClose);
+        // Abort any existing request for this session (only one request per session at a time)
+        const existingController = this.abortControllers.get(sessionId);
+        if (existingController) {
+          Logger.debug(`Aborting existing request for session ${sessionId}`);
+          existingController.abort();
+        }
 
-      try {
-        await runWithSSEContext(
-          params.res,
-          async () => {
-            // send thinking event to give the user faster feedback
-            const thinkingEvent = ReasoningEvent.createChunk(
-              sessionId,
-              runnableConfig.configurable.requestId ?? '',
-              'Thinking...',
-              undefined,
-              false,
-            );
+        // Register abort controller for this session
+        this.abortControllers.set(sessionId, abortController);
 
-            const stream = await this.mainAgent.streamMessage(
-              params.message,
-              runnableConfig,
-              params.tools ?? [],
-              params.msgFromMatrixRoom,
-              userContext,
-              abortController,
-              params.metadata?.editorRoomId,
-              params.metadata?.currentEntityDid,
-              params.agActions ?? [],
-              // UCAN options for MCP tool authorization
-              {
-                ucanService: this.ucanService,
-                mcpInvocations: params.mcpInvocations,
-              },
-            );
+        // Listen for client disconnection - Response 'close' event is most reliable
+        const onClose = () => {
+          Logger.debug(
+            `[MessagesService] Client disconnected, aborting stream. Signal already aborted: ${abortController.signal.aborted}`,
+          );
+          abortController.abort();
+          Logger.debug(
+            `[MessagesService] After abort(), signal.aborted: ${abortController.signal.aborted}`,
+          );
+        };
 
-            let fullContent = '';
-            if (params.sessionId) {
-              const toolCallMap = new Map<string, ToolCallEvent>();
-              const actionCallMap = new Map<string, ActionCallEvent>();
-              // Get list of AG-UI action names for quick lookup
-              const agActionNames = new Set(
-                (params.agActions ?? []).map((action) => action.name),
+        // Listen to response close event (fires when client disconnects/aborts)
+        params.res.on('close', onClose);
+
+        try {
+          await runWithSSEContext(
+            params.res,
+            async () => {
+              // send thinking event to give the user faster feedback
+              const thinkingEvent = ReasoningEvent.createChunk(
+                sessionId,
+                runnableConfig.configurable.requestId ?? '',
+                'Thinking...',
+                undefined,
+                false,
               );
 
-              Logger.log(
-                `[streamMessage] AG-UI actions registered: ${Array.from(agActionNames).join(', ') || 'none'}`,
+              const stream = await this.mainAgent.streamMessage(
+                params.message,
+                runnableConfig,
+                params.tools ?? [],
+                params.msgFromMatrixRoom,
+                userContext,
+                abortController,
+                params.metadata?.editorRoomId,
+                params.metadata?.currentEntityDid,
+                params.agActions ?? [],
+                // UCAN options for MCP tool authorization
+                {
+                  ucanService: this.ucanService,
+                  mcpInvocations: params.mcpInvocations,
+                },
               );
 
-              try {
-                for await (const { data, event, tags } of stream) {
-                  const isChatNode = true;
+              let fullContent = '';
+              if (params.sessionId) {
+                const toolCallMap = new Map<string, ToolCallEvent>();
+                const actionCallMap = new Map<string, ActionCallEvent>();
+                // Get list of AG-UI action names for quick lookup
+                const agActionNames = new Set(
+                  (params.agActions ?? []).map((action) => action.name),
+                );
 
-                  if (event === 'on_tool_end') {
-                    const toolMessage = data.output as ToolMessage;
+                Logger.log(
+                  `[streamMessage] AG-UI actions registered: ${Array.from(agActionNames).join(', ') || 'none'}`,
+                );
 
-                    // Check if this is an AG-UI action completion
-                    const actionCallEvent = actionCallMap.get(
-                      toolMessage.tool_call_id,
-                    );
+                try {
+                  for await (const { data, event, tags } of stream) {
+                    const isChatNode = true;
 
-                    if (actionCallEvent) {
-                      actionCallEvent.payload.output =
-                        toolMessage.content as string;
-                      actionCallEvent.payload.toolCallId =
-                        toolMessage.tool_call_id;
+                    if (event === 'on_tool_end') {
+                      const toolMessage = data.output as ToolMessage;
 
-                      // Check if the tool message content indicates an error
-                      try {
-                        const resultContent =
-                          typeof toolMessage.content === 'string'
-                            ? JSON.parse(toolMessage.content)
-                            : toolMessage.content;
-
-                        // Set status based on whether there's an error
-                        if (
-                          resultContent?.success === false ||
-                          resultContent?.error
-                        ) {
-                          actionCallEvent.payload.status = 'error';
-                          actionCallEvent.payload.error =
-                            resultContent.error || 'Action failed';
-                        } else {
-                          actionCallEvent.payload.status = 'done';
-                        }
-                      } catch {
-                        // If we can't parse, assume success
-                        actionCallEvent.payload.status = 'done';
-                      }
-
-                      if (!params.res) {
-                        throw new Error('Response not found');
-                      }
-                      // Send action call completion event as SSE
-                      if (
-                        !params.res.writableEnded &&
-                        !abortController.signal.aborted
-                      ) {
-                        params.res.write(
-                          formatSSE(
-                            actionCallEvent.eventName,
-                            actionCallEvent.payload,
-                          ),
-                        );
-                      }
-                      actionCallMap.delete(toolMessage.tool_call_id);
-                      continue;
-                    } else {
-                      // Normal tool call handling
-                      const toolCallEvent = toolCallMap.get(
+                      // Check if this is an AG-UI action completion
+                      const actionCallEvent = actionCallMap.get(
                         toolMessage.tool_call_id,
                       );
-                      if (!toolCallEvent) {
-                        continue;
-                      }
-                      toolCallEvent.payload.output =
-                        toolMessage.content as string;
-                      toolCallEvent.payload.status = 'done';
-                      (
-                        toolCallEvent.payload.args as Record<string, unknown>
-                      ).toolName = toolMessage.name;
-                      toolCallEvent.payload.eventId = toolMessage.tool_call_id;
-                      if (!params.res) {
-                        throw new Error('Response not found');
-                      }
-                      // Send tool call completion event as SSE
-                      if (
-                        !params.res.writableEnded &&
-                        !abortController.signal.aborted
-                      ) {
-                        params.res.write(
-                          formatSSE(
-                            toolCallEvent.eventName,
-                            toolCallEvent.payload,
-                          ),
-                        );
-                      }
-                      // If present_files tool: also dispatch render_component for artifactPreview
-                      if (
-                        toolMessage.name === 'present_files' &&
-                        !params.res.writableEnded &&
-                        !abortController.signal.aborted
-                      ) {
-                        const toolArgs = toolCallEvent.payload.args as Record<
-                          string,
-                          unknown
-                        >;
-                        const renderPayload = {
-                          sessionId,
-                          requestId:
-                            runnableConfig.configurable.requestId ?? '',
-                          componentName: 'ArtifactPreview',
-                          args: {
-                            title: toolArgs.title,
-                            fileType: toolArgs.fileType,
-                            url: toolArgs.artifactUrl,
-                          },
-                          status: 'done' as const,
-                          eventId: toolMessage.tool_call_id,
-                        };
-                        params.res.write(
-                          formatSSE(
-                            RenderComponentEvent.eventName,
-                            renderPayload,
-                          ),
-                        );
-                      }
-                      toolCallMap.delete(toolMessage.tool_call_id);
-                      continue;
-                    }
-                  }
 
-                  if (event === 'on_chat_model_stream') {
-                    const content = (data.chunk as AIMessageChunk).content;
-                    const toolCall = (data.chunk as AIMessageChunk).tool_calls;
+                      if (actionCallEvent) {
+                        actionCallEvent.payload.output =
+                          toolMessage.content as string;
+                        actionCallEvent.payload.toolCallId =
+                          toolMessage.tool_call_id;
 
-                    // Extract reasoning tokens from raw response
-                    const rawResponse = (data.chunk as AIMessageChunk)
-                      .additional_kwargs?.__raw_response as any;
-                    if (
-                      rawResponse?.choices?.[0]?.delta?.reasoning &&
-                      isChatNode
-                    ) {
-                      const reasoning = rawResponse.choices[0].delta.reasoning;
+                        // Check if the tool message content indicates an error
+                        try {
+                          const resultContent =
+                            typeof toolMessage.content === 'string'
+                              ? JSON.parse(toolMessage.content)
+                              : toolMessage.content;
 
-                      if (reasoning && reasoning.trim()) {
-                        // Use cleanAdditionalKwargs to extract and clean reasoning details
-                        const cleanedKwargs = cleanAdditionalKwargs(
-                          (data.chunk as AIMessageChunk).additional_kwargs,
-                          params.msgFromMatrixRoom ?? false,
-                        );
+                          // Set status based on whether there's an error
+                          if (
+                            resultContent?.success === false ||
+                            resultContent?.error
+                          ) {
+                            actionCallEvent.payload.status = 'error';
+                            actionCallEvent.payload.error =
+                              resultContent.error || 'Action failed';
+                          } else {
+                            actionCallEvent.payload.status = 'done';
+                          }
+                        } catch {
+                          // If we can't parse, assume success
+                          actionCallEvent.payload.status = 'done';
+                        }
 
-                        process.stdout.write(reasoning);
-                        const reasoningEvent = ReasoningEvent.createChunk(
-                          sessionId,
-                          runnableConfig.configurable.requestId ?? '',
-                          reasoning,
-                          cleanedKwargs.reasoningDetails,
-                          false, // Not complete yet
-                        );
-
-                        // Send reasoning chunk as SSE
                         if (!params.res) {
                           throw new Error('Response not found');
                         }
-                        if (
-                          !params.res.writableEnded &&
-                          !abortController.signal.aborted
-                        ) {
-                          params.res.write(
-                            formatSSE(
-                              reasoningEvent.eventName,
-                              reasoningEvent.payload,
-                            ),
-                          );
-                        }
-                      }
-                    }
-
-                    toolCall?.forEach((tool) => {
-                      // update toolCallEvent with toolCall
-                      if (!tool.name.trim() || !tool.id) {
-                        return;
-                      }
-
-                      Logger.log(
-                        `[streamMessage] Tool call detected: ${tool.name}, isAgAction: ${agActionNames.has(tool.name)}`,
-                      );
-
-                      // Check if this is an AG-UI action
-                      if (agActionNames.has(tool.name)) {
-                        // Create ActionCallEvent for SSE status update (no args - sent via WebSocket only)
-                        const actionCallEvent = new ActionCallEvent({
-                          requestId:
-                            runnableConfig.configurable.requestId ?? '',
-                          sessionId,
-                          toolCallId: tool.id,
-                          toolName: tool.name,
-                          args: undefined, // Args sent via WebSocket only, not SSE
-                          status: 'isRunning',
-                        });
-
-                        // Send action call start event as SSE
-                        if (!params.res) {
-                          throw new Error('Response not found');
-                        }
+                        // Send action call completion event as SSE
                         if (
                           !params.res.writableEnded &&
                           !abortController.signal.aborted
@@ -606,27 +458,28 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
                             ),
                           );
                         }
-                        actionCallMap.set(tool.id, actionCallEvent);
+                        actionCallMap.delete(toolMessage.tool_call_id);
+                        continue;
                       } else {
                         // Normal tool call handling
-                        const toolCallEvent = new ToolCallEvent({
-                          requestId:
-                            runnableConfig.configurable.requestId ?? '',
-                          sessionId,
-                          toolName: 'toolCall',
-                          args: {},
-                          status: 'isRunning',
-                        });
-                        toolCallEvent.payload.args = tool.args;
+                        const toolCallEvent = toolCallMap.get(
+                          toolMessage.tool_call_id,
+                        );
+                        if (!toolCallEvent) {
+                          continue;
+                        }
+                        toolCallEvent.payload.output =
+                          toolMessage.content as string;
+                        toolCallEvent.payload.status = 'done';
                         (
                           toolCallEvent.payload.args as Record<string, unknown>
-                        ).toolName = tool.name;
-                        toolCallEvent.payload.eventId = tool.id;
-
-                        // Send tool call start event as SSE
+                        ).toolName = toolMessage.name;
+                        toolCallEvent.payload.eventId =
+                          toolMessage.tool_call_id;
                         if (!params.res) {
                           throw new Error('Response not found');
                         }
+                        // Send tool call completion event as SSE
                         if (
                           !params.res.writableEnded &&
                           !abortController.signal.aborted
@@ -638,192 +491,348 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
                             ),
                           );
                         }
-                        toolCallMap.set(tool.id, toolCallEvent);
+                        // If present_files tool: also dispatch render_component for artifactPreview
+                        if (
+                          toolMessage.name === 'present_files' &&
+                          !params.res.writableEnded &&
+                          !abortController.signal.aborted
+                        ) {
+                          const toolArgs = toolCallEvent.payload.args as Record<
+                            string,
+                            unknown
+                          >;
+                          const renderPayload = {
+                            sessionId,
+                            requestId:
+                              runnableConfig.configurable.requestId ?? '',
+                            componentName: 'ArtifactPreview',
+                            args: {
+                              title: toolArgs.title,
+                              fileType: toolArgs.fileType,
+                              url: toolArgs.artifactUrl,
+                            },
+                            status: 'done' as const,
+                            eventId: toolMessage.tool_call_id,
+                          };
+                          params.res.write(
+                            formatSSE(
+                              RenderComponentEvent.eventName,
+                              renderPayload,
+                            ),
+                          );
+                        }
+                        toolCallMap.delete(toolMessage.tool_call_id);
+                        continue;
                       }
-                    });
-
-                    if (!content) {
-                      continue;
                     }
-                    if (isChatNode) {
-                      fullContent += content.toString();
-                      // Send message chunk as SSE
-                      if (!params.res) {
-                        throw new Error('Response not found');
-                      }
+
+                    if (event === 'on_chat_model_stream') {
+                      const content = (data.chunk as AIMessageChunk).content;
+                      const toolCall = (data.chunk as AIMessageChunk)
+                        .tool_calls;
+
+                      // Extract reasoning tokens from raw response
+                      const rawResponse = (data.chunk as AIMessageChunk)
+                        .additional_kwargs?.__raw_response as any;
                       if (
-                        !params.res.writableEnded &&
-                        !abortController.signal.aborted
+                        rawResponse?.choices?.[0]?.delta?.reasoning &&
+                        isChatNode
                       ) {
-                        params.res.write(
-                          formatSSE('message', {
-                            content: content.toString(),
-                            timestamp: new Date().toISOString(),
-                          }),
+                        const reasoning =
+                          rawResponse.choices[0].delta.reasoning;
+
+                        if (reasoning && reasoning.trim()) {
+                          // Use cleanAdditionalKwargs to extract and clean reasoning details
+                          const cleanedKwargs = cleanAdditionalKwargs(
+                            (data.chunk as AIMessageChunk).additional_kwargs,
+                            params.msgFromMatrixRoom ?? false,
+                          );
+
+                          const reasoningEvent = ReasoningEvent.createChunk(
+                            sessionId,
+                            runnableConfig.configurable.requestId ?? '',
+                            reasoning,
+                            cleanedKwargs.reasoningDetails,
+                            false, // Not complete yet
+                          );
+
+                          // Send reasoning chunk as SSE
+                          if (!params.res) {
+                            throw new Error('Response not found');
+                          }
+                          if (
+                            !params.res.writableEnded &&
+                            !abortController.signal.aborted
+                          ) {
+                            params.res.write(
+                              formatSSE(
+                                reasoningEvent.eventName,
+                                reasoningEvent.payload,
+                              ),
+                            );
+                          }
+                        }
+                      }
+
+                      toolCall?.forEach((tool) => {
+                        // update toolCallEvent with toolCall
+                        if (!tool.name.trim() || !tool.id) {
+                          return;
+                        }
+
+                        Logger.log(
+                          `[streamMessage] Tool call detected: ${tool.name}, isAgAction: ${agActionNames.has(tool.name)}`,
                         );
+
+                        // Check if this is an AG-UI action
+                        if (agActionNames.has(tool.name)) {
+                          // Create ActionCallEvent for SSE status update (no args - sent via WebSocket only)
+                          const actionCallEvent = new ActionCallEvent({
+                            requestId:
+                              runnableConfig.configurable.requestId ?? '',
+                            sessionId,
+                            toolCallId: tool.id,
+                            toolName: tool.name,
+                            args: undefined, // Args sent via WebSocket only, not SSE
+                            status: 'isRunning',
+                          });
+
+                          // Send action call start event as SSE
+                          if (!params.res) {
+                            throw new Error('Response not found');
+                          }
+                          if (
+                            !params.res.writableEnded &&
+                            !abortController.signal.aborted
+                          ) {
+                            params.res.write(
+                              formatSSE(
+                                actionCallEvent.eventName,
+                                actionCallEvent.payload,
+                              ),
+                            );
+                          }
+                          actionCallMap.set(tool.id, actionCallEvent);
+                        } else {
+                          // Normal tool call handling
+                          const toolCallEvent = new ToolCallEvent({
+                            requestId:
+                              runnableConfig.configurable.requestId ?? '',
+                            sessionId,
+                            toolName: 'toolCall',
+                            args: {},
+                            status: 'isRunning',
+                          });
+                          toolCallEvent.payload.args = tool.args;
+                          (
+                            toolCallEvent.payload.args as Record<
+                              string,
+                              unknown
+                            >
+                          ).toolName = tool.name;
+                          toolCallEvent.payload.eventId = tool.id;
+
+                          // Send tool call start event as SSE
+                          if (!params.res) {
+                            throw new Error('Response not found');
+                          }
+                          if (
+                            !params.res.writableEnded &&
+                            !abortController.signal.aborted
+                          ) {
+                            params.res.write(
+                              formatSSE(
+                                toolCallEvent.eventName,
+                                toolCallEvent.payload,
+                              ),
+                            );
+                          }
+                          toolCallMap.set(tool.id, toolCallEvent);
+                        }
+                      });
+
+                      if (!content) {
+                        continue;
+                      }
+                      if (isChatNode) {
+                        fullContent += content.toString();
+                        // Send message chunk as SSE
+                        if (!params.res) {
+                          throw new Error('Response not found');
+                        }
+                        if (
+                          !params.res.writableEnded &&
+                          !abortController.signal.aborted
+                        ) {
+                          params.res.write(
+                            formatSSE('message', {
+                              content: content.toString(),
+                              timestamp: new Date().toISOString(),
+                            }),
+                          );
+                        }
                       }
                     }
                   }
-                }
 
-                // Only send to Matrix if not aborted
-                if (!abortController.signal.aborted && fullContent) {
-                  Logger.debug(
-                    `[MessagesService] Sending AI response to Matrix (${fullContent.length} chars)`,
-                  );
-                  this.sessionManagerService.matrixManger
-                    .sendMessage({
-                      message: fullContent,
-                      roomId,
-                      threadId: sessionId,
-                      isOracleAdmin: true,
-                    })
-                    .catch((err) => {
-                      Logger.error(
-                        'Failed to replay API AI response message to matrix room',
-                        err,
-                      );
-                    });
-                } else {
-                  Logger.debug(
-                    `[MessagesService] Skipping Matrix send - aborted: ${abortController.signal.aborted}, content length: ${fullContent.length}`,
-                  );
+                  // Only send to Matrix if not aborted
+                  if (!abortController.signal.aborted && fullContent) {
+                    Logger.debug(
+                      `[MessagesService] Sending AI response to Matrix (${fullContent.length} chars)`,
+                    );
+                    this.sessionManagerService.matrixManger
+                      .sendMessage({
+                        message: fullContent,
+                        roomId,
+                        threadId: sessionId,
+                        isOracleAdmin: true,
+                      })
+                      .catch((err) => {
+                        Logger.error(
+                          'Failed to replay API AI response message to matrix room',
+                          err,
+                        );
+                      });
+                  } else {
+                    Logger.debug(
+                      `[MessagesService] Skipping Matrix send - aborted: ${abortController.signal.aborted}, content length: ${fullContent.length}`,
+                    );
+                  }
+                } catch (innerError) {
+                  throw innerError;
                 }
-              } catch (innerError) {
-                throw innerError;
-              }
-            }
-
-            // Send completion event only if not aborted
-            if (!abortController.signal.aborted) {
-              if (!params.res) {
-                throw new Error('Response not found');
               }
 
-              // Send reasoning completion event
-              const reasoningCompleteEvent = ReasoningEvent.createChunk(
-                sessionId,
-                runnableConfig.configurable.requestId ?? '',
-                '', // Empty reasoning for completion
-                undefined,
-                true, // Mark as complete
-              );
+              // Send completion event only if not aborted
+              if (!abortController.signal.aborted) {
+                if (!params.res) {
+                  throw new Error('Response not found');
+                }
 
-              if (!params.res.writableEnded) {
-                params.res.write(
-                  formatSSE(
-                    reasoningCompleteEvent.eventName,
-                    reasoningCompleteEvent.payload,
-                  ),
+                // Send reasoning completion event
+                const reasoningCompleteEvent = ReasoningEvent.createChunk(
+                  sessionId,
+                  runnableConfig.configurable.requestId ?? '',
+                  '', // Empty reasoning for completion
+                  undefined,
+                  true, // Mark as complete
+                );
+
+                if (!params.res.writableEnded) {
+                  params.res.write(
+                    formatSSE(
+                      reasoningCompleteEvent.eventName,
+                      reasoningCompleteEvent.payload,
+                    ),
+                  );
+                }
+
+                sendSSEDone(params.res);
+
+                // Increment ref count BEFORE firing background task so
+                // the outer finally's markUserInactive doesn't drop to 0
+                // while performPostMessageSync still accesses the DB.
+                this.checkpointStorageSyncService.markUserActive(params.did);
+                this.performPostMessageSync(
+                  params,
+                  sessionId,
+                  roomId,
+                  targetSession,
                 );
               }
-
-              sendSSEDone(params.res);
-
-              // Increment ref count BEFORE firing background task so
-              // the outer finally's markUserInactive doesn't drop to 0
-              // while performPostMessageSync still accesses the DB.
-              this.checkpointStorageSyncService.markUserActive(params.did);
-              this.performPostMessageSync(
-                params,
-                sessionId,
-                roomId,
-                targetSession,
-              );
-            }
-          },
-          abortController,
-        );
-
-        return;
-      } catch (error) {
-        // Handle abort errors gracefully - don't treat as error
-        if (
-          error instanceof Error &&
-          (error.name === 'AbortError' ||
-            error.message.includes('aborted') ||
-            error.message.includes('Stream aborted by client'))
-        ) {
-          Logger.debug(
-            '[MessagesService] Stream aborted by client, exiting cleanly',
+            },
+            abortController,
           );
 
-          if (!params.res.writableEnded) {
+          return;
+        } catch (error) {
+          // Handle abort errors gracefully - don't treat as error
+          if (
+            error instanceof Error &&
+            (error.name === 'AbortError' ||
+              error.message.includes('aborted') ||
+              error.message.includes('Stream aborted by client'))
+          ) {
+            Logger.debug(
+              '[MessagesService] Stream aborted by client, exiting cleanly',
+            );
+
+            if (!params.res.writableEnded) {
+              sendSSEDone(params.res);
+            }
+            return;
+          }
+
+          // Only log and send error if it's not an abort
+          Logger.error('Failed to stream message', error);
+          Logger.error(
+            `Error stack trace: ${error instanceof Error ? error.stack : 'No stack trace'}`,
+          );
+          if (!params.res.writableEnded && !abortController.signal.aborted) {
+            sendSSEError(
+              params.res,
+              error instanceof Error ? error : 'Something went wrong',
+            );
             sendSSEDone(params.res);
           }
-          return;
-        }
-
-        // Only log and send error if it's not an abort
-        Logger.error('Failed to stream message', error);
-        Logger.error(
-          `Error stack trace: ${error instanceof Error ? error.stack : 'No stack trace'}`,
-        );
-        if (!params.res.writableEnded && !abortController.signal.aborted) {
-          sendSSEError(
-            params.res,
-            error instanceof Error ? error : 'Something went wrong',
-          );
-          sendSSEDone(params.res);
-        }
-      } finally {
-        // Clear heartbeat and end response
-        clearInterval(heartbeat);
-        // Remove listener
-        params.res.off('close', onClose);
-        // Cleanup abort controller from registry
-        this.abortControllers.delete(sessionId);
-        if (!params.res.writableEnded) {
-          params.res.end();
+        } finally {
+          // Clear heartbeat and end response
+          clearInterval(heartbeat);
+          // Remove listener
+          params.res.off('close', onClose);
+          // Cleanup abort controller from registry
+          this.abortControllers.delete(sessionId);
+          if (!params.res.writableEnded) {
+            params.res.end();
+          }
         }
       }
-    }
 
-    const result = await this.mainAgent.sendMessage(
-      params.message,
-      runnableConfig,
-      params.tools ?? [],
-      params.msgFromMatrixRoom,
-      userContext,
-      params.metadata?.editorRoomId,
-      params.metadata?.currentEntityDid,
-      params.clientType,
-    );
-    const lastMessage = result.messages.at(-1);
-    if (!lastMessage) {
-      throw new BadRequestException('No message returned from the oracle');
-    }
+      const result = await this.mainAgent.sendMessage(
+        params.message,
+        runnableConfig,
+        params.tools ?? [],
+        params.msgFromMatrixRoom,
+        userContext,
+        params.metadata?.editorRoomId,
+        params.metadata?.currentEntityDid,
+        params.clientType,
+      );
+      const lastMessage = result.messages.at(-1);
+      if (!lastMessage) {
+        throw new BadRequestException('No message returned from the oracle');
+      }
 
-    if (!params.msgFromMatrixRoom) {
-      this.sessionManagerService.matrixManger
-        .sendMessage({
-          message: lastMessage.content.toString(),
-          roomId,
-          threadId: sessionId,
-          isOracleAdmin: true,
-        })
-        .catch((err) => {
-          Logger.error(
-            'Failed to replay API AI response message to matrix room',
-            err,
-          );
-        });
-    }
+      if (!params.msgFromMatrixRoom) {
+        this.sessionManagerService.matrixManger
+          .sendMessage({
+            message: lastMessage.content.toString(),
+            roomId,
+            threadId: sessionId,
+            isOracleAdmin: true,
+          })
+          .catch((err) => {
+            Logger.error(
+              'Failed to replay API AI response message to matrix room',
+              err,
+            );
+          });
+      }
 
-    // Increment ref count BEFORE firing background task so
-    // the outer finally's markUserInactive doesn't drop to 0
-    // while performPostMessageSync still accesses the DB.
-    this.checkpointStorageSyncService.markUserActive(params.did);
-    this.performPostMessageSync(params, sessionId, roomId, targetSession);
+      // Increment ref count BEFORE firing background task so
+      // the outer finally's markUserInactive doesn't drop to 0
+      // while performPostMessageSync still accesses the DB.
+      this.checkpointStorageSyncService.markUserActive(params.did);
+      this.performPostMessageSync(params, sessionId, roomId, targetSession);
 
-    return {
-      message: {
-        type: lastMessage.getType(),
-        content: lastMessage.content.toString(),
-        id: lastMessage.id ?? '',
-      },
-      sessionId,
-    };
+      return {
+        message: {
+          type: lastMessage.getType(),
+          content: lastMessage.content.toString(),
+          id: lastMessage.id ?? '',
+        },
+        sessionId,
+      };
     } finally {
       // Mark user inactive so cron can safely manage their DB
       // Covers both streaming and non-streaming paths
@@ -991,13 +1000,16 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     // Use cached roomId if available, otherwise fetch it
     let roomId = targetSession?.roomId;
     if (!roomId) {
-      const userHomeServer = payload.homeServer || await getMatrixHomeServerCroppedForDid(did);
+      const userHomeServer =
+        payload.homeServer || (await getMatrixHomeServerCroppedForDid(did));
       const roomResult =
-        await this.sessionManagerService.matrixManger.getOracleRoomIdWithHomeServer({
-          userDid: did,
-          oracleEntityDid: this.config.getOrThrow('ORACLE_ENTITY_DID'),
-          userHomeServer,
-        });
+        await this.sessionManagerService.matrixManger.getOracleRoomIdWithHomeServer(
+          {
+            userDid: did,
+            oracleEntityDid: this.config.getOrThrow('ORACLE_ENTITY_DID'),
+            userHomeServer,
+          },
+        );
       roomId = roomResult.roomId;
       if (!roomId) {
         throw new NotFoundException('Room not found or Invalid Session Id');
@@ -1023,7 +1035,9 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
           matrix: {
             roomId,
             oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
-            homeServerName: payload.homeServer || await getMatrixHomeServerCroppedForDid(did),
+            homeServerName:
+              payload.homeServer ||
+              (await getMatrixHomeServerCroppedForDid(did)),
           },
           user: {
             did,
