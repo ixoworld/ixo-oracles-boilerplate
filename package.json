@@ -18,8 +18,8 @@
   "devDependencies": {
     "@changesets/changelog-github": "^0.5.1",
     "@changesets/cli": "^2.29.7",
-    "@ixo/eslint-config": "^1.0.0",
-    "@ixo/typescript-config": "^1.0.0",
+    "@ixo/eslint-config": "workspace:*",
+    "@ixo/typescript-config": "workspace:*",
     "prettier": "^3.6.2",
     "tsc": "^2.0.4",
     "tsc-alias": "^1.8.16",
