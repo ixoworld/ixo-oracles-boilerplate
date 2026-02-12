@@ -1,5 +1,11 @@
 # @ixo/oracles-events
 
+## 1.0.2
+
+### Patch Changes
+
+- Export `ActionCallEvent` and `ReasoningEvent` from main entry (previously only in source; published 1.0.1 dist was missing these). Consumers (e.g. app, common) can now import them from `@ixo/oracles-events`.
+
 ## 1.0.1
 
 ### Patch Changes
