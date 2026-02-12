@@ -1,10 +1,14 @@
 # @ixo/oracles-events
 
-## 1.0.2
+## 1.0.3
 
 ### Patch Changes
 
-- Export `ActionCallEvent` and `ReasoningEvent` from main entry (previously only in source; published 1.0.1 dist was missing these). Consumers (e.g. app, common) can now import them from `@ixo/oracles-events`.
+- **Fix:** Published tarball now includes `ActionCallEvent` (dist/events/action-call). v1.0.2 on npm was built from a tree that omitted this export; ensure you run `pnpm build` before publishing. Added `prepublishOnly` script so `pnpm publish` always builds first.
+
+## 1.0.2
+
+- (Published 1.0.2 on npm was missing `ActionCallEvent` in dist; use 1.0.3.)
 
 ## 1.0.1
 
