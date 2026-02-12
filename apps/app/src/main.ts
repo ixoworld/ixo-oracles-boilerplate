@@ -130,7 +130,7 @@ async function bootstrap(): Promise<void> {
     `subscription: ${configService.get('SUBSCRIPTION_URL') ?? getSubscriptionUrlByNetwork(configService.getOrThrow('NETWORK'))}`,
   );
   Logger.log(
-    `Throw on insufficient credits: ${configService.get('THROW_ON_INSUFFICIENT_CREDITS')}. type: ${typeof configService.get('THROW_ON_INSUFFICIENT_CREDITS')}`,
+    `Credits disabled: ${configService.get('DISABLE_CREDITS')}. type: ${typeof configService.get('DISABLE_CREDITS')}`,
   );
 }
 

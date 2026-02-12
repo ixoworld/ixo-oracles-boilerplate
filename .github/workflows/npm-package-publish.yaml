@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       packages:
-        description: 'Comma-separated list of packages to override default ("@ixo/oracles-chain-client,@ixo/oracles-client-sdk")'
+        description: 'Comma-separated list of packages to publish (default: all app and root dependencies)'
         required: false
-        default: "@ixo/logger,@ixo/oracles-chain-client,@ixo/oracles-client-sdk,@ixo/oracles-events"
+        default: "@ixo/logger,@ixo/oracles-chain-client,@ixo/oracles-client-sdk,@ixo/oracles-events,@ixo/common,@ixo/data-store,@ixo/matrix,@ixo/slack,@ixo/sqlite-saver,@ixo/ucan,@ixo/eslint-config,@ixo/typescript-config"
         type: string
 
 jobs:
@@ -43,6 +43,6 @@ jobs:
           for pkg in "${PACKAGES[@]}"; do
             FILTERS="$FILTERS --filter=$pkg"
           done
-          pnpm publish $FILTERS
+          pnpm publish $FILTERS --access public
         env:
           NODE_AUTH_TOKEN: ${{secrets.npm_token}}

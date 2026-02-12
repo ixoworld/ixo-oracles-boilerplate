@@ -169,13 +169,13 @@ export class TokenLimiter {
         '0',
       );
 
-      if (configService.getOrThrow('THROW_ON_INSUFFICIENT_CREDITS')) {
-        throw new HttpException(
-          `It looks like you have some usage pending that’s higher than your current balance (${balance / 1000}). Please add more credits to your account to continue. If you think this is a mistake, please contact support. (Held: ${heldAmount / 1000})`,
-          HttpStatus.PAYMENT_REQUIRED,
-        );
+      if (configService.getOrThrow('DISABLE_CREDITS')) {
+        return '0';
       }
-      return '0';
+      throw new HttpException(
+        `It looks like you have some usage pending that’s higher than your current balance (${balance / 1000}). Please add more credits to your account to continue. If you think this is a mistake, please contact support. (Held: ${heldAmount / 1000})`,
+        HttpStatus.PAYMENT_REQUIRED,
+      );
     }
 
     await RedisService.getClient().set(
