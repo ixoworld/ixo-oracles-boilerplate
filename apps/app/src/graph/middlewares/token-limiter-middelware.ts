@@ -1,14 +1,22 @@
 import type { InteropZodObject } from '@langchain/core/utils/types';
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AgentMiddleware, AIMessageChunk, createMiddleware } from 'langchain';
+import { ENV } from 'src/config';
 import { TokenLimiter, TokenLimiterError } from 'src/utils/token-limit-handler';
 import { contextSchema, TChatNodeContext } from '../types';
 
+const configService = new ConfigService<ENV>();
 const createTokenLimiterMiddleware = (): AgentMiddleware => {
   return createMiddleware({
     name: 'TokenLimiterMiddleware',
     contextSchema: contextSchema as unknown as InteropZodObject,
     beforeModel: async (state, runtime) => {
+      const disableCredits = configService.get('DISABLE_CREDITS');
+      if (disableCredits) {
+        Logger.debug('Token limiting skipped (DISABLE_CREDITS=true)');
+        return state;
+      }
       if (!runtime.context) {
         throw new Error('Runtime context required for token limiting');
       }
@@ -43,6 +51,11 @@ const createTokenLimiterMiddleware = (): AgentMiddleware => {
       try {
         if (!runtime.context) {
           throw new Error('Runtime context required for token limiting');
+        }
+        const disableCredits = configService.get('DISABLE_CREDITS');
+        if (disableCredits) {
+          Logger.debug('Token limiting skipped (DISABLE_CREDITS=true)');
+          return state;
         }
 
         const { userDid } = runtime.context as TChatNodeContext;

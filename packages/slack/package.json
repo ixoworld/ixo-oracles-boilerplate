@@ -1,7 +1,8 @@
 {
   "name": "@ixo/slack",
   "version": "1.0.0",
-  "private": true,
+  "private": false,
+  "publishConfig": {"access": "public"},
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {

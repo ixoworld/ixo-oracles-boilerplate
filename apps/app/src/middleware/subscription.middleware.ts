@@ -41,10 +41,9 @@ export class SubscriptionMiddleware implements NestMiddleware {
   private checkCanContinue(
     subscription: GetMySubscriptionsResponseDto,
   ): boolean {
-    const shouldThrowOnInsufficientCredits = this.configService.get(
-      'THROW_ON_INSUFFICIENT_CREDITS',
-    );
-    if (!shouldThrowOnInsufficientCredits) {
+    const disableCredits = this.configService.get('DISABLE_CREDITS', false);
+    if (disableCredits) {
+      this.logger.debug('Subscription check skipped (DISABLE_CREDITS=true)');
       return true;
     }
     if (subscription.status !== 'active' && subscription.status !== 'trial') {
