@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { AgentMiddleware, createMiddleware, ToolMessage } from 'langchain';
+import { type AgentMiddleware, createMiddleware, ToolMessage } from 'langchain';
 
 /**
  * Middleware that catches tool validation errors and handles them gracefully.
@@ -47,8 +47,9 @@ export const createToolValidationMiddleware = (): AgentMiddleware => {
       }
     },
     beforeModel(state, runtime) {
-
-      const toolMessage = state.messages.find((message) => message.type === 'tool');
+      const toolMessage = state.messages.find(
+        (message) => message.type === 'tool',
+      );
 
       const agentsTools = [
         'list_blocks',
@@ -58,11 +59,13 @@ export const createToolValidationMiddleware = (): AgentMiddleware => {
         'read_survey',
         'fill_survey_answers',
         'validate_survey_answers',
-        "firecrawl",
+        'firecrawl',
       ];
 
-      if (toolMessage && toolMessage.name && agentsTools.includes(toolMessage.name)) {
-        Logger.log(`Tool validation middleware: ${toolMessage.name} is an agent tool, skipping`);
+      if (toolMessage?.name && agentsTools.includes(toolMessage.name)) {
+        Logger.log(
+          `Tool validation middleware: ${toolMessage.name} is an agent tool, skipping`,
+        );
         return {
           ...state,
           messages: state.messages.filter((message) => message.type !== 'tool'),

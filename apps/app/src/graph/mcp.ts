@@ -1,7 +1,10 @@
-import { ClientConfig, MultiServerMCPClient } from '@langchain/mcp-adapters';
+import {
+  type ClientConfig,
+  MultiServerMCPClient,
+} from '@langchain/mcp-adapters';
 import { Logger } from '@nestjs/common';
 import { DynamicStructuredTool, type StructuredTool } from 'langchain';
-import { UcanService } from 'src/ucan/ucan.service';
+import { type UcanService } from 'src/ucan/ucan.service';
 
 /**
  * Configuration for UCAN-protected MCP servers
@@ -69,7 +72,7 @@ export function parseMCPToolName(toolName: string): {
   // Fallback: treat as tool name only
   return {
     serverName: 'unknown',
-    toolName: toolName,
+    toolName,
   };
 }
 

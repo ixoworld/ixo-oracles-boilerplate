@@ -83,10 +83,10 @@ type BlocknoteToolset =
       listBlocksTool: StructuredTool;
       editBlockTool: StructuredTool;
       createBlockTool: StructuredTool;
-    readBlockByIdTool: StructuredTool;
-    readSurveyTool: StructuredTool;
-    fillSurveyAnswersTool: StructuredTool;
-    validateSurveyAnswersTool: StructuredTool;
+      readBlockByIdTool: StructuredTool;
+      readSurveyTool: StructuredTool;
+      fillSurveyAnswersTool: StructuredTool;
+      validateSurveyAnswersTool: StructuredTool;
     };
 
 export type EditorAgentMode = 'edit' | 'readOnly';

@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { type Socket } from 'socket.io';
-import { ENV } from 'src/config';
+import { type ENV } from 'src/config';
 import { SessionHistoryProcessor } from '../sessions/session-history-processor.service';
 import { WS_SERVICE_EVENT_NAME, wsEmitter } from './emitter';
 
@@ -102,12 +102,12 @@ export class WsService implements OnModuleInit, OnModuleDestroy {
             did,
             oracleEntityDid,
           })
-          .catch((err) =>
+          .catch((err) => {
             this.logger.error(
               `Failed to process session ${sessionId} on disconnect:`,
               err,
-            ),
-          );
+            );
+          });
       }
     }
   }

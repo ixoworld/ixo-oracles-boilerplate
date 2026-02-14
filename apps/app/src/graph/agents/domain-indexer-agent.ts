@@ -22,8 +22,7 @@ const llm = getOpenRouterChatModel({
 const formatToolDocs = (tools: StructuredTool[]): string =>
   tools
     .map((tool) => {
-      const description =
-        tool.description?.trim() ?? 'No description provided.';
+      const description = tool.description.trim() ?? 'No description provided.';
       return `- \`${tool.name}\`: ${description}`;
     })
     .join('\n');

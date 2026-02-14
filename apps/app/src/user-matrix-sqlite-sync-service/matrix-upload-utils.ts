@@ -1,6 +1,6 @@
-import { MatrixEvent, MatrixManager } from '@ixo/matrix';
+import { type MatrixEvent, MatrixManager } from '@ixo/matrix';
 import { Logger } from '@nestjs/common';
-import { File } from 'node:buffer';
+import { type File } from 'node:buffer';
 
 const logger = new Logger('MatrixUploadUtils');
 
@@ -18,23 +18,22 @@ const EVENTS = {
   MEDIA: 'm.ixo.media',
 } as const;
 
-export interface MatrixMediaEvent
-  extends MatrixEvent<{
-    msgtype: 'm.file';
-    body: string;
-    filename: string;
-    cid: string;
-    sender: string;
-    info: {
-      mimetype: string;
-      size: number;
-    };
-    file: {
-      url: string;
-      mimetype: string;
-      size: number;
-    };
-  }> {}
+export type MatrixMediaEvent = MatrixEvent<{
+  msgtype: 'm.file';
+  body: string;
+  filename: string;
+  cid: string;
+  sender: string;
+  info: {
+    mimetype: string;
+    size: number;
+  };
+  file: {
+    url: string;
+    mimetype: string;
+    size: number;
+  };
+}>;
 
 /**
  * Uploads media to a Matrix room
@@ -62,7 +61,7 @@ export async function uploadMediaToRoom(
       EVENTS.MEDIA_STATE,
       storageKey,
     );
-    if (existingMedia && existingMedia.eventId) {
+    if (existingMedia?.eventId) {
       oldEventId = existingMedia.eventId;
       logger.debug(
         `Found existing media event ${oldEventId} for storageKey ${storageKey}, will redact after successful upload`,
@@ -154,9 +153,7 @@ export async function uploadMediaToRoom(
         oldEventId,
         'Replacing with updated file',
       );
-      logger.debug(
-        `Successfully redacted old media event ${oldEventId}`,
-      );
+      logger.debug(`Successfully redacted old media event ${oldEventId}`);
     } catch (redactError) {
       logger.warn(
         `Failed to redact old media event ${oldEventId}:`,
@@ -202,7 +199,7 @@ export async function getMediaFromRoomByStorageKey(
       EVENTS.MEDIA_STATE,
       storageKey,
     );
-    if (!stateEvent || !stateEvent.eventId) {
+    if (!stateEvent?.eventId) {
       logger.warn(
         `No media state event found with storageKey: ${storageKey} in room ${roomId}`,
       );
@@ -287,7 +284,7 @@ export async function getMediaFromRoom(
     throw new Error('Event is not a media event.');
   }
 
-  const isEncrypted = !!event.content.file;
+  const isEncrypted = Boolean(event.content.file);
 
   if (isEncrypted) {
     const decryptedData = await client.mxClient.crypto.decryptMedia(
@@ -300,18 +297,15 @@ export async function getMediaFromRoom(
         filename: event.content.filename || 'download',
       },
     };
-  } else {
-    const mediaBuffer = await client.mxClient.downloadContent(
-      event.content.url,
-    );
-    return {
-      mediaBuffer: mediaBuffer.data,
-      contentInfo: {
-        mimetype: event.content.info?.mimetype || 'application/octet-stream',
-        filename: event.content.filename || 'download',
-      },
-    };
   }
+  const mediaBuffer = await client.mxClient.downloadContent(event.content.url);
+  return {
+    mediaBuffer: mediaBuffer.data,
+    contentInfo: {
+      mimetype: event.content.info?.mimetype || 'application/octet-stream',
+      filename: event.content.filename || 'download',
+    },
+  };
 }
 
 /**
@@ -338,7 +332,7 @@ export async function deleteMediaFromRoom(
       storageKey,
     );
 
-    if (!stateEvent || !stateEvent.eventId) {
+    if (!stateEvent?.eventId) {
       logger.warn(
         `No media state event found with storageKey: ${storageKey} in room ${roomId}`,
       );

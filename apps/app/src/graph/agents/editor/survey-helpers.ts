@@ -126,7 +126,7 @@ export function evaluateVisibilityCondition(
 
   try {
     // Handle simple patterns like {field} = value or {field} = true
-    const match = condition.match(/\{([^}]+)\}\s*=\s*(.+)/);
+    const match = /\{([^}]+)\}\s*=\s*(.+)/.exec(condition);
     if (match) {
       const fieldName = match[1].trim();
       const expectedValue = match[2].trim();

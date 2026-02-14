@@ -2,7 +2,7 @@ import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { MatrixClient, SyncStateData } from 'matrix-js-sdk';
 import { ClientEvent, createClient, SyncState } from 'matrix-js-sdk';
-import { ENV } from 'src/config';
+import { type ENV } from 'src/config';
 import { BLOCKNOTE_TOOLS_CONFIG } from './blocknote-tools';
 
 /**
@@ -229,7 +229,6 @@ export class EditorMatrixClient {
           client.removeListener(ClientEvent.Sync, initialSyncListener);
           this.logger.log(`✓ Initial sync ready (state: ${state})`);
           resolve();
-          return;
         }
       };
 
@@ -296,7 +295,7 @@ export class EditorMatrixClient {
    * Wait for the client to be ready
    * Useful when you need to ensure the client is initialized before using it
    */
-  public async waitUntilReady(timeoutMs: number = 30000): Promise<void> {
+  public async waitUntilReady(timeoutMs = 30000): Promise<void> {
     if (this.isReady()) {
       return;
     }

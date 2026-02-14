@@ -13,7 +13,7 @@ import { entrypoint, task } from '@langchain/langgraph';
 import { ConfigService } from '@nestjs/config';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { ENV } from 'src/config';
+import { type ENV } from 'src/config';
 import { submitClaimToSubscriptionApi } from './utils';
 
 export interface UsageClaim {

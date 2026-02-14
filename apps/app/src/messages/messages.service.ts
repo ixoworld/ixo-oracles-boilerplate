@@ -1,5 +1,5 @@
 import {
-  ChatSession,
+  type ChatSession,
   SessionManagerService,
   transformGraphStateMessageToListMessageResponse,
   type ListOracleMessagesResponse,
@@ -28,7 +28,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
-import { AIMessageChunk, ToolMessage } from 'langchain';
+import { type AIMessageChunk, type ToolMessage } from 'langchain';
 import * as crypto from 'node:crypto';
 import { MainAgentGraph } from 'src/graph';
 import { cleanAdditionalKwargs } from 'src/graph/nodes/chat-node/utils';
@@ -502,7 +502,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
 
                       // Extract reasoning tokens from raw response
                       const rawResponse = (data.chunk as AIMessageChunk)
-                        .additional_kwargs?.__raw_response as any;
+                        .additional_kwargs.__raw_response as any;
                       if (
                         rawResponse?.choices?.[0]?.delta?.reasoning &&
                         isChatNode
@@ -510,7 +510,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
                         const reasoning =
                           rawResponse.choices[0].delta.reasoning;
 
-                        if (reasoning && reasoning.trim()) {
+                        if (reasoning?.trim()) {
                           // Use cleanAdditionalKwargs to extract and clean reasoning details
                           const cleanedKwargs = cleanAdditionalKwargs(
                             (data.chunk as AIMessageChunk).additional_kwargs,
@@ -838,7 +838,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
           ),
           oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
           oracleEntityDid: this.config.getOrThrow('ORACLE_ENTITY_DID'),
-          lastProcessedCount: targetSession?.lastProcessedCount ?? 0,
+          lastProcessedCount: targetSession.lastProcessedCount ?? 0,
           roomId,
         });
 
@@ -956,18 +956,18 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       userDid: did,
     });
 
-    const targetSession = (await this.sessionManagerService.getSession(
+    const targetSession = await this.sessionManagerService.getSession(
       sessionId,
       did,
       false,
-    )) as ChatSession | undefined;
+    );
 
     if (!targetSession) {
       throw new NotFoundException('Session not found');
     }
 
     // Use cached roomId if available, otherwise fetch it
-    let roomId = targetSession?.roomId;
+    let roomId = targetSession.roomId;
     if (!roomId) {
       const userHomeServer =
         payload.homeServer || (await getMatrixHomeServerCroppedForDid(did));
@@ -1022,7 +1022,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       roomId,
       runnableConfig,
       sessionId,
-      userContext: targetSession?.userContext,
+      userContext: targetSession.userContext,
       targetSession,
     };
   }

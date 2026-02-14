@@ -1,5 +1,5 @@
 import { IsEnum, IsISO8601, IsOptional, IsString } from 'class-validator';
-import { CallId } from './types';
+import { type CallId } from './types';
 
 export class UpdateCallDto {
   @IsString()

@@ -3,16 +3,16 @@ import {
   jsonToYaml,
   parserActionTool,
   parserBrowserTool,
-  SearchEnhancedResponse,
+  type SearchEnhancedResponse,
 } from '@ixo/common';
 import { OpenIdTokenProvider } from '@ixo/oracles-chain-client';
-import { IRunnableConfigWithRequiredFields } from '@ixo/matrix';
+import { type IRunnableConfigWithRequiredFields } from '@ixo/matrix';
 import { SqliteSaver } from '@ixo/sqlite-saver';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createAgent, ReactAgent, toolRetryMiddleware } from 'langchain';
-import { ENV } from 'src/config';
-import { UcanService } from 'src/ucan/ucan.service';
+import { createAgent, type ReactAgent, toolRetryMiddleware } from 'langchain';
+import { type ENV } from 'src/config';
+import { type UcanService } from 'src/ucan/ucan.service';
 import { createSafetyGuardrailMiddleware } from '../middlewares/safety-guardrail-middleware';
 import { createTokenLimiterMiddleware } from '../middlewares/token-limiter-middelware';
 import { createToolValidationMiddleware } from '../middlewares/tool-validation-middleware';
@@ -21,7 +21,7 @@ import {
   AI_ASSISTANT_PROMPT,
   SLACK_FORMATTING_CONSTRAINTS_CONTENT,
 } from '../nodes/chat-node/prompt';
-import { TMainAgentGraphState } from '../state';
+import { type TMainAgentGraphState } from '../state';
 import { contextSchema } from '../types';
 import { createDomainIndexerAgent } from './domain-indexer-agent';
 import { createEditorAgent } from './editor/editor-agent';
@@ -82,7 +82,9 @@ export const createMainAgent = async ({
 
   const { configurable } = config as IRunnableConfigWithRequiredFields;
   const { matrix } = configurable?.configs ?? {};
-  Logger.log(`[createMainAgent] homeServerName: ${configurable.configs?.matrix.homeServerName}`);
+  Logger.log(
+    `[createMainAgent] homeServerName: ${configurable.configs?.matrix.homeServerName}`,
+  );
   const oracleOpenIdToken = configurable.configs?.user.matrixOpenIdToken
     ? await oracleOpenIdTokenProvider.getToken()
     : undefined;
@@ -109,14 +111,14 @@ export const createMainAgent = async ({
   Logger.log(`msgFromMatrixRoom: ${msgFromMatrixRoom}`);
 
   // Extract timezone and current time from config
-  const userConfig = configurable?.configs?.user;
+  const userConfig = configurable.configs?.user;
   const timezone = userConfig?.timezone;
   const currentTime = userConfig?.currentTime;
 
   // Format time context
   const timeContext = formatTimeContext(timezone, currentTime);
 
-  if (!configurable?.configs?.user?.did) {
+  if (!configurable.configs?.user.did) {
     throw new Error('User DID is required');
   }
   if (!configurable.thread_id) {
@@ -152,14 +154,12 @@ export const createMainAgent = async ({
   ] = await Promise.all([
     AI_ASSISTANT_PROMPT.format({
       APP_NAME: 'IXO | IXO Portal',
-      IDENTITY_CONTEXT: jsonToYaml(state?.userContext?.identity ?? {}),
-      WORK_CONTEXT: jsonToYaml(state?.userContext?.work ?? {}),
-      GOALS_CONTEXT: jsonToYaml(state?.userContext?.goals ?? {}),
-      INTERESTS_CONTEXT: jsonToYaml(state?.userContext?.interests ?? {}),
-      RELATIONSHIPS_CONTEXT: jsonToYaml(
-        state?.userContext?.relationships ?? {},
-      ),
-      RECENT_CONTEXT: jsonToYaml(state?.userContext?.recent ?? {}),
+      IDENTITY_CONTEXT: jsonToYaml(state.userContext?.identity ?? {}),
+      WORK_CONTEXT: jsonToYaml(state.userContext?.work ?? {}),
+      GOALS_CONTEXT: jsonToYaml(state.userContext?.goals ?? {}),
+      INTERESTS_CONTEXT: jsonToYaml(state.userContext?.interests ?? {}),
+      RELATIONSHIPS_CONTEXT: jsonToYaml(state.userContext?.relationships ?? {}),
+      RECENT_CONTEXT: jsonToYaml(state.userContext?.recent ?? {}),
       TIME_CONTEXT: timeContext,
       EDITOR_DOCUMENTATION: state.editorRoomId
         ? EDITOR_DOCUMENTATION_CONTENT
@@ -181,7 +181,7 @@ export const createMainAgent = async ({
         ) ?? [],
     }),
     createMemoryAgent({
-      userDid: configurable?.configs?.user?.did,
+      userDid: configurable.configs.user.did,
       oracleDid: matrix?.oracleDid ?? '',
       roomId: matrix?.roomId ?? '',
       mode: 'user',
@@ -216,7 +216,7 @@ export const createMainAgent = async ({
   // check db folder if not exists, create it
   const dbFolder = path.join(
     UserMatrixSqliteSyncService.checkpointsFolder,
-    configurable?.configs?.user?.did,
+    configurable.configs.user.did,
   );
   if (!fs.existsSync(dbFolder)) {
     fs.mkdirSync(dbFolder, { recursive: true });
@@ -254,7 +254,7 @@ export const createMainAgent = async ({
     systemPrompt,
     checkpointer: SqliteSaver.fromDatabase(
       await UserMatrixSqliteSyncService.getInstance().getUserDatabase(
-        configurable?.configs?.user?.did,
+        configurable.configs.user.did,
       ),
     ),
     name: 'Companion Agent',

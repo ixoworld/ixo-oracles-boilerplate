@@ -49,8 +49,7 @@ const formatToolDocs = (tools: StructuredTool[]): string => {
 
   return tools
     .map((tool) => {
-      const description =
-        tool.description?.trim() ?? 'No description provided.';
+      const description = tool.description.trim() ?? 'No description provided.';
       return `Firecrawl Agent: \`${tool.name}\`: ${description}`;
     })
     .join('\n');
