@@ -88,7 +88,7 @@ export class SimpleMatrixClient {
     const storagePath = this.config.storagePath || './matrix-storage';
     this.cryptoStore = new RustSdkCryptoStorageProvider(
       path.join(storagePath, 'encrypted-sqlite'),
-      0 as any, // StoreType.Sqlite from @ixo/matrix-sdk-crypto-nodejs
+      0, // StoreType.Sqlite from @ixo/matrix-sdk-crypto-nodejs
     );
   }
 

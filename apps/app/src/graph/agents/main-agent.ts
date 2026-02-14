@@ -42,8 +42,6 @@ import {
   listSkillsTool,
   searchSkillsTool,
 } from '../nodes/tools-node/skills-tools';
-import { presentFilesTool } from './skills-agent/present-files-tool';
-
 interface InvokeMainAgentParams {
   state: Partial<TMainAgentGraphState>;
   config: IRunnableConfigWithRequiredFields;
@@ -64,6 +62,27 @@ const llm = getOpenRouterChatModel({
   },
 });
 
+async function getOracleOpenIdToken(): Promise<string> {
+  const baseUrl = configService.getOrThrow('MATRIX_BASE_URL').replace(/\/$/, '');
+  const userId = configService.getOrThrow('MATRIX_ORACLE_ADMIN_USER_ID');
+  const accessToken = configService.getOrThrow('MATRIX_ORACLE_ADMIN_ACCESS_TOKEN');
+  const url = `${baseUrl}/_matrix/client/v3/user/${encodeURIComponent(userId)}/openid/request_token`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: '{}',
+  });
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw new Error(`Failed to get oracle OpenID token: ${response.status} ${body}`);
+  }
+  const data = (await response.json()) as { access_token: string };
+  return data.access_token;
+}
+
 export const createMainAgent = async ({
   state,
   config,
@@ -76,21 +95,28 @@ export const createMainAgent = async ({
   const { configurable } = config as IRunnableConfigWithRequiredFields;
   const { matrix } = configurable?.configs ?? {};
   Logger.log(`[createMainAgent] homeServerName: ${configurable.configs?.matrix.homeServerName}`);
-  const sandboxMCP = configurable.configs?.user.matrixOpenIdToken ? createMCPClient({
-    mcpServers: {
-      sandbox: {
-        type: 'http',
-        url: configService.getOrThrow('SANDBOX_MCP_URL'),
-        transport: 'http',
-        headers: {
-          Authorization: `Bearer ${configurable.configs?.user.matrixOpenIdToken}`,
-          'x-matrix-homeserver':
-            configurable.configs?.matrix.homeServerName ?? '',
-        },
-        },
-      },
-    })
-  : undefined;
+  const oracleOpenIdToken = configurable.configs?.user.matrixOpenIdToken
+    ? await getOracleOpenIdToken()
+    : undefined;
+  const sandboxMCP =
+    configurable.configs?.user.matrixOpenIdToken && oracleOpenIdToken
+      ? createMCPClient({
+          mcpServers: {
+            sandbox: {
+              type: 'http',
+              url: configService.getOrThrow('SANDBOX_MCP_URL'),
+              transport: 'http',
+              headers: {
+                Authorization: `Bearer ${configurable.configs?.user.matrixOpenIdToken}`,
+                'x-matrix-homeserver':
+                  configurable.configs?.matrix.homeServerName ?? '',
+                'X-oracle-openid-token': oracleOpenIdToken,
+              },
+            },
+          },
+          defaultToolTimeout: 180_000,
+        })
+      : undefined;
   Logger.log(`msgFromMatrixRoom: ${msgFromMatrixRoom}`);
 
   // Extract timezone and current time from config
@@ -227,7 +253,6 @@ export const createMainAgent = async ({
       ...mcpTools,
       ...sandboxTools,
       ...agActionTools,
-      presentFilesTool,
       listSkillsTool,
       searchSkillsTool,
       callPortalAgentTool,
