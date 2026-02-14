@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  type OnModuleDestroy,
-  type OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
 import { type ENV } from 'src/types';
@@ -40,7 +36,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleDestroy() {
-    return this.client.quit();
+    return this.client?.quit();
   }
 
   getClient(): Redis {
@@ -48,6 +44,6 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   static getClient(): Redis {
-    return RedisService.getInstance().getClient();
+    return RedisService.getInstance()?.getClient();
   }
 }

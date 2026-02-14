@@ -10,7 +10,7 @@ import {
   Res,
 } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { AbortRequestDto, SendMessageDto } from './dto/send-message.dto';
 import { MessagesService } from './messages.service';
 

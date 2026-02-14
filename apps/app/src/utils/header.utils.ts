@@ -7,9 +7,7 @@ export interface AuthHeaders {
   matrixHomeServer?: string;
 }
 
-export async function getAuthHeaders(
-  headers: IncomingHttpHeaders,
-): Promise<AuthHeaders> {
+export async function getAuthHeaders(headers: IncomingHttpHeaders): Promise<AuthHeaders> {
   const matrixAccessTokenHeader = headers['x-matrix-access-token'];
   const matrixHomeServerHeader = headers['x-matrix-homeserver'];
 
@@ -27,12 +25,11 @@ export async function getAuthHeaders(
     );
   }
 
-  const matrixHomeServer =
-    typeof matrixHomeServerHeader === 'string'
-      ? matrixHomeServerHeader
-      : Array.isArray(matrixHomeServerHeader)
-        ? matrixHomeServerHeader[0]
-        : undefined;
+  const matrixHomeServer = typeof matrixHomeServerHeader === 'string'
+    ? matrixHomeServerHeader
+    : Array.isArray(matrixHomeServerHeader)
+      ? matrixHomeServerHeader[0]
+      : undefined;
 
   return { matrixAccessToken, matrixHomeServer };
 }

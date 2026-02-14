@@ -20,7 +20,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { Request } from 'express';
+import type { Request } from 'express';
 import { SessionsService } from './sessions.service';
 
 @ApiTags('sessions')
@@ -103,11 +103,7 @@ export class SessionsController {
     @Req() req: Request,
     @Param('sessionId') sessionId: string,
   ): Promise<{ message: string }> {
-    const {
-      userOpenIdToken: matrixAccessToken,
-      did,
-      homeServer,
-    } = req.authData;
+    const { userOpenIdToken: matrixAccessToken, did, homeServer } = req.authData;
     return this.sessionsService.deleteSession({
       matrixAccessToken,
       did,

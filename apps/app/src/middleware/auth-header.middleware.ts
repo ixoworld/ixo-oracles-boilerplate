@@ -12,7 +12,7 @@ import { ConfigService } from '@nestjs/config';
 import { minutes } from '@nestjs/throttler';
 import { type NextFunction, type Request, type Response } from 'express';
 import * as crypto from 'node:crypto';
-import { type ENV } from 'src/config';
+import { ENV } from 'src/config';
 import { getAuthHeaders, normalizeDid } from '../utils/header.utils';
 
 declare global {

@@ -42,12 +42,12 @@ export class SessionsService {
           oracleEntityDid,
           homeServer: data.homeServer,
         })
-        .catch((err) => {
+        .catch((err) =>
           Logger.error(
             `Failed to process previous session ${previousSession.sessionId}:`,
             err,
-          );
-        })
+          ),
+        )
         .finally(() => {
           this.syncService.markUserInactive(data.did);
         });
@@ -66,12 +66,12 @@ export class SessionsService {
       // finally's markUserInactive doesn't drop to 0 while the task runs.
       this.syncService.markUserActive(data.did);
       this.processPreviousSessionHistory(data)
-        .catch((err) => {
+        .catch((err) =>
           Logger.error(
             `Failed to process previous session history for DID ${data.did}:`,
             err,
-          );
-        })
+          ),
+        )
         .finally(() => {
           this.syncService.markUserInactive(data.did);
         });
@@ -143,12 +143,12 @@ export class SessionsService {
           oracleEntityDid,
           homeServer: data.homeServer,
         })
-        .catch((err) => {
+        .catch((err) =>
           Logger.error(
             `Failed to process deleted session ${data.sessionId}:`,
             err,
-          );
-        })
+          ),
+        )
         .finally(() => {
           this.syncService.markUserInactive(data.did);
         });
