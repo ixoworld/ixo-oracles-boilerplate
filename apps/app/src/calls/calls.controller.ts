@@ -13,7 +13,7 @@ import {
   ApiParam,
   ApiResponse,
 } from '@nestjs/swagger';
-import type { Request } from 'express';
+import { Request } from 'express';
 import { CallsService } from './calls.service';
 import { StrictBody } from './decorators/strict-body.decorator';
 import { ListCallResponse } from './dto/list-call';

@@ -9,7 +9,7 @@
  * properly built and published, these can be replaced with imports.
  */
 
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { ENV } from 'src/config';
 import {
@@ -39,9 +39,9 @@ type DIDKeyResolver = (
  * Invocation store for replay protection
  */
 interface InvocationStore {
-  has(cid: string): Promise<boolean>;
-  add(cid: string, ttlMs?: number): Promise<void>;
-  cleanup?(): Promise<void>;
+  has: (cid: string) => Promise<boolean>;
+  add: (cid: string, ttlMs?: number) => Promise<void>;
+  cleanup?: () => Promise<void>;
 }
 
 /**
@@ -188,7 +188,7 @@ function createIxoDIDResolver(config: { indexerUrl: string }): DIDKeyResolver {
           vm.type.includes('Ed25519') &&
           vm.publicKeyMultibase?.startsWith('z')
         ) {
-          keys.push(`did:key:${vm.publicKeyMultibase}` as KeyDID);
+          keys.push(`did:key:${vm.publicKeyMultibase}`);
         }
       }
 
@@ -302,7 +302,7 @@ export class UcanService implements OnModuleDestroy {
 
   onModuleDestroy() {
     if (this.invocationStore instanceof InMemoryInvocationStore) {
-      (this.invocationStore as InMemoryInvocationStore).destroy();
+      this.invocationStore.destroy();
     }
   }
 

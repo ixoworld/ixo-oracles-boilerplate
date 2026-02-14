@@ -1,4 +1,4 @@
-import { UserContextData } from '@ixo/common';
+import { type UserContextData } from '@ixo/common';
 import { Annotation, messagesStateReducer } from '@langchain/langgraph';
 import { type BaseMessage } from 'langchain';
 import {
