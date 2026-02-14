@@ -254,7 +254,9 @@ export class MatrixProviderManager {
           this.documentAvailable = true;
           const resolvers = [...this.availabilityResolvers];
           this.availabilityResolvers = [];
-          resolvers.forEach((resolver) => resolver());
+          resolvers.forEach((resolver) => {
+            resolver();
+          });
         }, 500); // Short delay for Y.Doc sync
       }),
     );

@@ -254,7 +254,7 @@ export function simplifyBlockForAgent(detail: BlockDetail): {
  */
 export function collectAllBlocks(
   fragment: Y.XmlFragment,
-  includeText: boolean = true,
+  includeText = true,
 ): BlockDetail[] {
   const results: BlockDetail[] = [];
 
@@ -288,7 +288,7 @@ export function collectAllBlocks(
 export function getBlockDetail(
   doc: Y.Doc,
   blockId: string,
-  includeText: boolean = true,
+  includeText = true,
 ): BlockDetail | null {
   const fragment = doc.getXmlFragment('document');
   const blockContainer = findBlockById(fragment, blockId);

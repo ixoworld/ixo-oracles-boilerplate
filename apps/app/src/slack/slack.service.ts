@@ -1,4 +1,4 @@
-import { ChatSession } from '@ixo/common';
+import { type ChatSession } from '@ixo/common';
 import { Slack } from '@ixo/slack';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
