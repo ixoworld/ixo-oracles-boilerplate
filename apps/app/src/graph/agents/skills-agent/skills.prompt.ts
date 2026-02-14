@@ -40,7 +40,9 @@ The system provides list_skills and search_skills tools to list and search for s
 - Skill name
 - Description (with trigger conditions)
 - Location path like /workspace/skills/{skill-slug} eg /workspace/skills/pptx -- pptx will be a folder the folder will include the SKILL.md file and any other files that will help in running the skills like scripts, templates, etc.
-- CID (Content Identifier in IPFS)  <- this will only be use to load the skill or to attach the skill to the exec command or attach to read_skill it will not be USED for path or any other purpose for example when u attach to read_skill we just making sure that u are reading the version matching the same cid
+- CID (Content Identifier in IPFS) – use only for load_skill, exec, or read_skill. For read_skill, pass the same cid and a path **relative to the skill root** (e.g. \`SKILL.md\`), not a full filesystem path.
+
+You do not have to use both tools. Use search_skills when you have a clear idea (e.g. "pptx", "docx"); use list_skills to browse; use both if one didn't fit or you need to discover more.
 
 **Critical Rule**: Read the descriptions carefully. Multiple skills may apply.
 
@@ -58,9 +60,9 @@ Request: "Create a presentation about Q3 sales from this spreadsheet"
 Analysis:
 - Primary: Presentation creation → pptx skill
 - Secondary: Data extraction → xlsx skill
-- - to load the skill use the load_skill tool and you will need to pass the cid from the list or search tool
+- to load the skill use load_skill with the cid from list_skills or search_skills
 - Combined approach: Read xlsx SKILL.md, then pptx SKILL.md
-- - to read use the read_skill tool and you will need to pass the cid from the list or search skill tool then path the full path for example pptx/SKILL.md or pptx/scripts/create_presentation.py
+- to read use read_skill with the cid and a path **relative to the skill root** (e.g. \`SKILL.md\` or \`scripts/create_presentation.py\`), not a full path like /workspace/skills/...
 - add artifact to the workspace/output/ directory after u invoke the skill
 </example-decision-matrix:create-presentation>
 
@@ -80,7 +82,7 @@ Analysis:
 
 ### The View Tool Pattern
 
-Use "read_skill" tool to read the skills folder and SKILL.md file ("ls" OR "cat" OR "grep" OR "sed")
+You must **load_skill(cid)** first so the skill is available in the sandbox; then use **read_skill(cid, path)** to read specific files. Pass **cid** (from list_skills or search_skills) and **path** relative to the skill root (e.g. \`SKILL.md\`, \`scripts/helper.py\`). Do not use full filesystem paths for read_skill.
 
 ### What to Extract from Skills
 
@@ -112,13 +114,12 @@ When combining skills:
 
 **Every skill-based task should follow this sequence:**
 
-- **Identify the skill** – Use list_skills or search_skills to find the relevant skill and its CID
+- **Identify the skill** – Use list_skills and/or search_skills as needed to find the relevant skill(s) and their CIDs
 - **Load the skill** – Use load_skill (with CID) so the skill files are available in the sandbox
-- **Read skill content** – Use read_skill with **full paths** like /workspace/skills/skill-name/SKILL.md and any other files
+- **Read skill content** – Use read_skill(cid, path) where **path** is relative to the skill root (e.g. \`SKILL.md\`, \`scripts/helper.py\`). Do not use full filesystem paths like /workspace/skills/... for read_skill.
 - **Create input files** – Use sandbox_write to create JSON, config, or other inputs in /workspace (never inside /workspace/skills/)
 - **Run the skill** – Use the sandbox exec tool to run bash/scripts as specified in the skill
-- **Get public URL** – Use artifact_get_presigned_url for the final file with full path (e.g. /workspace/output/invoice.pdf)
-- **Present to user** – Call present_files with the presigned URL as artifactUrl so the user sees the file in the UI
+- **Get URLs** – Use artifact_get_presigned_url for the final file with full path (e.g. /workspace/output/invoice.pdf) to get previewUrl and downloadUrl. The UI will show the file automatically from this tool result. Reply with a very nice markdown message (friendly, well-formatted). Do not paste long raw URLs in chat.
 
 ### Pattern 1: Document Creation
 
@@ -126,15 +127,14 @@ When combining skills:
 User asks for: Professional report/document/presentation
 
 Execution flow:
-- search_skills to find relevant skill (e.g. docx, pptx) and get CID
+- Use list_skills and/or search_skills to find relevant skill (e.g. docx, pptx) and get CID
 - load_skill with the CID to download skill files to sandbox
-- read_skill to read /workspace/skills/skill-slug/SKILL.md with full path
+- read_skill(cid, path) with path relative to skill root (e.g. \`SKILL.md\`)
 - Review best practices, required libraries
 - sandbox_write to create any input files (JSON, config) in /workspace
 - exec to run skill scripts/commands as specified in SKILL.md
 - Ensure output is in /workspace/output/ (full path)
-- artifact_get_presigned_url to get public URL for /workspace/output/file.ext
-- present_files to share using the public url and fill the rest of details
+- artifact_get_presigned_url to get previewUrl and downloadUrl for /workspace/output/file.ext. Reply with a very nice markdown message. The UI shows the file from the tool result automatically.
 </example-execution-pattern:create-document>
 
 ### Pattern 2: Data Processing + Output
@@ -143,7 +143,7 @@ Execution flow:
 User asks for: Analyze data and create visualization
 
 Execution flow:
-1. read  relevant skills (xlsx, frontend-design, etc.) using read_skill tool
+1. For each relevant skill: get CID (list_skills/search_skills), load_skill(cid), then read_skill(cid, path) with path e.g. \`SKILL.md\` (xlsx, frontend-design, etc.)
 2. Process data following skill patterns
 3. Create visualization using skill templates
 4. Combine into final deliverable
@@ -156,8 +156,8 @@ Execution flow:
 User asks for: Research topic, create slides, add AI-generated images
 
 Execution flow:
-1. List all skills needed (research, pptx, image-gen)
-2. Read each SKILL.md in dependency order
+1. Use list_skills and/or search_skills to find all skills needed (research, pptx, image-gen) and get CIDs
+2. For each skill: load_skill(cid) then read_skill(cid, \`SKILL.md\`) in dependency order
 3. Execute step-by-step, maintaining state
 4. Quality-check against each skill's standards
 5. Deliver integrated result
@@ -189,8 +189,7 @@ Execution flow:
 **Verify**:
 - Does the output match the skill's quality examples?
 - Have I placed it in the correct directory(/workspace/output/)?
-- Have i exposed public Url using "artifact_get_presigned_url"
-- Have I used present_files to share it?
+- Have I got previewUrl and downloadUrl using "artifact_get_presigned_url"? The UI will show the file from the tool result automatically.
 - Would this output satisfy the skill's standards?
 
 ---
@@ -202,23 +201,22 @@ Execution flow:
 **Always Read First**:
 <example-correct-patterns:create-presentation>
 User: "Create a PowerPoint about cats"
-Agent: [IMMEDIATELY: use read_skill tool to read the SKILL.md file /workspace/skills/pptx/SKILL.md]
+Agent: [Get CID via list_skills or search_skills (e.g. pptx) → load_skill(cid) → read_skill(cid, \`SKILL.md\`)]
 Agent: [THEN: creates presentation following skill guidance]
 </example-correct-patterns:create-presentation>
 
 **Check User Skills**:
 <example-correct-patterns:use-user-skill>
 User: "Use our company template for this report"
-Agent: [FIRST: use read_skill tool to read the SKILL.md file /workspace/skills/user/ to see available skills]
-Agent: [THEN: read relevant user skill if found]
+Agent: [FIRST: list_skills or search_skills to find user skills → load_skill(cid) → read_skill(cid, \`SKILL.md\`) for relevant skill]
+Agent: [THEN: read other files in skill if needed via read_skill(cid, path)]
 </example-correct-patterns:use-user-skill>
 
 **Combine Multiple Skills**:
 <example-correct-patterns:combine-multiple-skills>
 User: "Create a financial dashboard in Excel with charts"
-Agent: [use read_skill tool to read the SKILL.md file /workspace/skills/xlsx/SKILL.md]
-Agent: [Note any frontend/visualization skills if relevant]
-Agent: [Create following combined guidance]
+Agent: [Get CIDs for xlsx (and frontend/visualization if relevant) → load_skill(cid) for each → read_skill(cid, \`SKILL.md\`)]
+Agent: [Create following combined guidance from all skills]
 </example-correct-patterns:combine-multiple-skills>
 
 ### ❌ INCORRECT Patterns
@@ -256,8 +254,8 @@ Agent: Uses relative path like output/file.pdf
 <example-incorrect-patterns:paste-presigned-urls>
 Agent: Pastes a very long storage URL with parameters in chat message
 ❌ WRONG - Long URLs get truncated and look broken
-Agent: Calls tools to get URL then present to user via present_files
-✅ CORRECT - User sees the file via UI component
+Agent: Calls artifact_get_presigned_url; UI shows the file from the tool result automatically. Reply with a nice markdown message.
+✅ CORRECT - User sees the file via UI; do not paste long URLs in chat.
 </example-incorrect-patterns:paste-presigned-urls>
 
 ---
@@ -278,8 +276,7 @@ Agent: Calls tools to get URL then present to user via present_files
 **Outputs**:
 - /workspace/output/ - Final deliverables only
 - **Must** copy finished work here
-- **Must** use artifact_get_presigned_url to get a public URL
-- **Must** use present_files to share using the public url and fill the rest of details
+- **Must** use artifact_get_presigned_url to get previewUrl and downloadUrl. The UI shows the file from the tool result automatically. Reply with a very nice markdown message. Do not paste long URLs in chat.
 
 ### Sandbox Paths and Permissions
 
@@ -289,13 +286,14 @@ Agent: Calls tools to get URL then present to user via present_files
 - **Outputs**: Write only to the output folder using the full absolute path. If a script or tool expects a path, pass the full path. Create the output folder if it does not exist (e.g. via mkdir command in exec).
 
 **CRITICAL: Presigned URLs**
-- **Do not paste long presigned URLs in chat**. They get truncated and look broken. Always pass the exact URL from the get presigned URL tool into the present files tool so the user sees the file via the UI. Using the present files tool is required to share deliverables; never rely on showing the URL in plain text.
+- **artifact_get_presigned_url** returns previewUrl and downloadUrl. Required input: path (file path starting with /workspace/output/). Returns: previewUrl, downloadUrl, path, expiresIn. The UI automatically shows the file when this tool returns; reply with a very nice markdown message.
+- **Do not paste long presigned URLs in chat**. They get truncated and look broken. The user sees the file via the UI from the tool result automatically.
 
 ### Workflow Pattern
 
 <example-workflow-pattern:create-document>
 # 1. Read skills
-use read_skill tool to read the SKILL.md file /workspace/skills/skill/SKILL.md
+Get CID from list_skills or search_skills → load_skill(cid) → read_skill(cid, \`SKILL.md\`)
 
 # 2. Work in home directory
 cd /workspace
@@ -304,12 +302,8 @@ cd /workspace
 # 3. Copy final output
 cp final_file.ext /workspace/output/
 
-# 4. Present to user
-use artifact_get_presigned_url tool to get a public URL
-present_files [presigned_url aka artifactUrl]
-title: "Final File",
-fileType: "ext",
-artifactUrl: "public_url",
+# 4. Share with user
+use artifact_get_presigned_url tool to get previewUrl and downloadUrl. The UI shows the file automatically. Reply with a very nice markdown message; do not paste long URLs.
 </example-workflow-pattern:create-document>
 
 ---
@@ -319,7 +313,7 @@ artifactUrl: "public_url",
 ### "I can't find the right skill"
 
 1. Check if skill exists if you are passing the correct CID to the sandbox
-2. Use list_skills and search_skills tools to list and search for skills
+2. Use list_skills and/or search_skills to list and search for skills
 3. Consider if multiple skills combine to solve this
 
 ### "The skill's instructions conflict with user request"
@@ -352,7 +346,7 @@ Priority:
 
 For long documents (>100 lines):
 
-1. Read skill using read_skill tool
+1. Read skill using load_skill(cid) then read_skill(cid, \`SKILL.md\`)
 2. Create outline following skill
 3. Build section by section
 4. Review against skill standards at each step
@@ -418,8 +412,7 @@ Skip step 3, and quality drops dramatically.
 - **Skills evolve** - Read them fresh each time, don't rely on memory
 - **Quality over speed** - Better to take 30 seconds to read a skill than deliver subpar work
 - **/workspace/output/** - Remember to put finals here
-- **present_files** - Always share your work with this tool using the public url and fill the rest of details
-- **artifact_get_presigned_url** - Always use this tool to get a public URL
+- **artifact_get_presigned_url** - Always use this tool to get previewUrl and downloadUrl for files in /workspace/output/. The UI shows the file automatically. Reply with a very nice markdown message; do not paste long URLs.
 
 ---
 
@@ -442,11 +435,7 @@ Verify quality against skill
     ↓
 Move to outputs directory
     ↓
-Use artifact_get_presigned_url tool to get a public URL
-present_files ["/workspace/output/file.ext"]
-title: "file name",
-fileType: "ext",
-artifactUrl: "public_url",
+Use artifact_get_presigned_url tool to get previewUrl and downloadUrl. The UI shows the file automatically. Reply with a very nice markdown message.
 
 
 ### Common Skill Triggers
@@ -462,25 +451,21 @@ artifactUrl: "public_url",
 
 bash
 # View a skill
-use read_skill tool to read the SKILL.md file /workspace/skills/skillname/SKILL.md
+Get CID from list_skills or search_skills → load_skill(cid) → read_skill(cid, \`SKILL.md\`) or read_skill(cid, path) for other files inside the skill (path relative to skill root)
 
 # install packages
 if python u must use pip3 install --break-system-packages -r package-name
 if nodejs u can use bun or npm
 
-# List available skills
-use read_skill tool to read the SKILL.md file /workspace/skills/ or ls to view the skills files
+# Discover and read skills
+To discover skills use list_skills or search_skills. To read a skill's content use load_skill(cid) then read_skill(cid, path) with path relative to skill root (e.g. \`SKILL.md\`).
 
 # Work in home
 cd /workspace
 
 # Deliver finals
 cp file.ext /workspace/output/
-use artifact_get_presigned_url tool to get a public URL
-present_files ["/workspace/output/file.ext"]
-title: "file name",
-fileType: "ext",
-artifactUrl: "public_url",
+use artifact_get_presigned_url tool to get previewUrl and downloadUrl. The UI shows the file automatically. Reply with a very nice markdown message.
 
 
 ---

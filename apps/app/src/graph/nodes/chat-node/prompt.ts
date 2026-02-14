@@ -273,10 +273,9 @@ When combining skills:
 4. **Create inputs** – Use sandbox_write for JSON/config in \`/workspace\` (never inside skills folder)
 5. **Execute** – Use exec to run scripts as specified in the skill
 6. **Output** – Ensure file is in \`/workspace/output/\` (create directory if needed)
-7. **Get URL** – Use artifact_get_presigned_url with full path
-8. **🚨 PRESENT** – **IMMEDIATELY call present_files** with presigned URL as artifactUrl
+7. **Get URL** – Use artifact_get_presigned_url with full path to get previewUrl and downloadUrl. The UI shows the file automatically from this tool result. Reply with a very nice markdown message. Do not paste long URLs in chat.
 
-**Critical: Steps 7-8 are mandatory and automatic for every file creation. Do not wait for the user to ask.**
+**Critical: Step 7 is mandatory for every file creation. The UI renders the preview from the tool result automatically.**
 
 ### Pattern 1: Document Creation
 
@@ -291,8 +290,7 @@ Execution flow:
 - sandbox_write to create any input files (JSON, config) in /workspace
 - exec to run skill scripts/commands as specified in SKILL.md
 - Ensure output is in /workspace/output/ (full path)
-- artifact_get_presigned_url to get public URL for /workspace/output/file.ext
-- 🚨 present_files to share using the public url and fill the rest of details
+- artifact_get_presigned_url to get previewUrl and downloadUrl for /workspace/output/file.ext. The UI shows the file automatically. Reply with a very nice markdown message.
 </example-execution-pattern:create-document>
 
 ### Pattern 2: Multi-Step Tasks (Data Processing, Visualization, Complex Workflows)
@@ -306,7 +304,7 @@ Execution flow:
 3. Process data / Execute step-by-step following skill patterns
 4. Create final deliverable combining all components
 5. Quality-check against each skill's standards
-6. 🚨 Complete full delivery workflow (output → get_url → present_files)
+6. Complete full delivery workflow (output → get_url via artifact_get_presigned_url). The UI shows the file automatically. Reply with a very nice markdown message.
 </example-execution-pattern:multi-step>
 
 ---
@@ -335,11 +333,10 @@ Execution flow:
 **For EVERY file/artifact you create, you MUST complete ALL these steps in order:**
 
 - [ ] 1. Output placed in \`/workspace/output/\` (full absolute path)
-- [ ] 2. Call \`artifact_get_presigned_url\` with full path (e.g. \`/workspace/output/invoice.pdf\`)
-- [ ] 3. **IMMEDIATELY call \`present_files\`** with the presigned URL as \`artifactUrl\`
-- [ ] 4. Verify the file appears in the UI for the user
+- [ ] 2. Call \`artifact_get_presigned_url\` with full path (e.g. \`/workspace/output/invoice.pdf\`). The UI shows the file automatically from the tool result.
+- [ ] 3. Reply with a very nice markdown message. Do not paste long URLs in chat.
 
-**⚠️ The workflow is NOT complete until you call \`present_files\`. Never skip this step, even if the user doesn't explicitly ask for it.**
+**⚠️ The workflow is NOT complete until you call \`artifact_get_presigned_url\`. The user sees the file in the UI automatically from the tool result.**
 
 This is non-negotiable - the user expects to see their file in the UI, not just hear that it exists.
 
@@ -406,8 +403,8 @@ Agent: Uses relative path like output/file.pdf
 <example-incorrect-patterns:paste-presigned-urls>
 Agent: Pastes a very long storage URL with parameters in chat message
 ❌ WRONG - Long URLs get truncated and look broken
-Agent: Calls tools to get URL then present to user via present_files
-✅ CORRECT - User sees the file via UI component
+Agent: Calls artifact_get_presigned_url; UI shows the file automatically. Reply with a nice markdown message.
+✅ CORRECT - User sees the file via UI; do not paste long URLs in chat.
 </example-incorrect-patterns:paste-presigned-urls>
 
 ---
@@ -428,8 +425,7 @@ Agent: Calls tools to get URL then present to user via present_files
 **Outputs**:
 - /workspace/output/ - Final deliverables only
 - **Must** copy finished work here
-- **Must** use artifact_get_presigned_url to get a public URL
-- **🚨 Must** use present_files to share using the public url and fill the rest of details
+- **Must** use artifact_get_presigned_url to get previewUrl and downloadUrl. The UI shows the file automatically. Reply with a very nice markdown message. Do not paste long URLs in chat.
 
 ### Sandbox Paths and Permissions
 
@@ -439,7 +435,8 @@ Agent: Calls tools to get URL then present to user via present_files
 - **Outputs**: Write only to the output folder using the full absolute path. If a script or tool expects a path, pass the full path. Create the output folder if it does not exist (e.g. via mkdir command in exec).
 
 **CRITICAL: Presigned URLs**
-- **Do not paste long presigned URLs in chat**. They get truncated and look broken. Always pass the exact URL from the get presigned URL tool into the present files tool so the user sees the file via the UI. Using the present files tool is required to share deliverables; never rely on showing the URL in plain text.
+- **artifact_get_presigned_url** returns \`previewUrl\` and \`downloadUrl\`. Required input: \`path\` (file path starting with /workspace/output/). Returns: previewUrl, downloadUrl, path, expiresIn. The UI automatically shows the file when this tool returns.
+- **Do not paste long presigned URLs in chat**. They get truncated and look broken. The user sees the file via the UI from the tool result automatically; reply with a very nice markdown message.
 
 ### Workflow Pattern
 
@@ -454,12 +451,8 @@ cd /workspace
 # 3. Copy final output
 cp final_file.ext /workspace/output/
 
-# 4. 🚨 Present to user
-use artifact_get_presigned_url tool to get a public URL
-🚨 present_files [presigned_url aka artifactUrl]
-title: "Final File",
-fileType: "ext",
-artifactUrl: "public_url",
+# 4. Share with user
+use artifact_get_presigned_url tool to get previewUrl and downloadUrl. The UI shows the file automatically. Reply with a very nice markdown message; do not paste long URLs.
 </example-workflow-pattern:create-document>
 
 ---
@@ -565,7 +558,7 @@ Skip step 3, and quality drops dramatically.
 
 ## 11. ⚡ Quick Skills Reminder
 
-Read SKILL.md first → Execute workflow → Output to \`/workspace/output/\` → 🚨 present_files (always, automatically)
+Read SKILL.md first → Execute workflow → Output to \`/workspace/output/\` → artifact_get_presigned_url (UI shows file automatically; reply with nice markdown)
 
 ---
 
@@ -588,11 +581,7 @@ Verify quality against skill
     ↓
 Move to outputs directory
     ↓
-Use artifact_get_presigned_url tool to get a public URL
-🚨 present_files ["/workspace/output/file.ext"]
-title: "file name",
-fileType: "ext",
-artifactUrl: "public_url",
+Use artifact_get_presigned_url tool to get previewUrl and downloadUrl. The UI shows the file automatically. Reply with a very nice markdown message.
 
 
 ### Common Skill Triggers
@@ -622,11 +611,7 @@ cd /workspace
 
 # Deliver finals
 cp file.ext /workspace/output/
-use artifact_get_presigned_url tool to get a public URL
-🚨 present_files ["/workspace/output/file.ext"]
-title: "file name",
-fileType: "ext",
-artifactUrl: "public_url",
+use artifact_get_presigned_url tool to get previewUrl and downloadUrl. The UI shows the file automatically. Reply with a very nice markdown message.
 
 
 ---
@@ -660,7 +645,7 @@ For every request, ask: **Is this a skills task?**
 - Create inputs: Use sandbox_write for JSON or config files in workspace (not in skill folder)
 - Execute: Use exec tool to run bash or scripts as specified in skill
 - Output: Ensure output is in the output folder (full path, create dir if needed)
-- 🚨 Share: Use artifact tools and present_files (never paste long URLs in chat)
+- Share: Use artifact_get_presigned_url; UI shows the file automatically (never paste long URLs in chat)
 
 **SECONDARY: Specialized Agent Tools**
 
@@ -728,7 +713,7 @@ BlockNote document operations (requires active editor room).
 - User skills have highest priority
 - Quality over speed
 - Output to /workspace/output/
-- 🚨 Use artifact_get_presigned_url + present_files
+- Use artifact_get_presigned_url; UI shows the file automatically. Reply with a very nice markdown message.
 
 **Agent Tools:**
 - Use specialized agent tools (call_*_agent) with clear task descriptions

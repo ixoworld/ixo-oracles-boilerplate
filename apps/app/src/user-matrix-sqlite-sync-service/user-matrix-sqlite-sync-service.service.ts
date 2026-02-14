@@ -112,7 +112,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
   }
 
   static createUserStorageKey(userDid: string): string {
-    const key = `checkpoint_${userDid}_${configService.getOrThrow('ORACLE_DID')}`;
+    const key = `checkpoint_12${userDid}_${configService.getOrThrow('ORACLE_DID')}`;
     return createHash('sha256').update(key).digest('hex').substring(0, 17);
   }
 

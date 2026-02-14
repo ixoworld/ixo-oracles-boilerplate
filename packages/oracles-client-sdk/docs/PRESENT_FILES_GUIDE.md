@@ -82,7 +82,7 @@ function ChatInterface() {
 // Option 2: Create a custom component
 import type { ArtifactPreviewProps } from '@ixo/oracles-client-sdk';
 
-function CustomArtifactPreview({ title, fileType, url }: ArtifactPreviewProps) {
+function CustomArtifactPreview({ title, fileType, previewUrl, downloadUrl }: ArtifactPreviewProps) {
   return (
     <div className="my-custom-preview">
       <h2>{title}</h2>
@@ -101,16 +101,20 @@ function ChatInterface() {
 
 ## Backend/Agent Usage
 
-Once registered on the frontend, the skills-agent (or any agent) can use the `present_files` tool:
+Once registered on the frontend, the skills-agent (or any agent) can use the `present_files` tool.
+
+**artifact_get_presigned_url** returns two URLs: **previewUrl** (for opening in browser or use with present/view tools) and **downloadUrl** (for saving the file or dispose). Both share the same validity and expiration. Call `artifact_get_presigned_url` with the file path (e.g. `/workspace/output/file.pdf`), then pass the returned **previewUrl** and **downloadUrl** into `present_files`. Do not use `artifactUrl` or a single `url`—use the MCP field names **previewUrl** and **downloadUrl**.
 
 ### Basic Tool Call
 
 ```typescript
-// In your LangGraph agent or tool
+// 1. Get URLs from artifact_get_presigned_url (path: '/workspace/output/q4_report.pdf')
+// 2. Pass previewUrl and downloadUrl into present_files
 present_files({
   title: 'Q4 Financial Report',
   fileType: 'pdf',
-  artifactUrl: '/workspace/output/q4_report.pdf',
+  previewUrl: '<previewUrl from artifact_get_presigned_url>',
+  downloadUrl: '<downloadUrl from artifact_get_presigned_url>',
 });
 ```
 
@@ -122,11 +126,13 @@ The skills-agent automatically has access to this tool. After creating an artifa
 # 1. Create artifact in /workspace/output/
 create_pdf_report('/workspace/output/report.pdf')
 
-# 2. Present it to user
+# 2. Get previewUrl and downloadUrl via artifact_get_presigned_url
+# 3. Present it to user
 present_files({
   "title": "Sales Analysis Report",
   "fileType": "pdf",
-  "artifactUrl": "/workspace/output/report.pdf"
+  "previewUrl": "<from artifact_get_presigned_url>",
+  "downloadUrl": "<from artifact_get_presigned_url>"
 })
 ```
 
@@ -184,17 +190,18 @@ import type { ArtifactPreviewProps } from '@ixo/oracles-client-sdk';
 export function MyArtifactPreview({
   title,
   fileType,
-  url,
+  previewUrl,
+  downloadUrl,
 }: ArtifactPreviewProps) {
   const normalizedType = fileType.toLowerCase().replace(/^\./, '');
 
-  // PDF preview
+  // PDF preview (use previewUrl for iframe, downloadUrl for download link)
   if (normalizedType === 'pdf') {
     return (
       <div className="pdf-preview">
         <h3>{title}</h3>
-        <iframe src={url} width="100%" height="800px" />
-        <a href={url} download>
+        <iframe src={previewUrl} width="100%" height="800px" />
+        <a href={downloadUrl} download>
           Download PDF
         </a>
       </div>
@@ -206,7 +213,7 @@ export function MyArtifactPreview({
     return (
       <div className="image-preview">
         <h3>{title}</h3>
-        <img src={url} alt={title} style={{ maxWidth: '100%' }} />
+        <img src={previewUrl} alt={title} style={{ maxWidth: '100%' }} />
       </div>
     );
   }
@@ -216,7 +223,7 @@ export function MyArtifactPreview({
     <div className="default-preview">
       <h3>{title}</h3>
       <p>File type: {fileType}</p>
-      <a href={url} download>
+      <a href={downloadUrl} download>
         Download File
       </a>
     </div>
@@ -247,7 +254,8 @@ function ChatInterface() {
 present_files({
   title: 'Monthly Financial Report - December 2024',
   fileType: 'pdf',
-  artifactUrl: '/workspace/output/december_report.pdf',
+  previewUrl: '<from artifact_get_presigned_url>',
+  downloadUrl: '<from artifact_get_presigned_url>',
 });
 ```
 
@@ -259,7 +267,8 @@ present_files({
 present_files({
   title: 'Sales Data Q4 2024',
   fileType: 'xlsx',
-  artifactUrl: '/workspace/output/sales_q4.xlsx',
+  previewUrl: '<from artifact_get_presigned_url>',
+  downloadUrl: '<from artifact_get_presigned_url>',
 });
 ```
 
@@ -271,7 +280,8 @@ present_files({
 present_files({
   title: 'Company Logo - Final Design',
   fileType: 'png',
-  artifactUrl: '/workspace/output/logo_final.png',
+  previewUrl: '<from artifact_get_presigned_url>',
+  downloadUrl: '<from artifact_get_presigned_url>',
 });
 ```
 
@@ -283,7 +293,8 @@ present_files({
 present_files({
   title: 'Interactive Sales Dashboard',
   fileType: 'html',
-  artifactUrl: '/workspace/output/dashboard.html',
+  previewUrl: '<from artifact_get_presigned_url>',
+  downloadUrl: '<from artifact_get_presigned_url>',
 });
 ```
 
@@ -295,7 +306,8 @@ present_files({
 present_files({
   title: 'API Documentation',
   fileType: 'md',
-  artifactUrl: '/workspace/output/api_docs.md',
+  previewUrl: '<from artifact_get_presigned_url>',
+  downloadUrl: '<from artifact_get_presigned_url>',
 });
 ```
 
@@ -307,7 +319,8 @@ present_files({
 present_files({
   title: 'Research Paper PDF',
   fileType: 'pdf',
-  artifactUrl: 'https://example.com/research/paper.pdf',
+  previewUrl: 'https://example.com/research/paper.pdf',
+  downloadUrl: 'https://example.com/research/paper.pdf',
 });
 ```
 
@@ -325,7 +338,8 @@ create_document('/workspace/output/report.docx');
 present_files({
   title: 'Business Report',
   fileType: 'docx',
-  artifactUrl: '/workspace/output/report.docx',
+  previewUrl: '<from artifact_get_presigned_url>',
+  downloadUrl: '<from artifact_get_presigned_url>',
 });
 
 // ❌ Bad - file created but not presented
@@ -340,14 +354,16 @@ create_document('/workspace/output/report.docx');
 present_files({
   title: 'Q4 2024 Sales Analysis Report - Regional Breakdown',
   fileType: 'pdf',
-  artifactUrl: '/workspace/output/sales_report.pdf',
+  previewUrl: '<from artifact_get_presigned_url>',
+  downloadUrl: '<from artifact_get_presigned_url>',
 });
 
 // ❌ Bad - vague title
 present_files({
   title: 'Report',
   fileType: 'pdf',
-  artifactUrl: '/workspace/output/sales_report.pdf',
+  previewUrl: '<from artifact_get_presigned_url>',
+  downloadUrl: '<from artifact_get_presigned_url>',
 });
 ```
 
@@ -358,14 +374,16 @@ present_files({
 present_files({
   title: 'Data Export',
   fileType: 'xlsx', // or 'xls'
-  artifactUrl: '/workspace/output/data.xlsx',
+  previewUrl: '<from artifact_get_presigned_url>',
+  downloadUrl: '<from artifact_get_presigned_url>',
 });
 
 // ❌ Bad - generic or wrong type
 present_files({
   title: 'Data Export',
   fileType: 'file', // Not helpful
-  artifactUrl: '/workspace/output/data.xlsx',
+  previewUrl: '<from artifact_get_presigned_url>',
+  downloadUrl: '<from artifact_get_presigned_url>',
 });
 ```
 
@@ -383,19 +401,22 @@ create_chart('/workspace/output/chart.png');
 present_files({
   title: 'Financial Report',
   fileType: 'pdf',
-  artifactUrl: '/workspace/output/report.pdf',
+  previewUrl: '<from artifact_get_presigned_url>',
+  downloadUrl: '<from artifact_get_presigned_url>',
 });
 
 present_files({
   title: 'Supporting Data',
   fileType: 'xlsx',
-  artifactUrl: '/workspace/output/data.xlsx',
+  previewUrl: '<from artifact_get_presigned_url>',
+  downloadUrl: '<from artifact_get_presigned_url>',
 });
 
 present_files({
   title: 'Sales Trend Chart',
   fileType: 'png',
-  artifactUrl: '/workspace/output/chart.png',
+  previewUrl: '<from artifact_get_presigned_url>',
+  downloadUrl: '<from artifact_get_presigned_url>',
 });
 ```
 
@@ -403,13 +424,13 @@ present_files({
 
 ```typescript
 // ✅ Workspace files (most common)
-artifactUrl: '/workspace/output/file.pdf';
+previewUrl and downloadUrl from artifact_get_presigned_url;
 
 // ✅ Relative paths
-artifactUrl: './outputs/file.pdf';
+previewUrl and downloadUrl from artifact_get_presigned_url;
 
 // ✅ External URLs
-artifactUrl: 'https://example.com/file.pdf';
+previewUrl and downloadUrl from artifact_get_presigned_url;
 
 // ⚠️ Ensure files exist before presenting
 ```
@@ -425,7 +446,7 @@ artifactUrl: 'https://example.com/file.pdf';
 **Solutions:**
 
 1. Check that the file exists at the specified path
-2. Verify the `artifactUrl` is correct
+2. Verify `previewUrl` and `downloadUrl` are correct (from artifact_get_presigned_url)
 3. Ensure the file was created before calling `present_files`
 4. Check browser console for errors
 
@@ -463,8 +484,9 @@ artifactUrl: 'https://example.com/file.pdf';
 The skills-agent prompt already references `present_files`. After creating any artifact:
 
 1. Create file in `/workspace/output/`
-2. Call `present_files` with appropriate parameters
-3. User sees rich preview automatically
+2. Call `artifact_get_presigned_url` to get previewUrl and downloadUrl
+3. Call `present_files` with previewUrl and downloadUrl
+4. User sees rich preview automatically
 
 Example flow:
 
@@ -499,7 +521,8 @@ Registers the present_files AGUI action.
 
 - `title: string` - Display title
 - `fileType: string` - File extension (e.g., "pdf", "png")
-- `url: string` - File URL or path
+- `previewUrl: string` - URL for preview/display (from artifact_get_presigned_url)
+- `downloadUrl: string` - URL for download/save (from artifact_get_presigned_url)
 - `className?: string` - Optional CSS class
 - `style?: React.CSSProperties` - Optional inline styles
 
@@ -509,7 +532,8 @@ Registers the present_files AGUI action.
 {
   title: string; // Human-readable title
   fileType: string; // File extension or MIME type
-  artifactUrl: string; // URL or path to file
+  previewUrl: string; // From artifact_get_presigned_url (for preview/view)
+  downloadUrl: string; // From artifact_get_presigned_url (for download/dispose)
 }
 ```
 

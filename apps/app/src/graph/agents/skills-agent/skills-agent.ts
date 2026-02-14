@@ -2,7 +2,6 @@ import { getOpenRouterChatModel } from '@ixo/common';
 import { createMCPClient } from 'src/graph/mcp';
 import { listSkillsTool, searchSkillsTool } from 'src/graph/nodes/tools-node';
 import type { AgentSpec } from '../subagent-as-tool';
-import { presentFilesTool } from './present-files-tool';
 import { SKILLS_PROMPT } from './skills.prompt';
 
 const llm = getOpenRouterChatModel({
@@ -33,7 +32,6 @@ export const createSkillsAgent = async (): Promise<AgentSpec> => ({
   name: 'Skills Agent',
   description: 'A agent that uses skills to help the user',
   tools: [
-    presentFilesTool,
     ...((await sandboxMCP?.getTools()) ?? []),
     listSkillsTool,
     searchSkillsTool,

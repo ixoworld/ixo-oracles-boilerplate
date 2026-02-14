@@ -1419,8 +1419,8 @@ function ChatInterface() {
 
 ### How It Works
 
-1. **Backend:** The oracle uses the `present_files` tool after creating an artifact
-2. **Frontend:** The registered action receives the call and renders the preview
+1. **Backend:** The oracle calls `artifact_get_presigned_url` to get **previewUrl** and **downloadUrl**, then uses the `present_files` tool with both URLs (MCP naming).
+2. **Frontend:** The registered action receives the call and renders the preview using previewUrl for display and downloadUrl for the download button.
 3. **User:** Sees a rich preview with download option
 
 ### Supported File Types
@@ -1437,14 +1437,15 @@ The action automatically handles different file types:
 
 ### Backend Usage
 
-Once registered on the frontend, the oracle can call:
+Once registered on the frontend, the oracle gets **previewUrl** and **downloadUrl** from `artifact_get_presigned_url`, then calls:
 
 ```typescript
-// In your LangGraph agent
+// In your LangGraph agent: pass previewUrl and downloadUrl from artifact_get_presigned_url
 present_files({
   title: 'Q4 Sales Report',
   fileType: 'pdf',
-  artifactUrl: '/workspace/output/sales_report.pdf',
+  previewUrl: '<from artifact_get_presigned_url>',
+  downloadUrl: '<from artifact_get_presigned_url>',
 });
 ```
 
@@ -1459,7 +1460,7 @@ import { usePresentFilesAction, ArtifactPreview } from '@ixo/oracles-client-sdk'
 usePresentFilesAction(ArtifactPreview);
 
 // Or create a custom one
-function CustomPreview({ title, fileType, url }: ArtifactPreviewProps) {
+function CustomPreview({ title, fileType, previewUrl, downloadUrl }: ArtifactPreviewProps) {
   return (
     <div className="my-preview">
       <h2>{title}</h2>
@@ -1478,8 +1479,9 @@ The skills-agent workflow automatically uses `present_files`:
 ```
 1. User: "Create a sales report"
 2. Agent: Creates report.pdf in /workspace/output/
-3. Agent: Calls present_files to display it
-4. User: Sees embedded PDF with download button
+3. Agent: Calls artifact_get_presigned_url to get previewUrl and downloadUrl
+4. Agent: Calls present_files with previewUrl and downloadUrl to display it
+5. User: Sees embedded PDF with download button
 ```
 
 ### Complete Example
@@ -1520,39 +1522,44 @@ function ChatInterface() {
 {
   title: string; // Human-readable title
   fileType: string; // File extension (e.g., "pdf", "png")
-  artifactUrl: string; // Path or URL to file
+  previewUrl: string; // From artifact_get_presigned_url (for preview/view)
+  downloadUrl: string; // From artifact_get_presigned_url (for download/dispose)
 }
 ```
 
 ### Example Tool Calls
 
 ```typescript
-// PDF Report
+// PDF Report (previewUrl and downloadUrl from artifact_get_presigned_url)
 present_files({
   title: 'Financial Report Q4 2024',
   fileType: 'pdf',
-  artifactUrl: '/workspace/output/q4_report.pdf',
+  previewUrl: '<from artifact_get_presigned_url>',
+  downloadUrl: '<from artifact_get_presigned_url>',
 });
 
 // Generated Image
 present_files({
   title: 'Company Logo Design',
   fileType: 'png',
-  artifactUrl: '/workspace/output/logo.png',
+  previewUrl: '<from artifact_get_presigned_url>',
+  downloadUrl: '<from artifact_get_presigned_url>',
 });
 
 // Excel Spreadsheet
 present_files({
   title: 'Sales Data Export',
   fileType: 'xlsx',
-  artifactUrl: '/workspace/output/sales_data.xlsx',
+  previewUrl: '<from artifact_get_presigned_url>',
+  downloadUrl: '<from artifact_get_presigned_url>',
 });
 
 // HTML Visualization
 present_files({
   title: 'Interactive Dashboard',
   fileType: 'html',
-  artifactUrl: '/workspace/output/dashboard.html',
+  previewUrl: '<from artifact_get_presigned_url>',
+  downloadUrl: '<from artifact_get_presigned_url>',
 });
 ```
 
@@ -1561,7 +1568,7 @@ present_files({
 1. **Always call after creating files** - Don't leave users wondering where the output is
 2. **Use descriptive titles** - Help users understand what they're viewing
 3. **Correct file types** - Ensures proper preview rendering
-4. **Workspace paths** - Use `/workspace/output/` for generated files
+4. **Pass both URLs** - Get previewUrl and downloadUrl from artifact_get_presigned_url and pass both into present_files
 
 ### For More Details
 
