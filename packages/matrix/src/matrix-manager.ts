@@ -13,6 +13,7 @@ import {
   SimpleMatrixClient,
 } from './utils/create-simple-matrix-client.js';
 import { formatMsg } from './utils/format-msg.js';
+import { extractBackupKeyFromSSS } from './utils/ssss.js';
 
 function getEntityRoomAliasFromDid(did: string) {
   return did.replace(/:/g, '-');
@@ -126,12 +127,33 @@ export class MatrixManager {
         '🚀 Starting MatrixManager initialization with matrix-bot-sdk...',
       );
 
+      // Try to extract backup key from SSSS for key backup support
+      let recoveryKey: string | undefined;
+      const recoveryPhrase = process.env.MATRIX_RECOVERY_PHRASE;
+      if (recoveryPhrase && recoveryPhrase !== 'secret') {
+        try {
+          const backupKey = await extractBackupKeyFromSSS({
+            baseUrl: process.env.MATRIX_BASE_URL!,
+            accessToken: process.env.MATRIX_ORACLE_ADMIN_ACCESS_TOKEN!,
+            userId: process.env.MATRIX_ORACLE_ADMIN_USER_ID!,
+            recoveryPhrase,
+          });
+          if (backupKey) {
+            recoveryKey = backupKey;
+            Logger.info('🔑 Backup key extracted from SSSS for key backup support');
+          }
+        } catch (e) {
+          Logger.warn('Could not extract backup key from SSSS (will proceed without):', e);
+        }
+      }
+
       const config: ISimpleMatrixClientConfig = {
         baseUrl: process.env.MATRIX_BASE_URL!,
         accessToken: process.env.MATRIX_ORACLE_ADMIN_ACCESS_TOKEN!,
         userId: process.env.MATRIX_ORACLE_ADMIN_USER_ID!,
         storagePath: process.env.MATRIX_STORE_PATH!,
         autoJoin: true,
+        recoveryKey,
       };
 
       // Create client and start it
