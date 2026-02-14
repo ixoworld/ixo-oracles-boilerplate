@@ -43,6 +43,7 @@
     },
     "onlyBuiltDependencies": [
       "@nestjs/core",
+      "@ixo/matrix-sdk-crypto-nodejs",
       "@matrix-org/matrix-sdk-crypto-nodejs",
       "@scarf/scarf",
       "@swc/core",

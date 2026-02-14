@@ -19,6 +19,7 @@ export interface ISimpleMatrixClientConfig {
   userId: string;
   storagePath?: string;
   autoJoin?: boolean;
+  recoveryKey?: string;
 }
 
 export interface IMessageOptions {
@@ -82,20 +83,26 @@ export class SimpleMatrixClient {
   }
 
   private prepareCryptoStorage(): void {
-    // Prepare a crypto store using Rust SDK
+    // Prepare a crypto store using Rust SDK with SQLite backend
+    // Using numeric value 0 for StoreType.Sqlite (const enum, not accessible with isolatedModules)
     const storagePath = this.config.storagePath || './matrix-storage';
     this.cryptoStore = new RustSdkCryptoStorageProvider(
-      path.join(storagePath, 'encrypted'),
+      path.join(storagePath, 'encrypted-sqlite'),
+      0 as any, // StoreType.Sqlite from @ixo/matrix-sdk-crypto-nodejs
     );
   }
 
   private createClient(): void {
     if (!this.storage) throw new Error('Storage not prepared');
+    const cryptoConfig = this.config.recoveryKey
+      ? { recoveryKey: this.config.recoveryKey }
+      : undefined;
     this.mxClient = new MatrixClient(
       this.config.baseUrl,
       this.config.accessToken,
       this.storage,
       this.cryptoStore,
+      cryptoConfig,
     );
   }
 
