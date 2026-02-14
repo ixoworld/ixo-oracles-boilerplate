@@ -1,7 +1,7 @@
 import { getOpenRouterChatModel } from '@ixo/common';
 import { RemoveMessage } from '@langchain/core/messages';
 import { Logger } from '@nestjs/common';
-import { type AgentMiddleware, AIMessage, createMiddleware } from 'langchain';
+import { AgentMiddleware, AIMessage, createMiddleware } from 'langchain';
 
 const safetyModel = getOpenRouterChatModel({
   model: 'openai/gpt-oss-safeguard-20b:nitro',
@@ -82,11 +82,15 @@ ALWAYS mark as SAFE if the response:
           return {
             messages: [
               new RemoveMessage({ id: lastMessage.id ?? '' }),
-              new AIMessage("I'm sorry, but I can't provide that information."),
+              new AIMessage(
+                "I'm sorry, but I can't provide that information.",
+              )
             ],
             jumpTo: 'end',
           };
         }
+
+        return;
       },
     },
   });

@@ -1,5 +1,5 @@
 import { getOpenRouterChatModel } from '@ixo/common';
-import { type DynamicStructuredTool, type StructuredTool } from 'langchain';
+import { DynamicStructuredTool, type StructuredTool } from 'langchain';
 
 import type { AgentSpec } from './subagent-as-tool';
 
@@ -48,7 +48,8 @@ const formatToolDocs = (tools: StructuredTool[]): string => {
 
   return tools
     .map((tool) => {
-      const description = tool.description.trim() ?? 'No description provided.';
+      const description =
+        tool.description?.trim() ?? 'No description provided.';
       return `- \`${tool.name}\`: ${description}`;
     })
     .join('\n');

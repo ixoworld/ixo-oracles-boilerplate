@@ -1,4 +1,4 @@
-import { type OraclesCallMatrixEvent } from '@ixo/matrix';
+import { OraclesCallMatrixEvent } from '@ixo/matrix';
 import { ApiProperty } from '@nestjs/swagger';
 import { CallId } from './types';
 

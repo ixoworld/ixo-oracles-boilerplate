@@ -9,7 +9,7 @@ import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { MatrixClient } from 'matrix-js-sdk';
 import { randomUUID } from 'node:crypto';
-import { type ENV } from 'src/config';
+import { ENV } from 'src/config';
 import * as Y from 'yjs';
 import {
   appendBlock,
@@ -21,7 +21,7 @@ import {
   simplifyBlockForAgent,
   type BlockSnapshot,
 } from './blocknote-helper';
-import { type AppConfig, MatrixProviderManager } from './provider';
+import { AppConfig, MatrixProviderManager } from './provider';
 import {
   extractSurveyQuestions,
   getMissingRequiredFields,
@@ -69,7 +69,7 @@ const logger = new Logger('BlocknoteTools');
 export const createBlocknoteTools = async (
   matrixClient: MatrixClient,
   config: AppConfig,
-  readOnly = false,
+  readOnly: boolean = false,
 ) => {
   logger.log(
     `🔧 Creating BlockNote tools with Matrix client: ${matrixClient.getUserId()}`,
@@ -130,6 +130,7 @@ export const createBlocknoteTools = async (
         const filteredBlocks = blockType
           ? blocks.filter((b) => b.blockType === blockType)
           : blocks;
+
 
         return JSON.stringify(
           {
@@ -795,7 +796,7 @@ The returned block includes the auto-generated UUID that you can use for future 
         }
 
         const block = getBlockDetail(doc, blockId, true);
-        console.log('🚀 ~ createBlocknoteTools ~ block:', block);
+        console.log("🚀 ~ createBlocknoteTools ~ block:", block)
         if (!block) {
           return JSON.stringify({
             success: false,
@@ -826,6 +827,7 @@ The returned block includes the auto-generated UUID that you can use for future 
           surveySchema,
         );
 
+      
         return JSON.stringify(
           {
             success: true,

@@ -130,9 +130,11 @@ const createBlockStructure = (
 
   // Also set props on child element (matching edit behavior)
   if (isPlainObject(attributes)) {
-    const props = attributes.props;
+    const props = (attributes as Record<string, unknown>).props;
     if (isPlainObject(props)) {
-      for (const [key, value] of Object.entries(props)) {
+      for (const [key, value] of Object.entries(
+        props as Record<string, unknown>,
+      )) {
         blockContent.setAttribute(key, value as string);
       }
     }
@@ -232,7 +234,9 @@ const applyAttributeUpdates = (
   const next: Record<string, unknown> = { ...existing, ...rest };
 
   if (isPlainObject(propsUpdates)) {
-    const existingProps = isPlainObject(existing.props) ? existing.props : {};
+    const existingProps = isPlainObject(existing.props)
+      ? (existing.props as Record<string, unknown>)
+      : {};
     next.props = { ...existingProps, ...propsUpdates };
   }
 
@@ -240,7 +244,7 @@ const applyAttributeUpdates = (
     if (key.startsWith('props.')) {
       const propKey = key.slice('props.'.length);
       if (isPlainObject(next.props)) {
-        delete next.props[propKey];
+        delete (next.props as Record<string, unknown>)[propKey];
       }
       continue;
     }
@@ -250,7 +254,7 @@ const applyAttributeUpdates = (
 
   setAnyAttribute(element, 'attrs', next);
 
-  const nextId = next.id;
+  const nextId = next['id'];
   if (typeof nextId === 'string') {
     element.setAttribute('id', nextId);
   }
@@ -264,7 +268,9 @@ const applyAttributeUpdates = (
     );
 
   if (blockContent && isPlainObject(propsUpdates)) {
-    for (const [key, value] of Object.entries(propsUpdates)) {
+    for (const [key, value] of Object.entries(
+      propsUpdates as Record<string, unknown>,
+    )) {
       blockContent.setAttribute(key, value as string);
     }
   }

@@ -14,7 +14,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { minutes } from '@nestjs/throttler';
 import { type NextFunction, type Request, type Response } from 'express';
-import { type ENV } from 'src/config';
+import { ENV } from 'src/config';
 import { TokenLimiter } from 'src/utils/token-limit-handler';
 
 // Extend Express Request interface to include subscription data
@@ -73,8 +73,7 @@ export class SubscriptionMiddleware implements NestMiddleware {
       if (!req.authData) {
         this.logger.warn('No auth data available, skipping subscription check');
         req.subscriptionData = undefined;
-        next();
-        return;
+        return next();
       }
 
       const { did, userOpenIdToken: matrixAccessToken } = req.authData;

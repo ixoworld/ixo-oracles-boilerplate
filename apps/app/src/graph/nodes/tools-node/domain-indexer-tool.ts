@@ -1,7 +1,7 @@
 import { tool } from '@langchain/core/tools';
 import { ConfigService } from '@nestjs/config';
 import 'dotenv/config';
-import { type ENV } from 'src/config';
+import { ENV } from 'src/config';
 import z from 'zod';
 
 const configService = new ConfigService<ENV>();

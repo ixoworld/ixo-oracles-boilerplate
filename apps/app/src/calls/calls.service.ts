@@ -9,26 +9,21 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { type ENV } from 'src/config';
+import { ENV } from 'src/config';
 import { UserMatrixSqliteSyncService } from '../user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 import {
-  type OraclesCallMatrixEventContent,
-  type SyncCallResponse,
+  OraclesCallMatrixEventContent,
+  SyncCallResponse,
 } from './dto/sync-call';
 
 import { validateSync } from 'class-validator';
 import {
-  type GetEncryptionKeyDTO,
-  type GetEncryptionKeyResponse,
+  GetEncryptionKeyDTO,
+  GetEncryptionKeyResponse,
 } from './dto/get-encrpytion-key';
-import {
-  type Call,
-  type ListCallDto,
-  type ListCallResponse,
-} from './dto/list-call';
-import { type CallId } from './dto/types';
-import { type UpdateCallDto, type UpdateCallResponse } from './dto/update-dto';
-
+import { Call, ListCallDto, ListCallResponse } from './dto/list-call';
+import { CallId } from './dto/types';
+import { UpdateCallDto, UpdateCallResponse } from './dto/update-dto';
 @Injectable()
 export class CallsService {
   constructor(
@@ -152,15 +147,12 @@ export class CallsService {
       // Check SQLite first
       const callsRows = await this.listCallsFromDB(dto.userDid, dto.sessionId);
 
-      const userHomeServer =
-        dto.homeServer || (await getMatrixHomeServerCroppedForDid(dto.userDid));
-      const { roomId } = await this.matrixManager.getOracleRoomIdWithHomeServer(
-        {
-          userDid: dto.userDid,
-          oracleEntityDid: this.configService.getOrThrow('ORACLE_ENTITY_DID'),
-          userHomeServer,
-        },
-      );
+      const userHomeServer = dto.homeServer || await getMatrixHomeServerCroppedForDid(dto.userDid);
+      const { roomId } = await this.matrixManager.getOracleRoomIdWithHomeServer({
+        userDid: dto.userDid,
+        oracleEntityDid: this.configService.getOrThrow('ORACLE_ENTITY_DID'),
+        userHomeServer,
+      });
 
       if (!roomId) {
         throw new NotFoundException(
@@ -198,7 +190,7 @@ export class CallsService {
           }
 
           // Sort the chunk array by origin_server_ts descending and get the most recent chunk
-          let latestRelation;
+          let latestRelation = undefined;
           if (
             relations &&
             Array.isArray(relations.chunk) &&
@@ -226,12 +218,12 @@ export class CallsService {
         }),
       );
       return {
-        calls: events.reduce<Call[]>((acc, event) => {
+        calls: events.reduce((acc, event) => {
           if (event.sessionId === dto.sessionId) {
             acc.push(event);
           }
           return acc;
-        }, []),
+        }, [] as Call[]),
       };
     } catch (error) {
       if (

@@ -1,13 +1,13 @@
 import { getSubscriptionUrlByNetwork } from '@ixo/common';
 import { MatrixManager } from '@ixo/matrix';
 import { setupClaimSigningMnemonics } from '@ixo/oracles-chain-client';
-import { type INestApplication, Logger, ValidationPipe } from '@nestjs/common';
+import { INestApplication, Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
-import { type ENV } from './config';
+import { ENV } from './config';
 import { EditorMatrixClient } from './graph/agents/editor/editor-mx';
 import { UserMatrixSqliteSyncService } from './user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 

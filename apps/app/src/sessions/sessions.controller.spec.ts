@@ -1,4 +1,4 @@
-import { Test, type TestingModule } from '@nestjs/testing';
+import { Test, TestingModule } from '@nestjs/testing';
 import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
 

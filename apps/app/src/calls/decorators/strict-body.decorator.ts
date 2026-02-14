@@ -1,7 +1,7 @@
 import {
   BadRequestException,
   createParamDecorator,
-  type ExecutionContext,
+  ExecutionContext,
 } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';

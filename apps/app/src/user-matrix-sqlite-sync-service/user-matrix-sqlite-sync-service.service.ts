@@ -4,10 +4,10 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  type OnModuleInit,
+  OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createHash } from 'node:crypto';
+import { createHash } from 'crypto';
 
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { hours } from '@nestjs/throttler';
@@ -18,14 +18,14 @@ import { promisify } from 'node:util';
 import { gunzip, gzip } from 'node:zlib';
 
 import Database, { type Database as DatabaseType } from 'better-sqlite3';
-import path from 'node:path';
-import { type ENV } from 'src/config';
+import path from 'path';
+import { ENV } from 'src/config';
 import {
   deleteMediaFromRoom,
   getMediaFromRoom,
   getMediaFromRoomByStorageKey,
-  type GetMediaFromRoomByStorageKeyResult,
-  type MatrixMediaEvent,
+  GetMediaFromRoomByStorageKeyResult,
+  MatrixMediaEvent,
   uploadMediaToRoom,
 } from './matrix-upload-utils';
 
@@ -86,10 +86,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
   private readonly activeUsers = new Map<string, number>();
 
   private readonly downloadInProgress = new Map<string, Promise<void>>();
-  private readonly recoveryInProgress = new Map<
-    string,
-    Promise<DatabaseType>
-  >();
+  private readonly recoveryInProgress = new Map<string, Promise<DatabaseType>>();
 
   private readonly lastUploadedChecksum = new Map<string, string>();
 
@@ -346,10 +343,13 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
       const result = db.pragma('integrity_check') as Array<{
         integrity_check: string;
       }>;
-      const isOk = result.length === 1 && result[0].integrity_check === 'ok';
+      const isOk =
+        result.length === 1 && result[0].integrity_check === 'ok';
 
       if (!isOk) {
-        const details = result.map((r) => r.integrity_check).join('; ');
+        const details = result
+          .map((r) => r.integrity_check)
+          .join('; ');
         Logger.error(
           `[CORRUPTION DETECTED] PRAGMA integrity_check failed for user ${userDid}: ${details}`,
         );
@@ -448,9 +448,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
   @Cron(CronExpression.EVERY_HOUR)
   public async localStorageCacheCleanUpTask(): Promise<void> {
     if (this.cronRunning) {
-      Logger.debug(
-        'Skipping hourly cleanup — another cron task is still running',
-      );
+      Logger.debug('Skipping hourly cleanup — another cron task is still running');
       return;
     }
     this.cronRunning = true;
@@ -489,9 +487,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
         { lastAccessedAt },
       ] of this.filePathCache.entries()) {
         if (this.isUserActive(userDid)) {
-          Logger.debug(
-            `Skipping file cache cleanup for active user ${userDid}`,
-          );
+          Logger.debug(`Skipping file cache cleanup for active user ${userDid}`);
           continue;
         }
         if (now - lastAccessedAt > hours(1)) {
@@ -645,7 +641,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
       const mxManager = MatrixManager.getInstance();
       const userHomeServer = await getMatrixHomeServerCroppedForDid(userDid);
       const { roomId } = await mxManager.getOracleRoomIdWithHomeServer({
-        userDid,
+        userDid: userDid,
         oracleEntityDid: configService.getOrThrow('ORACLE_ENTITY_DID'),
         userHomeServer,
       });
@@ -710,7 +706,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
     );
 
     // Atomic write: write to temp file then rename (rename is atomic on POSIX)
-    const tmpPath = `${checkpointPath}.tmp`;
+    const tmpPath = checkpointPath + '.tmp';
     try {
       await fs.writeFile(tmpPath, decompressedBuffer);
       await fs.rename(tmpPath, checkpointPath);
@@ -733,6 +729,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
     Logger.debug(
       `Successfully saved checkpoint for user ${userDid} at ${checkpointPath}`,
     );
+    return;
   }
 
   /**
@@ -770,9 +767,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
       if (this.isUserActive(userDid)) {
         // User has an in-flight request — WAL checkpoint flushes data without closing
         try {
-          const walResult = cached.db.pragma(
-            'wal_checkpoint(PASSIVE)',
-          ) as Array<{
+          const walResult = cached.db.pragma('wal_checkpoint(PASSIVE)') as Array<{
             busy: number;
             log: number;
             checkpointed: number;
@@ -811,7 +806,9 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
         try {
           cached.db.close();
           this.dbConnectionCache.delete(userDid);
-          Logger.debug(`Closed cached database connection for user ${userDid}`);
+          Logger.debug(
+            `Closed cached database connection for user ${userDid}`,
+          );
         } catch (error) {
           Logger.warn(
             `Failed to close cached database connection for user ${userDid}: ${error}`,
@@ -855,7 +852,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
     const mxManager = MatrixManager.getInstance();
     const userHomeServer = await getMatrixHomeServerCroppedForDid(userDid);
     const { roomId } = await mxManager.getOracleRoomIdWithHomeServer({
-      userDid,
+      userDid: userDid,
       oracleEntityDid: configService.getOrThrow('ORACLE_ENTITY_DID'),
       userHomeServer,
     });
@@ -906,16 +903,8 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
           Logger.error(
             `Failed to upload checkpoint to Matrix storage for user ${userDid}`,
             error.message,
-            `File path: ${UserMatrixSqliteSyncService.getUserCheckpointDbPath(
-              userDid,
-            )}`,
-            `File Size before gzip: ${bytesToHumanReadable(
-              await fs
-                .stat(
-                  UserMatrixSqliteSyncService.getUserCheckpointDbPath(userDid),
-                )
-                .then((stats) => stats.size),
-            )}`,
+            "File path: " + UserMatrixSqliteSyncService.getUserCheckpointDbPath(userDid),
+            "File Size before gzip: " + bytesToHumanReadable(await fs.stat(UserMatrixSqliteSyncService.getUserCheckpointDbPath(userDid)).then((stats) => stats.size)),
           );
         }
       }
@@ -1056,9 +1045,7 @@ function computeFileChecksum(filePath: string): Promise<string> {
     const hash = createHash('sha256');
     const stream = fsSync.createReadStream(filePath);
     stream.on('data', (chunk) => hash.update(chunk));
-    stream.on('end', () => {
-      resolve(hash.digest('hex'));
-    });
+    stream.on('end', () => resolve(hash.digest('hex')));
     stream.on('error', (err) => {
       stream.destroy();
       reject(err);
@@ -1069,5 +1056,5 @@ function computeFileChecksum(filePath: string): Promise<string> {
 const bytesToHumanReadable = (bytes: number): string => {
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   const index = Math.floor(Math.log(bytes) / Math.log(1024));
-  return `${(bytes / Math.pow(1024, index)).toFixed(2)} ${units[index]}`;
+  return (bytes / Math.pow(1024, index)).toFixed(2) + ' ' + units[index];
 };

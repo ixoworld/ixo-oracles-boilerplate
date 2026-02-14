@@ -1,11 +1,11 @@
-import { type GetMySubscriptionsResponseDto } from '@ixo/common';
+import { GetMySubscriptionsResponseDto } from '@ixo/common';
 import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
-import { type Serialized } from '@langchain/core/load/serializable';
-import { type LLMResult } from '@langchain/core/outputs';
+import { Serialized } from '@langchain/core/load/serializable';
+import { LLMResult } from '@langchain/core/outputs';
 import { HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import crypto from 'node:crypto';
-import { type ENV } from 'src/config';
+import { ENV } from 'src/config';
 import z from 'zod';
 import { RedisService } from './redis.service';
 
@@ -42,9 +42,12 @@ export class TokenLimiter {
   `;
 
   static getSubscriptionPayloadKey(userDid: string) {
-    return `${TokenLimiter.KEY_PREFIX + userDid}:${
+    return (
+      TokenLimiter.KEY_PREFIX +
+      userDid +
+      ':' +
       TokenLimiter.KEY_SUBSCRIPTION_PAYLOAD
-    }`;
+    );
   }
 
   static async setSubscriptionPayload(
@@ -90,7 +93,7 @@ export class TokenLimiter {
   }
 
   static getUserBalanceKey(userDid: string): string {
-    return `${TokenLimiter.KEY_PREFIX + userDid}:${TokenLimiter.KEY_BALANCE}`;
+    return TokenLimiter.KEY_PREFIX + userDid + ':' + TokenLimiter.KEY_BALANCE;
   }
 
   static async getUserHeldAmount(userDid: string): Promise<number> {
@@ -278,7 +281,9 @@ export class TokenLimiter {
   }
 
   static getPendingClaimKey(userDid: string): string {
-    return `${TokenLimiter.KEY_PREFIX + userDid}:${TokenLimiter.KEY_PENDING_CLAIM}`;
+    return (
+      TokenLimiter.KEY_PREFIX + userDid + ':' + TokenLimiter.KEY_PENDING_CLAIM
+    );
   }
 
   /**
@@ -577,8 +582,4 @@ class TokenLimiterHandler extends BaseCallbackHandler {
   }
 }
 
-export {
-  TokenLimiterError,
-  TokenLimiterHandler,
-  type TokenLimiterHandlerOptions,
-};
+export { TokenLimiterError, TokenLimiterHandler, TokenLimiterHandlerOptions };
