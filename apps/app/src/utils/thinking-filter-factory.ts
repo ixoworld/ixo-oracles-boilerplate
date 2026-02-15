@@ -27,7 +27,6 @@ export class StreamTagProcessor {
   ) {
     this.buffer += chunk;
 
-     
     while (true) {
       if (!this.inAnswer && !this.inThinking) {
         // --- State: Outside any known tag ---

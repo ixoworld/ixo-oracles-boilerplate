@@ -53,7 +53,11 @@ export async function callFrontendTool({
     // eslint-disable-next-line prefer-const -- assigned after handler definition due to mutual reference
     let timeoutHandle: NodeJS.Timeout;
     const resultHandler = (...args: unknown[]) => {
-      const data = args[0] as { toolCallId: string; error?: string; result?: Record<string, unknown> };
+      const data = args[0] as {
+        toolCallId: string;
+        error?: string;
+        result?: Record<string, unknown>;
+      };
       const receivedId = data.toolCallId;
       if (receivedId === toolId) {
         clearTimeout(timeoutHandle);

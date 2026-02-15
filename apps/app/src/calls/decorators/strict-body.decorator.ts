@@ -7,7 +7,10 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 
 export const StrictBody = createParamDecorator(
-  async (dtoClass: new (...args: unknown[]) => object, ctx: ExecutionContext) => {
+  async (
+    dtoClass: new (...args: unknown[]) => object,
+    ctx: ExecutionContext,
+  ) => {
     const request = ctx.switchToHttp().getRequest();
     const body = request.body;
 
@@ -32,7 +35,8 @@ export const StrictBody = createParamDecorator(
     }
 
     // Also check the constructor parameters for properties
-    const _paramTypes = Reflect.getMetadata('design:paramtypes', dtoClass) || [];
+    const _paramTypes =
+      Reflect.getMetadata('design:paramtypes', dtoClass) || [];
     const _paramNames =
       Reflect.getMetadata('custom:param-names', dtoClass) || [];
 

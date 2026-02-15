@@ -7,7 +7,7 @@ describe('WsGateway', () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [WsGateway, WsService],
+      providers: [WsGateway, { provide: WsService, useValue: {} }],
     }).compile();
 
     gateway = module.get<WsGateway>(WsGateway);

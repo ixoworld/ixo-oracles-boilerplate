@@ -132,7 +132,6 @@ export const createBlocknoteTools = async (
           ? blocks.filter((b) => b.blockType === blockType)
           : blocks;
 
-
         return JSON.stringify(
           {
             success: true,
@@ -797,7 +796,7 @@ The returned block includes the auto-generated UUID that you can use for future 
         }
 
         const block = getBlockDetail(doc, blockId, true);
-        console.log("🚀 ~ createBlocknoteTools ~ block:", block)
+        console.log('🚀 ~ createBlocknoteTools ~ block:', block);
         if (!block) {
           return JSON.stringify({
             success: false,
@@ -806,7 +805,9 @@ The returned block includes the auto-generated UUID that you can use for future 
         }
 
         const properties = extractBlockProperties(block);
-        const surveySchema = properties.surveySchema as SurveySchema | undefined;
+        const surveySchema = properties.surveySchema as
+          | SurveySchema
+          | undefined;
         const answers = (properties.answers || {}) as Record<string, unknown>;
 
         if (!surveySchema) {
@@ -827,7 +828,6 @@ The returned block includes the auto-generated UUID that you can use for future 
           answers,
           surveySchema,
         );
-
 
         return JSON.stringify(
           {
@@ -970,7 +970,9 @@ The returned block includes the auto-generated UUID that you can use for future 
         }
 
         const properties = extractBlockProperties(block);
-        const surveySchema = properties.surveySchema as SurveySchema | undefined;
+        const surveySchema = properties.surveySchema as
+          | SurveySchema
+          | undefined;
 
         if (!surveySchema) {
           return JSON.stringify({
@@ -980,7 +982,10 @@ The returned block includes the auto-generated UUID that you can use for future 
         }
 
         // Get current answers
-        const currentAnswers = (properties.answers || {}) as Record<string, unknown>;
+        const currentAnswers = (properties.answers || {}) as Record<
+          string,
+          unknown
+        >;
 
         // Merge or replace answers
         const updatedAnswers = merge
@@ -1185,7 +1190,9 @@ The returned block includes the auto-generated UUID that you can use for future 
         }
 
         const properties = extractBlockProperties(block);
-        const surveySchema = properties.surveySchema as SurveySchema | undefined;
+        const surveySchema = properties.surveySchema as
+          | SurveySchema
+          | undefined;
         const answers = (properties.answers || {}) as Record<string, unknown>;
 
         if (!surveySchema) {

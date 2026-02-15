@@ -384,7 +384,6 @@ new RenderComponentEvent({
 }).emit();
 ```
 
-
 ### Required Payload Properties
 
 Every event payload **must** include:

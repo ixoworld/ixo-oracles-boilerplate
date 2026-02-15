@@ -3,5 +3,12 @@
   "compilerOptions": {
     "baseUrl": "./",
     "outDir": "./dist"
-  }
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "vitest.config.ts",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ]
 }

@@ -328,30 +328,36 @@ export class Slack {
     if (!this.useSocketMode) return;
 
     // Health check every 60 seconds (less frequent since SDK handles reconnections)
-    this.healthCheckInterval = setInterval(() => void (async () => {
-      try {
-        await this.app.client.auth.test();
+    this.healthCheckInterval = setInterval(
+      () =>
+        void (async () => {
+          try {
+            await this.app.client.auth.test();
 
-        // Connection is healthy - reset any error counters
-        if (this.reconnectAttempts > 0) {
-          Logger.debug('Connection healthy - resetting reconnection counter');
-          this.reconnectAttempts = 0;
-          this.reconnectDelay = 1000;
-        }
-      } catch (error) {
-        Logger.warn(
-          'Health check failed - connection may be unhealthy:',
-          error,
-        );
+            // Connection is healthy - reset any error counters
+            if (this.reconnectAttempts > 0) {
+              Logger.debug(
+                'Connection healthy - resetting reconnection counter',
+              );
+              this.reconnectAttempts = 0;
+              this.reconnectDelay = 1000;
+            }
+          } catch (error) {
+            Logger.warn(
+              'Health check failed - connection may be unhealthy:',
+              error,
+            );
 
-        // If health check fails consistently, trigger error handling
-        if (this.reconnectAttempts === 0) {
-          this.handleConnectionError(
-            error instanceof Error ? error : new Error(String(error)),
-          );
-        }
-      }
-    })(), 60000); // Check every minute
+            // If health check fails consistently, trigger error handling
+            if (this.reconnectAttempts === 0) {
+              this.handleConnectionError(
+                error instanceof Error ? error : new Error(String(error)),
+              );
+            }
+          }
+        })(),
+      60000,
+    ); // Check every minute
   }
 
   /**

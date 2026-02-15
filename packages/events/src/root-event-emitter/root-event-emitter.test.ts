@@ -19,7 +19,7 @@ describe('RootEventEmitter', () => {
   it('should emit and listen to events', () => {
     const event = 'testEvent';
     const data = { key: 'value' };
-    const listener = jest.fn();
+    const listener = vi.fn();
 
     rootEventEmitter.on(event, listener);
     rootEventEmitter.emit(event, data);
@@ -29,7 +29,7 @@ describe('RootEventEmitter', () => {
 
   it('should remove event listeners', () => {
     const event = 'testEvent';
-    const listener = jest.fn();
+    const listener = vi.fn();
 
     rootEventEmitter.on(event, listener);
     rootEventEmitter.removeListener(event, listener);

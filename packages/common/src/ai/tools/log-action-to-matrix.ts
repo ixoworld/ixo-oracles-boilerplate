@@ -3,7 +3,6 @@ import { MatrixManager } from '@ixo/matrix';
 
 const matrixManager = MatrixManager.getInstance();
 
-
 interface IAction {
   name: string;
   args: Record<string, unknown>;

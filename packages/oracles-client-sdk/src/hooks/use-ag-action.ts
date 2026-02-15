@@ -66,7 +66,9 @@ export function useAgAction<TSchema extends z.ZodTypeAny>(
     registerAgAction(
       action,
       config.handler as (args: unknown) => Promise<unknown> | unknown,
-      config.render as ((props: Record<string, unknown>) => React.ReactElement | null) | undefined,
+      config.render as
+        | ((props: Record<string, unknown>) => React.ReactElement | null)
+        | undefined,
     );
 
     // Cleanup: unregister on unmount or when name changes

@@ -153,9 +153,7 @@ export async function uploadMediaToRoom(
         oldEventId,
         'Replacing with updated file',
       );
-      logger.debug(
-        `Successfully redacted old media event ${oldEventId}`,
-      );
+      logger.debug(`Successfully redacted old media event ${oldEventId}`);
     } catch (redactError) {
       logger.warn(
         `Failed to redact old media event ${oldEventId}:`,

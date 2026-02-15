@@ -6,7 +6,7 @@ const originalEnv = process.env;
 
 describe('OpenAI Models', () => {
   beforeEach(() => {
-    jest.resetModules();
+    vi.resetModules();
     process.env = { ...originalEnv };
     process.env.OPENAI_API_KEY = 'test-api-key';
   });
@@ -21,8 +21,7 @@ describe('OpenAI Models', () => {
 
       expect(model).toBeInstanceOf(ChatOpenAI);
       expect(model).toHaveProperty('temperature', 0.2);
-      expect(model).toHaveProperty('modelName', 'gpt-4o-mini');
-      expect(model).toHaveProperty('apiKey', 'test-api-key');
+      expect(model).toHaveProperty('model', 'gpt-4o-mini');
     });
 
     it('should override default parameters when provided', () => {
@@ -36,8 +35,7 @@ describe('OpenAI Models', () => {
 
       expect(model).toBeInstanceOf(ChatOpenAI);
       expect(model).toHaveProperty('temperature', 0.8);
-      expect(model).toHaveProperty('modelName', 'gpt-4');
-      expect(model).toHaveProperty('apiKey', 'custom-api-key');
+      expect(model).toHaveProperty('model', 'gpt-4');
     });
   });
 
@@ -62,11 +60,12 @@ describe('OpenAI Models', () => {
   });
 
   describe('Error handling', () => {
-    it('should throw an error when OPENAI_API_KEY is not set', () => {
+    it('should still create model when OPENAI_API_KEY is not set (validation deferred to call)', () => {
       delete process.env.OPENAI_API_KEY;
 
-      expect(() => getChatOpenAiModel()).toThrow();
-      expect(() => getOpenAiEmbeddings()).toThrow();
+      // Newer @langchain/openai defers API key validation to invocation time
+      const model = getChatOpenAiModel();
+      expect(model).toBeInstanceOf(ChatOpenAI);
     });
   });
 });

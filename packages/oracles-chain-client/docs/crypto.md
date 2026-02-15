@@ -32,7 +32,10 @@ const mnemonic = 'your mnemonic phrase here...';
 const wallet = await generateServerWallet(mnemonic);
 
 // Encrypt simple string
-const encryptedData = CryptoUtils.encrypt('Hello, world!', wallet.publicKeyBase58);
+const encryptedData = CryptoUtils.encrypt(
+  'Hello, world!',
+  wallet.publicKeyBase58,
+);
 console.log(encryptedData); // Base64 encoded string
 ```
 

@@ -7,6 +7,7 @@ A framework-agnostic UCAN (User Controlled Authorization Networks) implementatio
 UCAN is a decentralized authorization system using cryptographically signed tokens. Think of it as "JWT meets capabilities" - users can grant specific permissions to others, who can further delegate (but never escalate) those permissions.
 
 **Key concepts:**
+
 - **Capabilities**: What actions can be performed on which resources
 - **Delegations**: Granting capabilities to others (can be chained)
 - **Invocations**: Requests to use a capability
@@ -47,7 +48,11 @@ const EmployeesRead = defineCapability({
     const delegatedLimit = delegated.nb?.limit ?? Infinity;
 
     if (claimedLimit > delegatedLimit) {
-      return { error: new Error(`Limit ${claimedLimit} exceeds allowed ${delegatedLimit}`) };
+      return {
+        error: new Error(
+          `Limit ${claimedLimit} exceeds allowed ${delegatedLimit}`,
+        ),
+      };
     }
     return { ok: {} };
   },
@@ -60,8 +65,8 @@ const EmployeesRead = defineCapability({
 import { createUCANValidator, createIxoDIDResolver } from '@ixo/ucan';
 
 const validator = await createUCANValidator({
-  serverDid: 'did:ixo:ixo1abc...',  // Your server's DID
-  rootIssuers: ['did:ixo:ixo1admin...'],  // DIDs that can issue root capabilities
+  serverDid: 'did:ixo:ixo1abc...', // Your server's DID
+  rootIssuers: ['did:ixo:ixo1admin...'], // DIDs that can issue root capabilities
   didResolver: createIxoDIDResolver({
     indexerUrl: 'https://blocksync.ixo.earth/graphql',
   }),
@@ -73,9 +78,9 @@ const validator = await createUCANValidator({
 ```typescript
 app.post('/employees', async (req, res) => {
   const result = await validator.validate(
-    req.body.invocation,  // Base64-encoded CAR
+    req.body.invocation, // Base64-encoded CAR
     EmployeesRead,
-    'myapp:company/acme'
+    'myapp:company/acme',
   );
 
   if (!result.ok) {
@@ -90,7 +95,12 @@ app.post('/employees', async (req, res) => {
 ### 4. Create & Use a Delegation (Client)
 
 ```typescript
-import { generateKeypair, createDelegation, createInvocation, serializeInvocation } from '@ixo/ucan';
+import {
+  generateKeypair,
+  createDelegation,
+  createInvocation,
+  serializeInvocation,
+} from '@ixo/ucan';
 
 // Generate a keypair for the user
 const { signer, did } = await generateKeypair();
@@ -99,15 +109,21 @@ const { signer, did } = await generateKeypair();
 const delegation = await createDelegation({
   issuer: rootSigner,
   audience: did,
-  capabilities: [{ can: 'employees/read', with: 'myapp:company/acme', nb: { limit: 50 } }],
-  expiration: Math.floor(Date.now() / 1000) + 3600,  // 1 hour
+  capabilities: [
+    { can: 'employees/read', with: 'myapp:company/acme', nb: { limit: 50 } },
+  ],
+  expiration: Math.floor(Date.now() / 1000) + 3600, // 1 hour
 });
 
 // User creates an invocation
 const invocation = await createInvocation({
   issuer: signer,
   audience: serverDid,
-  capability: { can: 'employees/read', with: 'myapp:company/acme', nb: { limit: 25 } },
+  capability: {
+    can: 'employees/read',
+    with: 'myapp:company/acme',
+    nb: { limit: 25 },
+  },
   proofs: [delegation],
 });
 
@@ -121,12 +137,12 @@ await fetch('/employees', {
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
-| **[Flow Diagram](./docs/FLOW.md)** | Visual explanation of UCAN delegation and invocation |
-| **[Server Example](./docs/examples/SERVER.md)** | Complete Express server with protected routes |
-| **[Client Example](./docs/examples/CLIENT.md)** | Frontend/client-side usage |
-| **[Capabilities Guide](./docs/examples/CAPABILITIES.md)** | How to define custom capabilities with caveats |
+| Document                                                  | Description                                          |
+| --------------------------------------------------------- | ---------------------------------------------------- |
+| **[Flow Diagram](./docs/FLOW.md)**                        | Visual explanation of UCAN delegation and invocation |
+| **[Server Example](./docs/examples/SERVER.md)**           | Complete Express server with protected routes        |
+| **[Client Example](./docs/examples/CLIENT.md)**           | Frontend/client-side usage                           |
+| **[Capabilities Guide](./docs/examples/CAPABILITIES.md)** | How to define custom capabilities with caveats       |
 
 ## API Reference
 
@@ -138,12 +154,12 @@ defineCapability(options: DefineCapabilityOptions)
 
 Define a capability with optional caveat validation.
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `can` | `string` | Action name (e.g., `'employees/read'`) |
-| `protocol` | `string` | URI protocol (default: `'urn:'`) |
-| `nb` | `object` | Schema for caveats using `Schema.*` |
-| `derives` | `function` | Custom validation for attenuation |
+| Option     | Type       | Description                            |
+| ---------- | ---------- | -------------------------------------- |
+| `can`      | `string`   | Action name (e.g., `'employees/read'`) |
+| `protocol` | `string`   | URI protocol (default: `'urn:'`)       |
+| `nb`       | `object`   | Schema for caveats using `Schema.*`    |
+| `derives`  | `function` | Custom validation for attenuation      |
 
 ### Validator
 
@@ -153,25 +169,25 @@ createUCANValidator(options: CreateValidatorOptions): Promise<UCANValidator>
 
 Create a framework-agnostic validator.
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `serverDid` | `string` | Server's DID (any method supported) |
-| `rootIssuers` | `string[]` | DIDs that can self-issue capabilities |
-| `didResolver` | `DIDKeyResolver` | Resolver for non-`did:key` DIDs |
-| `invocationStore` | `InvocationStore` | Custom store for replay protection |
+| Option            | Type              | Description                           |
+| ----------------- | ----------------- | ------------------------------------- |
+| `serverDid`       | `string`          | Server's DID (any method supported)   |
+| `rootIssuers`     | `string[]`        | DIDs that can self-issue capabilities |
+| `didResolver`     | `DIDKeyResolver`  | Resolver for non-`did:key` DIDs       |
+| `invocationStore` | `InvocationStore` | Custom store for replay protection    |
 
 ### Client Helpers
 
-| Function | Description |
-|----------|-------------|
-| `generateKeypair()` | Generate new Ed25519 keypair |
-| `parseSigner(privateKey, did?)` | Parse private key into signer |
+| Function                             | Description                       |
+| ------------------------------------ | --------------------------------- |
+| `generateKeypair()`                  | Generate new Ed25519 keypair      |
+| `parseSigner(privateKey, did?)`      | Parse private key into signer     |
 | `signerFromMnemonic(mnemonic, did?)` | Derive signer from BIP39 mnemonic |
-| `createDelegation(options)` | Create a delegation |
-| `createInvocation(options)` | Create an invocation |
-| `serializeDelegation(delegation)` | Serialize to base64 CAR |
-| `serializeInvocation(invocation)` | Serialize to base64 CAR |
-| `parseDelegation(serialized)` | Parse from base64 CAR |
+| `createDelegation(options)`          | Create a delegation               |
+| `createInvocation(options)`          | Create an invocation              |
+| `serializeDelegation(delegation)`    | Serialize to base64 CAR           |
+| `serializeInvocation(invocation)`    | Serialize to base64 CAR           |
+| `parseDelegation(serialized)`        | Parse from base64 CAR             |
 
 ### DID Resolution
 
@@ -189,11 +205,11 @@ createInvocationStore(options?)
 
 ## DID Support
 
-| DID Method | Support | Notes |
-|------------|---------|-------|
-| `did:key` | ✅ Native | Parsed directly from the identifier |
-| `did:ixo` | ✅ Via resolver | Resolved via IXO blockchain indexer |
-| `did:web` | 🔧 Extendable | Implement custom resolver |
+| DID Method | Support         | Notes                               |
+| ---------- | --------------- | ----------------------------------- |
+| `did:key`  | ✅ Native       | Parsed directly from the identifier |
+| `did:ixo`  | ✅ Via resolver | Resolved via IXO blockchain indexer |
+| `did:web`  | 🔧 Extendable   | Implement custom resolver           |
 
 ## Environment Variables
 
@@ -209,7 +225,12 @@ BLOCKSYNC_GRAPHQL_URL=https://blocksync.ixo.earth/graphql
 For advanced use cases, you can access the underlying ucanto packages:
 
 ```typescript
-import { UcantoServer, UcantoClient, UcantoValidator, ed25519 } from '@ixo/ucan';
+import {
+  UcantoServer,
+  UcantoClient,
+  UcantoValidator,
+  ed25519,
+} from '@ixo/ucan';
 ```
 
 ### Custom Invocation Store

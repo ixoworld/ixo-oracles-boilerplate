@@ -1,4 +1,7 @@
-import { type ClientConfig, MultiServerMCPClient } from '@langchain/mcp-adapters';
+import {
+  type ClientConfig,
+  MultiServerMCPClient,
+} from '@langchain/mcp-adapters';
 import { Logger } from '@nestjs/common';
 import { DynamicStructuredTool, type StructuredTool } from 'langchain';
 import { type UcanService } from 'src/ucan/ucan.service';

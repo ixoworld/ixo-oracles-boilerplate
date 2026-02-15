@@ -110,7 +110,12 @@ export class WsGateway
    */
   private handleFrontendToolResult(
     client: Socket,
-    data: { toolCallId: string; result?: unknown; error?: string; sessionId?: string },
+    data: {
+      toolCallId: string;
+      result?: unknown;
+      error?: string;
+      sessionId?: string;
+    },
     eventType: 'browser_tool_result' | 'action_call_result',
   ): void {
     const sessionId = client.handshake.query.sessionId as string;
@@ -140,7 +145,8 @@ export class WsGateway
   })
   handleToolResult(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { toolCallId: string; result: unknown; error?: string },
+    @MessageBody()
+    data: { toolCallId: string; result: unknown; error?: string },
   ): void {
     this.handleFrontendToolResult(client, data, 'browser_tool_result');
   }

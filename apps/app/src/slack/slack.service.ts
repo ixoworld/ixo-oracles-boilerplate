@@ -184,7 +184,11 @@ export class SlackService implements OnModuleInit, OnModuleDestroy {
       did: userDid,
       slackThreadTs: threadTs,
     });
-    void this.cacheManager.set(`session:${threadTs}`, newSession, 5 * 60 * 1000);
+    void this.cacheManager.set(
+      `session:${threadTs}`,
+      newSession,
+      5 * 60 * 1000,
+    );
     return newSession;
   }
   private onMessageHandler(): void {

@@ -49,7 +49,7 @@ describe('RenderComponentEvent', () => {
       eventId: '101112',
     };
     const event = new RenderComponentEvent(payload);
-    const emitSpy = jest.spyOn(rootEventEmitter, 'emit');
+    const emitSpy = vi.spyOn(rootEventEmitter, 'emit');
     event.emit();
     expect(emitSpy).toHaveBeenCalledWith(
       RenderComponentEvent.eventName,

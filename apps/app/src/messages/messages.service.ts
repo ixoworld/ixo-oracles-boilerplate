@@ -133,7 +133,6 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         return rootEventId;
       }
 
-       
       const parentEvent = await this.matrixManager.getEventById<{
         'm.relates_to'?: {
           'm.in_reply_to'?: {
@@ -146,7 +145,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         parentEvent.content['m.relates_to']?.['m.in_reply_to']?.event_id;
       if (!parentInReplyTo) {
         // Found the root!
-         
+
         pathToCache.forEach((id) => {
           this.threadRootCache.set(id, currentEventId);
         });
@@ -535,12 +534,18 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
                       // Extract reasoning tokens from raw response
                       const rawResponse = (data.chunk as AIMessageChunk)
                         .additional_kwargs?.__raw_response as
-                        | { choices?: Array<{ delta?: { reasoning?: string; reasoning_details?: unknown } }> }
+                        | {
+                            choices?: Array<{
+                              delta?: {
+                                reasoning?: string;
+                                reasoning_details?: unknown;
+                              };
+                            }>;
+                          }
                         | undefined;
                       const reasoning =
                         rawResponse?.choices?.[0]?.delta?.reasoning;
                       if (reasoning && isChatNode) {
-
                         if (reasoning && reasoning.trim()) {
                           // Use cleanAdditionalKwargs to extract and clean reasoning details
                           const cleanedKwargs = cleanAdditionalKwargs(
@@ -987,11 +992,11 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       userDid: did,
     });
 
-    const targetSession = (await this.sessionManagerService.getSession(
+    const targetSession = await this.sessionManagerService.getSession(
       sessionId,
       did,
       false,
-    ));
+    );
 
     if (!targetSession) {
       throw new NotFoundException('Session not found');

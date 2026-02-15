@@ -211,13 +211,11 @@ const botProfile = await slack.getCurrentUserProfile();
 ### Common Issues and Solutions
 
 1. **Server Restarts Due to Socket Disconnections**
-
    - The enhanced client now handles disconnections gracefully
    - Check logs for reconnection attempts
    - Monitor the `/health` endpoint for connection status
 
 2. **Frequent Reconnections**
-
    - Check network stability
    - Verify Slack tokens are valid
    - Monitor the `reconnectAttempts` in connection stats

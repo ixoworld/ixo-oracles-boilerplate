@@ -184,6 +184,7 @@ Invocations bundle their entire proof chain:
 ```
 
 **Benefits:**
+
 - Server doesn't need external delegation store
 - Validation is entirely local
 - No network calls during validation (except DID resolution)
@@ -216,7 +217,7 @@ import {
   createUCANValidator,
   createDelegation,
   createInvocation,
-  Schema
+  Schema,
 } from '@ixo/ucan';
 
 // 1. Define capability with caveat
@@ -238,38 +239,49 @@ const EmployeesRead = defineCapability({
 const rootToAlice = await createDelegation({
   issuer: rootSigner,
   audience: aliceDid,
-  capabilities: [{ can: 'employees/read', with: 'myapp:company', nb: { limit: 50 } }],
+  capabilities: [
+    { can: 'employees/read', with: 'myapp:company', nb: { limit: 50 } },
+  ],
 });
 
 // 3. Alice re-delegates to Bob with limit: 25
 const aliceToBob = await createDelegation({
   issuer: aliceSigner,
   audience: bobDid,
-  capabilities: [{ can: 'employees/read', with: 'myapp:company', nb: { limit: 25 } }],
-  proofs: [rootToAlice],  // Include proof chain
+  capabilities: [
+    { can: 'employees/read', with: 'myapp:company', nb: { limit: 25 } },
+  ],
+  proofs: [rootToAlice], // Include proof chain
 });
 
 // 4. Bob invokes with limit: 20
 const invocation = await createInvocation({
   issuer: bobSigner,
   audience: serverDid,
-  capability: { can: 'employees/read', with: 'myapp:company', nb: { limit: 20 } },
-  proofs: [aliceToBob],  // Includes entire chain
+  capability: {
+    can: 'employees/read',
+    with: 'myapp:company',
+    nb: { limit: 20 },
+  },
+  proofs: [aliceToBob], // Includes entire chain
 });
 
 // 5. Server validates
-const result = await validator.validate(serialized, EmployeesRead, 'myapp:company');
+const result = await validator.validate(
+  serialized,
+  EmployeesRead,
+  'myapp:company',
+);
 // result.ok === true, result.capability.nb.limit === 20
 ```
 
 ## Summary
 
-| Concept | Description |
-|---------|-------------|
-| **Delegation** | Granting capabilities to others (signed by issuer) |
-| **Attenuation** | Narrowing permissions when re-delegating |
-| **Invocation** | Request to use a capability (signed by invoker) |
-| **Proof Chain** | Delegations linked together, bundled in invocation |
-| **Caveat** | Restrictions on capabilities (e.g., `limit`) |
-| **Replay Protection** | CID-based tracking prevents reuse |
-
+| Concept               | Description                                        |
+| --------------------- | -------------------------------------------------- |
+| **Delegation**        | Granting capabilities to others (signed by issuer) |
+| **Attenuation**       | Narrowing permissions when re-delegating           |
+| **Invocation**        | Request to use a capability (signed by invoker)    |
+| **Proof Chain**       | Delegations linked together, bundled in invocation |
+| **Caveat**            | Restrictions on capabilities (e.g., `limit`)       |
+| **Replay Protection** | CID-based tracking prevents reuse                  |

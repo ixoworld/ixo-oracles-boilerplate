@@ -44,7 +44,9 @@ export class OpenIdTokenProvider {
     }
   }
 
-  private async fetchWithRetry(matrixUserId: string): Promise<{ access_token: string; expires_in: number }> {
+  private async fetchWithRetry(
+    matrixUserId: string,
+  ): Promise<{ access_token: string; expires_in: number }> {
     for (let attempt = 0; attempt <= BACKOFF_DELAYS_MS.length; attempt++) {
       if (attempt > 0) {
         const delay = BACKOFF_DELAYS_MS[attempt - 1];
@@ -64,17 +66,24 @@ export class OpenIdTokenProvider {
       );
 
       if (response.ok) {
-        return (await response.json()) as { access_token: string; expires_in: number };
+        return (await response.json()) as {
+          access_token: string;
+          expires_in: number;
+        };
       }
 
       if (response.status === 401 || response.status === 403) {
         const body = await response.text().catch(() => '');
-        throw new Error(`Failed to get OpenID token: ${response.status} ${body}`);
+        throw new Error(
+          `Failed to get OpenID token: ${response.status} ${body}`,
+        );
       }
 
       if (attempt === BACKOFF_DELAYS_MS.length) {
         const body = await response.text().catch(() => '');
-        throw new Error(`Failed to get OpenID token after ${attempt + 1} attempts: ${response.status} ${body}`);
+        throw new Error(
+          `Failed to get OpenID token after ${attempt + 1} attempts: ${response.status} ${body}`,
+        );
       }
     }
 
@@ -85,7 +94,8 @@ export class OpenIdTokenProvider {
     return this.withMutex(async () => {
       if (
         this.cached &&
-        Date.now() < this.cached.expiresAt - OpenIdTokenProvider.EXPIRY_BUFFER_MS
+        Date.now() <
+          this.cached.expiresAt - OpenIdTokenProvider.EXPIRY_BUFFER_MS
       ) {
         return this.cached.accessToken;
       }

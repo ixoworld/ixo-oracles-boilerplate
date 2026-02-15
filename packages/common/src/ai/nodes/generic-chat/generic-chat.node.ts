@@ -7,7 +7,10 @@ import {
 import { type RunnableConfig } from '@langchain/core/runnables';
 import { type StructuredTool, type Tool } from '@langchain/core/tools';
 import { getChatOpenAiModel } from 'src/ai/models/openai.js';
-import { GENERIC_CHAT_PROMPT, type InputVariables } from './generic-chat.prompt.js';
+import {
+  GENERIC_CHAT_PROMPT,
+  type InputVariables,
+} from './generic-chat.prompt.js';
 
 type StateWithMessages<S extends object> = {
   messages: BaseMessage[];

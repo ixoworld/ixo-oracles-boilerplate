@@ -139,8 +139,8 @@ export type Permission<T extends AuthorizationType> = {
   ? SendAuthorizationPermissionPayload
   : T extends '/ixo.claims.v1beta1.SubmitClaimAuthorization'
     ? SubmitClaimAuthorizationPermissionPayload
-    // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-    : {});
+    : // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+      {});
 
 export type GetOracleAuthZConfigParams = {
   oracleDid: string;

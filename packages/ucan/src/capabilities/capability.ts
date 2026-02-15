@@ -23,7 +23,9 @@ export { Schema };
  * Extracts the output type O from a Reader/Schema
  * A Reader<O, I> has a read method that returns { ok: O } | { error: ... }
  */
-type Infer<T> = T extends { read(input: unknown): { ok: infer O } | { error: unknown } }
+type Infer<T> = T extends {
+  read(input: unknown): { ok: infer O } | { error: unknown };
+}
   ? O
   : never;
 
@@ -167,9 +169,9 @@ export interface DefineCapabilityOptions<
  * ```
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function defineCapability<NBSchema extends Record<string, any> = Record<string, never>>(
-  options: DefineCapabilityOptions<NBSchema>,
-) {
+export function defineCapability<
+  NBSchema extends Record<string, any> = Record<string, never>,
+>(options: DefineCapabilityOptions<NBSchema>) {
   const protocol = (options.protocol ?? 'urn:') as `${string}:`;
   const supportWildcards = options.supportWildcards ?? true;
 

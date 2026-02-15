@@ -35,7 +35,7 @@ describe('RouterEvent', () => {
       step: 'initial',
     };
     const event = new RouterEvent(payload);
-    const emitSpy = jest.spyOn(rootEventEmitter, 'emit');
+    const emitSpy = vi.spyOn(rootEventEmitter, 'emit');
     event.emit();
     expect(emitSpy).toHaveBeenCalledWith(RouterEvent.eventName, payload);
   });

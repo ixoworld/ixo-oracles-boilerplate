@@ -1,5 +1,5 @@
 import { base } from '@ixo/eslint-config/base';
-import jest from 'eslint-plugin-jest';
+import vitest from '@vitest/eslint-plugin';
 
 export default [
   // Core rules from shared preset (includes ignores, recommended presets,
@@ -13,7 +13,7 @@ export default [
       '**/*.config.mjs',
       '**/*.config.cjs',
       '**/*.setup.js',
-      'packages/jest-config/**',
+      'packages/vitest-config/**',
       'packages/eslint-config/prettier-base.cjs',
     ],
   },
@@ -65,10 +65,9 @@ export default [
       '**/__tests__/**/*.[jt]s?(x)',
       '**/?(*.)+(spec|test).[jt]s?(x)',
     ],
-    ...jest.configs['flat/recommended'],
+    plugins: { vitest },
     rules: {
-      ...jest.configs['flat/recommended'].rules,
-      'jest/prefer-lowercase-title': 'off',
+      ...vitest.configs.recommended.rules,
     },
   },
 ];

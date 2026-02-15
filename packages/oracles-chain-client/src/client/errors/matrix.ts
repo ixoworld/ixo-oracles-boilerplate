@@ -41,7 +41,9 @@ export class MissingMatrixTokenError extends MatrixAuthenticationError {
   /**
    * Type guard to check if an error is a MissingMatrixTokenError
    */
-  static isMissingMatrixTokenError(error: unknown): error is MissingMatrixTokenError {
+  static isMissingMatrixTokenError(
+    error: unknown,
+  ): error is MissingMatrixTokenError {
     return (
       error instanceof MissingMatrixTokenError &&
       error.code === MatrixAuthenticationErrorCodes.MISSING_TOKEN
@@ -66,7 +68,9 @@ export class InvalidMatrixTokenError extends MatrixAuthenticationError {
   /**
    * Type guard to check if an error is an InvalidMatrixTokenError
    */
-  static isInvalidMatrixTokenError(error: unknown): error is InvalidMatrixTokenError {
+  static isInvalidMatrixTokenError(
+    error: unknown,
+  ): error is InvalidMatrixTokenError {
     return (
       error instanceof InvalidMatrixTokenError &&
       error.code === MatrixAuthenticationErrorCodes.INVALID_TOKEN

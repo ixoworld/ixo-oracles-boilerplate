@@ -382,7 +382,10 @@ const askOracleStream = async (props: {
 
         default:
           // This should never happen with proper typing, but handle gracefully
-          console.debug('Unknown SSE event:', (sseEvent as unknown as { event: string }).event);
+          console.debug(
+            'Unknown SSE event:',
+            (sseEvent as unknown as { event: string }).event,
+          );
           break;
       }
     }

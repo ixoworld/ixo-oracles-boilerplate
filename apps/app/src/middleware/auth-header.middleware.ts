@@ -18,7 +18,6 @@ import { getAuthHeaders, normalizeDid } from '../utils/header.utils';
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace -- Required for declaration merging
   namespace Express {
-     
     interface Request {
       authData: {
         did: string;

@@ -302,7 +302,7 @@ export class UcanService implements OnModuleDestroy {
 
   onModuleDestroy() {
     if (this.invocationStore instanceof InMemoryInvocationStore) {
-      (this.invocationStore).destroy();
+      this.invocationStore.destroy();
     }
   }
 

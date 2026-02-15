@@ -13,7 +13,11 @@ export function cleanAdditionalKwargs(
   // Extract reasoning information from raw response
   // Note: Reasoning is only available when the AI model supports it (e.g., GPT-OSS-120B with include_reasoning: true)
   const rawResponse = additionalKwargs.__raw_response as
-    | { choices?: Array<{ delta?: { reasoning?: string; reasoning_details?: unknown } }> }
+    | {
+        choices?: Array<{
+          delta?: { reasoning?: string; reasoning_details?: unknown };
+        }>;
+      }
     | undefined;
 
   // Check if reasoning exists in the response

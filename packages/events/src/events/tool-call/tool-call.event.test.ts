@@ -49,7 +49,7 @@ describe('ToolCallEvent', () => {
       eventId: '101112',
     };
     const event = new ToolCallEvent(payload);
-    const emitSpy = jest.spyOn(rootEventEmitter, 'emit');
+    const emitSpy = vi.spyOn(rootEventEmitter, 'emit');
     event.emit();
     expect(emitSpy).toHaveBeenCalledWith(ToolCallEvent.eventName, payload);
   });

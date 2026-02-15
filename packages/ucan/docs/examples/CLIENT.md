@@ -17,8 +17,8 @@ import { generateKeypair } from '@ixo/ucan';
 
 const { signer, did, privateKey } = await generateKeypair();
 
-console.log('DID:', did);           // did:key:z6Mk...
-console.log('Private Key:', privateKey);  // MgCY... (save securely!)
+console.log('DID:', did); // did:key:z6Mk...
+console.log('Private Key:', privateKey); // MgCY... (save securely!)
 ```
 
 ### Parse an Existing Private Key
@@ -26,7 +26,7 @@ console.log('Private Key:', privateKey);  // MgCY... (save securely!)
 ```typescript
 import { parseSigner } from '@ixo/ucan';
 
-const signer = parseSigner('MgCY...');  // Your stored private key
+const signer = parseSigner('MgCY...'); // Your stored private key
 console.log('DID:', signer.did());
 ```
 
@@ -38,12 +38,12 @@ Useful for deriving keys from an existing wallet mnemonic:
 import { signerFromMnemonic } from '@ixo/ucan';
 
 const { signer, did, privateKey } = await signerFromMnemonic(
-  'word1 word2 word3 ...',  // 12-24 word mnemonic
-  'did:ixo:ixo1abc...'      // Optional: override DID (e.g., for did:ixo)
+  'word1 word2 word3 ...', // 12-24 word mnemonic
+  'did:ixo:ixo1abc...', // Optional: override DID (e.g., for did:ixo)
 );
 
 console.log('DID:', did);
-console.log('Private Key:', privateKey);  // Can be used with parseSigner()
+console.log('Private Key:', privateKey); // Can be used with parseSigner()
 ```
 
 ## Working with Delegations
@@ -61,15 +61,15 @@ const issuerSigner = parseSigner('MgCY...');
 // Create delegation
 const delegation = await createDelegation({
   issuer: issuerSigner,
-  audience: 'did:key:z6MkRecipient...',  // Who receives the capability
+  audience: 'did:key:z6MkRecipient...', // Who receives the capability
   capabilities: [
     {
       can: 'employees/read',
       with: 'myapp:company/acme',
-      nb: { limit: 50 },  // Caveat: max 50 employees
+      nb: { limit: 50 }, // Caveat: max 50 employees
     },
   ],
-  expiration: Math.floor(Date.now() / 1000) + 3600,  // 1 hour
+  expiration: Math.floor(Date.now() / 1000) + 3600, // 1 hour
 });
 
 // Serialize for storage/transport
@@ -114,11 +114,11 @@ const subDelegation = await createDelegation({
     {
       can: 'employees/read',
       with: 'myapp:company/acme',
-      nb: { limit: 25 },  // ⬅️ Narrower than my limit of 50
+      nb: { limit: 25 }, // ⬅️ Narrower than my limit of 50
     },
   ],
-  expiration: Math.floor(Date.now() / 1000) + 1800,  // Shorter: 30 min
-  proofs: [myDelegation],  // Include proof chain
+  expiration: Math.floor(Date.now() / 1000) + 1800, // Shorter: 30 min
+  proofs: [myDelegation], // Include proof chain
 });
 ```
 
@@ -127,7 +127,12 @@ const subDelegation = await createDelegation({
 ### Create and Send an Invocation
 
 ```typescript
-import { createInvocation, serializeInvocation, parseDelegation, parseSigner } from '@ixo/ucan';
+import {
+  createInvocation,
+  serializeInvocation,
+  parseDelegation,
+  parseSigner,
+} from '@ixo/ucan';
 
 // Load your delegation
 const delegation = await parseDelegation(mySerializedDelegation);
@@ -145,9 +150,9 @@ const invocation = await createInvocation({
   capability: {
     can: 'employees/read',
     with: 'myapp:company/acme',
-    nb: { limit: 25 },  // Must be ≤ delegated limit
+    nb: { limit: 25 }, // Must be ≤ delegated limit
   },
-  proofs: [delegation],  // Include delegation chain
+  proofs: [delegation], // Include delegation chain
 });
 
 // Serialize
@@ -181,56 +186,61 @@ function ProtectedDataComponent() {
   const [loading, setLoading] = useState(false);
 
   // These would come from your app's state/storage
-  const userMnemonic = '...';  // User's mnemonic (from wallet)
+  const userMnemonic = '...'; // User's mnemonic (from wallet)
   const userDid = 'did:ixo:ixo1user...';
-  const delegationBase64 = '...';  // Stored delegation
+  const delegationBase64 = '...'; // Stored delegation
   const serverDid = 'did:ixo:ixo1server...';
 
-  const fetchEmployees = useCallback(async (limit: number) => {
-    setLoading(true);
-    setError(null);
+  const fetchEmployees = useCallback(
+    async (limit: number) => {
+      setLoading(true);
+      setError(null);
 
-    try {
-      // 1. Get user's signer from mnemonic
-      const { signer } = await signerFromMnemonic(userMnemonic, userDid);
+      try {
+        // 1. Get user's signer from mnemonic
+        const { signer } = await signerFromMnemonic(userMnemonic, userDid);
 
-      // 2. Parse the delegation
-      const delegation = await parseDelegation(delegationBase64);
+        // 2. Parse the delegation
+        const delegation = await parseDelegation(delegationBase64);
 
-      // 3. Create invocation with requested limit
-      const invocation = await createInvocation({
-        issuer: signer,
-        audience: serverDid,
-        capability: {
-          can: 'employees/read',
-          with: `myapp:${serverDid}`,
-          nb: { limit },
-        },
-        proofs: [delegation],
-      });
+        // 3. Create invocation with requested limit
+        const invocation = await createInvocation({
+          issuer: signer,
+          audience: serverDid,
+          capability: {
+            can: 'employees/read',
+            with: `myapp:${serverDid}`,
+            nb: { limit },
+          },
+          proofs: [delegation],
+        });
 
-      // 4. Serialize and send
-      const serialized = await serializeInvocation(invocation);
+        // 4. Serialize and send
+        const serialized = await serializeInvocation(invocation);
 
-      const response = await fetch('/api/protected', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invocation: serialized }),
-      });
+        const response = await fetch('/api/protected', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ invocation: serialized }),
+        });
 
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.details?.message || err.error || 'Request failed');
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(
+            err.details?.message || err.error || 'Request failed',
+          );
+        }
+
+        const data = await response.json();
+        setEmployees(data.employees);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
       }
-
-      const data = await response.json();
-      setEmployees(data.employees);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [userMnemonic, userDid, delegationBase64, serverDid]);
+    },
+    [userMnemonic, userDid, delegationBase64, serverDid],
+  );
 
   return (
     <div>
@@ -284,10 +294,10 @@ const userDid = 'did:ixo:ixo1abc123...';
 // Derive signer with did:ixo identity (NOT the default did:key)
 const { signer } = await signerFromMnemonic(
   edSigningMnemonic,
-  userDid as SupportedDID  // ⬅️ This wraps the signer with did:ixo
+  userDid as SupportedDID, // ⬅️ This wraps the signer with did:ixo
 );
 
-console.log(signer.did());  // "did:ixo:ixo1abc123..." (not did:key!)
+console.log(signer.did()); // "did:ixo:ixo1abc123..." (not did:key!)
 ```
 
 ### Complete Invocation Example
@@ -302,16 +312,16 @@ import {
 } from '@ixo/ucan';
 
 async function invokeWithIxoDid(
-  edSigningMnemonic: string,  // User's ED mnemonic
-  userDid: string,            // User's did:ixo
-  delegationBase64: string,   // Stored delegation
-  serverDid: string,          // Server's DID
-  requestedLimit: number
+  edSigningMnemonic: string, // User's ED mnemonic
+  userDid: string, // User's did:ixo
+  delegationBase64: string, // Stored delegation
+  serverDid: string, // Server's DID
+  requestedLimit: number,
 ) {
   // 1. Derive signer with did:ixo identity
   const { signer } = await signerFromMnemonic(
     edSigningMnemonic,
-    userDid as SupportedDID
+    userDid as SupportedDID,
   );
 
   // 2. Parse the delegation for proof
@@ -361,7 +371,9 @@ Delegations should be stored securely. Options include:
 localStorage.setItem('ucan-delegation', serializedDelegation);
 
 // Load
-const delegation = await parseDelegation(localStorage.getItem('ucan-delegation'));
+const delegation = await parseDelegation(
+  localStorage.getItem('ucan-delegation'),
+);
 ```
 
 ## Error Handling
@@ -404,4 +416,3 @@ try {
 3. **Use appropriate limits** - Don't request more than you need
 4. **Bundle proofs** - Always include the full delegation chain in invocations
 5. **Verify server DID** - Make sure `audience` matches the actual server DID
-

@@ -18,14 +18,12 @@ While it might be tempting to just generate and store random strings as API keys
 We implement a robust security model using three distinct layers:
 
 1. **The API Key** (What the user sees)
-
    - Generated as a cryptographically secure random string
    - Formatted in base64url for safe transmission
    - Never stored in its original form
    - Example: `dBjPXwknZuZF0j_KFWBgAB1Zj5Piz-OWJcwTxjZhQpc`
 
 2. **The Salt** (Unique per key)
-
    - Random value generated for each API key
    - Stored alongside the hash in the database
    - Prevents rainbow table attacks
@@ -40,13 +38,11 @@ We implement a robust security model using three distinct layers:
 ### How Key Generation Works
 
 1. When a new key is requested:
-
    - Generate a secure random API key
    - Generate a unique salt for this key
    - Generate a unique identifier (for reference)
 
 2. Before storage:
-
    - Combine pepper (server secret) + salt + API key
    - Hash the combined value using SHA-256
    - Store only the hash, salt, and metadata
@@ -88,7 +84,6 @@ Our schema is designed around key lifecycle management:
 We've carefully chosen indexes to optimize the most common operations:
 
 1. **Validity Check Index**
-
    - Most frequent operation: checking if a key is valid
    - Combines ID, revocation, and expiration checks
    - Optimizes the critical path of API key validation
@@ -151,7 +146,6 @@ Our design prevents common attacks:
 ### What to Monitor
 
 1. **Key Usage Patterns**
-
    - Sudden spikes in validation attempts
    - Failed validation patterns
    - Usage from unexpected locations
@@ -164,7 +158,6 @@ Our design prevents common attacks:
 ### Regular Maintenance
 
 1. **Cleanup Tasks**
-
    - Remove expired keys
    - Archive revoked keys
    - Update usage statistics

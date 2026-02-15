@@ -1,0 +1,23 @@
+{
+  "name": "@ixo/vitest-config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./base": "./base.js",
+    "./nest": "./nest.js"
+  },
+  "dependencies": {
+    "vitest": "^3.2.3",
+    "@vitest/coverage-v8": "^3.2.3",
+    "unplugin-swc": "^1.5.9"
+  },
+  "peerDependencies": {
+    "@swc/core": "^1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@swc/core": {
+      "optional": true
+    }
+  }
+}

@@ -1,9 +1,12 @@
 import { createSemanticRouter } from './create-semantic-router.js';
 
-const parse = jest.fn();
-const create = jest.fn();
-jest.mock('openai', () => ({
-  OpenAI: jest.fn().mockImplementation(() => {
+const parse = vi.fn();
+const create = vi.fn();
+vi.mock('langfuse', () => ({
+  observeOpenAI: vi.fn((client: unknown) => client),
+}));
+vi.mock('openai', () => ({
+  OpenAI: vi.fn().mockImplementation(() => {
     function fn(): unknown {
       return {};
     }
@@ -15,7 +18,7 @@ jest.mock('openai', () => ({
     };
 
     fn.chat = {
-      completions: { create },
+      completions: { create, parse },
     };
     return fn;
   }),

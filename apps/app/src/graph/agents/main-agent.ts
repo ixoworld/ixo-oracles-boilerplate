@@ -79,22 +79,25 @@ Promise<ReactAgent<any, any, any, any>> => {
 
   const { configurable } = config;
   const { matrix } = configurable?.configs ?? {};
-  Logger.log(`[createMainAgent] homeServerName: ${configurable.configs?.matrix.homeServerName}`);
-  const sandboxMCP = configurable.configs?.user.matrixOpenIdToken ? createMCPClient({
-    mcpServers: {
-      sandbox: {
-        type: 'http',
-        url: configService.getOrThrow('SANDBOX_MCP_URL'),
-        transport: 'http',
-        headers: {
-          Authorization: `Bearer ${configurable.configs?.user.matrixOpenIdToken}`,
-          'x-matrix-homeserver':
-            configurable.configs?.matrix.homeServerName ?? '',
+  Logger.log(
+    `[createMainAgent] homeServerName: ${configurable.configs?.matrix.homeServerName}`,
+  );
+  const sandboxMCP = configurable.configs?.user.matrixOpenIdToken
+    ? createMCPClient({
+        mcpServers: {
+          sandbox: {
+            type: 'http',
+            url: configService.getOrThrow('SANDBOX_MCP_URL'),
+            transport: 'http',
+            headers: {
+              Authorization: `Bearer ${configurable.configs?.user.matrixOpenIdToken}`,
+              'x-matrix-homeserver':
+                configurable.configs?.matrix.homeServerName ?? '',
+            },
+          },
         },
-        },
-      },
-    })
-  : undefined;
+      })
+    : undefined;
   Logger.log(`msgFromMatrixRoom: ${msgFromMatrixRoom}`);
 
   // Extract timezone and current time from config

@@ -116,12 +116,10 @@ try {
 ## Best Practices
 
 1. **Environment Variables**
-
    - Always store your pepper in environment variables - if you lost it, you will not be able to validate any keys
    - Use different peppers for different environments - this will make it harder to break the security of the system
 
 2. **Key Management**
-
    - Implement key rotation policies
    - Set appropriate expiration periods
    - Monitor failed validation attempts

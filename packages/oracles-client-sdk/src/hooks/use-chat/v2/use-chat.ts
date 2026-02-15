@@ -189,7 +189,8 @@ export function useChat({
         type: 'ai',
         content: resolveContent({
           eventName: 'action_call',
-          payload: actionCallData as WithRequiredEventProps<SSEActionCallEventData>,
+          payload:
+            actionCallData as WithRequiredEventProps<SSEActionCallEventData>,
         }),
         toolCalls: [
           {

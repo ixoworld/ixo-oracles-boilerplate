@@ -219,7 +219,8 @@ export class Authz {
                 decoded,
               );
               permissions.push({
-                msgTypeUrl: authorization.typeUrl as '/ixo.claims.v1beta1.SubmitClaimAuthorization',
+                msgTypeUrl:
+                  authorization.typeUrl as '/ixo.claims.v1beta1.SubmitClaimAuthorization',
                 admin: decoded?.admin,
                 constraints: decoded?.constraints,
                 granter: granterAddress,

@@ -102,7 +102,11 @@ export function useWebSocketEvents(
       // Listen for browser tool calls
       newSocket.on(
         'browser_tool_call',
-        async (data: { toolCallId: string; toolName: string; args: Record<string, unknown> }) => {
+        async (data: {
+          toolCallId: string;
+          toolName: string;
+          args: Record<string, unknown>;
+        }) => {
           await executeToolAndEmitResult(
             {
               socket: newSocket,
