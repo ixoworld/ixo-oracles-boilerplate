@@ -77,7 +77,7 @@ export async function encryptAndStore({
     const encryptedData = await crypto.subtle.encrypt(
       {
         name: ENCRYPTION_ALGORITHM,
-        iv: iv,
+        iv,
       },
       key,
       data,
@@ -127,7 +127,7 @@ export async function decryptAndRetrieve({
     const decryptedData = await crypto.subtle.decrypt(
       {
         name: ENCRYPTION_ALGORITHM,
-        iv: iv,
+        iv,
       },
       key,
       encryptedData,

@@ -1,6 +1,6 @@
 import bs58 from 'bs58';
 import { decrypt, encrypt } from 'eciesjs';
-import z from 'zod';
+import type z from 'zod';
 
 /**
  * Utility class for encrypting and decrypting data using ECIES with mnemonics

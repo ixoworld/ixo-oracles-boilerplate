@@ -2,16 +2,16 @@ import { Ed25519, sha256 } from '@cosmjs/crypto';
 import { toHex, toUtf8 } from '@cosmjs/encoding';
 import { getResolver as IxoDidResolver } from '@ixo/did-provider-x';
 import {
-  ICreateVerifiableCredentialArgs,
-  IDIDManager,
-  IDataStore,
-  IIdentifier,
-  IKeyManager,
-  IResolver,
-  MinimalImportableIdentifier,
-  MinimalImportableKey,
-  TAgent,
-  VerifiableCredential,
+  type ICreateVerifiableCredentialArgs,
+  type IDIDManager,
+  type IDataStore,
+  type IIdentifier,
+  type IKeyManager,
+  type IResolver,
+  type MinimalImportableIdentifier,
+  type MinimalImportableKey,
+  type TAgent,
+  type VerifiableCredential,
   createAgent,
 } from '@veramo/core';
 import {
@@ -21,7 +21,7 @@ import {
   VeramoEd25519Signature2020,
 } from '@veramo/credential-ld';
 // Using dynamic imports for @veramo/credential-ld to avoid build-time import assertions
-import { CredentialPlugin, ICredentialIssuer } from '@veramo/credential-w3c';
+import { CredentialPlugin, type ICredentialIssuer } from '@veramo/credential-w3c';
 import { DIDManager, MemoryDIDStore } from '@veramo/did-manager';
 import { KeyDIDProvider } from '@veramo/did-provider-key';
 import { DIDResolverPlugin } from '@veramo/did-resolver';
@@ -44,7 +44,7 @@ interface CreateCredentialParams {
   credential: ICreateVerifiableCredentialArgs;
   mnemonic: string;
   issuerDid: string;
-  agent: TAgent<any>;
+  agent: TAgent<IDIDManager & IKeyManager & IDataStore & IResolver & ICredentialIssuer>;
 }
 
 export async function createCredential({
@@ -66,12 +66,13 @@ export async function createCredential({
   const verifiableCredential: VerifiableCredential =
     await agent.createVerifiableCredential(credential);
 
-  // Clean up extra properties
-  if ('vc' in verifiableCredential) delete (verifiableCredential as any).vc;
-  if ('sub' in verifiableCredential) delete (verifiableCredential as any).sub;
-  if ('iss' in verifiableCredential) delete (verifiableCredential as any).iss;
-  if ('nbf' in verifiableCredential) delete (verifiableCredential as any).nbf;
-  if ('exp' in verifiableCredential) delete (verifiableCredential as any).exp;
+  // Clean up extra JWT properties that Veramo may add
+  const vcRecord = verifiableCredential as unknown as Record<string, unknown>;
+  if ('vc' in vcRecord) delete vcRecord.vc;
+  if ('sub' in vcRecord) delete vcRecord.sub;
+  if ('iss' in vcRecord) delete vcRecord.iss;
+  if ('nbf' in vcRecord) delete vcRecord.nbf;
+  if ('exp' in vcRecord) delete vcRecord.exp;
 
   return verifiableCredential;
 }
@@ -81,7 +82,7 @@ export async function createCredential({
  * Ed25519
  */
 export async function loadIssuerDid(
-  agent: TAgent<any>,
+  agent: TAgent<IDIDManager & IKeyManager & IDataStore & IResolver & ICredentialIssuer>,
   mnemonic: string,
   issuerDid: string,
 ): Promise<IIdentifier> {
@@ -89,16 +90,17 @@ export async function loadIssuerDid(
     throw new Error('Key management system not found');
   }
   const [kms] = await agent.keyManagerGetKeyManagementSystems();
-
-  let key: MinimalImportableKey;
+  if (!kms) {
+    throw new Error('No key management system available');
+  }
 
   // Generate Ed25519 keypair from mnemonic (original working method)
   const keypair = await Ed25519.makeKeypair(
     sha256(toUtf8(mnemonic)).slice(0, 32),
   );
 
-  key = {
-    kms: kms,
+  const key: MinimalImportableKey = {
+    kms,
     type: 'Ed25519',
     kid: toHex(keypair.pubkey),
     publicKeyHex: toHex(keypair.pubkey),

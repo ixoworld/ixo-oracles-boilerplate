@@ -172,7 +172,7 @@ export class SlackService implements OnModuleInit, OnModuleDestroy {
       (s) => s.slackThreadTs === threadTs,
     );
     if (targetSession) {
-      this.cacheManager.set(
+      void this.cacheManager.set(
         `session:${threadTs}`,
         targetSession,
         5 * 60 * 1000,
@@ -184,14 +184,14 @@ export class SlackService implements OnModuleInit, OnModuleDestroy {
       did: userDid,
       slackThreadTs: threadTs,
     });
-    this.cacheManager.set(`session:${threadTs}`, newSession, 5 * 60 * 1000);
+    void this.cacheManager.set(`session:${threadTs}`, newSession, 5 * 60 * 1000);
     return newSession;
   }
   private onMessageHandler(): void {
     if (!this.slackInstance?.app) {
       return;
     }
-    this.slackInstance.app.message(async ({ message, say, event }) => {
+    this.slackInstance.app.message(async ({ message, say, event: _event }) => {
       this.logger.debug('Message received', { message });
       if (
         message.type === 'message' &&
@@ -213,7 +213,7 @@ export class SlackService implements OnModuleInit, OnModuleDestroy {
           userMatrixOpenIdToken: '',
         });
 
-        say({
+        void say({
           text: aiMessage?.message.content ?? '',
           thread_ts: threadTs,
         });

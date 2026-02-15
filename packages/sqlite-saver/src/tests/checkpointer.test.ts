@@ -1,7 +1,7 @@
 import type { RunnableConfig } from '@langchain/core/runnables';
 import {
-  Checkpoint,
-  CheckpointTuple,
+  type Checkpoint,
+  type CheckpointTuple,
   emptyCheckpoint,
   TASKS,
   uuid6,
@@ -124,7 +124,7 @@ describe('SqliteSaver', () => {
     });
 
     // list checkpoints
-    const checkpointTupleGenerator = await sqliteSaver.list(
+    const checkpointTupleGenerator = sqliteSaver.list(
       {
         configurable: { thread_id: '1' },
       },

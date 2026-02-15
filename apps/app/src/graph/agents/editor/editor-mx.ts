@@ -2,7 +2,7 @@ import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { MatrixClient, SyncStateData } from 'matrix-js-sdk';
 import { ClientEvent, createClient, SyncState } from 'matrix-js-sdk';
-import { ENV } from 'src/config';
+import { type ENV } from 'src/config';
 import { BLOCKNOTE_TOOLS_CONFIG } from './blocknote-tools';
 
 /**
@@ -180,6 +180,7 @@ export class EditorMatrixClient {
       }
 
       if (state === SyncState.Syncing) {
+        // Intentionally empty — no action needed during regular syncing
       }
     };
 
@@ -200,8 +201,8 @@ export class EditorMatrixClient {
 
     return new Promise<void>((resolve, reject) => {
       let resolved = false;
+      // eslint-disable-next-line prefer-const -- assigned after listener definition due to mutual reference
       let timeoutId: NodeJS.Timeout;
-
       const initialSyncListener = (
         state: SyncState,
         _prevState: SyncState | null,
@@ -251,7 +252,7 @@ export class EditorMatrixClient {
 
       // Start the client
       this.logger.log('Starting Matrix client...');
-      client.startClient({
+      void client.startClient({
         initialSyncLimit: this.INITIAL_SYNC_LIMIT,
         pollTimeout: this.SYNC_POLL_TIMEOUT,
       });

@@ -138,7 +138,7 @@ export async function signerFromMnemonic(mnemonic: string, did?: SupportedDID): 
   const multibasePrivateKey = 'M' + base64;
 
   // Parse using ucanto's parser to get a proper Signer
-  let signer = ed25519.Signer.parse(multibasePrivateKey);
+  const signer = ed25519.Signer.parse(multibasePrivateKey);
   const finalSigner = did ? signer.withDID(did) : signer;
 
   return {
@@ -190,10 +190,11 @@ export async function createDelegation(options: {
   // Create principal from any DID (did:key, did:ixo, did:web, etc.)
   const audiencePrincipal = createPrincipal(options.audience);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   return Client.delegate({
     issuer: options.issuer,
     audience: audiencePrincipal,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ucanto delegate() expects a specific branded tuple type incompatible with Capability[]
     capabilities: options.capabilities as any,
     expiration: options.expiration,
     proofs: options.proofs,
@@ -322,7 +323,7 @@ export async function parseDelegation(serialized: string): Promise<Delegation> {
     throw new Error('Failed to parse delegation: no data returned');
   }
 
-  return result.ok as Delegation;
+  return result.ok;
 }
 
 // Re-export useful types

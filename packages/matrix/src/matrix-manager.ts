@@ -1,16 +1,16 @@
 import { Logger } from '@ixo/logger';
-import { MatrixEvent, MessageEvent, MessageEventContent } from 'matrix-bot-sdk';
+import { type MatrixEvent, type MessageEvent, type MessageEventContent } from 'matrix-bot-sdk';
 import * as sdk from 'matrix-js-sdk';
 import {
   MatrixStateManager,
   matrixStateManager,
 } from './matrix-state-manager/matrix-state-manager.js';
-import { IAction, type IMessageOptions } from './types/matrix.js';
+import { type IAction, type IMessageOptions } from './types/matrix.js';
 import { Cache } from './utils/cache.js';
 import {
   createSimpleMatrixClient,
-  ISimpleMatrixClientConfig,
-  SimpleMatrixClient,
+  type ISimpleMatrixClientConfig,
+  type SimpleMatrixClient,
 } from './utils/create-simple-matrix-client.js';
 import { formatMsg } from './utils/format-msg.js';
 import { extractBackupKeyFromSSS } from './utils/ssss.js';
@@ -228,7 +228,7 @@ export class MatrixManager {
       throw new Error('Simple client not initialized');
     }
 
-    const fn = async (rmId: string, event: MatrixEvent<any>) => {
+    const fn = (rmId: string, event: MatrixEvent<T>) => {
       if (debug) {
         Logger.info('onRoomEvent', {
           roomId,
@@ -239,12 +239,8 @@ export class MatrixManager {
       if (rmId !== roomId) return;
 
       // Check if this is an encrypted event that failed to decrypt
-      if (event.type === 'm.room.encrypted' && !event.content?.body) {
-        return;
-      }
-
-      // Check if this is an encrypted event that failed to decrypt
-      if (event.type === 'm.room.encrypted' && !event.content?.body) {
+      const content = event.content as Record<string, unknown> | undefined;
+      if (event.type === 'm.room.encrypted' && !content?.body) {
         return;
       }
 
@@ -473,7 +469,7 @@ export class MatrixManager {
     });
   }
 
-  public async getEventById<T extends Object | unknown = unknown>(
+  public async getEventById<T extends object | unknown = unknown>(
     roomId: string,
     eventId: string,
   ): Promise<MatrixEvent<T>> {
@@ -550,7 +546,9 @@ export class MatrixManager {
       );
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
-      const cryptoClient = (this.mxClient.mxClient as any)?.crypto;
+      const cryptoClient = (this.mxClient.mxClient as unknown as Record<string, unknown>)?.crypto as
+        | { engine?: { machine?: { close?: () => void } } }
+        | undefined;
       if (cryptoClient?.engine?.machine?.close) {
         Logger.info('MatrixManager graceful shutdown: closing crypto store...');
         cryptoClient.engine.machine.close();

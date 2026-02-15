@@ -22,8 +22,8 @@ export interface ICreateRoomAndJoinOptions {
 
 export interface IAction {
   name: string;
-  args: Record<string, any>;
-  result: any;
+  args: Record<string, unknown>;
+  result: unknown;
   error?: string;
   success: boolean;
 }

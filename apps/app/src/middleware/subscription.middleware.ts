@@ -21,7 +21,7 @@ import { TokenLimiter } from 'src/utils/token-limit-handler';
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace -- Required for declaration merging
   namespace Express {
-    // eslint-disable-next-line @typescript-eslint/naming-convention -- Interface merging with external library
+     
     interface Request {
       subscriptionData?: GetMySubscriptionsResponseDto;
     }

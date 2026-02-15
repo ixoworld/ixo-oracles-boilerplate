@@ -25,12 +25,13 @@ jest.mock('../../utils/doc-relevance-checker', () => ({
 const fakeDocRelevanceChecker = jest.fn().mockResolvedValue(true);
 
 jest
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   .spyOn(require('../../utils/doc-relevance-checker'), 'default')
   .mockImplementation(fakeDocRelevanceChecker);
 
 describe('RetrieverTool', () => {
   let mockStore: jest.Mocked<VectorDBDataStore>;
-  let mockModel: FakeChatModel = new FakeChatModel({});
+  const mockModel: FakeChatModel = new FakeChatModel({});
 
   beforeEach(() => {
     mockStore = {

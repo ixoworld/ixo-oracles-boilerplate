@@ -29,7 +29,7 @@ export class Logger {
           const { timestamp, level, message, stack, context, ...rest } = info;
           const emoji = getEmoji(level);
           const contextStr =
-            context || this.context ? `[${context || this.context}]` : '';
+            context || this.context ? `[${String(context || this.context)}]` : '';
 
           // Extract errors and other metadata
           const meta =
@@ -37,10 +37,10 @@ export class Logger {
           const error = meta.find((m) => m instanceof Error);
           const otherMeta = meta.filter((m) => !(m instanceof Error));
 
-          const errorString = error
+          const errorString: string = error
             ? Logger.formatError(error)
             : stack // fallback for raw stack
-              ? stack
+              ? String(stack)
               : '';
 
           const metaString =

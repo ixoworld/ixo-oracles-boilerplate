@@ -44,7 +44,7 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
     enabled: Boolean(wallet?.address),
   });
 
-  const { data: oracleRoomId, isLoading: isLoadingOracleRoomId } = useQuery({
+  const { data: oracleRoomId, isLoading: _isLoadingOracleRoomId } = useQuery({
     queryKey: ['oracle-room-id', params.oracleDid, wallet?.did],
     queryFn: async () => {
       // Use DID-based resolution for decoupled Matrix infrastructure

@@ -1,4 +1,4 @@
-import { CleanAdditionalKwargs } from '@ixo/common';
+import { type CleanAdditionalKwargs } from '@ixo/common';
 
 /**
  * Cleans up additional_kwargs by extracting reasoning information and keeping only essential fields
@@ -7,23 +7,20 @@ import { CleanAdditionalKwargs } from '@ixo/common';
  * @returns Cleaned additional_kwargs with only essential fields
  */
 export function cleanAdditionalKwargs(
-  additionalKwargs: any,
+  additionalKwargs: Record<string, unknown>,
   msgFromMatrixRoom: boolean,
 ): CleanAdditionalKwargs {
   // Extract reasoning information from raw response
   // Note: Reasoning is only available when the AI model supports it (e.g., GPT-OSS-120B with include_reasoning: true)
-  const rawResponse = additionalKwargs.__raw_response as any;
+  const rawResponse = additionalKwargs.__raw_response as
+    | { choices?: Array<{ delta?: { reasoning?: string; reasoning_details?: unknown } }> }
+    | undefined;
 
   // Check if reasoning exists in the response
   // Reasoning will not be present in all AI responses, only when the model supports it
-  const hasReasoning = rawResponse?.choices?.[0]?.delta?.reasoning;
-  const reasoning = hasReasoning
-    ? rawResponse.choices[0].delta.reasoning
-    : undefined;
-  const reasoningDetails =
-    hasReasoning && rawResponse.choices[0].delta.reasoning_details
-      ? rawResponse.choices[0].delta.reasoning_details
-      : undefined;
+  const delta = rawResponse?.choices?.[0]?.delta;
+  const reasoning = delta?.reasoning;
+  const reasoningDetails = reasoning ? delta?.reasoning_details : undefined;
 
   // Return cleaned additional_kwargs with only essential fields
   const cleanedKwargs: CleanAdditionalKwargs = {

@@ -169,7 +169,7 @@ export class MatrixBotService {
   async saveClaimToMatrixWithDid(
     entityDid: string,
     collectionId: string,
-    claim: any,
+    claim: unknown,
   ) {
     try {
       const { openIdToken, authDid } = await this.requireAuth();

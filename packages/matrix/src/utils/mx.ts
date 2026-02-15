@@ -28,8 +28,8 @@ export async function createMatrixClient({
     deviceId,
     timelineSupport: true,
     cryptoCallbacks: {
-      getSecretStorageKey: getSecretStorageKey,
-      cacheSecretStorageKey: cacheSecretStorageKey,
+      getSecretStorageKey,
+      cacheSecretStorageKey,
     },
     verificationMethods: ['m.sas.v1'],
   });

@@ -3,7 +3,7 @@ import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import 'dotenv/config';
 import { type StructuredTool } from 'langchain';
-import { ENV } from 'src/config';
+import { type ENV } from 'src/config';
 import {
   domainIndexerSearchTool,
   getDomainCardTool,

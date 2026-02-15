@@ -3,7 +3,7 @@ import {
   createQueryClient,
   createRegistry,
   ixo,
-  QueryClient,
+  type QueryClient,
   utils,
 } from '@ixo/impactxclient-sdk';
 import { gqlClient } from '../../gql/index.js';
@@ -11,12 +11,12 @@ import { addDays } from '../../utils/general.js';
 import { getSettingsResource } from '../../utils/get-settings-resouce.js';
 import { ValidationError } from '../../utils/validation-error.js';
 import {
-  AuthorizationType,
-  GetOracleAuthZConfigParams,
-  GrantClaimSubmitAuthorizationParams,
-  IAuthzConfig,
-  Permission,
-  TransactionFn,
+  type AuthorizationType,
+  type GetOracleAuthZConfigParams,
+  type GrantClaimSubmitAuthorizationParams,
+  type IAuthzConfig,
+  type Permission,
+  type TransactionFn,
   validateAuthzConfig,
 } from './types.js';
 
@@ -219,7 +219,7 @@ export class Authz {
                 decoded,
               );
               permissions.push({
-                msgTypeUrl: authorization.typeUrl as any,
+                msgTypeUrl: authorization.typeUrl as '/ixo.claims.v1beta1.SubmitClaimAuthorization',
                 admin: decoded?.admin,
                 constraints: decoded?.constraints,
                 granter: granterAddress,
@@ -229,7 +229,7 @@ export class Authz {
                   : null,
               } satisfies Permission<'/ixo.claims.v1beta1.SubmitClaimAuthorization'>);
               break;
-            } catch (error) {
+            } catch (_error) {
               this.logger.error(
                 `Unknown authorization type: ${authorization.typeUrl}`,
               );

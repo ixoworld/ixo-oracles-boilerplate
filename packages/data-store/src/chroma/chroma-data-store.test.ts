@@ -1,4 +1,4 @@
-/* eslint-disable jest/unbound-method  -- ignore this for now */
+ 
 import { ChromaClient, Collection, type IEmbeddingFunction } from 'chromadb';
 import { ChromaDataStore } from './chroma-data-store';
 

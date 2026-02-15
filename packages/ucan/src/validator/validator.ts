@@ -14,13 +14,13 @@
 import { ed25519 } from '@ucanto/principal';
 import { Delegation } from '@ucanto/core';
 import { claim } from '@ucanto/validator';
-import { capability } from '@ucanto/validator';
+import { type capability } from '@ucanto/validator';
 import type { DIDKeyResolver, InvocationStore } from '../types.js';
 import { InMemoryInvocationStore } from '../store/memory.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CapabilityParser = ReturnType<typeof capability<any, any, any>>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 type Verifier = ReturnType<typeof ed25519.Verifier.parse>;
 
 /**
@@ -228,7 +228,7 @@ export async function createUCANValidator(
     // Try custom resolver for other DID methods (e.g., did:ixo)
     if (options.didResolver) {
       const result = await options.didResolver(
-        did as `did:${string}:${string}`,
+        did,
       );
       if ('ok' in result && result.ok.length > 0) {
         // Return the array of did:key strings (ucanto will parse them)
@@ -320,8 +320,9 @@ export async function createUCANValidator(
         const claimResult = claim(capabilityDef, [invocation], {
           authority: serverVerifier,
           principal: ed25519.Verifier,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ucanto claim() expects a specific DID resolver signature incompatible with our async resolver
           resolveDIDKey: resolveDIDKey as any,
-          canIssue: (cap: any, issuer: string) => {
+          canIssue: (cap: { with: string }, issuer: string) => {
             // Root issuers can issue any capability
             if (options.rootIssuers.includes(issuer)) return true;
             // Allow self-issued capabilities where resource contains issuer DID

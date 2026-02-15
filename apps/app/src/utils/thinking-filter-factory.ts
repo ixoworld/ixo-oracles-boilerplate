@@ -27,7 +27,7 @@ export class StreamTagProcessor {
   ) {
     this.buffer += chunk;
 
-    // eslint-disable-next-line no-constant-condition, @typescript-eslint/no-unnecessary-condition -- Using while(true) with breaks for control flow
+     
     while (true) {
       if (!this.inAnswer && !this.inThinking) {
         // --- State: Outside any known tag ---

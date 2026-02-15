@@ -1,13 +1,13 @@
 import {
   BadRequestException,
   createParamDecorator,
-  ExecutionContext,
+  type ExecutionContext,
 } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 
 export const StrictBody = createParamDecorator(
-  async (dtoClass: any, ctx: ExecutionContext) => {
+  async (dtoClass: new (...args: unknown[]) => object, ctx: ExecutionContext) => {
     const request = ctx.switchToHttp().getRequest();
     const body = request.body;
 
@@ -16,7 +16,7 @@ export const StrictBody = createParamDecorator(
     }
 
     // Check for extra properties
-    const allowedKeys = Reflect.getMetadataKeys(dtoClass.prototype);
+    const _allowedKeys = Reflect.getMetadataKeys(dtoClass.prototype);
     const validationKeys = new Set<string>();
 
     // Get all properties that have validation decorators
@@ -32,8 +32,8 @@ export const StrictBody = createParamDecorator(
     }
 
     // Also check the constructor parameters for properties
-    const paramTypes = Reflect.getMetadata('design:paramtypes', dtoClass) || [];
-    const paramNames =
+    const _paramTypes = Reflect.getMetadata('design:paramtypes', dtoClass) || [];
+    const _paramNames =
       Reflect.getMetadata('custom:param-names', dtoClass) || [];
 
     // Get property names from the DTO class itself
