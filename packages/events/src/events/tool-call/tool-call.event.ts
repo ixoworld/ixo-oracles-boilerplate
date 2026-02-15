@@ -3,7 +3,7 @@ import {
   shouldHaveSessionId,
   type WithRequiredEventProps,
 } from '../base-event/base-event';
-import { EVENT_NAME, IToolCallEvent } from './types';
+import { EVENT_NAME, type IToolCallEvent } from './types';
 
 export class ToolCallEvent extends BaseEvent<IToolCallEvent> {
   constructor(public payload: WithRequiredEventProps<IToolCallEvent>) {

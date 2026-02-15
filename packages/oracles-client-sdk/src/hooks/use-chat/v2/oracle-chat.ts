@@ -6,11 +6,9 @@ export class OracleChat {
   readonly id: string;
   #state: OracleChatState;
   #jobExecutor = new JobExecutor();
-  #options: IChatOptions;
 
   constructor(options: IChatOptions) {
     this.id = options.sessionId;
-    this.#options = options;
     this.#state = new OracleChatState([], options.streamingMode ?? 'immediate');
   }
 

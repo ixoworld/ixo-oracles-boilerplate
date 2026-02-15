@@ -5,10 +5,11 @@ import {
   type WithRequiredEventProps,
 } from '@ixo/oracles-events/types';
 
-import { SSEErrorEvent } from '../../utils/sse-parser.js';
+import { type SSEActionCallEventData, type SSEErrorEvent } from '../../utils/sse-parser.js';
 import { getToolName } from '../../utils/get-tool-name.js';
 import { type IComponentMetadata } from './v2/types.js';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Event<T = Record<string, any>> = {
   eventName:
     | 'tool_call'
@@ -29,16 +30,16 @@ export const resolveContent = (
     case 'tool_call': {
       const payload = event.payload as ToolCallEventPayload;
       return {
-        name: getToolName(payload.toolName, (payload.args as any)?.toolName),
+        name: getToolName(payload.toolName, (payload.args as Record<string, unknown>)?.toolName as string | undefined),
         props: {
           args: payload.args,
           id: payload.eventId ?? payload.requestId,
           status: payload.status,
           output: payload.output,
-          payload: payload,
+          payload,
           isToolCall: true,
-          toolName: getToolName(payload.toolName, (payload.args as any)?.toolName),
-          event: event,
+          toolName: getToolName(payload.toolName, (payload.args as Record<string, unknown>)?.toolName as string | undefined),
+          event,
         },
       };
     }
@@ -61,15 +62,15 @@ export const resolveContent = (
           args: payload.args,
           id: payload.toolCallId,
           status: 'done',
-          event: event,
-          payload: payload,
+          event,
+          payload,
           isToolCall: true,
           toolName: payload.toolName,
         },
       };
     }
     case 'action_call': {
-      const payload = event.payload as any;
+      const payload = event.payload as WithRequiredEventProps<SSEActionCallEventData>;
       return {
         name: payload.toolName,
         props: {
@@ -77,10 +78,10 @@ export const resolveContent = (
           id: payload.toolCallId ?? payload.requestId,
           status: payload.status,
           output: payload.output,
-          payload: payload,
+          payload,
           isAgAction: true,
           toolName: payload.toolName,
-          event: event,
+          event,
         },
       };
     }
@@ -93,8 +94,8 @@ export const resolveContent = (
           args: {},
           status: 'done',
           output: payload.error,
-          event: event,
-          payload: payload,
+          event,
+          payload,
         },
       };
     }

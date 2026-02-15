@@ -1,7 +1,7 @@
 import { callFrontendTool } from './frontend-tool-caller.js';
 
 export interface BrowserToolResult {
-  result?: any;
+  result?: unknown;
   error?: string;
   success: boolean;
 }
@@ -10,7 +10,7 @@ export interface IBrowserToolCallerParams {
   sessionId: string;
   toolCallId: string;
   toolName: string;
-  args: any;
+  args: Record<string, unknown>;
   timeout?: number;
 }
 
@@ -25,7 +25,7 @@ export async function callBrowserTool({
   toolName,
   args,
   timeout = 15000,
-}: IBrowserToolCallerParams): Promise<any> {
+}: IBrowserToolCallerParams): Promise<unknown> {
   return callFrontendTool({
     sessionId,
     toolId: toolCallId,

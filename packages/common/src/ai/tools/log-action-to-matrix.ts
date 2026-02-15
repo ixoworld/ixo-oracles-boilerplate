@@ -6,8 +6,8 @@ const matrixManager = MatrixManager.getInstance();
 
 interface IAction {
   name: string;
-  args: Record<string, any>;
-  result: any;
+  args: Record<string, unknown>;
+  result: unknown;
   error?: string;
   success: boolean;
 }

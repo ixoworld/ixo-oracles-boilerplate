@@ -318,7 +318,7 @@ function addToBatch(did: string): Promise<string> {
     batchState.resolvers.push(resolver);
 
     if (!batchState.timeoutId) {
-      batchState.timeoutId = setTimeout(processBatch, BATCH_DELAY_MS);
+      batchState.timeoutId = setTimeout(() => void processBatch(), BATCH_DELAY_MS);
     }
   });
 }

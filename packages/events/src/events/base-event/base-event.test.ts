@@ -1,4 +1,4 @@
-import { Server } from 'socket.io';
+import { type Server } from 'socket.io';
 import { rootEventEmitter } from '../../root-event-emitter/root-event-emitter';
 import {
   BaseEvent,

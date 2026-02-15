@@ -75,9 +75,9 @@ export default request;
 class RequestError extends Error {
   status?: number;
   outstandingClaims?: string[];
-  [key: string]: any;
+  [key: string]: unknown;
 
-  constructor(message: string, errorProps?: Record<string, any>) {
+  constructor(message: string, errorProps?: Record<string, unknown>) {
     super(message);
     this.name = 'RequestError';
 

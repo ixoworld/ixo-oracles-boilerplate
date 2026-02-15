@@ -1,5 +1,5 @@
 import { getOpenRouterChatModel } from '@ixo/common';
-import { DynamicStructuredTool, type StructuredTool } from 'langchain';
+import { type DynamicStructuredTool, type StructuredTool } from 'langchain';
 
 import type { AgentSpec } from './subagent-as-tool';
 

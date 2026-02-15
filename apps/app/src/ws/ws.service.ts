@@ -11,10 +11,6 @@ import { ENV } from 'src/config';
 import { SessionHistoryProcessor } from '../sessions/session-history-processor.service';
 import { WS_SERVICE_EVENT_NAME, wsEmitter } from './emitter';
 
-interface SessionMetadata {
-  did: string;
-}
-
 @Injectable()
 export class WsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WsService.name);
@@ -139,7 +135,7 @@ export class WsService implements OnModuleInit, OnModuleDestroy {
 
   onModuleDestroy(): void {
     this.logger.log('Cleaning up all WebSocket connections');
-    this.sessionConnections.forEach((connections, sessionId) => {
+    this.sessionConnections.forEach((connections, _sessionId) => {
       connections.forEach((socket) => {
         socket.disconnect();
       });

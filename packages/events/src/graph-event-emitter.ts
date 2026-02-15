@@ -9,7 +9,6 @@ import { MessageCacheInvalidationEvent } from './events/message-cache-invalidati
 import { RouterEvent } from './events/router-event/router.event';
 import { ToolCallEvent } from './events/tool-call/tool-call.event';
 
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- this class is used in the gateway
 export class GraphEventEmitter {
   static registerEventHandlers(
     server: Server<DefaultEventsMap, DefaultEventsMap>,

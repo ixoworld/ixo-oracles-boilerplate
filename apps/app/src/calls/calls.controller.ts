@@ -69,7 +69,7 @@ export class CallsController {
   updateCall(
     @Param('callId') callId: CallId,
     @StrictBody(UpdateCallDto) body: UpdateCallDto,
-    @Req() req: Request,
+    @Req() _req: Request,
   ) {
     return this.callsService.updateCall({
       callId,
@@ -102,7 +102,7 @@ export class CallsController {
   getEncryptionKey(
     @Param('callId') callId: CallId,
     @Headers('x-api-key') apiKey: string,
-    @Req() req: Request,
+    @Req() _req: Request,
   ) {
     return this.callsService.getEncryptionKey({
       callId,

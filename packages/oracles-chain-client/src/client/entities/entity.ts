@@ -1,8 +1,9 @@
+import { type DeliverTxResponse } from '@cosmjs/stargate';
 import { ixo, utils } from '@ixo/impactxclient-sdk';
 import { gqlClient } from '../../gql/index.js';
 import { getSettingsResource } from '../../utils/get-settings-resouce.js';
 import type { Client } from '../client.js';
-import { CreateEntityParams, TGetSettingsResourceSchema } from './types.js';
+import { type CreateEntityParams, type TGetSettingsResourceSchema } from './types.js';
 
 export class Entities {
   constructor(public readonly client: Client) {}
@@ -53,7 +54,7 @@ export class Entities {
     const did = utils.common.getValueFromEvents(
       {
         events: tx.events,
-      } as any,
+      } as unknown as DeliverTxResponse,
       'wasm',
       'token_id',
     );

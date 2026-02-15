@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/unbound-method -- This is a utility function */
+ 
 import { type Server } from 'socket.io';
 import { rootEventEmitter } from 'src/root-event-emitter';
 import { type AllEventsAsClass } from 'src/types';

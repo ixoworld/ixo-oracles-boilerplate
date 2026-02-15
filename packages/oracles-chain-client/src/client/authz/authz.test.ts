@@ -26,9 +26,10 @@ describe('Authz', () => {
       amount: [{ denom: 'uixo', amount: '1000' }],
       userClaimCollection: '138',
     });
-    expect(Promise).rejects.toThrow();
+    await expect(Promise).rejects.toThrow();
   });
 
+  // eslint-disable-next-line jest/expect-expect
   it('should list intents', async () => {
     await client.init();
     //  const Promise = claims.sendClaimIntent({
@@ -94,16 +95,18 @@ describe('Authz', () => {
     );
     await expect(txPromise).resolves.toBeDefined();
   }, 1000_000);
+  // eslint-disable-next-line jest/expect-expect
   it('Should successfully submit intent with permission', async () => {
     await client.init();
     let intentList = await client.queryClient.ixo.claims.v1beta1.intentList({});
     console.log('🚀 ~ Authz ~ it.only ~ intentList:', intentList.intents);
-    intentList.intents.length &&
-      (await claims.submitClaim({
+    if (intentList.intents.length) {
+      await claims.submitClaim({
         claimId: Math.random().toString(36).substring(2, 15),
         useIntent: true,
         collectionId: '138',
-      }));
+      });
+    }
     await claims.sendClaimIntent({
       amount: [{ denom: 'uixo', amount: '1000' }],
       userClaimCollection: '138',
@@ -135,7 +138,7 @@ describe('Authz', () => {
     // expect(tx).toBeDefined();
   }, 1000_000);
 
-  it.only('should approve claim', async () => {
+  it('should approve claim', async () => {
     //  ev
     const message = {
       typeUrl: '/ixo.entity.v1beta1.MsgGrantEntityAccountAuthz',

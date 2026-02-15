@@ -1,16 +1,16 @@
 import { cosmos, ixo } from '@ixo/impactxclient-sdk';
 import {
-  TOraclePricingLisJSONLD,
-  TOraclePricingListSchemaResponse,
+  type TOraclePricingLisJSONLD,
+  type TOraclePricingListSchemaResponse,
 } from 'src/react/types.js';
 import { gqlClient } from '../../gql/index.js';
 import { getSettingsResource } from '../../utils/get-settings-resouce.js';
 import { ValidationError } from '../../utils/validation-error.js';
-import { TransactionFn } from '../authz/types.js';
+import { type TransactionFn } from '../authz/types.js';
 import { claimsClient } from '../claims/claims.js';
 import { walletClient } from '../client.js';
 import {
-  InitialPaymentParams as InitialPaymentRequestParams,
+  type InitialPaymentParams as InitialPaymentRequestParams,
   IntentStatus,
 } from './types.js';
 
@@ -46,7 +46,7 @@ export class Payments {
     const intent = activeIntents.intents.find(
       (intent) =>
         intent.collectionId === params.userClaimCollection &&
-        intent.status === IntentStatus.ACTIVE &&
+        Number(intent.status) === Number(IntentStatus.ACTIVE) &&
         intent.agentAddress === params.granteeAddress,
     );
 

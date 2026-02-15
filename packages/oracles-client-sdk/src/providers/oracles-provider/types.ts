@@ -24,14 +24,14 @@ export interface IOraclesContextProps {
   agActions: AgAction[];
   registerAgAction: (
     action: AgAction,
-    handler: (args: any) => Promise<any> | any,
-    render?: (props: any) => React.ReactElement | null,
+    handler: (args: unknown) => Promise<unknown> | unknown,
+    render?: (props: Record<string, unknown>) => React.ReactElement | null,
   ) => void;
   unregisterAgAction: (name: string) => void;
-  executeAgAction: (name: string, args: any) => Promise<any>;
+  executeAgAction: (name: string, args: unknown) => Promise<unknown>;
   getAgActionRender: (
     name: string,
-  ) => ((props: any) => React.ReactElement | null) | undefined;
+  ) => ((props: Record<string, unknown>) => React.ReactElement | null) | undefined;
 }
 
 export interface IOraclesProviderProps {

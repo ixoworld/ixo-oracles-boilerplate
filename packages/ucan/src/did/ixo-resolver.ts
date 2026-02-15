@@ -99,7 +99,7 @@ function rawPublicKeyToDidKey(publicKeyBytes: Uint8Array): KeyDID | null {
   // Encode with base58btc and add 'z' multibase prefix
   const multibaseEncoded = 'z' + base58Encode(prefixedKey);
 
-  return `did:key:${multibaseEncoded}` as KeyDID;
+  return `did:key:${multibaseEncoded}`;
 }
 
 /**
@@ -114,7 +114,7 @@ function publicKeyToDidKey(vm: VerificationMethod): KeyDID | null {
     // The did:key format for Ed25519 is did:key:z6Mk...
     if (vm.publicKeyMultibase.startsWith('z')) {
       // Already in the correct format for did:key
-      return `did:key:${vm.publicKeyMultibase}` as KeyDID;
+      return `did:key:${vm.publicKeyMultibase}`;
     }
 
     // Handle other multibase prefixes if needed

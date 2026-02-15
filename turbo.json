@@ -52,7 +52,23 @@
     "MATRIX_CRYPTO_STORE_PATH",
     "MATRIX_STORE_PATH",
     "DATABASE_USE_SSL",
-    "OPEN_ROUTER_API_KEY"
+    "OPEN_ROUTER_API_KEY",
+    "BLOCKSYNC_URI",
+    "CHAIN_NETWORK",
+    "MATRIX_CP_CACHE_MAX",
+    "MATRIX_CP_CACHE_TTL_MS",
+    "MATRIX_CP_MAX_SIZE_BYTES",
+    "MATRIX_HOMESERVER_NAME",
+    "NEXT_PUBLIC_CHAIN_NETWORK",
+    "NEXT_PUBLIC_GRAPHQL_URL",
+    "NEXT_PUBLIC_JWT_SERVER",
+    "NEXT_PUBLIC_RPC_URL",
+    "ORACLE_ENTITY_DID",
+    "ORACLE_NAME",
+    "SANDBOX_API_KEY",
+    "UCAN_PROTECTED_MCP_SERVERS",
+    "UCAN_ROOT_ISSUERS",
+    "USER_CLAIM_COLLECTION_ID"
   ],
 
   "tasks": {
@@ -78,7 +94,6 @@
       ],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
-    "lint": {},
     "test": {},
     "test:e2e": {}
   }

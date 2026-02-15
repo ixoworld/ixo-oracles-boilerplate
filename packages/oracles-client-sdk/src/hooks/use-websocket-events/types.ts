@@ -3,6 +3,7 @@ import type { Socket } from 'socket.io-client';
 import { type IBrowserTools } from '../../types/browser-tool.type.js';
 import { type IActionTools } from '../../types/action-tool.type.js';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type WebSocketEvent<T = Record<string, any>> = {
   eventName: string;
   payload: WithRequiredEventProps<T>;

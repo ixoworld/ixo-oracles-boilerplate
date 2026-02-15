@@ -1,5 +1,5 @@
 import { customMessages, ixo, utils } from '@ixo/impactxclient-sdk';
-import { KeyTypes } from '@ixo/impactxclient-sdk/types/messages/iid.js';
+import { type KeyTypes } from '@ixo/impactxclient-sdk/types/messages/iid.js';
 import { Logger } from '@ixo/logger';
 import base58 from 'bs58';
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
@@ -115,7 +115,7 @@ async function storeEncryptedSigningMnemonic(
   }
 }
 export const checkIfVerificationMethodExists = (
-  verificationMethods: any[],
+  verificationMethods: Array<{ publicKeyBase58?: string }>,
   targetPublicKeyHex: string,
 ) => {
   return !!verificationMethods.find((method) => {
@@ -143,7 +143,7 @@ export const generateVerificationMsg = async (
     value: ixo.iid.v1beta1.MsgAddVerification.fromPartial({
       id: walletDid,
       verification: ixo.iid.v1beta1.Verification.fromPartial({
-        relationships: relationships,
+        relationships,
         method: customMessages.iid.createVerificationMethod(
           walletDid,
           pubkeyBytes,
@@ -226,7 +226,7 @@ export async function setupClaimSigningMnemonics({
     throw new Error('Cannot get encrypted signing mnemonic');
 
   const agent = await createVeramoAgent(network);
-  const decryptedSigningMnemonic = decrypt(existingSigningMnemonic!, pin);
+  const decryptedSigningMnemonic = decrypt(existingSigningMnemonic, pin);
   const identifier = await loadIssuerDid(
     agent,
     decryptedSigningMnemonic,

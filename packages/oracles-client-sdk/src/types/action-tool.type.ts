@@ -1,15 +1,15 @@
 import type React from 'react';
-import { z } from 'zod';
+import { type z } from 'zod';
 
 export interface IActionToolParams {
   toolName: string;
   description: string;
   schema: z.ZodTypeAny;
-  handler: (args: any) => Promise<any> | any;
+  handler: (args: unknown) => Promise<unknown> | unknown;
   render?: (props: {
     status?: 'isRunning' | 'done';
-    args?: any;
-    result?: any;
+    args?: unknown;
+    result?: unknown;
     isLoading?: boolean;
   }) => React.ReactElement | null;
 }

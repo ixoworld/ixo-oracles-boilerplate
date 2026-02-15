@@ -1,5 +1,5 @@
 import { decodeJwt } from 'jose';
-import { IOpenIDToken } from 'matrix-js-sdk';
+import { type IOpenIDToken } from 'matrix-js-sdk';
 import { useCallback, useState } from 'react';
 
 export type ConnectionDetails = {

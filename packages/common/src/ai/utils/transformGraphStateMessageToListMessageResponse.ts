@@ -1,5 +1,5 @@
 import {
-  ToolMessage,
+  type ToolMessage,
   type AIMessage,
   type BaseMessage,
 } from '@langchain/core/messages';
@@ -53,8 +53,8 @@ export function transformGraphStateMessageToListMessageResponse(
 
         acc.push({
           type: message.type === 'ai' ? 'ai' : 'human',
-          content: message.content.toString(),
-          id: uuidFromString(message.id ?? message.content.toString()),
+          content: String(message.content),
+          id: uuidFromString(message.id ?? String(message.content)),
           toolCalls: (message as AIMessage).tool_calls?.map((toolCall) => ({
             name: toolCall.name,
             args: toolCall.args,

@@ -1,11 +1,11 @@
-import { IRunnableConfigWithRequiredFields } from '@ixo/matrix';
+import { type IRunnableConfigWithRequiredFields } from '@ixo/matrix';
 import { tool } from '@langchain/core/tools';
 import { callBrowserTool } from './browser-tool-caller.js';
 import { logActionToMatrix } from './log-action-to-matrix.js';
 
 interface IParserBrowserToolParams {
   description: string;
-  schema: Record<string, any>;
+  schema: Record<string, unknown>;
   toolName: string;
 }
 
@@ -23,12 +23,12 @@ export function parserBrowserTool(params: IParserBrowserToolParams) {
       const result = await callBrowserTool({
         sessionId,
         toolName,
-        args: input,
+        args: input as Record<string, unknown>,
         toolCallId: `tc-${requestId}`,
       });
 
       if (configs?.matrix.roomId) {
-        logActionToMatrix(
+        void logActionToMatrix(
           {
             name: toolName,
             args: input as Record<string, unknown>,

@@ -6,7 +6,7 @@ export interface IFrontendToolCallerParams {
   sessionId: string;
   toolId: string;
   toolName: string;
-  args: any;
+  args: Record<string, unknown>;
   toolType: 'browser' | 'agui';
   timeout?: number;
 }
@@ -24,7 +24,7 @@ export async function callFrontendTool({
   args,
   toolType,
   timeout = 15000,
-}: IFrontendToolCallerParams): Promise<any> {
+}: IFrontendToolCallerParams): Promise<unknown> {
   // Step 1: Emit appropriate event based on tool type
   if (toolType === 'browser') {
     new BrowserToolCallEvent({
@@ -42,7 +42,7 @@ export async function callFrontendTool({
       toolName,
       args,
       status: 'isRunning',
-    } as any).emit();
+    }).emit();
   }
 
   // Step 2: Wait for result via rootEventEmitter
@@ -50,9 +50,10 @@ export async function callFrontendTool({
     toolType === 'browser' ? 'browser_tool_result' : 'action_call_result';
 
   return await new Promise((resolve, reject) => {
+    // eslint-disable-next-line prefer-const -- assigned after handler definition due to mutual reference
     let timeoutHandle: NodeJS.Timeout;
-
-    const resultHandler = (data: any) => {
+    const resultHandler = (...args: unknown[]) => {
+      const data = args[0] as { toolCallId: string; error?: string; result?: Record<string, unknown> };
       const receivedId = data.toolCallId;
       if (receivedId === toolId) {
         clearTimeout(timeoutHandle);
@@ -63,7 +64,7 @@ export async function callFrontendTool({
           reject(new Error(data.error));
         } else if (toolType === 'agui' && data.result?.success === false) {
           // AG-UI specific error handling
-          reject(new Error(data.result.error || 'Action failed'));
+          reject(new Error((data.result.error as string) || 'Action failed'));
         } else {
           resolve(data.result);
         }

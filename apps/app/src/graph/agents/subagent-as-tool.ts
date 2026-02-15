@@ -31,7 +31,7 @@ function lastMessageContent(messages: { content?: unknown }[]): string {
     );
     return (textPart as { text?: string } | undefined)?.text ?? '';
   }
-  return String(last.content);
+  return typeof last.content === 'string' ? last.content : JSON.stringify(last.content);
 }
 
 /**

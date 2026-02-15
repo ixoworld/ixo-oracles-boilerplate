@@ -162,7 +162,7 @@ const getErrorFromResponse = async (response: Response): Promise<unknown> => {
     const json = await response.json();
 
     return json;
-  } catch (error) {
+  } catch (_error) {
     if (response.bodyUsed) return 'Unknown error';
     const errorMessage = await response.text();
     return errorMessage;

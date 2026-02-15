@@ -137,7 +137,7 @@ function isValidSSEEventType(
     'message_cache_invalidation',
     'reasoning',
   ];
-  return validEventTypes.includes(eventType as any);
+  return validEventTypes.includes(eventType as SSEEvent['event']);
 }
 
 /**
@@ -198,7 +198,7 @@ export async function* parseSSEStream(
               const parsedData = JSON.parse(data);
               // Type-safe event creation with fallback for unknown events
               if (isValidSSEEventType(event)) {
-                yield { event: event, data: parsedData };
+                yield { event, data: parsedData };
               } else {
                 continue;
               }
@@ -239,8 +239,7 @@ export async function* parseSSEStream(
           const parsedData = JSON.parse(data);
           // Type-safe event creation with fallback for unknown events
           if (isValidSSEEventType(event)) {
-            yield { event: event, data: parsedData };
-          } else {
+            yield { event, data: parsedData };
           }
         } catch (parseError) {
           console.warn('Failed to parse final SSE data:', data, parseError);

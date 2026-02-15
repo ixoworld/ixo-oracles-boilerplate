@@ -10,7 +10,7 @@ export class JobExecutor {
           const result = await job();
           resolve(result);
         } catch (error) {
-          reject(error);
+          reject(error instanceof Error ? error : new Error(String(error)));
         }
       });
 
@@ -29,7 +29,7 @@ export class JobExecutor {
       const job = this.queue.shift();
       if (job) {
         try {
-          // eslint-disable-next-line no-await-in-loop -- this is a serial queue
+           
           await job();
         } catch (error) {
           // eslint-disable-next-line no-console -- this is a serial queue

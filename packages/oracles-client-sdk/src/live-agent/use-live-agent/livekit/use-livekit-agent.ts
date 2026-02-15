@@ -126,7 +126,7 @@ export function useLiveKitAgent(
       room.off(RoomEvent.Connected, onConnected);
     };
   }, [room, refreshConnectionDetails, idToken, toastAlert]);
-  const { mutateAsync: updateCall, isPending: isUpdating } = useMutation({
+  const { mutateAsync: updateCall, isPending: _isUpdating } = useMutation({
     mutationFn: async ({
       callId,
       callStatus,

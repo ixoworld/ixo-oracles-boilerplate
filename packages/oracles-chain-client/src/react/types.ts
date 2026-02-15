@@ -13,7 +13,7 @@ export const OraclePricingListSchemaResponse = z.array(
 );
 
 export type TOraclePricingLisJSONLD = {
-  '@context': [string, { ixo: string; oracle: Record<string, any> }];
+  '@context': [string, { ixo: string; oracle: Record<string, unknown> }];
   '@type': string;
   '@id': string;
   name: string;

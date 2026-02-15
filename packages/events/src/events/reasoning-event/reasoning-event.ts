@@ -3,7 +3,7 @@ import {
   shouldHaveSessionId,
   type WithRequiredEventProps,
 } from '../base-event/base-event';
-import { EVENT_NAME, IReasoningEvent } from './types';
+import { EVENT_NAME, type IReasoningEvent } from './types';
 
 export class ReasoningEvent extends BaseEvent<IReasoningEvent> {
   static override readonly eventName = EVENT_NAME;

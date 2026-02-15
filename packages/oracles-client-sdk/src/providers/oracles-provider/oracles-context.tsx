@@ -72,10 +72,10 @@ export const OraclesProvider = ({
   // AG-UI action state management
   const [agActions, setAgActions] = useState<AgAction[]>([]);
   const agActionHandlers = useRef<
-    Map<string, (args: any) => Promise<any> | any>
+    Map<string, (args: unknown) => Promise<unknown> | unknown>
   >(new Map());
   const agActionRenders = useRef<
-    Map<string, (props: any) => React.ReactElement | null>
+    Map<string, (props: Record<string, unknown>) => React.ReactElement | null>
   >(new Map());
 
   const authedRequest = useCallback(
@@ -135,8 +135,8 @@ export const OraclesProvider = ({
   const registerAgAction = useCallback(
     (
       action: AgAction,
-      handler: (args: any) => Promise<any> | any,
-      render?: (props: any) => React.ReactElement | null,
+      handler: (args: unknown) => Promise<unknown> | unknown,
+      render?: (props: Record<string, unknown>) => React.ReactElement | null,
     ) => {
       setAgActions((prev) => {
         // Check if action already exists
@@ -163,7 +163,7 @@ export const OraclesProvider = ({
     agActionRenders.current.delete(name);
   }, []);
 
-  const executeAgAction = useCallback(async (name: string, args: any) => {
+  const executeAgAction = useCallback(async (name: string, args: unknown) => {
     const handler = agActionHandlers.current.get(name);
     if (!handler) {
       throw new Error(`AG-UI action '${name}' not found`);

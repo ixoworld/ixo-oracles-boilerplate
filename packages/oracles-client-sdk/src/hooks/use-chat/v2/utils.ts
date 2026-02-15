@@ -1,3 +1,4 @@
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function throttle<T extends (...args: any[]) => void>(
   func: T,
   wait: number,
@@ -32,6 +33,7 @@ export function throttle<T extends (...args: any[]) => void>(
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function asyncThrottle<T extends (...args: any[]) => Promise<any>>(
   func: T,
   wait: number,
@@ -70,16 +72,18 @@ export function asyncThrottle<T extends (...args: any[]) => Promise<any>>(
         clearTimeout(timeoutId);
       }
 
-      timeoutId = setTimeout(async () => {
-        try {
-          lastCallTime = Date.now();
-          const result = await func.apply(this, args);
-          resolve(result);
-        } catch (error) {
-          reject(error);
-        } finally {
-          pendingPromise = null;
-        }
+      timeoutId = setTimeout(() => {
+        void (async () => {
+          try {
+            lastCallTime = Date.now();
+            const result = await func.apply(this, args);
+            resolve(result);
+          } catch (error) {
+            reject(error instanceof Error ? error : new Error(String(error)));
+          } finally {
+            pendingPromise = null;
+          }
+        })();
       }, delayForNextCall);
     });
 
@@ -87,6 +91,7 @@ export function asyncThrottle<T extends (...args: any[]) => Promise<any>>(
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function debounce<T extends (...args: any[]) => any>(
   func: T,
   wait: number,
@@ -110,6 +115,7 @@ export function debounce<T extends (...args: any[]) => any>(
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function asyncDebounce<T extends (...args: any[]) => Promise<any>>(
   func: T,
   wait: number,
@@ -138,15 +144,17 @@ export function asyncDebounce<T extends (...args: any[]) => Promise<any>>(
         clearTimeout(timeoutId);
       }
 
-      timeoutId = setTimeout(async () => {
-        try {
-          const result = await func.apply(this, args);
-          resolve(result);
-        } catch (error) {
-          reject(error);
-        } finally {
-          pendingPromise = null;
-        }
+      timeoutId = setTimeout(() => {
+        void (async () => {
+          try {
+            const result = await func.apply(this, args);
+            resolve(result);
+          } catch (error) {
+            reject(error instanceof Error ? error : new Error(String(error)));
+          } finally {
+            pendingPromise = null;
+          }
+        })();
       }, wait);
     });
 

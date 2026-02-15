@@ -2,7 +2,7 @@ import { PlaywrightWebBaseLoader } from '@langchain/community/document_loaders/w
 import { HtmlToTextTransformer } from '@langchain/community/document_transformers/html_to_text';
 import { Document } from '@langchain/core/documents';
 import { PromptTemplate } from '@langchain/core/prompts';
-import { ChatOpenAI } from '@langchain/openai';
+import { type ChatOpenAI } from '@langchain/openai';
 import { createAgent } from 'langchain';
 
 export const scrapeWebPage = async (url: string) => {

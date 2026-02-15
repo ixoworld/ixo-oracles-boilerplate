@@ -1,11 +1,11 @@
-import { GetMySubscriptionsResponseDto } from '@ixo/common';
+import { type GetMySubscriptionsResponseDto } from '@ixo/common';
 import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
-import { Serialized } from '@langchain/core/load/serializable';
-import { LLMResult } from '@langchain/core/outputs';
+import { type Serialized } from '@langchain/core/load/serializable';
+import { type LLMResult } from '@langchain/core/outputs';
 import { HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import crypto from 'node:crypto';
-import { ENV } from 'src/config';
+import { type ENV } from 'src/config';
 import z from 'zod';
 import { RedisService } from './redis.service';
 
@@ -228,7 +228,7 @@ export class TokenLimiter {
         credits.toString(),
       )) as [number, number, string];
 
-      const [success, balance, status] = result;
+      const [success, balance, _status] = result;
 
       if (success === 0) {
         throw new TokenLimiterError(
@@ -439,7 +439,7 @@ class TokenLimiterError extends Error {
     type: 'token' | 'request',
     limit?: number,
     reset?: number,
-    currentBalance?: number,
+    _currentBalance?: number,
   ) {
     super(message);
     this.type = type;

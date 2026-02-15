@@ -1,7 +1,7 @@
 import { callFrontendTool } from './frontend-tool-caller.js';
 
 export interface AgActionResult {
-  result?: any;
+  result?: unknown;
   error?: string;
   success: boolean;
 }
@@ -10,7 +10,7 @@ export interface IAgActionCallerParams {
   sessionId: string;
   toolCallId: string;
   toolName: string;
-  args: any;
+  args: Record<string, unknown>;
   timeout?: number;
 }
 
@@ -25,7 +25,7 @@ export async function callAgAction({
   toolName,
   args,
   timeout = 10000, // 10 seconds for UI actions
-}: IAgActionCallerParams): Promise<any> {
+}: IAgActionCallerParams): Promise<unknown> {
   return callFrontendTool({
     sessionId,
     toolId: toolCallId,

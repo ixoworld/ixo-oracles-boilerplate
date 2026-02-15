@@ -28,6 +28,7 @@ import {
   MatrixMediaEvent,
   uploadMediaToRoom,
 } from './matrix-upload-utils';
+import { type BaseSyncArgs } from './type';
 
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
@@ -641,7 +642,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
       const mxManager = MatrixManager.getInstance();
       const userHomeServer = await getMatrixHomeServerCroppedForDid(userDid);
       const { roomId } = await mxManager.getOracleRoomIdWithHomeServer({
-        userDid: userDid,
+        userDid,
         oracleEntityDid: configService.getOrThrow('ORACLE_ENTITY_DID'),
         userHomeServer,
       });
@@ -672,7 +673,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
       Logger.log(
         `Decompressed checkpoint for user ${userDid}: ${bytesToHumanReadable(userDB.mediaBuffer.length)} -> ${bytesToHumanReadable(decompressedBuffer.length)}`,
       );
-    } catch (error) {
+    } catch (_error) {
       // Decompression failed — check if the raw buffer is a valid uncompressed SQLite file
       if (
         userDB.mediaBuffer.length >= 16 &&
@@ -852,7 +853,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
     const mxManager = MatrixManager.getInstance();
     const userHomeServer = await getMatrixHomeServerCroppedForDid(userDid);
     const { roomId } = await mxManager.getOracleRoomIdWithHomeServer({
-      userDid: userDid,
+      userDid,
       oracleEntityDid: configService.getOrThrow('ORACLE_ENTITY_DID'),
       userHomeServer,
     });

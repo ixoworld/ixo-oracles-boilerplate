@@ -1,6 +1,6 @@
-import { Coin } from '@cosmjs/proto-signing';
+import { type Coin } from '@cosmjs/proto-signing';
 import { cosmos, ixo } from '@ixo/impactxclient-sdk';
-import { ICreateVerifiableCredentialArgs } from '@veramo/core';
+import { type ICreateVerifiableCredentialArgs } from '@veramo/core';
 import { MatrixBotService } from 'src/matrix-bot/matrix-bot.service.js';
 import { getMatrixHomeServerForDid } from 'src/matrix-bot/did-matrix-batcher.js';
 import { createOpenIdTokenProvider } from 'src/matrix-bot/openid-token-provider.js';
@@ -96,7 +96,7 @@ export class Claims {
             typeUrl: '/ixo.claims.v1beta1.MsgSubmitClaim',
             value: ixo.claims.v1beta1.MsgSubmitClaim.encode(
               ixo.claims.v1beta1.MsgSubmitClaim.fromPartial({
-                adminAddress: adminAddress,
+                adminAddress,
                 agentAddress: this.client.address,
                 agentDid: `did:ixo:${this.client.address}`,
                 claimId,

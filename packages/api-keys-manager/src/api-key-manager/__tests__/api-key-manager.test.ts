@@ -124,7 +124,7 @@ describe('ApiKeyManager', () => {
 
       const storedKey = db
         .prepare<
-          any,
+          [string],
           IApiKeyRecord
         >('SELECT lastUsedAt FROM api_keys WHERE id = ?')
         .get(keyId);

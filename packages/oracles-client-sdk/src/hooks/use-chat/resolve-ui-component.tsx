@@ -9,7 +9,7 @@ import {
   type SSEActionCallEventData,
   type SSEErrorEvent,
 } from '../../utils/sse-parser.js';
-import { Event } from './resolve-content.js';
+import { type Event } from './resolve-content.js';
 import { type ToolCallEvent, type UIComponentProps } from './v2/types.js';
 import { getToolName } from '../../utils/get-tool-name.js';
 
@@ -22,9 +22,10 @@ export type UIComponents = {
     output?: string;
     isLoading?: boolean;
     event?: Event;
-    payload?: any;
+    payload?: unknown;
     key: string;
   }>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: React.FC<any>;
 };
 
@@ -56,6 +57,7 @@ export const resolveUIComponent = (
   }
 
   // Get the component with fallback logic
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let Component: React.FC<any>;
 
   if (component.name in componentsMap) {
@@ -72,7 +74,7 @@ export const resolveUIComponent = (
   if (component.name === 'Error') {
     const errorComponentProps = {
       id: component.props.id,
-      args: component.props.args as Record<string, unknown>,
+      args: component.props.args,
       status: component.props.status,
       output: component.props.output,
       isLoading: isRunning,
@@ -126,6 +128,7 @@ export const resolveUIComponent = (
       key: `${component.name}${component.props.id}`,
     };
     return createElement(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       AgActionComponent as React.FC<any>,
       agActionComponentProps,
     );
