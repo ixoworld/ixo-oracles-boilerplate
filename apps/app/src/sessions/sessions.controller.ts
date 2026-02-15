@@ -103,7 +103,11 @@ export class SessionsController {
     @Req() req: Request,
     @Param('sessionId') sessionId: string,
   ): Promise<{ message: string }> {
-    const { userOpenIdToken: matrixAccessToken, did, homeServer } = req.authData;
+    const {
+      userOpenIdToken: matrixAccessToken,
+      did,
+      homeServer,
+    } = req.authData;
     return this.sessionsService.deleteSession({
       matrixAccessToken,
       did,

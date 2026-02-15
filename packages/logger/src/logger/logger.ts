@@ -29,7 +29,9 @@ export class Logger {
           const { timestamp, level, message, stack, context, ...rest } = info;
           const emoji = getEmoji(level);
           const contextStr =
-            context || this.context ? `[${String(context || this.context)}]` : '';
+            context || this.context
+              ? `[${String(context || this.context)}]`
+              : '';
 
           // Extract errors and other metadata
           const meta =

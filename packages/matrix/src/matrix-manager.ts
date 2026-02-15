@@ -1,5 +1,9 @@
 import { Logger } from '@ixo/logger';
-import { type MatrixEvent, type MessageEvent, type MessageEventContent } from 'matrix-bot-sdk';
+import {
+  type MatrixEvent,
+  type MessageEvent,
+  type MessageEventContent,
+} from 'matrix-bot-sdk';
 import * as sdk from 'matrix-js-sdk';
 import {
   MatrixStateManager,
@@ -271,7 +275,11 @@ export class MatrixManager {
     roomAlias: string;
     oracleRoomFullAlias: string;
   }> {
-    return this.getOracleRoomIdWithHomeServer({ userDid, oracleEntityDid, userHomeServer: this.homeserverName });
+    return this.getOracleRoomIdWithHomeServer({
+      userDid,
+      oracleEntityDid,
+      userHomeServer: this.homeserverName,
+    });
   }
 
   /**
@@ -546,7 +554,9 @@ export class MatrixManager {
       );
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
-      const cryptoClient = (this.mxClient.mxClient as unknown as Record<string, unknown>)?.crypto as
+      const cryptoClient = (
+        this.mxClient.mxClient as unknown as Record<string, unknown>
+      )?.crypto as
         | { engine?: { machine?: { close?: () => void } } }
         | undefined;
       if (cryptoClient?.engine?.machine?.close) {

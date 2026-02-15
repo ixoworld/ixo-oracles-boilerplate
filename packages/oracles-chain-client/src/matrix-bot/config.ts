@@ -2,14 +2,16 @@ export type NetworkType = 'devnet' | 'testnet' | 'mainnet';
 
 export const chainNetwork: NetworkType =
   (typeof process !== 'undefined' && process.env
-    ? (process.env.CHAIN_NETWORK as NetworkType) ??
+    ? ((process.env.CHAIN_NETWORK as NetworkType) ??
       (process.env.NEXT_PUBLIC_CHAIN_NETWORK as NetworkType) ??
-      (process.env.NETWORK as NetworkType)
+      (process.env.NETWORK as NetworkType))
     : undefined) ?? 'devnet';
 if (!chainNetwork) {
   throw new Error(
     'CHAIN_NETWORK is not set: ' +
-      (typeof process !== 'undefined' ? process.env.CHAIN_NETWORK : 'process undefined'),
+      (typeof process !== 'undefined'
+        ? process.env.CHAIN_NETWORK
+        : 'process undefined'),
   );
 }
 
@@ -64,7 +66,9 @@ export function getDefaultMatrixHomeServerUrl(network?: NetworkType): string {
   return MatrixHomeServerUrl[network ?? chainNetwork];
 }
 
-export function getDefaultMatrixHomeServerUrlCropped(network?: NetworkType): string {
+export function getDefaultMatrixHomeServerUrlCropped(
+  network?: NetworkType,
+): string {
   return MatrixHomeServerUrlCropped[network ?? chainNetwork];
 }
 

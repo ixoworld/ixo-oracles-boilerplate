@@ -21,7 +21,10 @@ import {
   VeramoEd25519Signature2020,
 } from '@veramo/credential-ld';
 // Using dynamic imports for @veramo/credential-ld to avoid build-time import assertions
-import { CredentialPlugin, type ICredentialIssuer } from '@veramo/credential-w3c';
+import {
+  CredentialPlugin,
+  type ICredentialIssuer,
+} from '@veramo/credential-w3c';
 import { DIDManager, MemoryDIDStore } from '@veramo/did-manager';
 import { KeyDIDProvider } from '@veramo/did-provider-key';
 import { DIDResolverPlugin } from '@veramo/did-resolver';
@@ -44,7 +47,9 @@ interface CreateCredentialParams {
   credential: ICreateVerifiableCredentialArgs;
   mnemonic: string;
   issuerDid: string;
-  agent: TAgent<IDIDManager & IKeyManager & IDataStore & IResolver & ICredentialIssuer>;
+  agent: TAgent<
+    IDIDManager & IKeyManager & IDataStore & IResolver & ICredentialIssuer
+  >;
 }
 
 export async function createCredential({
@@ -82,7 +87,9 @@ export async function createCredential({
  * Ed25519
  */
 export async function loadIssuerDid(
-  agent: TAgent<IDIDManager & IKeyManager & IDataStore & IResolver & ICredentialIssuer>,
+  agent: TAgent<
+    IDIDManager & IKeyManager & IDataStore & IResolver & ICredentialIssuer
+  >,
   mnemonic: string,
   issuerDid: string,
 ): Promise<IIdentifier> {

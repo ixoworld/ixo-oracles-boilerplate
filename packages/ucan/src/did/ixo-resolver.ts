@@ -60,8 +60,6 @@ interface IxoDIDDocument {
   verificationMethod: VerificationMethod[];
 }
 
-
-
 // =============================================================================
 // did:key Conversion
 // =============================================================================
@@ -185,7 +183,7 @@ export function createIxoDIDResolver(
     did: DID,
   ): Promise<
     { ok: KeyDID[] } | { error: { name: string; did: string; message: string } }
-    > => {
+  > => {
     // Only handle did:ixo
     if (!did.startsWith('did:ixo:')) {
       return {
@@ -322,4 +320,3 @@ export function createCompositeDIDResolver(
 
 // TODO: Add caching layer for resolved DIDs
 // TODO: Add support for resolving from local DID document store
-

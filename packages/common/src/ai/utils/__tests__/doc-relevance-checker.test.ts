@@ -4,18 +4,20 @@ import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { FakeChatModel } from '@langchain/core/utils/testing';
 import checkDocRelevance from '../doc-relevance-checker.js';
 
-jest.spyOn(ChatPromptTemplate, 'fromTemplate');
+vi.spyOn(ChatPromptTemplate, 'fromTemplate');
 
 describe('checkDocRelevance', () => {
   // Create a mock model that simulates relevance checking
   const createMockModel = (returnValue: boolean): BaseChatModel => {
     const mockModel = new FakeChatModel({});
-    mockModel.withStructuredOutput = jest.fn().mockReturnValue({
+    mockModel.withStructuredOutput = vi.fn().mockReturnValue({
       pipe: () => ({
         invoke: async () => ({ answer: returnValue }),
       }),
     });
-    (ChatPromptTemplate.fromTemplate as jest.Mock).mockReturnValue({
+    (
+      ChatPromptTemplate.fromTemplate as ReturnType<typeof vi.fn>
+    ).mockReturnValue({
       pipe: () => ({
         invoke: async () => ({ answer: returnValue }),
       }),

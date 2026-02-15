@@ -20,7 +20,7 @@ import { InMemoryInvocationStore } from '../store/memory.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CapabilityParser = ReturnType<typeof capability<any, any, any>>;
- 
+
 type Verifier = ReturnType<typeof ed25519.Verifier.parse>;
 
 /**
@@ -227,9 +227,7 @@ export async function createUCANValidator(
 
     // Try custom resolver for other DID methods (e.g., did:ixo)
     if (options.didResolver) {
-      const result = await options.didResolver(
-        did,
-      );
+      const result = await options.didResolver(did);
       if ('ok' in result && result.ok.length > 0) {
         // Return the array of did:key strings (ucanto will parse them)
         return { ok: result.ok };
@@ -264,7 +262,9 @@ export async function createUCANValidator(
     ): Promise<ValidateResult> {
       try {
         // 1. Decode the invocation from base64 CAR
-        const carBytes = new Uint8Array(Buffer.from(invocationBase64, 'base64'));
+        const carBytes = new Uint8Array(
+          Buffer.from(invocationBase64, 'base64'),
+        );
 
         // 2. Extract the invocation from CAR
         const extracted = await Delegation.extract(carBytes);

@@ -82,9 +82,7 @@ ALWAYS mark as SAFE if the response:
           return {
             messages: [
               new RemoveMessage({ id: lastMessage.id ?? '' }),
-              new AIMessage(
-                "I'm sorry, but I can't provide that information.",
-              )
+              new AIMessage("I'm sorry, but I can't provide that information."),
             ],
             jumpTo: 'end',
           };

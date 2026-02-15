@@ -5,7 +5,10 @@ import {
   type WithRequiredEventProps,
 } from '@ixo/oracles-events/types';
 
-import { type SSEActionCallEventData, type SSEErrorEvent } from '../../utils/sse-parser.js';
+import {
+  type SSEActionCallEventData,
+  type SSEErrorEvent,
+} from '../../utils/sse-parser.js';
 import { getToolName } from '../../utils/get-tool-name.js';
 import { type IComponentMetadata } from './v2/types.js';
 
@@ -30,7 +33,12 @@ export const resolveContent = (
     case 'tool_call': {
       const payload = event.payload as ToolCallEventPayload;
       return {
-        name: getToolName(payload.toolName, (payload.args as Record<string, unknown>)?.toolName as string | undefined),
+        name: getToolName(
+          payload.toolName,
+          (payload.args as Record<string, unknown>)?.toolName as
+            | string
+            | undefined,
+        ),
         props: {
           args: payload.args,
           id: payload.eventId ?? payload.requestId,
@@ -38,7 +46,12 @@ export const resolveContent = (
           output: payload.output,
           payload,
           isToolCall: true,
-          toolName: getToolName(payload.toolName, (payload.args as Record<string, unknown>)?.toolName as string | undefined),
+          toolName: getToolName(
+            payload.toolName,
+            (payload.args as Record<string, unknown>)?.toolName as
+              | string
+              | undefined,
+          ),
           event,
         },
       };
@@ -70,7 +83,8 @@ export const resolveContent = (
       };
     }
     case 'action_call': {
-      const payload = event.payload as WithRequiredEventProps<SSEActionCallEventData>;
+      const payload =
+        event.payload as WithRequiredEventProps<SSEActionCallEventData>;
       return {
         name: payload.toolName,
         props: {

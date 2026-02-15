@@ -239,11 +239,11 @@ function _encodeConstructorArgs(
   constructor: Function,
   method?: string,
   args?: any[],
-  kwargs?: Record<string, any>
+  kwargs?: Record<string, any>,
 ): object {
   return {
     lc: 2,
-    type: "constructor",
+    type: 'constructor',
     id: [constructor.name],
     method: method ?? null,
     args: args ?? [],

@@ -106,8 +106,7 @@ export class MatrixBotService {
   }
 
   async getRoomIdFromAliasWithDid(entityDid: string): Promise<string> {
-    const homeServerCropped =
-      await getMatrixHomeServerCroppedForDid(entityDid);
+    const homeServerCropped = await getMatrixHomeServerCroppedForDid(entityDid);
     const daoRoomAlias = `#${entityDid.replaceAll(/:/g, '-')}:${homeServerCropped}`;
     const apiClient = await this.getApiClientForDid(entityDid);
     const response = await apiClient.room.v1beta1.queryId(daoRoomAlias);
@@ -137,21 +136,18 @@ export class MatrixBotService {
     try {
       const { openIdToken, authDid } = await this.requireAuth();
       const roomBot = await this.getRoomBotForDid(entityDid);
-      const sourceRoomResponse =
-        await roomBot.room.v1beta1.sourceRoomAndJoin(
-          entityDid,
-          openIdToken,
-          authDid,
-        );
+      const sourceRoomResponse = await roomBot.room.v1beta1.sourceRoomAndJoin(
+        entityDid,
+        openIdToken,
+        authDid,
+      );
 
       const claimBot = await this.getClaimBotForDid(entityDid);
       await claimBot.bot.v1beta1.invite(sourceRoomResponse.roomId);
       return sourceRoomResponse.roomId;
     } catch (error) {
       console.error('Error sourcing room and joining', { error });
-      throw new Error(
-        `[sourceRoomAndJoin] Error sourcing room and joining`,
-      );
+      throw new Error(`[sourceRoomAndJoin] Error sourcing room and joining`);
     }
   }
 

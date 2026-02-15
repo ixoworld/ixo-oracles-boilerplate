@@ -29,7 +29,7 @@ describe('Authz', () => {
     await expect(Promise).rejects.toThrow();
   });
 
-  // eslint-disable-next-line jest/expect-expect
+  // eslint-disable-next-line vitest/expect-expect
   it('should list intents', async () => {
     await client.init();
     //  const Promise = claims.sendClaimIntent({
@@ -95,7 +95,7 @@ describe('Authz', () => {
     );
     await expect(txPromise).resolves.toBeDefined();
   }, 1000_000);
-  // eslint-disable-next-line jest/expect-expect
+  // eslint-disable-next-line vitest/expect-expect
   it('Should successfully submit intent with permission', async () => {
     await client.init();
     let intentList = await client.queryClient.ixo.claims.v1beta1.intentList({});

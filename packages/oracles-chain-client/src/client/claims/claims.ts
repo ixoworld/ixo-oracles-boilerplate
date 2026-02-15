@@ -156,7 +156,11 @@ export class Claims {
       matrixAccessToken: accessToken,
       homeServerUrl: oracleHomeServerUrl,
     });
-    const matrixBotService = new MatrixBotService(accessToken, getOpenIdToken, oracleDid);
+    const matrixBotService = new MatrixBotService(
+      accessToken,
+      getOpenIdToken,
+      oracleDid,
+    );
     const decryptedSigningMnemonic = await setupClaimSigningMnemonics({
       matrixRoomId,
       matrixAccessToken: accessToken,
@@ -194,10 +198,14 @@ export class Claims {
 
     const {
       data: { cid },
-    } = await matrixBotService.saveClaimToMatrixWithDid(oracleDid, collectionId, {
-      ...claim.body,
-      credentials: claimCredentials,
-    });
+    } = await matrixBotService.saveClaimToMatrixWithDid(
+      oracleDid,
+      collectionId,
+      {
+        ...claim.body,
+        credentials: claimCredentials,
+      },
+    );
 
     return cid;
   }

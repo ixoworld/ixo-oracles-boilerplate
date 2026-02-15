@@ -125,7 +125,9 @@ export class InMemoryInvocationStore implements InvocationStore {
     }
 
     if (cleaned > 0) {
-      console.log(`[InMemoryInvocationStore] Cleaned up ${cleaned} expired entries`);
+      console.log(
+        `[InMemoryInvocationStore] Cleaned up ${cleaned} expired entries`,
+      );
     }
   }
 
@@ -191,4 +193,3 @@ export function createInvocationStore(options?: {
 // TODO: Add Redis implementation for distributed deployments
 // TODO: Add SQLite implementation for persistence across restarts
 // TODO: Add metrics/monitoring for store size and cleanup operations
-

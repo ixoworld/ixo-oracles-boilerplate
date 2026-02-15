@@ -3,20 +3,27 @@
   "version": "2.0.0",
   "private": false,
   "type": "module",
-  "publishConfig": { "access": "public" },
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     "./base": "./base.js",
     "./nest": "./nest.js",
     "./library": "./library.js",
     "./prettier": "./prettier-base.cjs"
   },
-  "files": ["base.js", "nest.js", "library.js", "prettier-base.cjs"],
+  "files": [
+    "base.js",
+    "nest.js",
+    "library.js",
+    "prettier-base.cjs"
+  ],
   "peerDependencies": {
     "@eslint/js": "^9.18.0",
     "eslint": ">=9",
     "eslint-config-prettier": "^10.0.0",
     "eslint-config-turbo": "^2.6.0",
-    "eslint-plugin-jest": "^28.11.0",
+    "@vitest/eslint-plugin": "^1.2.1",
     "prettier": ">=3",
     "typescript": ">=5",
     "typescript-eslint": "^8.20.0"

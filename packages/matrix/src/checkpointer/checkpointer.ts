@@ -272,7 +272,10 @@ export class MatrixCheckpointSaver<
 
       if (
         threadMap &&
-        !('deleted' in threadMap && (threadMap as Record<string, unknown>).deleted)
+        !(
+          'deleted' in threadMap &&
+          (threadMap as Record<string, unknown>).deleted
+        )
       ) {
         this.indexCache.set(cacheKey, threadMap);
         return threadMap;

@@ -23,11 +23,8 @@ import {
 // CONFIGURATION - Change this to test different scenarios
 // ============================================================================
 
-const ACTION:
-  | 'generate-keys'
-  | 'create-delegation'
-  | 'full-flow'
-  | 'validate' = 'full-flow';
+const ACTION: 'generate-keys' | 'create-delegation' | 'full-flow' | 'validate' =
+  'full-flow';
 
 // ============================================================================
 // CAPABILITY DEFINITION
@@ -66,7 +63,9 @@ function log(title: string, data?: unknown) {
   console.log(`│ ${title}`);
   console.log('─'.repeat(70));
   if (data !== undefined) {
-    console.log(typeof data === 'string' ? data : JSON.stringify(data, null, 2));
+    console.log(
+      typeof data === 'string' ? data : JSON.stringify(data, null, 2),
+    );
   }
 }
 
@@ -97,11 +96,17 @@ async function generateKeys() {
   const did = signer.did();
   const privateKey = ed25519.Signer.format(signer);
 
-  console.log(JSON.stringify({
-    did,
-    privateKey,
-    note: 'Save the privateKey securely! The DID is public.',
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        did,
+        privateKey,
+        note: 'Save the privateKey securely! The DID is public.',
+      },
+      null,
+      2,
+    ),
+  );
 
   return { signer, did, privateKey };
 }
@@ -233,7 +238,7 @@ async function fullFlow() {
   });
 
   success(`Delegation created: ${aliceToBob.cid.toString().slice(0, 20)}...`);
-  info('Bob can now read up to 25 employees (attenuated from Alice\'s 50)');
+  info("Bob can now read up to 25 employees (attenuated from Alice's 50)");
 
   // ─────────────────────────────────────────────────────────────────────────
   // STEP 4: Alice invokes with limit: 50 (should succeed)
@@ -261,10 +266,12 @@ async function fullFlow() {
   );
 
   if (aliceResult.ok) {
-    success('Alice\'s invocation PASSED');
+    success("Alice's invocation PASSED");
     console.log(`   Requested: ${aliceResult.capability?.nb?.limit} employees`);
   } else {
-    fail(`Alice's invocation failed unexpectedly: ${aliceResult.error?.message}`);
+    fail(
+      `Alice's invocation failed unexpectedly: ${aliceResult.error?.message}`,
+    );
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -293,11 +300,11 @@ async function fullFlow() {
   );
 
   if (!bobBadResult.ok) {
-    success('Bob\'s excessive request correctly REJECTED');
+    success("Bob's excessive request correctly REJECTED");
     console.log(`   Error: ${bobBadResult.error?.message}`);
     console.log(`   Code: ${bobBadResult.error?.code}`);
   } else {
-    fail('Bob\'s excessive request should have been rejected!');
+    fail("Bob's excessive request should have been rejected!");
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -326,11 +333,15 @@ async function fullFlow() {
   );
 
   if (bobGoodResult.ok) {
-    success('Bob\'s valid request PASSED');
-    console.log(`   Requested: ${bobGoodResult.capability?.nb?.limit} employees`);
+    success("Bob's valid request PASSED");
+    console.log(
+      `   Requested: ${bobGoodResult.capability?.nb?.limit} employees`,
+    );
     console.log(`   Invoker: ${bobGoodResult.invoker?.slice(0, 40)}...`);
   } else {
-    fail(`Bob's valid request failed unexpectedly: ${bobGoodResult.error?.message}`);
+    fail(
+      `Bob's valid request failed unexpectedly: ${bobGoodResult.error?.message}`,
+    );
   }
 
   // ─────────────────────────────────────────────────────────────────────────

@@ -19,7 +19,6 @@ export class ChromaClientSingleton {
   public static async getInstance(
     opts: IChromaOptions,
   ): Promise<ChromaDataStore> {
-     
     if (!ChromaClientSingleton.instance) {
       const store = new ChromaDataStore({
         collectionName: opts.collectionName,

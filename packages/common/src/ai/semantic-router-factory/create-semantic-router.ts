@@ -3,7 +3,7 @@ import { PromptTemplate } from '@langchain/core/prompts';
 import { type LangfuseConfig, observeOpenAI } from 'langfuse';
 import { OpenAI } from 'openai';
 import { zodResponseFormat } from 'openai/helpers/zod';
-import  z from 'zod';
+import z from 'zod';
 import { type EnsureKeys } from '../types.js';
 import { jsonToYaml } from '../utils/index.js';
 import { semanticRouterPrompt } from './semantic-router-prompt.js';
@@ -45,7 +45,10 @@ export const createSemanticRouter = <
 ) => Promise<keyof R>) => {
   const keys = validateRoutes(routes, basedOn);
   const schema = z.object({
-    nextRoute: z.enum(keys as [string, ...string[]], 'The routes that will be used to resolve the path'),
+    nextRoute: z.enum(
+      keys as [string, ...string[]],
+      'The routes that will be used to resolve the path',
+    ),
   });
   return async <T extends Record<string, unknown>>(
     state: EnsureKeys<T, K>,

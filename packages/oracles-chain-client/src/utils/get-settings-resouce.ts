@@ -27,7 +27,9 @@ export async function getSettingsResource<T>(
   }
   const settingsResource = protocol?.linkedResource as LinkedResource[];
   const resource = settingsResource.find(
-    (resource) => resource.id === settingsResourceParams.id || resource.type === settingsResourceParams.type,
+    (resource) =>
+      resource.id === settingsResourceParams.id ||
+      resource.type === settingsResourceParams.type,
   );
   if (!resource) {
     throw new Error('Resource not found');

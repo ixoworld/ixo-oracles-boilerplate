@@ -1,4 +1,8 @@
-import { Authz, Payments, getMatrixUrlsForDid } from '@ixo/oracles-chain-client/react';
+import {
+  Authz,
+  Payments,
+  getMatrixUrlsForDid,
+} from '@ixo/oracles-chain-client/react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import MatrixClient from '../../matrix/matrix-client.js';
@@ -185,7 +189,10 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
       const oracleMatrixUrls = await getMatrixUrlsForDid(params.oracleDid);
       const oracleMatrixUserId = `@did-ixo-${authzConfig.granteeAddress}:${oracleMatrixUrls.homeServerCropped}`;
 
-      const members = await matrixClientRef.listRoomMembersWithDid(oracleRoomId, wallet?.did ?? '');
+      const members = await matrixClientRef.listRoomMembersWithDid(
+        oracleRoomId,
+        wallet?.did ?? '',
+      );
       return members.includes(oracleMatrixUserId);
     },
     enabled: Boolean(
@@ -206,7 +213,11 @@ const useContractOracle = ({ params }: IUseContractOracleProps) => {
         const oracleMatrixUrls = await getMatrixUrlsForDid(params.oracleDid);
         const oracleMatrixUserId = `@did-ixo-${authzConfig.granteeAddress}:${oracleMatrixUrls.homeServerCropped}`;
 
-        await matrixClientRef.inviteUserWithDid(oracleRoomId, oracleMatrixUserId, wallet.did);
+        await matrixClientRef.inviteUserWithDid(
+          oracleRoomId,
+          oracleMatrixUserId,
+          wallet.did,
+        );
         await refetchOracleInRoom();
       },
     });

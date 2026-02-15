@@ -51,11 +51,7 @@ export class SessionHistoryProcessor {
     await this.cacheManager.set(cacheKey, true, lockTtl);
 
     try {
-      await this.processSessionHistoryWithRetry(
-        params,
-        maxRetries,
-        retryDelay,
-      );
+      await this.processSessionHistoryWithRetry(params, maxRetries, retryDelay);
     } finally {
       // Always remove the lock
       await this.cacheManager.del(cacheKey);
@@ -122,13 +118,16 @@ export class SessionHistoryProcessor {
     }
 
     // Get room ID
-    const userHomeServer = homeServer || await getMatrixHomeServerCroppedForDid(did);
+    const userHomeServer =
+      homeServer || (await getMatrixHomeServerCroppedForDid(did));
     const { roomId } =
-      await this.sessionManagerService.matrixManger.getOracleRoomIdWithHomeServer({
-        userDid: did,
-        oracleEntityDid,
-        userHomeServer,
-      });
+      await this.sessionManagerService.matrixManger.getOracleRoomIdWithHomeServer(
+        {
+          userDid: did,
+          oracleEntityDid,
+          userHomeServer,
+        },
+      );
 
     if (!roomId) {
       this.logger.warn(

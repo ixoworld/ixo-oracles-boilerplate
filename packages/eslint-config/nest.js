@@ -1,8 +1,8 @@
-import jest from 'eslint-plugin-jest';
+import vitest from '@vitest/eslint-plugin';
 import { base } from './base.js';
 
 /**
- * NestJS ESLint flat config. Extends base with NestJS-specific rules and Jest.
+ * NestJS ESLint flat config. Extends base with NestJS-specific rules and Vitest.
  */
 export const nest = [
   ...base,
@@ -18,10 +18,9 @@ export const nest = [
       '**/__tests__/**/*.[jt]s?(x)',
       '**/?(*.)+(spec|test).[jt]s?(x)',
     ],
-    ...jest.configs['flat/recommended'],
+    plugins: { vitest },
     rules: {
-      ...jest.configs['flat/recommended'].rules,
-      'jest/prefer-lowercase-title': 'off',
+      ...vitest.configs.recommended.rules,
     },
   },
 ];

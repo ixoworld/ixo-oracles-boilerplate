@@ -347,7 +347,9 @@ ___________________________________________________________
   public async createSession(
     createSessionDto: CreateChatSessionDto,
   ): Promise<CreateChatSessionResponseDto> {
-    const userHomeServer = createSessionDto.homeServer || await getMatrixHomeServerCroppedForDid(createSessionDto.did);
+    const userHomeServer =
+      createSessionDto.homeServer ||
+      (await getMatrixHomeServerCroppedForDid(createSessionDto.did));
     const { roomId } = await this.matrixManger.getOracleRoomIdWithHomeServer({
       userDid: createSessionDto.did,
       oracleEntityDid: createSessionDto.oracleEntityDid,

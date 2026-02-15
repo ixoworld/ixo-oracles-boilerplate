@@ -43,7 +43,7 @@ class MockChatModel extends BaseChatModel {
 
   async _generate(
     _messages: BaseMessage[],
-    _options?: BaseLanguageModelCallOptions  ,
+    _options?: BaseLanguageModelCallOptions,
   ): Promise<ChatResult> {
     const response = this.responses[this.callCount % this.responses.length];
     this.callCount++;
@@ -63,7 +63,10 @@ class MockChatModel extends BaseChatModel {
     return 'mock';
   }
 
-  override async invoke(_input: BaseLanguageModelInput, _config?: Partial<BaseChatModelCallOptions>): Promise<AIMessageChunk> {
+  override async invoke(
+    _input: BaseLanguageModelInput,
+    _config?: Partial<BaseChatModelCallOptions>,
+  ): Promise<AIMessageChunk> {
     const response = this.responses[this.callCount % this.responses.length];
     this.callCount++;
     return new AIMessageChunk(response ?? '');
@@ -71,7 +74,7 @@ class MockChatModel extends BaseChatModel {
 
   override bindTools(
     _tools: BindToolsInput[],
-    _kwargs?: Partial<BaseChatModelCallOptions>  ,
+    _kwargs?: Partial<BaseChatModelCallOptions>,
   ): Runnable<
     BaseLanguageModelInput,
     AIMessageChunk<MessageStructure>,

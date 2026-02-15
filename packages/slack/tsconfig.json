@@ -4,5 +4,12 @@
     "baseUrl": "./",
     "outDir": "./dist",
     "allowSyntheticDefaultImports": true
-  }
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "vitest.config.ts",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ]
 }

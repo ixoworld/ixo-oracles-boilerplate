@@ -4,7 +4,6 @@ export class JobExecutor {
 
   async run<T>(job: () => Promise<T>): Promise<T> {
     return new Promise((resolve, reject) => {
-
       this.queue.push(async () => {
         try {
           const result = await job();
@@ -29,7 +28,6 @@ export class JobExecutor {
       const job = this.queue.shift();
       if (job) {
         try {
-           
           await job();
         } catch (error) {
           // eslint-disable-next-line no-console -- this is a serial queue

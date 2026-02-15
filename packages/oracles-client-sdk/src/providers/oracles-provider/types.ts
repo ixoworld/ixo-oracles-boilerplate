@@ -31,7 +31,9 @@ export interface IOraclesContextProps {
   executeAgAction: (name: string, args: unknown) => Promise<unknown>;
   getAgActionRender: (
     name: string,
-  ) => ((props: Record<string, unknown>) => React.ReactElement | null) | undefined;
+  ) =>
+    | ((props: Record<string, unknown>) => React.ReactElement | null)
+    | undefined;
 }
 
 export interface IOraclesProviderProps {
