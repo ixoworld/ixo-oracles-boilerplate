@@ -100,6 +100,9 @@ importers:
       '@ixo/ucan':
         specifier: 1.0.1
         version: 1.0.1(@cosmjs/crypto@0.33.1)(@cosmjs/encoding@0.33.1)(typescript@5.9.3)
+      '@ixo/vitest-config':
+        specifier: ^1.0.0
+        version: 1.0.0(@swc/core@1.15.2)(@types/debug@4.1.12)(@types/node@22.19.1)(jiti@2.6.1)(jsdom@20.0.3)(lightningcss@1.30.2)(rollup@4.53.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.1)
       '@langchain/community':
         specifier: ^1.0.3
         version: 1.0.4(5e935b8881f20c4811d3e16c26549bec)
@@ -227,9 +230,6 @@ importers:
         specifier: ^3.24.6
         version: 3.25.0(zod@4.1.12)
     devDependencies:
-      '@ixo/vitest-config':
-        specifier: workspace:*
-        version: link:../../packages/vitest-config
       '@nestjs/cli':
         specifier: ^11.0.0
         version: 11.0.12(@swc/cli@0.6.0(@swc/core@1.15.2)(chokidar@4.0.3))(@swc/core@1.15.2)(@types/node@22.19.1)
@@ -3086,6 +3086,14 @@ packages:
       '@cosmjs/crypto':
         optional: true
       '@cosmjs/encoding':
+        optional: true
+
+  '@ixo/vitest-config@1.0.0':
+    resolution: {integrity: sha512-PsflY6Dmac5VkNsuuUaehIIW6RN48kZJ6/x3f/GpdG0Ky2PTrQSrSmtQK32FND5zHV+4iHLIh6Dxml9BeqPK6w==}
+    peerDependencies:
+      '@swc/core': ^1.0.0
+    peerDependenciesMeta:
+      '@swc/core':
         optional: true
 
   '@jest/create-cache-key-function@29.7.0':
@@ -15071,6 +15079,35 @@ snapshots:
     optionalDependencies:
       '@cosmjs/crypto': 0.33.1
       '@cosmjs/encoding': 0.33.1
+
+  '@ixo/vitest-config@1.0.0(@swc/core@1.15.2)(@types/debug@4.1.12)(@types/node@22.19.1)(jiti@2.6.1)(jsdom@20.0.3)(lightningcss@1.30.2)(rollup@4.53.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.1)':
+    dependencies:
+      '@vitest/coverage-v8': 3.2.4(vitest@3.2.4(@types/debug@4.1.12)(@types/node@22.19.1)(jiti@2.6.1)(jsdom@20.0.3)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.1))
+      unplugin-swc: 1.5.9(@swc/core@1.15.2)(rollup@4.53.3)
+      vitest: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.1)(jiti@2.6.1)(jsdom@20.0.3)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.1)
+    optionalDependencies:
+      '@swc/core': 1.15.2
+    transitivePeerDependencies:
+      - '@edge-runtime/vm'
+      - '@types/debug'
+      - '@types/node'
+      - '@vitest/browser'
+      - '@vitest/ui'
+      - happy-dom
+      - jiti
+      - jsdom
+      - less
+      - lightningcss
+      - msw
+      - rollup
+      - sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - supports-color
+      - terser
+      - tsx
+      - yaml
 
   '@jest/create-cache-key-function@29.7.0':
     dependencies:
