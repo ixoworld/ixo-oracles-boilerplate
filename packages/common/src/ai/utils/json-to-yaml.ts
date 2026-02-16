@@ -7,7 +7,7 @@ export const jsonToYaml = <T extends object>(
   const isArray = Array.isArray(json);
 
   if (isArray) {
-    return (json as unknown as any[])
+    return (json as unknown as unknown[])
       .map((item) => {
         if (item !== null && typeof item === 'object') {
           // Recursively process nested objects/arrays with increased indentation

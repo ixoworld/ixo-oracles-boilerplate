@@ -1,4 +1,4 @@
-import { Document } from 'langchain';
+import { type Document } from 'langchain';
 import { getOpenAiClient } from '../models/openai.js';
 
 export const generateQuestionsFromChunks = async (

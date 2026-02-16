@@ -21,7 +21,7 @@ export interface BlockDetail {
   id: string;
   blockType: string;
   nodeName: string;
-  attributes: Record<string, any>;
+  attributes: Record<string, unknown>;
   text?: string;
   children?: BlockDetail[];
 }
@@ -136,9 +136,9 @@ function extractBlockDetail(
   if (attrsValue) {
     detail.attributes.attrs = attrsValue;
     // Extract blockType from attrs if available
-    const attrs = attrsValue as Record<string, any>;
-    if (attrs.type) {
-      detail.blockType = attrs.type as string;
+    const attrsType = attrsValue.type;
+    if (typeof attrsType === 'string') {
+      detail.blockType = attrsType;
     }
   }
 
@@ -167,8 +167,8 @@ function extractBlockDetail(
  */
 export function extractBlockProperties(
   detail: BlockDetail,
-): Record<string, any> {
-  const merged: Record<string, any> = {};
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = {};
 
   // Special handling for domainCreator blocks: parse surveySchema and answers
   // Check if this is a domainCreator block (either by blockType or by checking children)
@@ -217,7 +217,7 @@ export function extractBlockProperties(
 export function simplifyBlockForAgent(detail: BlockDetail): {
   id: string;
   type: string;
-  properties: Record<string, any>;
+  properties: Record<string, unknown>;
   text?: string;
 } {
   // Use detail.blockType (already extracted in extractBlockDetail)
@@ -254,7 +254,7 @@ export function simplifyBlockForAgent(detail: BlockDetail): {
  */
 export function collectAllBlocks(
   fragment: Y.XmlFragment,
-  includeText: boolean = true,
+  _includeText: boolean = true,
 ): BlockDetail[] {
   const results: BlockDetail[] = [];
 
@@ -288,7 +288,7 @@ export function collectAllBlocks(
 export function getBlockDetail(
   doc: Y.Doc,
   blockId: string,
-  includeText: boolean = true,
+  _includeText: boolean = true,
 ): BlockDetail | null {
   const fragment = doc.getXmlFragment('document');
   const blockContainer = findBlockById(fragment, blockId);

@@ -16,10 +16,6 @@ import { Server, Socket } from 'socket.io';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { WsService } from './ws.service';
 
-interface ISocketData {
-  sessionId: string;
-}
-
 @WebSocketGateway({
   cors: {
     origin: '*',
@@ -79,7 +75,7 @@ export class WsGateway
       this.logger.log(
         `WebSocket connection closed for session: ${sessionId}, client: ${client.id}`,
       );
-      this.wsService.removeClientConnection(sessionId, client);
+      void this.wsService.removeClientConnection(sessionId, client);
     } else {
       this.logger.warn(
         `WebSocket disconnected without sessionId: ${client.id}`,
@@ -114,7 +110,12 @@ export class WsGateway
    */
   private handleFrontendToolResult(
     client: Socket,
-    data: any,
+    data: {
+      toolCallId: string;
+      result?: unknown;
+      error?: string;
+      sessionId?: string;
+    },
     eventType: 'browser_tool_result' | 'action_call_result',
   ): void {
     const sessionId = client.handshake.query.sessionId as string;
@@ -144,7 +145,8 @@ export class WsGateway
   })
   handleToolResult(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { toolCallId: string; result: any; error?: string },
+    @MessageBody()
+    data: { toolCallId: string; result: unknown; error?: string },
   ): void {
     this.handleFrontendToolResult(client, data, 'browser_tool_result');
   }
@@ -162,7 +164,7 @@ export class WsGateway
   handleActionCallResult(
     @ConnectedSocket() client: Socket,
     @MessageBody()
-    data: { sessionId: string; toolCallId: string; result: any },
+    data: { sessionId: string; toolCallId: string; result: unknown },
   ): void {
     this.handleFrontendToolResult(client, data, 'action_call_result');
   }

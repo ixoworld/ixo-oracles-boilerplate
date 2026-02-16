@@ -1,13 +1,16 @@
 import { Logger } from '@ixo/logger';
-import { BaseMessage } from '@langchain/core/messages';
+import { type BaseMessage } from '@langchain/core/messages';
 import {
   ChatPromptTemplate,
   MessagesPlaceholder,
 } from '@langchain/core/prompts';
-import { RunnableConfig } from '@langchain/core/runnables';
-import { StructuredTool, Tool } from '@langchain/core/tools';
+import { type RunnableConfig } from '@langchain/core/runnables';
+import { type StructuredTool, type Tool } from '@langchain/core/tools';
 import { getChatOpenAiModel } from 'src/ai/models/openai.js';
-import { GENERIC_CHAT_PROMPT, InputVariables } from './generic-chat.prompt.js';
+import {
+  GENERIC_CHAT_PROMPT,
+  type InputVariables,
+} from './generic-chat.prompt.js';
 
 type StateWithMessages<S extends object> = {
   messages: BaseMessage[];

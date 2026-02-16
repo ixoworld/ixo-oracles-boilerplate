@@ -11,12 +11,15 @@ import {
   type SerializerProtocol,
   TASKS,
 } from '@langchain/langgraph-checkpoint';
-import Database, { Database as DatabaseType, Statement } from 'better-sqlite3';
-import { BaseMessage } from 'langchain';
+import Database, {
+  type Database as DatabaseType,
+  type Statement,
+} from 'better-sqlite3';
+import { type BaseMessage } from 'langchain';
 import migration001 from './migrations/001_add_created_at_to_messages';
 import {
   _default,
-  CleanAdditionalKwargs,
+  type CleanAdditionalKwargs,
   cleanAdditionalKwargs,
   stringify,
 } from './utils';
@@ -181,7 +184,10 @@ export class SqliteSaver extends BaseCheckpointSaver {
     return new SqliteSaver(new Database(connStringOrLocalPath));
   }
 
-  static fromDatabase(db: DatabaseType, serde?: SerializerProtocol): SqliteSaver {
+  static fromDatabase(
+    db: DatabaseType,
+    serde?: SerializerProtocol,
+  ): SqliteSaver {
     return new SqliteSaver(db, serde);
   }
 
@@ -742,7 +748,7 @@ ON writes(thread_id, checkpoint_id, channel);
           }
 
           const serializedMessage = encoder.encode(
-            stringify(message, (_: string, value: any) => {
+            stringify(message, (_: string, value: unknown) => {
               return _default(value);
             }),
           );

@@ -70,7 +70,7 @@ const createCallMxEvent = async (
   const event = await params.mxClient.sendEvent(
     params.roomId,
     callEvent.type as keyof TimelineEvents,
-    callEvent.content as any,
+    callEvent.content as unknown as TimelineEvents[keyof TimelineEvents],
   );
   return { callId: `${event.event_id}@${params.roomId}`, encryptionKey };
 };

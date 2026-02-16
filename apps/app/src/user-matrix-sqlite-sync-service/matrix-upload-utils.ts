@@ -1,6 +1,6 @@
-import { MatrixEvent, MatrixManager } from '@ixo/matrix';
+import { type MatrixEvent, MatrixManager } from '@ixo/matrix';
 import { Logger } from '@nestjs/common';
-import { File } from 'node:buffer';
+import { type File } from 'node:buffer';
 
 const logger = new Logger('MatrixUploadUtils');
 
@@ -18,23 +18,22 @@ const EVENTS = {
   MEDIA: 'm.ixo.media',
 } as const;
 
-export interface MatrixMediaEvent
-  extends MatrixEvent<{
-    msgtype: 'm.file';
-    body: string;
-    filename: string;
-    cid: string;
-    sender: string;
-    info: {
-      mimetype: string;
-      size: number;
-    };
-    file: {
-      url: string;
-      mimetype: string;
-      size: number;
-    };
-  }> {}
+export type MatrixMediaEvent = MatrixEvent<{
+  msgtype: 'm.file';
+  body: string;
+  filename: string;
+  cid: string;
+  sender: string;
+  info: {
+    mimetype: string;
+    size: number;
+  };
+  file: {
+    url: string;
+    mimetype: string;
+    size: number;
+  };
+}>;
 
 /**
  * Uploads media to a Matrix room
@@ -68,7 +67,7 @@ export async function uploadMediaToRoom(
         `Found existing media event ${oldEventId} for storageKey ${storageKey}, will redact after successful upload`,
       );
     }
-  } catch (error) {
+  } catch (_error) {
     // State event doesn't exist, proceed with upload
     logger.debug(
       `No existing media state event found for storageKey ${storageKey}, proceeding with new upload`,
@@ -154,9 +153,7 @@ export async function uploadMediaToRoom(
         oldEventId,
         'Replacing with updated file',
       );
-      logger.debug(
-        `Successfully redacted old media event ${oldEventId}`,
-      );
+      logger.debug(`Successfully redacted old media event ${oldEventId}`);
     } catch (redactError) {
       logger.warn(
         `Failed to redact old media event ${oldEventId}:`,

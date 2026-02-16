@@ -9,7 +9,7 @@ import { CallsService } from './calls.service';
   providers: [
     CallsService,
     {
-      useFactory(...args) {
+      useFactory() {
         return MatrixManager.getInstance();
       },
       provide: 'MATRIX_MANAGER',

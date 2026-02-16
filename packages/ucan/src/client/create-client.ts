@@ -9,7 +9,12 @@
 
 import * as Client from '@ucanto/client';
 import { ed25519 } from '@ucanto/principal';
-import type { Signer, Delegation, Capability, Principal } from '@ucanto/interface';
+import type {
+  Signer,
+  Delegation,
+  Capability,
+  Principal,
+} from '@ucanto/interface';
 import type { SupportedDID } from '../types.js';
 
 /**
@@ -66,7 +71,7 @@ export async function generateKeypair(): Promise<{
  * @returns The signer
  */
 export function parseSigner(privateKey: string, did?: SupportedDID): Signer {
-  const signer =  ed25519.Signer.parse(privateKey);
+  const signer = ed25519.Signer.parse(privateKey);
   if (did) {
     return signer.withDID(did);
   }
@@ -92,7 +97,10 @@ export function parseSigner(privateKey: string, did?: SupportedDID): Signer {
  * console.log('Private Key (for server config):', privateKey);
  * ```
  */
-export async function signerFromMnemonic(mnemonic: string, did?: SupportedDID): Promise<{
+export async function signerFromMnemonic(
+  mnemonic: string,
+  did?: SupportedDID,
+): Promise<{
   signer: Signer;
   did: string;
   privateKey: string;
@@ -127,10 +135,15 @@ export async function signerFromMnemonic(mnemonic: string, did?: SupportedDID): 
   );
   keyMaterial.set(ED25519_PRIV_MULTICODEC, 0);
   keyMaterial.set(seed, ED25519_PRIV_MULTICODEC.length);
-  keyMaterial.set(ED25519_PUB_MULTICODEC, ED25519_PRIV_MULTICODEC.length + seed.length);
+  keyMaterial.set(
+    ED25519_PUB_MULTICODEC,
+    ED25519_PRIV_MULTICODEC.length + seed.length,
+  );
   keyMaterial.set(
     keypair.pubkey,
-    ED25519_PRIV_MULTICODEC.length + seed.length + ED25519_PUB_MULTICODEC.length,
+    ED25519_PRIV_MULTICODEC.length +
+      seed.length +
+      ED25519_PUB_MULTICODEC.length,
   );
 
   // Encode as base64pad multibase (prefix 'M')
@@ -138,7 +151,7 @@ export async function signerFromMnemonic(mnemonic: string, did?: SupportedDID): 
   const multibasePrivateKey = 'M' + base64;
 
   // Parse using ucanto's parser to get a proper Signer
-  let signer = ed25519.Signer.parse(multibasePrivateKey);
+  const signer = ed25519.Signer.parse(multibasePrivateKey);
   const finalSigner = did ? signer.withDID(did) : signer;
 
   return {
@@ -190,10 +203,10 @@ export async function createDelegation(options: {
   // Create principal from any DID (did:key, did:ixo, did:web, etc.)
   const audiencePrincipal = createPrincipal(options.audience);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return Client.delegate({
     issuer: options.issuer,
     audience: audiencePrincipal,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ucanto delegate() expects a specific branded tuple type incompatible with Capability[]
     capabilities: options.capabilities as any,
     expiration: options.expiration,
     proofs: options.proofs,
@@ -284,7 +297,9 @@ export async function serializeInvocation(
  * @param delegation - The delegation to serialize
  * @returns Base64-encoded CAR data
  */
-export async function serializeDelegation(delegation: Delegation): Promise<string> {
+export async function serializeDelegation(
+  delegation: Delegation,
+): Promise<string> {
   // Archive the delegation (returns Result type)
   const archive = await delegation.archive();
 
@@ -322,7 +337,7 @@ export async function parseDelegation(serialized: string): Promise<Delegation> {
     throw new Error('Failed to parse delegation: no data returned');
   }
 
-  return result.ok as Delegation;
+  return result.ok;
 }
 
 // Re-export useful types

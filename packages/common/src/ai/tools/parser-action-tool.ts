@@ -1,4 +1,4 @@
-import { IRunnableConfigWithRequiredFields } from '@ixo/matrix';
+import { type IRunnableConfigWithRequiredFields } from '@ixo/matrix';
 import { tool } from '@langchain/core/tools';
 import { callAgAction } from './action-caller.js';
 import { logActionToMatrix } from './log-action-to-matrix.js';
@@ -6,7 +6,7 @@ import { logActionToMatrix } from './log-action-to-matrix.js';
 interface IParseAgActionParams {
   name: string;
   description: string;
-  schema: Record<string, any>;
+  schema: Record<string, unknown>;
 }
 
 // Helper function to parse AG-UI action into LangChain tool
@@ -27,14 +27,14 @@ export function parserActionTool(action: IParseAgActionParams) {
         sessionId,
         toolCallId: `ag_${requestId}`,
         toolName: name,
-        args: input,
+        args: input as Record<string, unknown>,
         timeout: 5000, // 5 seconds
       });
 
       if (configs?.matrix.roomId) {
-        logActionToMatrix(
+        void logActionToMatrix(
           {
-            name: name,
+            name,
             args: input as Record<string, unknown>,
             result,
             success: true,
@@ -50,9 +50,9 @@ export function parserActionTool(action: IParseAgActionParams) {
       return JSON.stringify(result);
     },
     {
-      name: name,
-      description: description,
-      schema: schema,
+      name,
+      description,
+      schema,
       metadata: {
         actionTool: true,
       },

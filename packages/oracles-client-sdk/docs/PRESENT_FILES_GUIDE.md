@@ -82,7 +82,12 @@ function ChatInterface() {
 // Option 2: Create a custom component
 import type { ArtifactPreviewProps } from '@ixo/oracles-client-sdk';
 
-function CustomArtifactPreview({ title, fileType, previewUrl, downloadUrl }: ArtifactPreviewProps) {
+function CustomArtifactPreview({
+  title,
+  fileType,
+  previewUrl,
+  downloadUrl,
+}: ArtifactPreviewProps) {
   return (
     <div className="my-custom-preview">
       <h2>{title}</h2>

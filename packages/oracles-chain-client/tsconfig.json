@@ -7,12 +7,18 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "esModuleInterop": true,
-    "types": ["jest", "node"],
+    "types": ["node"],
     "incremental": false,
     "paths": {
       "src/*": ["src/*"]
     }
   },
-  "include": ["src/**/*", "src/**/*.test.ts"],
-  "exclude": ["node_modules", "dist", "integration", "**/*.spec.ts"]
+  "include": ["src/**/*"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "integration",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ]
 }

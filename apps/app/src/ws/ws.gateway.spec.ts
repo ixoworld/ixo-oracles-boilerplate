@@ -1,4 +1,4 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { WsGateway } from './ws.gateway';
 import { WsService } from './ws.service';
 
@@ -7,7 +7,7 @@ describe('WsGateway', () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [WsGateway, WsService],
+      providers: [WsGateway, { provide: WsService, useValue: {} }],
     }).compile();
 
     gateway = module.get<WsGateway>(WsGateway);

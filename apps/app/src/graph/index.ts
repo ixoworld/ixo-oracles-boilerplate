@@ -70,7 +70,7 @@ export class MainAgentGraph {
     } satisfies Partial<TMainAgentGraphState>;
 
     const agent = await createMainAgent({
-      state: state,
+      state,
       config: {
         ...runnableConfig,
         recursionLimit: 150,
@@ -169,7 +169,7 @@ export class MainAgentGraph {
     } satisfies Partial<TMainAgentGraphState>;
 
     const agent = await createMainAgent({
-      state: state,
+      state,
       config: {
         ...runnableConfig,
         recursionLimit: 150,

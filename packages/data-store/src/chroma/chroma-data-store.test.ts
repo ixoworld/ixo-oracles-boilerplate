@@ -1,21 +1,18 @@
-/* eslint-disable jest/unbound-method  -- ignore this for now */
 import { ChromaClient, Collection, type IEmbeddingFunction } from 'chromadb';
 import { ChromaDataStore } from './chroma-data-store';
 
-jest.mock('chromadb');
+vi.mock('chromadb');
 const embeddingFunction: IEmbeddingFunction = {
-  generate: jest.fn(),
+  generate: vi.fn(),
 };
-jest
-  .mocked(ChromaClient.prototype.getOrCreateCollection)
-  .mockResolvedValue(
-    new Collection(
-      'test',
-      'test',
-      jest.fn() as unknown as ChromaClient,
-      embeddingFunction,
-    ),
-  );
+vi.mocked(ChromaClient.prototype.getOrCreateCollection).mockResolvedValue(
+  new Collection(
+    'test',
+    'test',
+    vi.fn() as unknown as ChromaClient,
+    embeddingFunction,
+  ),
+);
 
 describe('ChromaDataStore', () => {
   beforeAll(() => {
@@ -62,7 +59,7 @@ describe('ChromaDataStore', () => {
     });
 
     it('should create collection or use existing collection', async () => {
-      jest.spyOn(ChromaClient.prototype, 'getOrCreateCollection');
+      vi.spyOn(ChromaClient.prototype, 'getOrCreateCollection');
       const chromaDataStore = new ChromaDataStore({
         collectionName: 'test',
         url: 'http://localhost:8000',
@@ -89,7 +86,7 @@ describe('ChromaDataStore', () => {
       await chromaDataStore.init();
 
       await chromaDataStore.init();
-      jest.mocked(Collection.prototype.query).mockResolvedValue({
+      vi.mocked(Collection.prototype.query).mockResolvedValue({
         ids: [['1', '2']],
         embeddings: null,
         documents: [['Hello, world!', 'Hello, world! 2']],
@@ -125,8 +122,7 @@ describe('ChromaDataStore', () => {
     });
 
     it('should get document by id', async () => {
-      jest.spyOn(Collection.prototype, 'get');
-      jest.mocked(Collection.prototype.get).mockResolvedValue({
+      vi.mocked(Collection.prototype.get).mockResolvedValue({
         ids: ['1'],
         embeddings: null,
         documents: ['Hello, world!'],
@@ -142,7 +138,7 @@ describe('ChromaDataStore', () => {
     });
 
     it('should handle empty results', async () => {
-      jest.mocked(Collection.prototype.query).mockResolvedValue({
+      vi.mocked(Collection.prototype.query).mockResolvedValue({
         ids: [],
         embeddings: null,
         documents: [],
@@ -167,7 +163,6 @@ describe('ChromaDataStore', () => {
     });
 
     it('should upsert documents', async () => {
-      jest.spyOn(Collection.prototype, 'upsert');
       await chromaDataStore.upsert([
         {
           id: '1',
@@ -200,7 +195,6 @@ describe('ChromaDataStore', () => {
     });
 
     it('should delete documents', async () => {
-      jest.spyOn(Collection.prototype, 'delete');
       await chromaDataStore.delete(['1', '2']);
       expect(Collection.prototype.delete).toHaveBeenCalledWith({
         ids: ['1', '2'],

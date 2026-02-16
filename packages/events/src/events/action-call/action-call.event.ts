@@ -3,7 +3,7 @@ import {
   shouldHaveSessionId,
   type WithRequiredEventProps,
 } from '../base-event/base-event';
-import { EVENT_NAME, IActionCallEvent } from './types';
+import { EVENT_NAME, type IActionCallEvent } from './types';
 
 export class ActionCallEvent extends BaseEvent<IActionCallEvent> {
   constructor(public payload: WithRequiredEventProps<IActionCallEvent>) {

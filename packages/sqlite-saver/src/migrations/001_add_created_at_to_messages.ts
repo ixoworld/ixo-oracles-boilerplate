@@ -1,8 +1,8 @@
-import { Database as DatabaseType } from 'better-sqlite3';
+import { type Database as DatabaseType } from 'better-sqlite3';
 
 /**
  * Migration 001: Add created_at column to messages table
- * 
+ *
  * This migration adds the created_at column to the messages table
  * if it doesn't already exist. It also creates the index that depends on it.
  */
@@ -45,4 +45,3 @@ export default {
     }
   },
 };
-

@@ -27,7 +27,7 @@ export function clearSecretStorageKeys() {
 export async function getSecretStorageKey({
   keys,
 }: {
-  keys: any;
+  keys: Record<string, unknown>;
 }): Promise<[string, Uint8Array] | null> {
   const keyIds = Object.keys(keys);
   const keyId = keyIds.find(hasPrivateKey);
@@ -44,7 +44,7 @@ export async function getSecretStorageKey({
 
 export function cacheSecretStorageKey(
   keyId: string,
-  _keyInfo: any,
+  _keyInfo: unknown,
   privateKey: Uint8Array,
 ) {
   secretStorageKeys.set(keyId, privateKey);

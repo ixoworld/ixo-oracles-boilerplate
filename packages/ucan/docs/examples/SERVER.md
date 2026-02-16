@@ -32,9 +32,9 @@ app.use(express.json());
 // =============================================================================
 
 // Server identity (use did:key for simplicity, or did:ixo for production)
-const SERVER_DID = 'did:ixo:ixo1abc...';  // Your server's DID
-const ROOT_DID = 'did:ixo:ixo1admin...';  // Admin who can delegate
-const ROOT_PRIVATE_KEY = 'MgCY...';       // Admin's private key
+const SERVER_DID = 'did:ixo:ixo1abc...'; // Your server's DID
+const ROOT_DID = 'did:ixo:ixo1admin...'; // Admin who can delegate
+const ROOT_PRIVATE_KEY = 'MgCY...'; // Admin's private key
 
 // =============================================================================
 // Define Capabilities
@@ -58,7 +58,7 @@ const EmployeesRead = defineCapability({
     if (claimedLimit > delegatedLimit) {
       return {
         error: new Error(
-          `Cannot request limit=${claimedLimit}, delegation only allows limit=${delegatedLimit}`
+          `Cannot request limit=${claimedLimit}, delegation only allows limit=${delegatedLimit}`,
         ),
       };
     }
@@ -164,7 +164,7 @@ app.post('/protected', async (req: Request, res: Response) => {
   const result = await validator.validate(
     invocationBase64,
     EmployeesRead,
-    buildResourceUri(SERVER_DID)
+    buildResourceUri(SERVER_DID),
   );
 
   if (!result.ok) {
@@ -266,7 +266,9 @@ initializeServer().then(() => {
     console.log('\nEndpoints:');
     console.log('  GET  /health     - Health check');
     console.log('  GET  /info       - Server info');
-    console.log('  POST /protected  - Protected endpoint (requires invocation)');
+    console.log(
+      '  POST /protected  - Protected endpoint (requires invocation)',
+    );
     console.log('  POST /delegate   - Create delegation for a user');
   });
 });
@@ -321,6 +323,7 @@ curl -X POST http://localhost:3000/protected \
 ### Error Responses
 
 **Missing invocation:**
+
 ```json
 {
   "error": "Missing invocation in request body",
@@ -329,6 +332,7 @@ curl -X POST http://localhost:3000/protected \
 ```
 
 **Invalid signature:**
+
 ```json
 {
   "error": "Unauthorized",
@@ -337,6 +341,7 @@ curl -X POST http://localhost:3000/protected \
 ```
 
 **Caveat violation:**
+
 ```json
 {
   "error": "Unauthorized",
@@ -348,6 +353,7 @@ curl -X POST http://localhost:3000/protected \
 ```
 
 **Replay attack:**
+
 ```json
 {
   "error": "Unauthorized",
@@ -411,4 +417,3 @@ export class EmployeesController {
   }
 }
 ```
-

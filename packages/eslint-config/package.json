@@ -1,26 +1,31 @@
 {
   "name": "@ixo/eslint-config",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": false,
+  "type": "module",
   "publishConfig": {
     "access": "public"
   },
+  "exports": {
+    "./base": "./base.js",
+    "./nest": "./nest.js",
+    "./library": "./library.js",
+    "./prettier": "./prettier-base.cjs"
+  },
   "files": [
     "base.js",
-    "library.js",
     "nest.js",
-    "next.js",
-    "prettier-base.js",
-    "react-internal.js"
+    "library.js",
+    "prettier-base.cjs"
   ],
-  "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "6.17.0",
-    "@typescript-eslint/parser": "6.17.0",
-    "@vercel/style-guide": "^5.2.0",
-    "eslint-config-prettier": "^9.1.0",
-    "eslint-config-turbo": "^2.0.0",
-    "eslint-plugin-only-warn": "^1.1.0",
-    "eslint-plugin-prettier": "^5.1.3",
-    "typescript": "^5.3.4"
+  "peerDependencies": {
+    "@eslint/js": "^9.18.0",
+    "eslint": ">=9",
+    "eslint-config-prettier": "^10.0.0",
+    "eslint-config-turbo": "^2.6.0",
+    "@vitest/eslint-plugin": "^1.2.1",
+    "prettier": ">=3",
+    "typescript": ">=5",
+    "typescript-eslint": "^8.20.0"
   }
 }

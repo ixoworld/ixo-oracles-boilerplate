@@ -1,4 +1,4 @@
-import { Server } from 'socket.io';
+import { type Server } from 'socket.io';
 import { rootEventEmitter } from '../../root-event-emitter/root-event-emitter';
 import {
   BaseEvent,
@@ -56,7 +56,7 @@ describe('BaseEvent', () => {
   it('should emit an event with the correct payload', () => {
     const payload = { sessionId: '456', requestId: '789' };
     const event = new TestEvent(payload);
-    const emitSpy = jest.spyOn(rootEventEmitter, 'emit');
+    const emitSpy = vi.spyOn(rootEventEmitter, 'emit');
     event.emit();
     expect(emitSpy).toHaveBeenCalledWith(TestEvent.eventName, payload);
   });
@@ -64,10 +64,10 @@ describe('BaseEvent', () => {
   it('should register event handlers correctly', () => {
     const payload = { sessionId: '456', requestId: '789' };
     const server = {
-      to: jest.fn().mockReturnThis(),
-      emit: jest.fn(),
+      to: vi.fn().mockReturnThis(),
+      emit: vi.fn(),
     } as unknown as Server;
-    const logSpy = jest.spyOn(console, 'log');
+    const logSpy = vi.spyOn(console, 'log');
     TestEvent.registerEventHandlers(server);
     rootEventEmitter.emit(TestEvent.eventName, payload);
     expect(logSpy).toHaveBeenCalled();

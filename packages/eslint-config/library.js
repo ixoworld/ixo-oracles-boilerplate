@@ -1,29 +1,16 @@
-const { resolve } = require('node:path');
+import { base } from './base.js';
 
-const project = resolve(process.cwd(), 'tsconfig.json');
-
-/** @type {import("eslint").Linter.Config} */
-module.exports = {
-  extends: ['./base.js'],
-  plugins: ['only-warn'],
-  globals: {
-    React: true,
-    JSX: true,
-  },
-  env: {
-    node: true,
-  },
-  settings: {
-    'import/resolver': {
-      typescript: {
-        project,
-      },
+/**
+ * Library ESLint flat config. Extends base with relaxed rules for shared libraries.
+ */
+export const library = [
+  ...base,
+  {
+    files: ['**/*.ts', '**/*.tsx'],
+    rules: {
+      '@typescript-eslint/explicit-function-return-type': 'off',
     },
   },
-  ignorePatterns: ['.*.js', 'node_modules/', 'dist/'],
-  overrides: [
-    {
-      files: ['*.js?(x)', '*.ts?(x)'],
-    },
-  ],
-};
+];
+
+export default library;

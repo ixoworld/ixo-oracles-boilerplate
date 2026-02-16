@@ -6,7 +6,6 @@ export interface IChromaOptions {
   url: string;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- singleton
 export class ChromaClientSingleton {
   private static instance: ChromaDataStore;
 
@@ -20,7 +19,6 @@ export class ChromaClientSingleton {
   public static async getInstance(
     opts: IChromaOptions,
   ): Promise<ChromaDataStore> {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- singleton
     if (!ChromaClientSingleton.instance) {
       const store = new ChromaDataStore({
         collectionName: opts.collectionName,

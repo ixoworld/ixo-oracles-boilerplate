@@ -1,5 +1,5 @@
 import { type AllEvents } from '@ixo/oracles-events/types';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { useOraclesContext } from '../../providers/oracles-provider/oracles-context.js';
 import { useOraclesConfig } from '../use-oracles-config.js';
@@ -102,7 +102,11 @@ export function useWebSocketEvents(
       // Listen for browser tool calls
       newSocket.on(
         'browser_tool_call',
-        async (data: { toolCallId: string; toolName: string; args: any }) => {
+        async (data: {
+          toolCallId: string;
+          toolName: string;
+          args: Record<string, unknown>;
+        }) => {
           await executeToolAndEmitResult(
             {
               socket: newSocket,
@@ -130,7 +134,7 @@ export function useWebSocketEvents(
         requestId: string;
         toolName: string;
         toolCallId: string;
-        args: any;
+        args: Record<string, unknown>;
         status: string;
       }) => {
         const tool = actionToolsRef.current?.[data.toolName];

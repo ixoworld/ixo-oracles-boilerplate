@@ -1,15 +1,15 @@
 import { Logger } from '@ixo/logger';
 import { PromptTemplate } from '@langchain/core/prompts';
-import { LangfuseConfig, observeOpenAI } from 'langfuse';
+import { type LangfuseConfig, observeOpenAI } from 'langfuse';
 import { OpenAI } from 'openai';
 import { zodResponseFormat } from 'openai/helpers/zod';
-import  z from 'zod';
+import z from 'zod';
 import { type EnsureKeys } from '../types.js';
 import { jsonToYaml } from '../utils/index.js';
 import { semanticRouterPrompt } from './semantic-router-prompt.js';
 import { validateRoutes } from './validate-routes.js';
-import { APIPromise } from 'openai/index.js';
-import { ParsedChatCompletion } from 'openai/resources/chat/completions.mjs';
+import { type APIPromise } from 'openai/index.js';
+import { type ParsedChatCompletion } from 'openai/resources/chat/completions.mjs';
 
 /**
  * Creates a semantic router that resolves the path based on the given routes and basedOn value.
@@ -45,7 +45,10 @@ export const createSemanticRouter = <
 ) => Promise<keyof R>) => {
   const keys = validateRoutes(routes, basedOn);
   const schema = z.object({
-    nextRoute: z.enum(keys as [string, ...string[]], 'The routes that will be used to resolve the path'),
+    nextRoute: z.enum(
+      keys as [string, ...string[]],
+      'The routes that will be used to resolve the path',
+    ),
   });
   return async <T extends Record<string, unknown>>(
     state: EnsureKeys<T, K>,

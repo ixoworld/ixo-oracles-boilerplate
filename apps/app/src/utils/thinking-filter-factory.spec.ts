@@ -125,7 +125,9 @@ describe('StreamTagProcessor', () => {
     expect(emitted).toEqual(['Content']);
     // Check internal state if possible/necessary, though output is primary
     // processor.buffer should be empty after flush
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect((processor as any).buffer).toBe('');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect((processor as any).inAnswer).toBe(false);
   });
 

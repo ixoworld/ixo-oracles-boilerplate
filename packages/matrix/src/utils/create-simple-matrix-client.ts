@@ -9,7 +9,7 @@ import {
   SimpleFsStorageProvider,
   UserID,
 } from 'matrix-bot-sdk';
-import * as sdk from 'matrix-js-sdk';
+import type * as sdk from 'matrix-js-sdk';
 import * as path from 'node:path';
 import { createMatrixClient } from './mx.js';
 
@@ -151,7 +151,7 @@ export class SimpleMatrixClient {
     if (!this.isStarted) return;
 
     try {
-      await this.mxClient.stop();
+      this.mxClient.stop();
       this.isStarted = false;
       Logger.info('✅ Matrix client stopped');
     } catch (error) {
@@ -210,7 +210,7 @@ export class SimpleMatrixClient {
   public async sendStateEvent(
     roomId: string,
     eventType: string,
-    content: any,
+    content: Record<string, unknown>,
     stateKey = '',
   ): Promise<string> {
     if (!this.isStarted) {
@@ -286,7 +286,7 @@ export class SimpleMatrixClient {
       event: MessageEvent<MessageEventContent>,
     ) => void,
   ): () => void {
-    const fn = (roomId: string, event: any) => {
+    const fn = (roomId: string, event: Record<string, unknown>) => {
       const message = new MessageEvent(event);
       if (!message) return;
 
@@ -304,7 +304,7 @@ export class SimpleMatrixClient {
    */
   public removeListener(
     event: string,
-    callback: (...args: any[]) => void,
+    callback: (...args: unknown[]) => void,
   ): void {
     this.mxClient.removeListener(event, callback);
   }
@@ -436,7 +436,7 @@ export class SimpleMatrixClient {
         type: 'm.id.user',
         user: userId,
       },
-      password: password,
+      password,
     };
   }
 }

@@ -105,20 +105,17 @@ const router = createSemanticRouter({
 The AI module provides a comprehensive suite of AI-powered tools and utilities:
 
 - **Document Processing**
-
   - Text splitting and chunking
   - Document relevance checking
   - File loading and format conversion
   - Similarity search filtering
 
 - **Semantic Routing**
-
   - Intent-based routing
   - OpenAI integration
   - LangSmith tracing support
 
 - **Search and Retrieval**
-
   - Web search integration with Tavily
   - Vector similarity search
   - Document retrieval tools
@@ -133,13 +130,11 @@ The AI module provides a comprehensive suite of AI-powered tools and utilities:
 Core services for Matrix integration and state management:
 
 - **Room Manager**
-
   - Matrix room creation and retrieval
   - DID-based room management
   - Access control and validation
 
 - **Session Manager**
-
   - Chat session management
   - AI-powered session titling
   - Matrix state persistence
@@ -159,7 +154,7 @@ The Environment Service provides a type-safe way to manage and access environmen
 
 ```typescript
 // src/services/env/schema.ts
-import  z  from 'zod';
+import z from 'zod';
 
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']),

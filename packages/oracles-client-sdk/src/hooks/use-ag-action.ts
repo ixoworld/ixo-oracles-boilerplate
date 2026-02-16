@@ -1,16 +1,16 @@
 import { useEffect } from 'react';
-import { z } from 'zod';
+import { type z } from 'zod';
 import { useOraclesContext } from '../providers/oracles-provider/oracles-context.js';
 
 export interface AgActionConfig<TSchema extends z.ZodTypeAny = z.ZodTypeAny> {
   name: string;
   description: string;
   parameters: TSchema;
-  handler: (args: z.infer<TSchema>) => Promise<any> | any;
+  handler: (args: z.infer<TSchema>) => Promise<unknown> | unknown;
   render?: (props: {
     status?: 'isRunning' | 'done';
     args?: z.infer<TSchema>;
-    result?: any;
+    result?: unknown;
     isLoading?: boolean;
   }) => React.ReactElement | null;
 }
@@ -63,13 +63,17 @@ export function useAgAction<TSchema extends z.ZodTypeAny>(
       hasRender: !!config.render,
     };
 
-    registerAgAction(action, config.handler, config.render);
+    registerAgAction(
+      action,
+      config.handler as (args: unknown) => Promise<unknown> | unknown,
+      config.render as
+        | ((props: Record<string, unknown>) => React.ReactElement | null)
+        | undefined,
+    );
 
     // Cleanup: unregister on unmount or when name changes
     return () => {
       unregisterAgAction(config.name);
     };
-    // Only re-run if the action name changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.name]);
 }

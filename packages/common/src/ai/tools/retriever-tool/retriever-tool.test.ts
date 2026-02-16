@@ -6,36 +6,36 @@ import { retrieverToolFactory } from './retriever-tool.js';
 const fakeModel = new FakeChatModel({});
 
 // Mock the logger to prevent console output during tests
-jest.mock('@ixo/logger', () => ({
+vi.mock('@ixo/logger', () => ({
   Logger: {
-    error: jest.fn(),
+    error: vi.fn(),
   },
 }));
 
 // Mock the OpenAI model
-jest.mock('../../models/openai', () => ({
+vi.mock('../../models/openai', () => ({
   getChatOpenAiModel: () => fakeModel,
 }));
 
 // Mock the doc relevance checker
-jest.mock('../../utils/doc-relevance-checker', () => ({
-  __esModule: true,
-  default: jest.fn().mockResolvedValue(true),
+vi.mock('../../utils/doc-relevance-checker', () => ({
+  default: vi.fn().mockResolvedValue(true),
 }));
-const fakeDocRelevanceChecker = jest.fn().mockResolvedValue(true);
+const fakeDocRelevanceChecker = vi.fn().mockResolvedValue(true);
 
-jest
-  .spyOn(require('../../utils/doc-relevance-checker'), 'default')
-  .mockImplementation(fakeDocRelevanceChecker);
+vi.spyOn(
+  await import('../../utils/doc-relevance-checker'),
+  'default',
+).mockImplementation(fakeDocRelevanceChecker);
 
 describe('RetrieverTool', () => {
-  let mockStore: jest.Mocked<VectorDBDataStore>;
-  let mockModel: FakeChatModel = new FakeChatModel({});
+  let mockStore: { queryWithSimilarity: ReturnType<typeof vi.fn> };
+  const mockModel: FakeChatModel = new FakeChatModel({});
 
   beforeEach(() => {
     mockStore = {
-      queryWithSimilarity: jest.fn(),
-    } as unknown as jest.Mocked<VectorDBDataStore>;
+      queryWithSimilarity: vi.fn(),
+    };
   });
 
   it('should retrieve documents with default settings', async () => {
@@ -46,7 +46,9 @@ describe('RetrieverTool', () => {
 
     mockStore.queryWithSimilarity.mockResolvedValue(mockDocs);
 
-    const tool = retrieverToolFactory({ store: mockStore });
+    const tool = retrieverToolFactory({
+      store: mockStore as unknown as VectorDBDataStore,
+    });
     const result = (await tool.invoke({ query: 'test query' })) as Document[];
 
     expect(mockStore.queryWithSimilarity).toHaveBeenCalledWith('test query', {
@@ -76,7 +78,7 @@ describe('RetrieverTool', () => {
     const requestId = 'test-request-id';
 
     const tool = retrieverToolFactory({
-      store: mockStore,
+      store: mockStore as unknown as VectorDBDataStore,
       map: resultsMap,
       requestId,
     });
@@ -89,7 +91,9 @@ describe('RetrieverTool', () => {
   it('should return undefined when no documents found', async () => {
     mockStore.queryWithSimilarity.mockResolvedValue([]);
 
-    const tool = retrieverToolFactory({ store: mockStore });
+    const tool = retrieverToolFactory({
+      store: mockStore as unknown as VectorDBDataStore,
+    });
     const result = await tool.invoke({ query: 'test query' });
 
     expect(result).toBeUndefined();
@@ -102,7 +106,7 @@ describe('RetrieverTool', () => {
     mockStore.queryWithSimilarity.mockResolvedValue(mockDocs);
 
     const tool = retrieverToolFactory({
-      store: mockStore,
+      store: mockStore as unknown as VectorDBDataStore,
       similarThreshold: 0.5,
       model: mockModel,
     });
@@ -120,12 +124,15 @@ describe('RetrieverTool', () => {
     mockStore.queryWithSimilarity.mockResolvedValue(mockDocs);
 
     // Mock the relevance checker to throw an error
-    jest
-      .requireMock('../../utils/doc-relevance-checker')
-      .default.mockRejectedValueOnce(new Error('Test error'));
+    const docRelevanceModule = await import(
+      '../../utils/doc-relevance-checker'
+    );
+    (
+      docRelevanceModule.default as ReturnType<typeof vi.fn>
+    ).mockRejectedValueOnce(new Error('Test error'));
 
     const tool = retrieverToolFactory({
-      store: mockStore,
+      store: mockStore as unknown as VectorDBDataStore,
       similarThreshold: 0.5,
       model: mockModel,
     });
@@ -142,7 +149,7 @@ describe('RetrieverTool', () => {
     mockStore.queryWithSimilarity.mockResolvedValue(mockDocs);
     const filters = { category: 'test' };
     const tool = retrieverToolFactory({
-      store: mockStore,
+      store: mockStore as unknown as VectorDBDataStore,
       filters,
     });
 

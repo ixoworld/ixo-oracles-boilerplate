@@ -19,7 +19,10 @@ import {
 import { Logger } from '@ixo/logger';
 
 import { matrixStateManager } from '../matrix-state-manager/matrix-state-manager.js';
-import type { IGraphStateWithRequiredFields } from './types.js';
+import type {
+  IGraphStateWithRequiredFields,
+  IRunnableConfigWithRequiredFields,
+} from './types.js';
 
 // Thread mapping interface (like SQL index)
 interface ThreadMap {
@@ -133,7 +136,7 @@ export class MatrixCheckpointSaver<
     checkpointId: string;
     lastUpdatedAt: number;
   }>;
-  private indexCache: LRUCache<any>; // Used for thread map caching
+  private indexCache: LRUCache<ThreadMap>;
 
   // Metrics
   private metrics: CacheMetrics = {
@@ -255,7 +258,7 @@ export class MatrixCheckpointSaver<
     const cached = this.indexCache.get(cacheKey);
     if (cached) {
       this.metrics.hits++;
-      return cached as ThreadMap;
+      return cached;
     }
 
     this.metrics.misses++;
@@ -267,7 +270,13 @@ export class MatrixCheckpointSaver<
         threadMapKey,
       );
 
-      if (threadMap && !(threadMap as any).deleted) {
+      if (
+        threadMap &&
+        !(
+          'deleted' in threadMap &&
+          (threadMap as Record<string, unknown>).deleted
+        )
+      ) {
         this.indexCache.set(cacheKey, threadMap);
         return threadMap;
       }
@@ -505,7 +514,7 @@ export class MatrixCheckpointSaver<
       // Skip null/deleted/invalid states
       if (
         !stored ||
-        (stored as any).deleted ||
+        ('deleted' in stored && (stored as Record<string, unknown>).deleted) ||
         !this.isValidCheckpoint(stored)
       ) {
         return undefined;
@@ -525,16 +534,20 @@ export class MatrixCheckpointSaver<
   }
 
   // Validate checkpoint has required fields
-  private isValidCheckpoint(checkpoint: any): checkpoint is StoredCheckpoint {
+  private isValidCheckpoint(
+    checkpoint: unknown,
+  ): checkpoint is StoredCheckpoint {
     return (
-      checkpoint &&
+      checkpoint != null &&
       typeof checkpoint === 'object' &&
-      typeof checkpoint.thread_id === 'string' &&
-      typeof checkpoint.checkpoint_id === 'string' &&
-      typeof checkpoint.checkpoint_ns === 'string' &&
-      typeof checkpoint.type === 'string' &&
-      typeof checkpoint.checkpoint === 'string' &&
-      typeof checkpoint.metadata === 'string'
+      typeof (checkpoint as Record<string, unknown>).thread_id === 'string' &&
+      typeof (checkpoint as Record<string, unknown>).checkpoint_id ===
+        'string' &&
+      typeof (checkpoint as Record<string, unknown>).checkpoint_ns ===
+        'string' &&
+      typeof (checkpoint as Record<string, unknown>).type === 'string' &&
+      typeof (checkpoint as Record<string, unknown>).checkpoint === 'string' &&
+      typeof (checkpoint as Record<string, unknown>).metadata === 'string'
     );
   }
 
@@ -580,7 +593,10 @@ export class MatrixCheckpointSaver<
       );
 
       // Skip null/deleted states
-      if (!writes || (writes as any).deleted) {
+      if (
+        !writes ||
+        ('deleted' in writes && (writes as Record<string, unknown>).deleted)
+      ) {
         return [];
       }
 
@@ -591,9 +607,14 @@ export class MatrixCheckpointSaver<
       this.writesCache.set(cacheKey, sorted);
 
       return sorted;
-    } catch (error) {
+    } catch (error: unknown) {
       // M_NOT_FOUND is expected when checkpoint has no writes
-      if ((error as any)?.errcode === 'M_NOT_FOUND') {
+      if (
+        error != null &&
+        typeof error === 'object' &&
+        'errcode' in error &&
+        (error as { errcode: unknown }).errcode === 'M_NOT_FOUND'
+      ) {
         Logger.debug(
           `No writes found for checkpoint ${checkpointId} (expected for checkpoints with writesCount=0)`,
         );
@@ -664,7 +685,9 @@ export class MatrixCheckpointSaver<
     }
 
     // Extract Matrix configs (Matrix-specific)
-    const configs = (config.configurable as any)?.configs;
+    const configs = (
+      config.configurable as IRunnableConfigWithRequiredFields['configurable']
+    )?.configs;
     if (!configs) {
       Logger.error('Missing Matrix configs in configurable', {
         threadId,
@@ -785,7 +808,9 @@ export class MatrixCheckpointSaver<
     }
 
     // Extract Matrix configs (Matrix-specific)
-    const configs = (config.configurable as any)?.configs;
+    const configs = (
+      config.configurable as IRunnableConfigWithRequiredFields['configurable']
+    )?.configs;
     if (!configs) {
       Logger.error('Missing Matrix configs in list', { threadId });
       return;
@@ -860,7 +885,9 @@ export class MatrixCheckpointSaver<
         if (filter && Object.keys(filter).length > 0) {
           let matches = true;
           for (const [key, value] of Object.entries(filter)) {
-            if ((metadata as any)[key] !== value) {
+            if (
+              (metadata as unknown as Record<string, unknown>)[key] !== value
+            ) {
               matches = false;
               break;
             }
@@ -944,7 +971,9 @@ export class MatrixCheckpointSaver<
     }
 
     // Extract Matrix configs (Matrix-specific)
-    const configs = (config.configurable as any)?.configs;
+    const configs = (
+      config.configurable as IRunnableConfigWithRequiredFields['configurable']
+    )?.configs;
     if (!configs) {
       throw new Error('Missing Matrix configs in configurable');
     }
@@ -1007,7 +1036,9 @@ export class MatrixCheckpointSaver<
     }
 
     // Extract Matrix configs (Matrix-specific)
-    const configs = (config.configurable as any)?.configs;
+    const configs = (
+      config.configurable as IRunnableConfigWithRequiredFields['configurable']
+    )?.configs;
     if (!configs) {
       Logger.error('Missing Matrix configs in putWrites', {
         threadId,
@@ -1112,10 +1143,10 @@ export class MatrixCheckpointSaver<
           checkpointNs,
           currentId,
         );
-        await this.stateManager.setState({
+        await this.stateManager.setState<null>({
           roomId,
           stateKey: checkpointKey,
-          data: null as any,
+          data: null,
         });
 
         // Nullify writes
@@ -1125,10 +1156,10 @@ export class MatrixCheckpointSaver<
           checkpointNs,
           currentId,
         );
-        await this.stateManager.setState({
+        await this.stateManager.setState<null>({
           roomId,
           stateKey: writesKey,
-          data: null as any,
+          data: null,
         });
 
         deletedCount++;
@@ -1150,10 +1181,10 @@ export class MatrixCheckpointSaver<
         threadId,
         checkpointNs,
       );
-      await this.stateManager.setState({
+      await this.stateManager.setState<null>({
         roomId,
         stateKey: latestKey,
-        data: null as any,
+        data: null,
       });
 
       // Purge all LRU entries for this thread

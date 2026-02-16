@@ -1,7 +1,7 @@
 import { getOpenRouterChatModel } from '@ixo/common';
 import { RemoveMessage } from '@langchain/core/messages';
 import { Logger } from '@nestjs/common';
-import { AgentMiddleware, AIMessage, createMiddleware } from 'langchain';
+import { type AgentMiddleware, AIMessage, createMiddleware } from 'langchain';
 
 const safetyModel = getOpenRouterChatModel({
   model: 'openai/gpt-oss-safeguard-20b:nitro',
@@ -60,31 +60,29 @@ ALWAYS mark as SAFE if the response:
             role: 'user',
             content: `User request: ${userContent}
             +--------------------------------+
-            Assistant response: ${lastMessage.content.toString()}
+            Assistant response: ${String(lastMessage.content)}
             +--------------------------------+
             Decision:`,
           },
         ]);
 
-        const safetyDecision = result.content.toString().trim().toUpperCase();
+        const safetyDecision = String(result.content).trim().toUpperCase();
         Logger.log(`Safety decision: ${safetyDecision}`, {
           userContent: userContent.substring(0, 100),
-          responsePreview: lastMessage.content.toString().substring(0, 100),
+          responsePreview: String(lastMessage.content).substring(0, 100),
         });
         if (safetyDecision.includes('UNSAFE')) {
           Logger.warn(
             'Unsafe response detected, blocking and returning safe message',
             {
               userContent: userContent.substring(0, 100),
-              responsePreview: lastMessage.content.toString().substring(0, 100),
+              responsePreview: String(lastMessage.content).substring(0, 100),
             },
           );
           return {
             messages: [
               new RemoveMessage({ id: lastMessage.id ?? '' }),
-              new AIMessage(
-                "I'm sorry, but I can't provide that information.",
-              )
+              new AIMessage("I'm sorry, but I can't provide that information."),
             ],
             jumpTo: 'end',
           };

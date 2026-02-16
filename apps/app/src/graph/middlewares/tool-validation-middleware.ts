@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { AgentMiddleware, createMiddleware, ToolMessage } from 'langchain';
+import { type AgentMiddleware, createMiddleware, ToolMessage } from 'langchain';
 
 /**
  * Middleware that catches tool validation errors and handles them gracefully.
@@ -14,14 +14,14 @@ export const createToolValidationMiddleware = (): AgentMiddleware => {
       try {
         // Attempt to call the tool
         return await handler(toolCallRequest);
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Check if this is a schema validation error
-        const errorMessage = error?.message || '';
+        const errorMessage = error instanceof Error ? error.message : '';
         const isSchemaError =
           errorMessage.includes('did not match expected schema') ||
           errorMessage.includes('Received tool input did not match') ||
           errorMessage.includes('schema') ||
-          error?.name === 'ZodError';
+          (error instanceof Error && error.name === 'ZodError');
 
         if (isSchemaError) {
           const toolName = toolCall.name ?? toolCallRequest.tool.name ?? '';
@@ -46,9 +46,10 @@ export const createToolValidationMiddleware = (): AgentMiddleware => {
         throw error;
       }
     },
-    beforeModel(state, runtime) {
-
-      const toolMessage = state.messages.find((message) => message.type === 'tool');
+    beforeModel(state, _runtime) {
+      const toolMessage = state.messages.find(
+        (message) => message.type === 'tool',
+      );
 
       const agentsTools = [
         'list_blocks',
@@ -58,11 +59,17 @@ export const createToolValidationMiddleware = (): AgentMiddleware => {
         'read_survey',
         'fill_survey_answers',
         'validate_survey_answers',
-        "firecrawl",
+        'firecrawl',
       ];
 
-      if (toolMessage && toolMessage.name && agentsTools.includes(toolMessage.name)) {
-        Logger.log(`Tool validation middleware: ${toolMessage.name} is an agent tool, skipping`);
+      if (
+        toolMessage &&
+        toolMessage.name &&
+        agentsTools.includes(toolMessage.name)
+      ) {
+        Logger.log(
+          `Tool validation middleware: ${toolMessage.name} is an agent tool, skipping`,
+        );
         return {
           ...state,
           messages: state.messages.filter((message) => message.type !== 'tool'),

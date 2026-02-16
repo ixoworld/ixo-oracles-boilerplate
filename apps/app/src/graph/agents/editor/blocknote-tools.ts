@@ -9,7 +9,7 @@ import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { MatrixClient } from 'matrix-js-sdk';
 import { randomUUID } from 'node:crypto';
-import { ENV } from 'src/config';
+import { type ENV } from 'src/config';
 import * as Y from 'yjs';
 import {
   appendBlock,
@@ -21,11 +21,12 @@ import {
   simplifyBlockForAgent,
   type BlockSnapshot,
 } from './blocknote-helper';
-import { AppConfig, MatrixProviderManager } from './provider';
+import { type AppConfig, MatrixProviderManager } from './provider';
 import {
   extractSurveyQuestions,
   getMissingRequiredFields,
   getVisibleQuestions,
+  type SurveySchema,
   validateAnswersAgainstSchema,
 } from './survey-helpers';
 
@@ -130,7 +131,6 @@ export const createBlocknoteTools = async (
         const filteredBlocks = blockType
           ? blocks.filter((b) => b.blockType === blockType)
           : blocks;
-
 
         return JSON.stringify(
           {
@@ -280,7 +280,7 @@ List blocks without text content (faster):
           Object.keys(updates).length > 0 ? { props: updates } : {};
 
         // Use the production-tested editBlock helper
-        const snapshot: BlockSnapshot = editBlock(doc, {
+        const _snapshot: BlockSnapshot = editBlock(doc, {
           blockId,
           attributes,
           removeAttributes,
@@ -796,7 +796,7 @@ The returned block includes the auto-generated UUID that you can use for future 
         }
 
         const block = getBlockDetail(doc, blockId, true);
-        console.log("🚀 ~ createBlocknoteTools ~ block:", block)
+        console.log('🚀 ~ createBlocknoteTools ~ block:', block);
         if (!block) {
           return JSON.stringify({
             success: false,
@@ -805,8 +805,10 @@ The returned block includes the auto-generated UUID that you can use for future 
         }
 
         const properties = extractBlockProperties(block);
-        const surveySchema = properties.surveySchema;
-        const answers = properties.answers || {};
+        const surveySchema = properties.surveySchema as
+          | SurveySchema
+          | undefined;
+        const answers = (properties.answers || {}) as Record<string, unknown>;
 
         if (!surveySchema) {
           Logger.error('Block does not contain a surveySchema:', block);
@@ -827,7 +829,6 @@ The returned block includes the auto-generated UUID that you can use for future 
           surveySchema,
         );
 
-      
         return JSON.stringify(
           {
             success: true,
@@ -969,7 +970,9 @@ The returned block includes the auto-generated UUID that you can use for future 
         }
 
         const properties = extractBlockProperties(block);
-        const surveySchema = properties.surveySchema;
+        const surveySchema = properties.surveySchema as
+          | SurveySchema
+          | undefined;
 
         if (!surveySchema) {
           return JSON.stringify({
@@ -979,7 +982,10 @@ The returned block includes the auto-generated UUID that you can use for future 
         }
 
         // Get current answers
-        const currentAnswers = properties.answers || {};
+        const currentAnswers = (properties.answers || {}) as Record<
+          string,
+          unknown
+        >;
 
         // Merge or replace answers
         const updatedAnswers = merge
@@ -1184,8 +1190,10 @@ The returned block includes the auto-generated UUID that you can use for future 
         }
 
         const properties = extractBlockProperties(block);
-        const surveySchema = properties.surveySchema;
-        const answers = properties.answers || {};
+        const surveySchema = properties.surveySchema as
+          | SurveySchema
+          | undefined;
+        const answers = (properties.answers || {}) as Record<string, unknown>;
 
         if (!surveySchema) {
           return JSON.stringify({

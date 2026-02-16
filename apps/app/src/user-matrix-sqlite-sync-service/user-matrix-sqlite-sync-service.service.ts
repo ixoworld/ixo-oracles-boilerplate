@@ -28,6 +28,7 @@ import {
   MatrixMediaEvent,
   uploadMediaToRoom,
 } from './matrix-upload-utils';
+import { type BaseSyncArgs } from './type';
 
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
@@ -86,7 +87,10 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
   private readonly activeUsers = new Map<string, number>();
 
   private readonly downloadInProgress = new Map<string, Promise<void>>();
-  private readonly recoveryInProgress = new Map<string, Promise<DatabaseType>>();
+  private readonly recoveryInProgress = new Map<
+    string,
+    Promise<DatabaseType>
+  >();
 
   private readonly lastUploadedChecksum = new Map<string, string>();
 
@@ -343,13 +347,10 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
       const result = db.pragma('integrity_check') as Array<{
         integrity_check: string;
       }>;
-      const isOk =
-        result.length === 1 && result[0].integrity_check === 'ok';
+      const isOk = result.length === 1 && result[0].integrity_check === 'ok';
 
       if (!isOk) {
-        const details = result
-          .map((r) => r.integrity_check)
-          .join('; ');
+        const details = result.map((r) => r.integrity_check).join('; ');
         Logger.error(
           `[CORRUPTION DETECTED] PRAGMA integrity_check failed for user ${userDid}: ${details}`,
         );
@@ -448,7 +449,9 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
   @Cron(CronExpression.EVERY_HOUR)
   public async localStorageCacheCleanUpTask(): Promise<void> {
     if (this.cronRunning) {
-      Logger.debug('Skipping hourly cleanup — another cron task is still running');
+      Logger.debug(
+        'Skipping hourly cleanup — another cron task is still running',
+      );
       return;
     }
     this.cronRunning = true;
@@ -487,7 +490,9 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
         { lastAccessedAt },
       ] of this.filePathCache.entries()) {
         if (this.isUserActive(userDid)) {
-          Logger.debug(`Skipping file cache cleanup for active user ${userDid}`);
+          Logger.debug(
+            `Skipping file cache cleanup for active user ${userDid}`,
+          );
           continue;
         }
         if (now - lastAccessedAt > hours(1)) {
@@ -641,7 +646,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
       const mxManager = MatrixManager.getInstance();
       const userHomeServer = await getMatrixHomeServerCroppedForDid(userDid);
       const { roomId } = await mxManager.getOracleRoomIdWithHomeServer({
-        userDid: userDid,
+        userDid,
         oracleEntityDid: configService.getOrThrow('ORACLE_ENTITY_DID'),
         userHomeServer,
       });
@@ -672,7 +677,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
       Logger.log(
         `Decompressed checkpoint for user ${userDid}: ${bytesToHumanReadable(userDB.mediaBuffer.length)} -> ${bytesToHumanReadable(decompressedBuffer.length)}`,
       );
-    } catch (error) {
+    } catch (_error) {
       // Decompression failed — check if the raw buffer is a valid uncompressed SQLite file
       if (
         userDB.mediaBuffer.length >= 16 &&
@@ -767,7 +772,9 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
       if (this.isUserActive(userDid)) {
         // User has an in-flight request — WAL checkpoint flushes data without closing
         try {
-          const walResult = cached.db.pragma('wal_checkpoint(PASSIVE)') as Array<{
+          const walResult = cached.db.pragma(
+            'wal_checkpoint(PASSIVE)',
+          ) as Array<{
             busy: number;
             log: number;
             checkpointed: number;
@@ -806,9 +813,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
         try {
           cached.db.close();
           this.dbConnectionCache.delete(userDid);
-          Logger.debug(
-            `Closed cached database connection for user ${userDid}`,
-          );
+          Logger.debug(`Closed cached database connection for user ${userDid}`);
         } catch (error) {
           Logger.warn(
             `Failed to close cached database connection for user ${userDid}: ${error}`,
@@ -852,7 +857,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
     const mxManager = MatrixManager.getInstance();
     const userHomeServer = await getMatrixHomeServerCroppedForDid(userDid);
     const { roomId } = await mxManager.getOracleRoomIdWithHomeServer({
-      userDid: userDid,
+      userDid,
       oracleEntityDid: configService.getOrThrow('ORACLE_ENTITY_DID'),
       userHomeServer,
     });
@@ -903,8 +908,18 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
           Logger.error(
             `Failed to upload checkpoint to Matrix storage for user ${userDid}`,
             error.message,
-            "File path: " + UserMatrixSqliteSyncService.getUserCheckpointDbPath(userDid),
-            "File Size before gzip: " + bytesToHumanReadable(await fs.stat(UserMatrixSqliteSyncService.getUserCheckpointDbPath(userDid)).then((stats) => stats.size)),
+            'File path: ' +
+              UserMatrixSqliteSyncService.getUserCheckpointDbPath(userDid),
+            'File Size before gzip: ' +
+              bytesToHumanReadable(
+                await fs
+                  .stat(
+                    UserMatrixSqliteSyncService.getUserCheckpointDbPath(
+                      userDid,
+                    ),
+                  )
+                  .then((stats) => stats.size),
+              ),
           );
         }
       }

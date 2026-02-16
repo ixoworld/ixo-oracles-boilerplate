@@ -1,25 +1,25 @@
 import {
-  BaseLanguageModelCallOptions,
-  BaseLanguageModelInput,
+  type BaseLanguageModelCallOptions,
+  type BaseLanguageModelInput,
 } from '@langchain/core/language_models/base';
 import {
   BaseChatModel,
-  BaseChatModelCallOptions,
-  BindToolsInput,
+  type BaseChatModelCallOptions,
+  type BindToolsInput,
 } from '@langchain/core/language_models/chat_models';
 import {
   AIMessageChunk,
-  BaseMessage,
+  type BaseMessage,
   HumanMessage,
-  MessageStructure,
+  type MessageStructure,
 } from '@langchain/core/messages';
-import { ChatGeneration, ChatResult } from '@langchain/core/outputs';
+import { type ChatGeneration, type ChatResult } from '@langchain/core/outputs';
 import Database from 'better-sqlite3';
 import * as fs from 'fs';
 import { createAgent } from 'langchain';
 import { SqliteSaver } from '../index';
 
-import { Runnable, RunnableLambda } from '@langchain/core/runnables';
+import { type Runnable, RunnableLambda } from '@langchain/core/runnables';
 import { MessagesZodMeta } from '@langchain/langgraph';
 import { registry } from '@langchain/langgraph/zod';
 import { z } from 'zod/v4-mini';
@@ -42,8 +42,8 @@ class MockChatModel extends BaseChatModel {
   }
 
   async _generate(
-    _messages: any[],
-    _options?: BaseLanguageModelCallOptions | undefined,
+    _messages: BaseMessage[],
+    _options?: BaseLanguageModelCallOptions,
   ): Promise<ChatResult> {
     const response = this.responses[this.callCount % this.responses.length];
     this.callCount++;
@@ -63,7 +63,10 @@ class MockChatModel extends BaseChatModel {
     return 'mock';
   }
 
-  override async invoke(_input: any, _config?: any): Promise<AIMessageChunk> {
+  override async invoke(
+    _input: BaseLanguageModelInput,
+    _config?: Partial<BaseChatModelCallOptions>,
+  ): Promise<AIMessageChunk> {
     const response = this.responses[this.callCount % this.responses.length];
     this.callCount++;
     return new AIMessageChunk(response ?? '');
@@ -71,7 +74,7 @@ class MockChatModel extends BaseChatModel {
 
   override bindTools(
     _tools: BindToolsInput[],
-    _kwargs?: Partial<BaseChatModelCallOptions> | undefined,
+    _kwargs?: Partial<BaseChatModelCallOptions>,
   ): Runnable<
     BaseLanguageModelInput,
     AIMessageChunk<MessageStructure>,

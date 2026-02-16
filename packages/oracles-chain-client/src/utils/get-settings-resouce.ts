@@ -1,6 +1,6 @@
-import { LinkedResource } from '@ixo/impactxclient-sdk/types/codegen/ixo/iid/v1beta1/types.js';
+import { type LinkedResource } from '@ixo/impactxclient-sdk/types/codegen/ixo/iid/v1beta1/types.js';
 import { gqlClient } from 'src/gql/index.js';
-import { TGetSettingsResourceSchema } from '../client/entities/types.js';
+import { type TGetSettingsResourceSchema } from '../client/entities/types.js';
 
 function rewriteMatrixMediaUrl(url: string, matrixHomeServer: string): string {
   const mediaMatch = url.match(
@@ -27,7 +27,9 @@ export async function getSettingsResource<T>(
   }
   const settingsResource = protocol?.linkedResource as LinkedResource[];
   const resource = settingsResource.find(
-    (resource) => resource.id === settingsResourceParams.id || resource.type === settingsResourceParams.type,
+    (resource) =>
+      resource.id === settingsResourceParams.id ||
+      resource.type === settingsResourceParams.type,
   );
   if (!resource) {
     throw new Error('Resource not found');

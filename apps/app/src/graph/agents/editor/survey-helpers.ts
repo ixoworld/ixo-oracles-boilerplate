@@ -30,7 +30,7 @@ export interface SurveyElement {
   description?: string;
   isRequired?: boolean;
   visibleIf?: string;
-  defaultValue?: any;
+  defaultValue?: unknown;
   defaultValueExpression?: string;
   inputType?: string;
   choices?: Array<{ value: string; text: string }>;
@@ -52,7 +52,7 @@ export interface SurveyQuestion {
   isRequired: boolean;
   isVisible?: boolean;
   visibleIf?: string;
-  defaultValue?: any;
+  defaultValue?: unknown;
   choices?: Array<{ value: string; text: string }>;
   choicesByUrl?: {
     url: string;
@@ -99,13 +99,15 @@ export function parseSurveySchema(schemaString: string): SurveySchema | null {
 /**
  * Parse a JSON string of answers into a structured object
  */
-export function parseSurveyAnswers(answersString: string): Record<string, any> {
+export function parseSurveyAnswers(
+  answersString: string,
+): Record<string, unknown> {
   try {
     if (!answersString || typeof answersString !== 'string') {
       return {};
     }
     const parsed = JSON.parse(answersString);
-    return parsed as Record<string, any>;
+    return parsed as Record<string, unknown>;
   } catch (error) {
     console.error('Error parsing survey answers:', error);
     return {};
@@ -118,7 +120,7 @@ export function parseSurveyAnswers(answersString: string): Record<string, any> {
  */
 export function evaluateVisibilityCondition(
   condition: string | undefined,
-  answers: Record<string, any>,
+  answers: Record<string, unknown>,
 ): boolean {
   if (!condition) {
     return true;
@@ -200,7 +202,7 @@ async function fetchChoicesFromUrl(choicesByUrl: {
     if (typeof data === 'object' && data !== null) {
       // If the response has a data property that's an array
       if (Array.isArray(data.data)) {
-        return data.data.map((item: any) => ({
+        return data.data.map((item: Record<string, unknown>) => ({
           value: String(item[choicesByUrl.valueName] ?? item.value ?? ''),
           text: String(
             item[choicesByUrl.titleName] ?? item.text ?? item.title ?? '',
@@ -236,7 +238,7 @@ async function fetchChoicesFromUrl(choicesByUrl: {
  */
 export async function extractSurveyQuestions(
   schema: SurveySchema,
-  answers?: Record<string, any>,
+  answers?: Record<string, unknown>,
 ): Promise<SurveyQuestion[]> {
   const questions: SurveyQuestion[] = [];
 
@@ -318,7 +320,7 @@ export async function extractSurveyQuestions(
  * Get all visible questions based on current answers
  */
 export async function getVisibleQuestions(
-  answers: Record<string, any>,
+  answers: Record<string, unknown>,
   schema: SurveySchema,
 ): Promise<SurveyQuestion[]> {
   const allQuestions = await extractSurveyQuestions(schema, answers);
@@ -329,7 +331,7 @@ export async function getVisibleQuestions(
  * Get missing required fields from answers
  */
 export async function getMissingRequiredFields(
-  answers: Record<string, any>,
+  answers: Record<string, unknown>,
   schema: SurveySchema,
 ): Promise<string[]> {
   const visibleQuestions = await getVisibleQuestions(answers, schema);
@@ -358,7 +360,7 @@ export async function getMissingRequiredFields(
  */
 function validateAnswerValue(
   question: SurveyQuestion,
-  value: any,
+  value: unknown,
   options: { checkRequired: boolean; returnAsWarnings: boolean } = {
     checkRequired: true,
     returnAsWarnings: false,
@@ -435,7 +437,7 @@ function validateAnswerValue(
         // Check choices if available
         if (question.choices && Array.isArray(question.choices)) {
           const validValues = question.choices.map((c) => c.value);
-          if (!validValues.includes(value)) {
+          if (!validValues.includes(String(value))) {
             addIssue(
               `${question.title || question.name} must be one of: ${validValues.join(', ')}`,
               'choice',
@@ -483,7 +485,7 @@ function validateAnswerValue(
  * Validate answers against schema requirements
  */
 export async function validateAnswersAgainstSchema(
-  answers: Record<string, any>,
+  answers: Record<string, unknown>,
   schema: SurveySchema,
 ): Promise<ValidationResult> {
   const errors: ValidationError[] = [];

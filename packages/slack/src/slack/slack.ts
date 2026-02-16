@@ -159,13 +159,13 @@ export class Slack {
         this.reconnectDelay = 1000;
       });
 
-      receiver?.on('error', (error: any) => {
+      receiver?.on('error', (error: Error) => {
         Logger.error('Socket Mode receiver error:', error.message);
         this.handleConnectionError(error);
       });
 
       // Listen for when Socket Mode fails to start
-      receiver?.on('unable_to_socket_mode_start', (error: any) => {
+      receiver?.on('unable_to_socket_mode_start', (error: Error) => {
         Logger.error('Unable to start Socket Mode:', error.message);
         this.handleConnectionError(error);
       });
@@ -181,7 +181,7 @@ export class Slack {
           );
         }
       });
-    } catch (error) {
+    } catch (_error) {
       Logger.warn(
         'Could not set up Socket Mode event monitoring - using fallback error handling only',
       );
@@ -198,7 +198,7 @@ export class Slack {
   /**
    * Checks if a disconnect is a graceful periodic disconnection vs an error
    */
-  private isGracefulDisconnect(error: any): boolean {
+  private isGracefulDisconnect(error: Error | { message?: string }): boolean {
     const errorMessage = error.message || String(error);
     const gracefulPatterns = [
       'connection closed normally',
@@ -217,7 +217,7 @@ export class Slack {
   /**
    * Checks if an error is related to Socket Mode connectivity
    */
-  private isSocketModeError(error: any): boolean {
+  private isSocketModeError(error: Error | { message?: string }): boolean {
     const errorMessage = error.message || String(error);
     const socketModeErrorPatterns = [
       'socket disconnected',
@@ -245,7 +245,7 @@ export class Slack {
   /**
    * Handles connection errors with fallback mechanisms
    */
-  private handleConnectionError(error: any): void {
+  private handleConnectionError(error: Error | { message?: string }): void {
     if (!this.isStarted) {
       return; // Don't handle errors if we're intentionally stopped
     }
@@ -304,7 +304,7 @@ export class Slack {
     try {
       await this.app.client.auth.test();
       return true;
-    } catch (error) {
+    } catch (_error) {
       return false;
     }
   }
@@ -328,28 +328,36 @@ export class Slack {
     if (!this.useSocketMode) return;
 
     // Health check every 60 seconds (less frequent since SDK handles reconnections)
-    this.healthCheckInterval = setInterval(async () => {
-      try {
-        await this.app.client.auth.test();
+    this.healthCheckInterval = setInterval(
+      () =>
+        void (async () => {
+          try {
+            await this.app.client.auth.test();
 
-        // Connection is healthy - reset any error counters
-        if (this.reconnectAttempts > 0) {
-          Logger.debug('Connection healthy - resetting reconnection counter');
-          this.reconnectAttempts = 0;
-          this.reconnectDelay = 1000;
-        }
-      } catch (error) {
-        Logger.warn(
-          'Health check failed - connection may be unhealthy:',
-          error,
-        );
+            // Connection is healthy - reset any error counters
+            if (this.reconnectAttempts > 0) {
+              Logger.debug(
+                'Connection healthy - resetting reconnection counter',
+              );
+              this.reconnectAttempts = 0;
+              this.reconnectDelay = 1000;
+            }
+          } catch (error) {
+            Logger.warn(
+              'Health check failed - connection may be unhealthy:',
+              error,
+            );
 
-        // If health check fails consistently, trigger error handling
-        if (this.reconnectAttempts === 0) {
-          this.handleConnectionError(error);
-        }
-      }
-    }, 60000); // Check every minute
+            // If health check fails consistently, trigger error handling
+            if (this.reconnectAttempts === 0) {
+              this.handleConnectionError(
+                error instanceof Error ? error : new Error(String(error)),
+              );
+            }
+          }
+        })(),
+      60000,
+    ); // Check every minute
   }
 
   /**

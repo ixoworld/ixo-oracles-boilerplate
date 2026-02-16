@@ -30,7 +30,7 @@ describe('jsonToYaml', () => {
     const json = {
       fruits: ['apple', 'banana', 'orange'],
     };
-    const expected = 'fruits:\n  0: apple\n  1: banana\n  2: orange';
+    const expected = 'fruits:\n  - apple\n  - banana\n  - orange';
     expect(jsonToYaml(json)).toBe(expected);
   });
 

@@ -138,4 +138,3 @@ export function hexDecode(hex: string): Uint8Array {
 
   return bytes;
 }
-

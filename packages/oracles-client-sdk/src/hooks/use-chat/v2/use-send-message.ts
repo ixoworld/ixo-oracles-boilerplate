@@ -20,7 +20,7 @@ interface IUseSendMessageReturn {
     message: string,
     metadata?: Record<string, unknown>,
   ) => Promise<void>;
-  abortStream: () => void;
+  abortStream: () => Promise<void>;
   isSending: boolean;
   error?: Error | null;
   isConfigReady: boolean;
@@ -382,7 +382,10 @@ const askOracleStream = async (props: {
 
         default:
           // This should never happen with proper typing, but handle gracefully
-          console.debug('Unknown SSE event:', (sseEvent as any).event);
+          console.debug(
+            'Unknown SSE event:',
+            (sseEvent as unknown as { event: string }).event,
+          );
           break;
       }
     }
@@ -392,7 +395,7 @@ const askOracleStream = async (props: {
       requestId,
     };
   } catch (error) {
-    reader.cancel();
+    void reader.cancel();
 
     // Handle abort errors gracefully
     if (

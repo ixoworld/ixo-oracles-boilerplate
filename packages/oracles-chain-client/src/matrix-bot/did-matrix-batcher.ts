@@ -54,7 +54,8 @@ const batchState: BatchState = {
 };
 
 function getBlocksyncGraphqlUrl(): string {
-  const envUrl = typeof process !== 'undefined' ? process.env.BLOCKSYNC_URI : undefined;
+  const envUrl =
+    typeof process !== 'undefined' ? process.env.BLOCKSYNC_URI : undefined;
   if (envUrl) {
     return envUrl.replace(/\/$/, '') + '/graphql';
   }
@@ -64,7 +65,9 @@ function getBlocksyncGraphqlUrl(): string {
     testnet: 'https://testnet-blocksync-graphql.ixo.earth/graphql',
     mainnet: 'https://blocksync-graphql.ixo.earth/graphql',
   } as const;
-  return defaults[chainNetwork] ?? 'https://blocksync-graphql.ixo.earth/graphql';
+  return (
+    defaults[chainNetwork] ?? 'https://blocksync-graphql.ixo.earth/graphql'
+  );
 }
 
 function isEntityDid(did: string): boolean {
@@ -91,7 +94,9 @@ export function deriveMatrixBotUrls(homeServerUrl: string): MatrixBotUrls {
   };
 }
 
-export function buildMatrixUrlsFromHomeServer(homeServerUrl: string): MatrixUrls {
+export function buildMatrixUrlsFromHomeServer(
+  homeServerUrl: string,
+): MatrixUrls {
   const botUrls = deriveMatrixBotUrls(homeServerUrl);
   return {
     homeServer: homeServerUrl,
@@ -163,7 +168,9 @@ const QUERY_ENTITIES = gql`
   }
 `;
 
-async function queryIidServices(dids: string[]): Promise<Map<string, string | null>> {
+async function queryIidServices(
+  dids: string[],
+): Promise<Map<string, string | null>> {
   const results = new Map<string, string | null>();
 
   if (dids.length === 0) {
@@ -176,7 +183,9 @@ async function queryIidServices(dids: string[]): Promise<Map<string, string | nu
     }>(getBlocksyncGraphqlUrl(), QUERY_IIDS, { dids });
 
     if (!data?.iids?.nodes) {
-      console.error('[DidMatrixBatcher] Error querying IIDs: no nodes returned');
+      console.error(
+        '[DidMatrixBatcher] Error querying IIDs: no nodes returned',
+      );
       dids.forEach((did) => results.set(did, null));
       return results;
     }
@@ -193,7 +202,9 @@ async function queryIidServices(dids: string[]): Promise<Map<string, string | nu
         continue;
       }
 
-      const matrixService = node.service?.find((s) => s.type === MATRIX_SERVICE_TYPE);
+      const matrixService = node.service?.find(
+        (s) => s.type === MATRIX_SERVICE_TYPE,
+      );
       if (matrixService?.serviceEndpoint) {
         results.set(did, matrixService.serviceEndpoint);
       } else {
@@ -208,7 +219,9 @@ async function queryIidServices(dids: string[]): Promise<Map<string, string | nu
   return results;
 }
 
-async function queryEntityServices(entityDids: string[]): Promise<Map<string, string | null>> {
+async function queryEntityServices(
+  entityDids: string[],
+): Promise<Map<string, string | null>> {
   const results = new Map<string, string | null>();
 
   if (entityDids.length === 0) {
@@ -221,7 +234,9 @@ async function queryEntityServices(entityDids: string[]): Promise<Map<string, st
     }>(getBlocksyncGraphqlUrl(), QUERY_ENTITIES, { dids: entityDids });
 
     if (!data?.entities?.nodes) {
-      console.error('[DidMatrixBatcher] Error querying entities: no nodes returned');
+      console.error(
+        '[DidMatrixBatcher] Error querying entities: no nodes returned',
+      );
       entityDids.forEach((did) => results.set(did, null));
       return results;
     }
@@ -238,7 +253,9 @@ async function queryEntityServices(entityDids: string[]): Promise<Map<string, st
         continue;
       }
 
-      const matrixService = node.service?.find((s) => s.type === MATRIX_SERVICE_TYPE);
+      const matrixService = node.service?.find(
+        (s) => s.type === MATRIX_SERVICE_TYPE,
+      );
       if (matrixService?.serviceEndpoint) {
         results.set(did, matrixService.serviceEndpoint);
       } else {
@@ -253,7 +270,9 @@ async function queryEntityServices(entityDids: string[]): Promise<Map<string, st
   return results;
 }
 
-async function executeBatchQuery(dids: string[]): Promise<Map<string, string | null>> {
+async function executeBatchQuery(
+  dids: string[],
+): Promise<Map<string, string | null>> {
   const results = new Map<string, string | null>();
 
   if (dids.length === 0) {
@@ -318,7 +337,10 @@ function addToBatch(did: string): Promise<string> {
     batchState.resolvers.push(resolver);
 
     if (!batchState.timeoutId) {
-      batchState.timeoutId = setTimeout(processBatch, BATCH_DELAY_MS);
+      batchState.timeoutId = setTimeout(
+        () => void processBatch(),
+        BATCH_DELAY_MS,
+      );
     }
   });
 }
@@ -336,7 +358,9 @@ export async function getMatrixUrlsForDid(did: string): Promise<MatrixUrls> {
   return buildMatrixUrlsFromHomeServer(homeServerUrl);
 }
 
-export async function getMatrixHomeServerCroppedForDid(did: string): Promise<string> {
+export async function getMatrixHomeServerCroppedForDid(
+  did: string,
+): Promise<string> {
   const homeServerUrl = await getMatrixHomeServerForDid(did);
   return extractUrlDomain(homeServerUrl);
 }
@@ -359,13 +383,16 @@ export async function prefetchMatrixUrlsForDids(dids: string[]): Promise<void> {
   await Promise.all(uncachedDids.map((did) => addToBatch(did)));
 }
 
-export async function getMultipleMatrixUrls(dids: string[]): Promise<Map<string, MatrixUrls>> {
+export async function getMultipleMatrixUrls(
+  dids: string[],
+): Promise<Map<string, MatrixUrls>> {
   await prefetchMatrixUrlsForDids(dids);
 
   const results = new Map<string, MatrixUrls>();
 
   for (const did of dids) {
-    const homeServerUrl = getCachedHomeServer(did) || getDefaultHomeServerForDid(did);
+    const homeServerUrl =
+      getCachedHomeServer(did) || getDefaultHomeServerForDid(did);
     results.set(did, buildMatrixUrlsFromHomeServer(homeServerUrl));
   }
 

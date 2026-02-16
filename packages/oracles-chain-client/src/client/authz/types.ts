@@ -1,6 +1,6 @@
-import { Coin, EncodeObject } from '@cosmjs/proto-signing';
-import { DeliverTxResponse } from '@cosmjs/stargate';
-import { SubmitClaimAuthorization } from '@ixo/impactxclient-sdk/types/codegen/ixo/claims/v1beta1/authz.js';
+import { type Coin, type EncodeObject } from '@cosmjs/proto-signing';
+import { type DeliverTxResponse } from '@cosmjs/stargate';
+import { type SubmitClaimAuthorization } from '@ixo/impactxclient-sdk/types/codegen/ixo/claims/v1beta1/authz.js';
 import z from 'zod';
 import { ValidationError } from '../../utils/validation-error.js';
 
@@ -139,7 +139,8 @@ export type Permission<T extends AuthorizationType> = {
   ? SendAuthorizationPermissionPayload
   : T extends '/ixo.claims.v1beta1.SubmitClaimAuthorization'
     ? SubmitClaimAuthorizationPermissionPayload
-    : {});
+    : // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+      {});
 
 export type GetOracleAuthZConfigParams = {
   oracleDid: string;

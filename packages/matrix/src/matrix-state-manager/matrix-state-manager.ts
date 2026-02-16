@@ -5,14 +5,16 @@ import {
   Direction,
   MatrixClient,
   MatrixError,
-  StateEvents,
+  type StateEvents,
 } from 'matrix-js-sdk';
 import { parse, stringify } from 'superjson';
 
 import { Logger } from '@ixo/logger';
 import { logger } from 'matrix-js-sdk/lib/logger.js';
 
-(logger as any)?.setLevel('ERROR');
+(logger as unknown as { setLevel?: (level: string) => void })?.setLevel?.(
+  'ERROR',
+);
 
 interface IStatePayload<C> {
   roomId: string;
@@ -207,10 +209,10 @@ export class MatrixStateManager {
     Logger.info(`Starting to list state events for room ${room.roomId}`);
 
     // Start paginating backward.
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition, no-constant-condition -- we need to paginate the timeline
+
     while (true) {
       // `client.scrollback` will paginate more events into the timeline.
-      // eslint-disable-next-line no-await-in-loop -- we need to paginate the timeline
+
       await this.client.scrollback(room, 100); // The second argument is the number of events to load.
 
       // After the scrollback, check if we're at the start of the timeline.

@@ -1,6 +1,10 @@
 import { HumanMessage } from '@langchain/core/messages';
 import { tool } from '@langchain/core/tools';
-import { createAgent, type AgentMiddleware, type StructuredTool } from 'langchain';
+import {
+  createAgent,
+  type AgentMiddleware,
+  type StructuredTool,
+} from 'langchain';
 import { z } from 'zod';
 
 /**
@@ -27,11 +31,14 @@ function lastMessageContent(messages: { content?: unknown }[]): string {
   if (typeof last.content === 'string') return last.content;
   if (Array.isArray(last.content)) {
     const textPart = last.content.find(
-      (block: { type?: string; text?: string }) => block.type === 'text' && block.text,
+      (block: { type?: string; text?: string }) =>
+        block.type === 'text' && block.text,
     );
     return (textPart as { text?: string } | undefined)?.text ?? '';
   }
-  return String(last.content);
+  return typeof last.content === 'string'
+    ? last.content
+    : JSON.stringify(last.content);
 }
 
 /**

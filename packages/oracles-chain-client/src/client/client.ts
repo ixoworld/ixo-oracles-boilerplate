@@ -1,15 +1,19 @@
-/* eslint-disable @typescript-eslint/no-unnecessary-condition -- f */
-import { DirectSecp256k1HdWallet, EncodeObject } from '@cosmjs/proto-signing';
+import {
+  DirectSecp256k1HdWallet,
+  type EncodeObject,
+} from '@cosmjs/proto-signing';
 import { createQueryClient, createSigningClient } from '@ixo/impactxclient-sdk';
 import store from 'store';
 
-import { GasPrice, StdFee } from '@cosmjs/stargate';
-import { TxResponse } from '@ixo/impactxclient-sdk/types/codegen/cosmos/base/abci/v1beta1/abci.js';
+import { GasPrice, type StdFee } from '@cosmjs/stargate';
+import { type TxResponse } from '@ixo/impactxclient-sdk/types/codegen/cosmos/base/abci/v1beta1/abci.js';
 
 export type SigningClientType = Awaited<ReturnType<typeof createSigningClient>>;
 export type QueryClientType = Awaited<ReturnType<typeof createQueryClient>>;
-const RPC_URL = typeof process !== 'undefined' ? process.env.RPC_URL : undefined;
-const SECP_MNEMONIC = typeof process !== 'undefined' ? process.env.SECP_MNEMONIC : undefined;
+const RPC_URL =
+  typeof process !== 'undefined' ? process.env.RPC_URL : undefined;
+const SECP_MNEMONIC =
+  typeof process !== 'undefined' ? process.env.SECP_MNEMONIC : undefined;
 
 export class Client {
   public queryClient!: QueryClientType;

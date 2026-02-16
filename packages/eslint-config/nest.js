@@ -1,25 +1,28 @@
-const { resolve } = require('node:path');
+import vitest from '@vitest/eslint-plugin';
+import { base } from './base.js';
 
-const project = resolve(process.cwd(), 'tsconfig.json');
-
-/** @type {import("eslint").Linter.Config} */
-module.exports = {
-  extends: ['./base.js'],
-  rules: {
-    '@typescript-eslint/explicit-module-boundary-types': 'off',
-    '@typescript-eslint/no-extraneous-class': 'warn',
-  },
-  overrides: [
-    {
-      files: ['**/__tests__/**/*.[jt]s?(x)', '**/?(*.)+(spec|test).[jt]s?(x)'],
-      extends: [require.resolve('@vercel/style-guide/eslint/jest')],
-      rules: {
-        'jest/prefer-lowercase-title': 'off',
-      },
+/**
+ * NestJS ESLint flat config. Extends base with NestJS-specific rules and Vitest.
+ */
+export const nest = [
+  ...base,
+  {
+    files: ['**/*.ts', '**/*.tsx'],
+    rules: {
+      '@typescript-eslint/explicit-module-boundary-types': 'off',
+      '@typescript-eslint/no-extraneous-class': 'off',
     },
-  ],
-  env: {
-    node: true,
-    jest: true,
   },
-};
+  {
+    files: [
+      '**/__tests__/**/*.[jt]s?(x)',
+      '**/?(*.)+(spec|test).[jt]s?(x)',
+    ],
+    plugins: { vitest },
+    rules: {
+      ...vitest.configs.recommended.rules,
+    },
+  },
+];
+
+export default nest;

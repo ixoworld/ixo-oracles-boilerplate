@@ -8,6 +8,8 @@ import {
   useRef,
   useSyncExternalStore,
 } from 'react';
+import { type WithRequiredEventProps } from '@ixo/oracles-events/types';
+import { type IActionTools } from '../../../types/action-tool.type.js';
 import { useOraclesContext } from '../../../providers/oracles-provider/oracles-context.js';
 import { RequestError } from '../../../utils/request.js';
 import {
@@ -187,7 +189,8 @@ export function useChat({
         type: 'ai',
         content: resolveContent({
           eventName: 'action_call',
-          payload: actionCallData as any,
+          payload:
+            actionCallData as WithRequiredEventProps<SSEActionCallEventData>,
         }),
         toolCalls: [
           {
@@ -277,7 +280,7 @@ export function useChat({
                   {
                     id: event.payload.requestId,
                     args: event.payload.args as Record<string, unknown>,
-                    name: event.payload.toolName as string,
+                    name: event.payload.toolName,
                     status: event.payload.status as 'isRunning' | 'done',
                     output:
                       'output' in event.payload
@@ -317,13 +320,13 @@ export function useChat({
 
   // Build actionTools from registered AG-UI actions
   const actionTools = useMemo(() => {
-    const tools: Record<string, any> = {};
+    const tools: IActionTools = {};
     agActions.forEach((action) => {
       tools[action.name] = {
         toolName: action.name,
         description: action.description,
         schema: action.parameters,
-        handler: async (args: any) => {
+        handler: async (args: unknown) => {
           return await executeAgAction(action.name, args);
         },
         render: getAgActionRender(action.name),

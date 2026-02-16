@@ -1,9 +1,9 @@
 import { Logger } from '@ixo/logger';
 import { MatrixManager } from '@ixo/matrix';
 import { getMatrixHomeServerCroppedForDid } from '@ixo/oracles-chain-client';
-import { Database } from 'better-sqlite3';
+import { type Database } from 'better-sqlite3';
 import { getChatOpenAiModel } from '../../ai/index.js';
-import { MemoryEngineService } from '../memory-engine/memory-engine.service.js';
+import { type MemoryEngineService } from '../memory-engine/memory-engine.service.js';
 import { type UserContextData } from '../memory-engine/types.js';
 import {
   type ChatSession,
@@ -99,7 +99,7 @@ ___________________________________________________________
       `,
     );
 
-    const title = response.content.toString();
+    const title = String(response.content);
     return title;
   }
 
@@ -347,7 +347,9 @@ ___________________________________________________________
   public async createSession(
     createSessionDto: CreateChatSessionDto,
   ): Promise<CreateChatSessionResponseDto> {
-    const userHomeServer = createSessionDto.homeServer || await getMatrixHomeServerCroppedForDid(createSessionDto.did);
+    const userHomeServer =
+      createSessionDto.homeServer ||
+      (await getMatrixHomeServerCroppedForDid(createSessionDto.did));
     const { roomId } = await this.matrixManger.getOracleRoomIdWithHomeServer({
       userDid: createSessionDto.did,
       oracleEntityDid: createSessionDto.oracleEntityDid,

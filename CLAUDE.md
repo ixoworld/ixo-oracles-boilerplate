@@ -39,24 +39,26 @@ pnpm test --filter @ixo/events
 
 ### Core Packages
 
-| Package | Purpose |
-|---------|---------|
-| `@ixo/common` | AI services, session management, room management, checkpointer interfaces |
-| `@ixo/matrix` | Matrix client wrapper, encrypted room management |
-| `@ixo/events` | SSE/WebSocket event streaming (`ToolCallEvent`, `RenderComponentEvent`, `BrowserToolCallEvent`) |
-| `@ixo/data-store` | Knowledge management with ChromaDB (vector) + PostgreSQL (structured) |
-| `@ixo/oracles-chain-client` | Blockchain operations, claims, payments, ECIES encryption |
-| `@ixo/oracles-client-sdk` | React client SDK (`useChat()` hook) |
-| `@ixo/slack` | Slack bot integration |
+| Package                     | Purpose                                                                                         |
+| --------------------------- | ----------------------------------------------------------------------------------------------- |
+| `@ixo/common`               | AI services, session management, room management, checkpointer interfaces                       |
+| `@ixo/matrix`               | Matrix client wrapper, encrypted room management                                                |
+| `@ixo/events`               | SSE/WebSocket event streaming (`ToolCallEvent`, `RenderComponentEvent`, `BrowserToolCallEvent`) |
+| `@ixo/data-store`           | Knowledge management with ChromaDB (vector) + PostgreSQL (structured)                           |
+| `@ixo/oracles-chain-client` | Blockchain operations, claims, payments, ECIES encryption                                       |
+| `@ixo/oracles-client-sdk`   | React client SDK (`useChat()` hook)                                                             |
+| `@ixo/slack`                | Slack bot integration                                                                           |
 
 ### LangGraph Architecture
 
 The AI system is built on LangGraph with state-based conversation flows:
 
 **State (`apps/app/src/graph/state.ts`):**
+
 - `MainAgentGraphState` - Annotation-based state with `messages[]`, `userContext`, `config`, `client`, `browserTools`, `agActions`, `mcpUcanContext`
 
 **Agents (`apps/app/src/graph/agents/`):**
+
 - `main-agent.ts` - Orchestrator, creates the graph
 - `memory-agent.ts` - Contextual memory retrieval
 - `portal-agent.ts` - Web portal logic
@@ -65,11 +67,13 @@ The AI system is built on LangGraph with state-based conversation flows:
 - `editor/editor-agent.ts` - Content editing with BlockNote
 
 **Tools (`apps/app/src/graph/nodes/tools-node/`):**
+
 - Server-side LangGraph tools
 - Browser tools (reverse calls for DOM/UI operations)
 - Middlewares: `tool-validation-middleware.ts`, `safety-guardrail-middleware.ts`, `token-limiter-middleware.ts`
 
 **Entry points (`apps/app/src/graph/index.ts`):**
+
 - `MainAgentGraph.sendMessage()` - Invoke mode
 - `MainAgentGraph.streamMessage()` - Stream mode with SSE
 - `MainAgentGraph.getGraphState()` - Retrieve current state
@@ -104,6 +108,7 @@ User → Client SDK → Oracle API → LangGraph Engine → Matrix Storage
 ## Configuration
 
 Environment variables are validated via Zod schema in `apps/app/src/config.ts`. Key categories:
+
 - Matrix (base URL, tokens, recovery phrases)
 - Database (PostgreSQL, ChromaDB, SQLite paths)
 - LLM (OpenAI, OpenRouter APIs)
