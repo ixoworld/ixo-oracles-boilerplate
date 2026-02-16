@@ -66,10 +66,14 @@ const llm = getOpenRouterChatModel({
   },
 });
 
-const oracleMatrixBaseUrl = configService.getOrThrow('MATRIX_BASE_URL').replace(/\/$/, '');
+const oracleMatrixBaseUrl = configService
+  .getOrThrow('MATRIX_BASE_URL')
+  .replace(/\/$/, '');
 
 const oracleOpenIdTokenProvider = new OpenIdTokenProvider({
-  matrixAccessToken: configService.getOrThrow('MATRIX_ORACLE_ADMIN_ACCESS_TOKEN'),
+  matrixAccessToken: configService.getOrThrow(
+    'MATRIX_ORACLE_ADMIN_ACCESS_TOKEN',
+  ),
   homeServerUrl: oracleMatrixBaseUrl,
   matrixUserId: configService.getOrThrow('MATRIX_ORACLE_ADMIN_USER_ID'),
 });
@@ -105,7 +109,10 @@ Promise<ReactAgent<any, any, any, any>> => {
                 'x-matrix-homeserver':
                   configurable.configs?.matrix.homeServerName ?? '',
                 'X-oracle-openid-token': oracleOpenIdToken,
-                'x-oracle-homeserver': oracleMatrixBaseUrl.replace(/^https?:\/\//, ''),
+                'x-oracle-homeserver': oracleMatrixBaseUrl.replace(
+                  /^https?:\/\//,
+                  '',
+                ),
               },
             },
           },

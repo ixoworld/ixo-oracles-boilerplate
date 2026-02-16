@@ -144,10 +144,15 @@ export class MatrixManager {
           });
           if (backupKey) {
             recoveryKey = backupKey;
-            Logger.info('🔑 Backup key extracted from SSSS for key backup support');
+            Logger.info(
+              '🔑 Backup key extracted from SSSS for key backup support',
+            );
           }
         } catch (e) {
-          Logger.warn('Could not extract backup key from SSSS (will proceed without):', e);
+          Logger.warn(
+            'Could not extract backup key from SSSS (will proceed without):',
+            e,
+          );
         }
       }
 
