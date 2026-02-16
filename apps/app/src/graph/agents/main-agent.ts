@@ -5,6 +5,7 @@ import {
   parserBrowserTool,
   SearchEnhancedResponse,
 } from '@ixo/common';
+import { OpenIdTokenProvider } from '@ixo/oracles-chain-client';
 import { IRunnableConfigWithRequiredFields } from '@ixo/matrix';
 import { SqliteSaver } from '@ixo/sqlite-saver';
 import { Logger } from '@nestjs/common';
@@ -62,26 +63,13 @@ const llm = getOpenRouterChatModel({
   },
 });
 
-async function getOracleOpenIdToken(): Promise<string> {
-  const baseUrl = configService.getOrThrow('MATRIX_BASE_URL').replace(/\/$/, '');
-  const userId = configService.getOrThrow('MATRIX_ORACLE_ADMIN_USER_ID');
-  const accessToken = configService.getOrThrow('MATRIX_ORACLE_ADMIN_ACCESS_TOKEN');
-  const url = `${baseUrl}/_matrix/client/v3/user/${encodeURIComponent(userId)}/openid/request_token`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: '{}',
-  });
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    throw new Error(`Failed to get oracle OpenID token: ${response.status} ${body}`);
-  }
-  const data = (await response.json()) as { access_token: string };
-  return data.access_token;
-}
+const oracleMatrixBaseUrl = configService.getOrThrow('MATRIX_BASE_URL').replace(/\/$/, '');
+
+const oracleOpenIdTokenProvider = new OpenIdTokenProvider({
+  matrixAccessToken: configService.getOrThrow('MATRIX_ORACLE_ADMIN_ACCESS_TOKEN'),
+  homeServerUrl: oracleMatrixBaseUrl,
+  matrixUserId: configService.getOrThrow('MATRIX_ORACLE_ADMIN_USER_ID'),
+});
 
 export const createMainAgent = async ({
   state,
@@ -96,7 +84,7 @@ export const createMainAgent = async ({
   const { matrix } = configurable?.configs ?? {};
   Logger.log(`[createMainAgent] homeServerName: ${configurable.configs?.matrix.homeServerName}`);
   const oracleOpenIdToken = configurable.configs?.user.matrixOpenIdToken
-    ? await getOracleOpenIdToken()
+    ? await oracleOpenIdTokenProvider.getToken()
     : undefined;
   const sandboxMCP =
     configurable.configs?.user.matrixOpenIdToken && oracleOpenIdToken
@@ -111,6 +99,7 @@ export const createMainAgent = async ({
                 'x-matrix-homeserver':
                   configurable.configs?.matrix.homeServerName ?? '',
                 'X-oracle-openid-token': oracleOpenIdToken,
+                'x-oracle-homeserver': oracleMatrixBaseUrl.replace(/^https?:\/\//, ''),
               },
             },
           },
