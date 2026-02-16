@@ -100,9 +100,6 @@ importers:
       '@ixo/ucan':
         specifier: 1.0.1
         version: 1.0.1(@cosmjs/crypto@0.33.1)(@cosmjs/encoding@0.33.1)(typescript@5.9.3)
-      '@ixo/vitest-config':
-        specifier: ^1.0.0
-        version: 1.0.0(@swc/core@1.15.2)(@types/debug@4.1.12)(@types/node@22.19.1)(jiti@2.6.1)(jsdom@20.0.3)(lightningcss@1.30.2)(rollup@4.53.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.1)
       '@langchain/community':
         specifier: ^1.0.3
         version: 1.0.4(5e935b8881f20c4811d3e16c26549bec)
@@ -230,6 +227,9 @@ importers:
         specifier: ^3.24.6
         version: 3.25.0(zod@4.1.12)
     devDependencies:
+      '@ixo/vitest-config':
+        specifier: ^1.0.0
+        version: 1.0.0(@swc/core@1.15.2)(@types/debug@4.1.12)(@types/node@22.19.1)(jiti@2.6.1)(jsdom@20.0.3)(lightningcss@1.30.2)(rollup@4.53.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.1)
       '@nestjs/cli':
         specifier: ^11.0.0
         version: 11.0.12(@swc/cli@0.6.0(@swc/core@1.15.2)(chokidar@4.0.3))(@swc/core@1.15.2)(@types/node@22.19.1)

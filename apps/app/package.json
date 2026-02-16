@@ -36,7 +36,6 @@
     "@ixo/slack": "1.0.0",
     "@ixo/sqlite-saver": "1.0.4",
     "@ixo/ucan": "1.0.1",
-    "@ixo/vitest-config": "^1.0.0",
     "@langchain/community": "^1.0.3",
     "@langchain/core": "^1.0.5",
     "@langchain/langgraph": "^1.0.2",
@@ -95,6 +94,7 @@
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "@ixo/vitest-config": "^1.0.0"
   }
 }
