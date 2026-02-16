@@ -1,7 +1,11 @@
 {
   "name": "@ixo/vitest-config",
-  "version": "0.0.0",
-  "private": true,
+  "version": "1.0.0",
+  "description": "Vitest configuration for Ixo",
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "exports": {
     "./base": "./base.js",
