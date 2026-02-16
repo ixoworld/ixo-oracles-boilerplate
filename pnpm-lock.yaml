@@ -29,8 +29,8 @@ importers:
         specifier: ^9.18.0
         version: 9.39.2
       '@ixo/eslint-config':
-        specifier: workspace:*
-        version: link:packages/eslint-config
+        specifier: 2.0.0
+        version: 2.0.0(@eslint/js@9.39.2)(@vitest/eslint-plugin@1.6.9(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)(vitest@3.2.4(@types/debug@4.1.12)(@types/node@22.19.1)(jiti@2.6.1)(jsdom@20.0.3)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.1)))(eslint-config-prettier@10.1.8(eslint@9.39.2(jiti@2.6.1)))(eslint-config-turbo@2.6.1(eslint@9.39.2(jiti@2.6.1))(turbo@2.6.1))(eslint@9.39.2(jiti@2.6.1))(prettier@3.6.2)(typescript-eslint@8.47.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3))(typescript@5.9.3)
       '@ixo/typescript-config':
         specifier: 1.0.0
         version: 1.0.0
@@ -3032,6 +3032,18 @@ packages:
 
   '@ixo/did-provider-x@0.0.2':
     resolution: {integrity: sha512-QOZH3i68pGfRZSyU+OSu3OkplfB5UIj6nRrm0ieD827/OyAQXu+uTyz+POoD9Icrn9OVFP3gl7b3b0sgpaeavg==}
+
+  '@ixo/eslint-config@2.0.0':
+    resolution: {integrity: sha512-o46o/dX4NVHr3QGNPf5UjjJ/jVPQTCPN9vuMfvic39ZQyGAKcSYE12fCTxjyNC4D9jMzkvfBy2tNn1Gzww5mWg==}
+    peerDependencies:
+      '@eslint/js': ^9.18.0
+      '@vitest/eslint-plugin': ^1.2.1
+      eslint: '>=9'
+      eslint-config-prettier: ^10.0.0
+      eslint-config-turbo: ^2.6.0
+      prettier: '>=3'
+      typescript: '>=5'
+      typescript-eslint: ^8.20.0
 
   '@ixo/impactxclient-sdk@2.4.1':
     resolution: {integrity: sha512-os0fllhn80KsH4Y+GiepGmWbTeva23RXWL1qux2XeNS3RNg8hYV6ahpNJtHy7rIzF7e10fVspZ73u00j6QwBDQ==}
@@ -14894,6 +14906,17 @@ snapshots:
     transitivePeerDependencies:
       - debug
       - supports-color
+
+  '@ixo/eslint-config@2.0.0(@eslint/js@9.39.2)(@vitest/eslint-plugin@1.6.9(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)(vitest@3.2.4(@types/debug@4.1.12)(@types/node@22.19.1)(jiti@2.6.1)(jsdom@20.0.3)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.1)))(eslint-config-prettier@10.1.8(eslint@9.39.2(jiti@2.6.1)))(eslint-config-turbo@2.6.1(eslint@9.39.2(jiti@2.6.1))(turbo@2.6.1))(eslint@9.39.2(jiti@2.6.1))(prettier@3.6.2)(typescript-eslint@8.47.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3))(typescript@5.9.3)':
+    dependencies:
+      '@eslint/js': 9.39.2
+      '@vitest/eslint-plugin': 1.6.9(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)(vitest@3.2.4(@types/debug@4.1.12)(@types/node@22.19.1)(jiti@2.6.1)(jsdom@20.0.3)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.1))
+      eslint: 9.39.2(jiti@2.6.1)
+      eslint-config-prettier: 10.1.8(eslint@9.39.2(jiti@2.6.1))
+      eslint-config-turbo: 2.6.1(eslint@9.39.2(jiti@2.6.1))(turbo@2.6.1)
+      prettier: 3.6.2
+      typescript: 5.9.3
+      typescript-eslint: 8.47.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
 
   '@ixo/impactxclient-sdk@2.4.1':
     dependencies:
