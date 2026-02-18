@@ -94,4 +94,10 @@ export type OraclesCallMatrixEvent = {
   };
 };
 
-export * from 'matrix-bot-sdk';
+export {
+  type MatrixEvent,
+  type MessageEvent,
+  type MessageEventContent,
+  EncryptedRoomEvent,
+  MatrixError,
+} from 'matrix-bot-sdk';
