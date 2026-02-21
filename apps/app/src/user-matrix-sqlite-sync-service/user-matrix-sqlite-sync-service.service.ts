@@ -35,9 +35,8 @@ const gunzipAsync = promisify(gunzip);
 
 const configService = new ConfigService<ENV>();
 
-/** Configure a SQLite connection with WAL mode and busy timeout for safe concurrent access */
+/** Configure a SQLite connection with busy timeout for safe concurrent access */
 function configureSqliteConnection(db: DatabaseType): void {
-  db.pragma('journal_mode = WAL');
   db.pragma('busy_timeout = 5000');
 }
 
@@ -409,8 +408,8 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
       );
     }
 
-    // Delete local file + WAL/SHM files
-    for (const suffix of ['', '-wal', '-shm', '.tmp']) {
+    // Delete local file + temp files
+    for (const suffix of ['', '.tmp']) {
       try {
         await fs.unlink(dbPath + suffix);
       } catch {
@@ -626,40 +625,53 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
 
     let userDB: GetMediaFromRoomByStorageKeyResult | null = null;
 
-    const cachedEventText = this.fileEventsDatabase
-      .prepare('SELECT event FROM file_events WHERE storage_key = ?')
-      .get(storageKey) as { event: string } | undefined;
+    try {
+      const cachedEventText = this.fileEventsDatabase
+        .prepare('SELECT event FROM file_events WHERE storage_key = ?')
+        .get(storageKey) as { event: string } | undefined;
 
-    const cachedEvent = cachedEventText
-      ? (JSON.parse(cachedEventText.event) as MatrixMediaEvent)
-      : undefined;
-    if (cachedEvent) {
-      const result = await getMediaFromRoom(undefined, undefined, cachedEvent);
-      userDB = {
-        ...result,
-        contentInfo: {
-          ...result.contentInfo,
-          storageKey,
-        },
-      };
-    } else {
-      const mxManager = MatrixManager.getInstance();
-      const userHomeServer = await getMatrixHomeServerCroppedForDid(userDid);
-      const { roomId } = await mxManager.getOracleRoomIdWithHomeServer({
-        userDid,
-        oracleEntityDid: configService.getOrThrow('ORACLE_ENTITY_DID'),
-        userHomeServer,
-      });
+      const cachedEvent = cachedEventText
+        ? (JSON.parse(cachedEventText.event) as MatrixMediaEvent)
+        : undefined;
+      if (cachedEvent) {
+        const result = await getMediaFromRoom(
+          undefined,
+          undefined,
+          cachedEvent,
+        );
+        userDB = {
+          ...result,
+          contentInfo: {
+            ...result.contentInfo,
+            storageKey,
+          },
+        };
+      } else {
+        const mxManager = MatrixManager.getInstance();
+        const userHomeServer = await getMatrixHomeServerCroppedForDid(userDid);
+        const { roomId } = await mxManager.getOracleRoomIdWithHomeServer({
+          userDid,
+          oracleEntityDid: configService.getOrThrow('ORACLE_ENTITY_DID'),
+          userHomeServer,
+        });
 
-      if (!roomId) {
-        throw new NotFoundException('Room not found or Invalid Session Id');
+        if (!roomId) {
+          throw new NotFoundException('Room not found or Invalid Session Id');
+        }
+
+        Logger.debug(
+          `Downloading checkpoint from Matrix room ${roomId} for user ${userDid}`,
+        );
+        // load from matrix
+        userDB = await getMediaFromRoomByStorageKey(roomId, storageKey);
       }
-
-      Logger.debug(
-        `Downloading checkpoint from Matrix room ${roomId} for user ${userDid}`,
+    } catch (error) {
+      // Matrix download/decryption failed (e.g. missing room key, corrupt encryption
+      // metadata). Treat as if no backup exists — a fresh DB will be created by the caller.
+      Logger.warn(
+        `Failed to download checkpoint from Matrix for user ${userDid}, will start with fresh database: ${error instanceof Error ? error.message : String(error)}`,
       );
-      // load from matrix
-      userDB = await getMediaFromRoomByStorageKey(roomId, storageKey);
+      return;
     }
 
     if (!userDB) {
@@ -770,44 +782,12 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
     const cached = this.dbConnectionCache.get(userDid);
     if (cached) {
       if (this.isUserActive(userDid)) {
-        // User has an in-flight request — WAL checkpoint flushes data without closing
-        try {
-          const walResult = cached.db.pragma(
-            'wal_checkpoint(PASSIVE)',
-          ) as Array<{
-            busy: number;
-            log: number;
-            checkpointed: number;
-          }>;
-          const { busy, log, checkpointed } = walResult[0] ?? {};
-          if (busy) {
-            // Another connection is writing — skip this upload cycle
-            Logger.debug(
-              `WAL checkpoint busy for active user ${userDid}, skipping upload`,
-            );
-            return;
-          }
-          if (log != null && checkpointed != null && log !== checkpointed) {
-            // PASSIVE couldn't flush all WAL pages — checksum would be computed on
-            // incomplete data, so skip this upload cycle to avoid a stale checksum.
-            Logger.debug(
-              `WAL checkpoint incomplete for active user ${userDid} (${checkpointed}/${log} pages), skipping upload`,
-            );
-            return;
-          }
-          Logger.debug(
-            `WAL checkpoint (passive) for active user ${userDid} before upload`,
-          );
-        } catch (error) {
-          // WAL checkpoint failure for an active user — skip upload but keep the
-          // connection in cache. The user's in-flight request still holds a reference
-          // to this DB handle, so closing/removing it would cause errors. The connection
-          // will be refreshed on the next cron cycle after the user becomes inactive.
-          Logger.warn(
-            `WAL checkpoint failed for active user ${userDid}, skipping upload to avoid stale data: ${error}`,
-          );
-          return;
-        }
+        // User has an in-flight request — in DELETE journal mode the DB file may be
+        // inconsistent mid-transaction, so skip upload. Next cron cycle will pick it up.
+        Logger.debug(
+          `Skipping upload for active user ${userDid}, will retry next cycle`,
+        );
+        return;
       } else {
         // No active request — safe to close
         try {
@@ -823,7 +803,6 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
     }
 
     // Compute checksum via streaming to avoid loading the entire DB into memory.
-    // This runs AFTER the WAL flush above so the .db file reflects the latest data.
     // Streaming reads ~64KB chunks at a time instead of the full file (which can be 100MB+).
     const currentChecksum = await computeFileChecksum(checkpointPath);
     const lastChecksum = this.lastUploadedChecksum.get(storageKey);

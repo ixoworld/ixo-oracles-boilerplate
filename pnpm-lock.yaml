@@ -95,8 +95,8 @@ importers:
         specifier: 1.0.0
         version: 1.0.0(@types/express@5.0.5)
       '@ixo/sqlite-saver':
-        specifier: 1.0.4
-        version: 1.0.4(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.0(@opentelemetry/api@1.9.0))(openai@6.9.1(ws@8.18.2)(zod@4.1.12))
+        specifier: ^1.0.5
+        version: 1.0.5(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.0(@opentelemetry/api@1.9.0))(openai@6.9.1(ws@8.18.2)(zod@4.1.12))
       '@ixo/ucan':
         specifier: 1.0.1
         version: 1.0.1(@cosmjs/crypto@0.33.1)(@cosmjs/encoding@0.33.1)(typescript@5.9.3)
@@ -3082,8 +3082,8 @@ packages:
   '@ixo/slack@1.0.0':
     resolution: {integrity: sha512-DOr43XgGjmCmm8psFdOA72o3U4JzoBv8y+vtuXphF6LAFcJ3NO+YjzMsqrM0CRhrRH6V1j8Yp67h21sq8mXfww==}
 
-  '@ixo/sqlite-saver@1.0.4':
-    resolution: {integrity: sha512-4N1ETwjDS/hPsTf7lcb1k6BpJJ5VyyppPdzmv1nNFnhFIAlv5Nr4EyEnE3pXc6sy1JMV8eaEzPD1B7a7z/5EiA==}
+  '@ixo/sqlite-saver@1.0.5':
+    resolution: {integrity: sha512-4PwB68SInusG8l08tuqOD8zke4yygVDuiTQmRXuhs0IOatiP+bPIntF6rn17J+6qeXm8AHvp7rySaiaMPafwRA==}
 
   '@ixo/typescript-config@1.0.0':
     resolution: {integrity: sha512-reavFCnQlEY3efgDMBJoUbHJUIhlpFgf/LS0Q1Vqz+y/mbXymItF82unAzcmRFjb5fE+ANgYpj0k22njWs/tzg==}
@@ -15075,7 +15075,7 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@ixo/sqlite-saver@1.0.4(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.0(@opentelemetry/api@1.9.0))(openai@6.9.1(ws@8.18.2)(zod@4.1.12))':
+  '@ixo/sqlite-saver@1.0.5(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.0(@opentelemetry/api@1.9.0))(openai@6.9.1(ws@8.18.2)(zod@4.1.12))':
     dependencies:
       '@ixo/logger': 0.0.2
       '@langchain/core': 1.0.6(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.0(@opentelemetry/api@1.9.0))(openai@6.9.1(ws@8.18.2)(zod@4.1.12))

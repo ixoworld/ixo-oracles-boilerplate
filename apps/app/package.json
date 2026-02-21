@@ -34,7 +34,7 @@
     "@ixo/oracles-chain-client": "1.2.0",
     "@ixo/oracles-events": "1.0.3",
     "@ixo/slack": "1.0.0",
-    "@ixo/sqlite-saver": "1.0.4",
+    "@ixo/sqlite-saver": "^1.0.5",
     "@ixo/ucan": "1.0.1",
     "@langchain/community": "^1.0.3",
     "@langchain/core": "^1.0.5",
