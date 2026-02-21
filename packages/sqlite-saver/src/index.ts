@@ -301,8 +301,7 @@ export class SqliteSaver extends BaseCheckpointSaver {
       return;
     }
 
-    // Enable WAL mode for concurrent read/write support and set busy timeout
-    this.db.pragma('journal_mode = WAL');
+    // Set busy timeout for concurrent access
     this.db.pragma('busy_timeout = 5000');
 
     // Create base tables
