@@ -33,6 +33,38 @@ import { type BaseSyncArgs } from './type';
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
 
+/**
+ * Returns true if the error is permanent (data genuinely unrecoverable),
+ * meaning it's safe to create a fresh DB. All other errors are assumed
+ * transient and should propagate to prevent data loss.
+ */
+function isUnrecoverableDownloadError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+
+  // Crypto/decryption failures from Rust NAPI layer (hash mismatch, invalid key, corrupt JSON)
+  // These mean the encrypted payload is broken — retrying won't help
+  const cryptoPatterns = [
+    /decrypt/i,
+    /hash/i,
+    /mismatch/i,
+    /base64/i,
+    /serde/i,
+    /invalid.*key/i,
+    /missing field/i,
+  ];
+
+  // Matrix-specific permanent errors
+  const matrixPatterns = [
+    /M_NOT_FOUND/, // media deleted/redacted from Matrix
+    /Event not found/, // event no longer exists
+    /not a media event/i, // event type mismatch
+    /mxcUrl.*does not begin/i, // malformed content.file.url
+    /M_FORBIDDEN/, // access permanently denied
+  ];
+
+  return [...cryptoPatterns, ...matrixPatterns].some((p) => p.test(message));
+}
+
 const configService = new ConfigService<ENV>();
 
 /** Configure a SQLite connection with busy timeout for safe concurrent access */
@@ -625,14 +657,24 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
 
     let userDB: GetMediaFromRoomByStorageKeyResult | null = null;
 
+    // Step 1: Try cached event lookup (local SQLite — independent concern)
+    let cachedEvent: MatrixMediaEvent | undefined;
     try {
       const cachedEventText = this.fileEventsDatabase
         .prepare('SELECT event FROM file_events WHERE storage_key = ?')
         .get(storageKey) as { event: string } | undefined;
-
-      const cachedEvent = cachedEventText
+      cachedEvent = cachedEventText
         ? (JSON.parse(cachedEventText.event) as MatrixMediaEvent)
         : undefined;
+    } catch (cacheError) {
+      // file_events.db corrupt or locked — skip cache, fall through to direct Matrix lookup
+      Logger.warn(
+        `Failed to read cached event for user ${userDid}, falling through to Matrix lookup: ${cacheError instanceof Error ? cacheError.message : String(cacheError)}`,
+      );
+    }
+
+    // Step 2: Download from Matrix
+    try {
       if (cachedEvent) {
         const result = await getMediaFromRoom(
           undefined,
@@ -662,16 +704,20 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
         Logger.debug(
           `Downloading checkpoint from Matrix room ${roomId} for user ${userDid}`,
         );
-        // load from matrix
         userDB = await getMediaFromRoomByStorageKey(roomId, storageKey);
       }
     } catch (error) {
-      // Matrix download/decryption failed (e.g. missing room key, corrupt encryption
-      // metadata). Treat as if no backup exists — a fresh DB will be created by the caller.
-      Logger.warn(
-        `Failed to download checkpoint from Matrix for user ${userDid}, will start with fresh database: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      return;
+      if (isUnrecoverableDownloadError(error)) {
+        // Permanent failure — data genuinely unrecoverable, safe to start fresh
+        Logger.warn(
+          `Unrecoverable download failure for user ${userDid}, will start with fresh database: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        return;
+      }
+      // Transient/unknown error — let it propagate so the request fails with 500
+      // and the user retries later. This prevents creating an empty DB that would
+      // overwrite the good Matrix backup on the next upload cron cycle.
+      throw error;
     }
 
     if (!userDB) {
