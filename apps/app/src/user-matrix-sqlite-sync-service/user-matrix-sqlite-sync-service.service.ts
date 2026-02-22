@@ -19,7 +19,6 @@ import { gunzip, gzip } from 'node:zlib';
 
 import Database, { type Database as DatabaseType } from 'better-sqlite3';
 import path from 'path';
-import { ENV } from 'src/config';
 import {
   deleteMediaFromRoom,
   getMediaFromRoom,
@@ -29,6 +28,7 @@ import {
   uploadMediaToRoom,
 } from './matrix-upload-utils';
 import { type BaseSyncArgs } from './type';
+import { ENV } from '../config';
 
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
@@ -68,10 +68,12 @@ function isUnrecoverableDownloadError(error: unknown): boolean {
 const configService = new ConfigService<ENV>();
 
 /** Configure a SQLite connection with busy timeout for safe concurrent access */
+/** Configure a SQLite connection with pragmas for safe concurrent access on VPS */
 function configureSqliteConnection(db: DatabaseType): void {
+  db.pragma('journal_mode = DELETE');
   db.pragma('busy_timeout = 5000');
+  db.pragma('synchronous = NORMAL');
 }
-
 @Injectable()
 export class UserMatrixSqliteSyncService implements OnModuleInit {
   private static instance: UserMatrixSqliteSyncService;
@@ -96,6 +98,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
         'file_events.db',
       ),
     );
+    configureSqliteConnection(this.fileEventsDatabase);
   }
 
   private readonly filePathCache = new Map<
@@ -145,7 +148,6 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
   private isUserActive(userDid: string): boolean {
     return (this.activeUsers.get(userDid) ?? 0) > 0;
   }
-
   static createUserStorageKey(userDid: string): string {
     const key = `checkpoint_${userDid}_${configService.getOrThrow('ORACLE_DID')}`;
     return createHash('sha256').update(key).digest('hex').substring(0, 17);
@@ -442,6 +444,8 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
 
     // Delete local file + temp files
     for (const suffix of ['', '.tmp']) {
+    // Delete local file + temp files + leftover WAL/SHM/journal files
+    for (const suffix of ['', '.tmp', '-wal', '-shm', '-journal']) {
       try {
         await fs.unlink(dbPath + suffix);
       } catch {
@@ -449,7 +453,6 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
       }
     }
   }
-
   private initializeSessionsAndCallsTables(db: DatabaseType): void {
     db.exec(`
       CREATE TABLE IF NOT EXISTS sessions (
@@ -1092,7 +1095,6 @@ function computeFileChecksum(filePath: string): Promise<string> {
     });
   });
 }
-
 const bytesToHumanReadable = (bytes: number): string => {
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   const index = Math.floor(Math.log(bytes) / Math.log(1024));
