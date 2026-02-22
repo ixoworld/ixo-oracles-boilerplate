@@ -442,8 +442,6 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
       );
     }
 
-    // Delete local file + temp files
-    for (const suffix of ['', '.tmp']) {
     // Delete local file + temp files + leftover WAL/SHM/journal files
     for (const suffix of ['', '.tmp', '-wal', '-shm', '-journal']) {
       try {
