@@ -67,17 +67,10 @@ ALWAYS mark as SAFE if the response:
         ]);
 
         const safetyDecision = String(result.content).trim().toUpperCase();
-        Logger.log(`Safety decision: ${safetyDecision}`, {
-          userContent: userContent.substring(0, 100),
-          responsePreview: String(lastMessage.content).substring(0, 100),
-        });
+        Logger.log(`Safety decision: ${safetyDecision}`, {});
         if (safetyDecision.includes('UNSAFE')) {
           Logger.warn(
             'Unsafe response detected, blocking and returning safe message',
-            {
-              userContent: userContent.substring(0, 100),
-              responsePreview: String(lastMessage.content).substring(0, 100),
-            },
           );
           return {
             messages: [
