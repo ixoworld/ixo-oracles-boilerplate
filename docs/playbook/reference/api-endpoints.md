@@ -6,12 +6,12 @@
 
 ## Required Headers
 
-| Header                  | Required | Description                  |
-| ----------------------- | -------- | ---------------------------- |
-| `x-matrix-access-token` | Yes      | User's Matrix access token   |
-| `x-did`                 | Yes      | User's DID                   |
-| `x-matrix-homeserver`   | No       | User's Matrix homeserver URL |
-| `x-timezone`            | No       | User's timezone              |
+| Header | Required | Description |
+|--------|----------|-------------|
+| `x-matrix-access-token` | Yes | User's Matrix access token |
+| `x-did` | Yes | User's DID |
+| `x-matrix-homeserver` | No | User's Matrix homeserver URL |
+| `x-timezone` | No | User's timezone |
 
 ---
 
@@ -28,7 +28,6 @@ Creates a new chat session.
 **Headers:** `x-matrix-access-token`, `x-did`
 
 **Response:** `201 Created`
-
 ```json
 {
   "sessionId": "string",
@@ -65,7 +64,6 @@ Deletes a specific session.
 **Headers:** `x-matrix-access-token`, `x-did`
 
 **Response:** `200 OK`
-
 ```json
 {
   "message": "Session deleted successfully"
@@ -87,7 +85,6 @@ Sends a message to the oracle. Supports both streaming (SSE) and standard respon
 **Headers:** `x-matrix-access-token`, `x-did`
 
 **Body:**
-
 ```json
 {
   "message": "string",
@@ -99,7 +96,6 @@ Sends a message to the oracle. Supports both streaming (SSE) and standard respon
 ```
 
 **Response:**
-
 - If `stream: true` — SSE event stream (`text/event-stream`)
 - If `stream: false` — `200 OK` with JSON response
 
@@ -124,7 +120,6 @@ POST /messages/abort
 Aborts an ongoing streaming request.
 
 **Body:**
-
 ```json
 {
   "sessionId": "string"
@@ -132,7 +127,6 @@ Aborts an ongoing streaming request.
 ```
 
 **Response:** `200 OK`
-
 ```json
 {
   "success": true

@@ -1,86 +1,68 @@
-# 07 — MCP Servers: Connect External Tools
+# 07 — MCP Servers: Connect External Services
 
-> **What you'll learn:** How to plug external tools into your oracle so it can do more things — search the web, run code, remember past conversations, and anything else an MCP server provides.
-
----
-
-## 7.1 What is MCP?
-
-A way to plug external tools into your oracle, like connecting apps to a phone. You add a server URL, and your oracle automatically discovers what tools are available.
+> **What you'll build:** Connections to external MCP (Model Context Protocol) servers, giving your oracle access to third-party tools and services.
 
 ---
 
-## 7.2 Built-in Connections
+## What is MCP
 
-Your oracle ships with these MCP integrations out of the box:
+<!-- TODO: Brief explanation of Model Context Protocol -->
 
-| Server            | Scope    | What it gives your oracle                             |
-| ----------------- | -------- | ----------------------------------------------------- |
-| **Memory Engine** | Per-user | Remembers things about each user across conversations |
-| **Firecrawl**     | Global   | Searches and scrapes the web for information          |
-| **Sandbox**       | Per-user | Runs code securely when executing skills              |
-| **Subscription**  | Per-user | Checks user credits and subscription status           |
-
-**Scope explained:**
-
-- **Global** — one shared connection for all users
-- **Per-user** — each user gets their own isolated connection (with their own credentials and data)
+MCP (Model Context Protocol) is a standard way to connect LLMs to external tools. Instead of writing custom tool integrations, you point your oracle at an MCP server and it discovers available tools automatically.
 
 ---
 
-## 7.3 Adding a New MCP Server
+## The mcpConfig in mcp.ts
 
-Open `apps/app/src/graph/mcp.ts` and add your server to the `mcpServers` object:
+<!-- TODO: Show the MCPConfigWithUCAN structure from mcp.ts -->
 
-```typescript
-const mcpConfig: MCPConfigWithUCAN = {
-  useStandardContentBlocks: true,
-  prefixToolNameWithServerName: true,
-  mcpServers: {
-    // Add your server here
-    myService: {
-      type: 'http',
-      transport: 'http',
-      url: 'https://my-mcp-server.com/mcp',
-      headers: {
-        Authorization: `Bearer ${process.env.MY_SERVICE_API_KEY}`,
-      },
-    },
-  },
-  ucanConfig: {
-    // If your server needs per-user authorization, add it here
-    // myService: { requiresUcan: true },
-  },
-};
-```
+Located in `apps/app/src/graph/mcp.ts`. The config defines which MCP servers to connect to and which require UCAN authorization.
 
-That's it. Restart your oracle and it will pick up all the tools from the new server automatically. Tool names get prefixed with the server name (e.g., `myService__searchDocs`), so there are no naming conflicts.
+---
 
-### Server types
+## Adding an MCP Server
 
-| Type      | When to use                              | Example                           |
-| --------- | ---------------------------------------- | --------------------------------- |
-| `http`    | Remote MCP server with a URL             | Third-party APIs, hosted services |
-| `command` | Local process that speaks MCP over stdio | Docker containers, CLI tools      |
+<!-- TODO: Show step-by-step with code example -->
 
-**Command-based example:**
+Edit the `mcpServers` object in `mcp.ts`:
 
 ```typescript
 mcpServers: {
-  github: {
-    command: 'npx',
-    args: ['-y', '@modelcontextprotocol/server-github'],
-    env: {
-      GITHUB_PERSONAL_ACCESS_TOKEN: process.env.GITHUB_TOKEN,
+  myService: {
+    type: 'http',
+    transport: 'http',
+    url: 'https://my-mcp-server.com/mcp',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
     },
   },
-},
+}
 ```
 
-## Quick reference
+---
 
-| I want to...                          | Do this                                                           |
-| ------------------------------------- | ----------------------------------------------------------------- |
-| Add a new external tool               | Add a server entry to `mcpServers` in `apps/app/src/graph/mcp.ts` |
-| Require user permissions for a server | Add the server name to `ucanConfig` with `requiresUcan: true`     |
-| See which tools loaded                | Check the oracle logs on startup for the MCP tool count           |
+## UCAN-Protected Servers
+
+<!-- TODO: Explain ucanConfig and when to use it -->
+
+Add to the `ucanConfig` object for servers that require client-side authorization via UCAN tokens.
+
+---
+
+## Per-User MCP Servers
+
+<!-- TODO: Show the sandbox pattern from main-agent.ts lines 99-121 -->
+
+Some MCP servers need per-user authentication. The sandbox pattern creates a new MCP client per request with user-specific headers (Matrix OpenID token, user DID, room ID).
+
+---
+
+## Existing MCP Integrations
+
+<!-- TODO: Expand each with configuration and purpose -->
+
+| Server | Scope | Purpose |
+|--------|-------|---------|
+| Memory Engine | Per-user | Persistent memory across conversations |
+| Firecrawl | Global | Web scraping and search |
+| Sandbox | Per-user | Client-provided tools with OpenID auth |
