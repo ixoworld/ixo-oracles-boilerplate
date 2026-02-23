@@ -41,6 +41,15 @@ const getMemoryEngineMcpTools = async ({
     'memory-engine__delete_episode',
   ],
 }: GetMemoryEngineMcpToolsParams) => {
+  if (!oracleToken || !userToken) {
+    logger.warn(
+      'Skipping memory engine MCP — missing required tokens (oracleToken: %s, userToken: %s)',
+      oracleToken ? 'present' : 'missing',
+      userToken ? 'present' : 'missing',
+    );
+    return [];
+  }
+
   try {
     const client = new MultiServerMCPClient({
       useStandardContentBlocks: true,

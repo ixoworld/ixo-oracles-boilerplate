@@ -70,7 +70,6 @@ export const EnvSchema = z.object({
   LIVE_AGENT_AUTH_API_KEY: z.string().optional().default(''),
   MEMORY_MCP_URL: z.url(),
   MEMORY_ENGINE_URL: z.url(),
-  MEMORY_SERVICE_API_KEY: z.string(),
   ORACLE_ENTITY_DID: z.string(),
   SUBSCRIPTION_URL: z.string().optional(),
   FIRECRAWL_MCP_URL: z.url(),
