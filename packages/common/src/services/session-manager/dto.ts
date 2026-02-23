@@ -50,6 +50,22 @@ export class CreateChatSessionDto extends UserAuthDto {
   @IsString()
   @IsOptional()
   slackThreadTs?: string;
+
+  @IsString()
+  @IsOptional()
+  oracleToken?: string;
+
+  @IsString()
+  @IsOptional()
+  userToken?: string;
+
+  @IsString()
+  @IsOptional()
+  oracleHomeServer?: string;
+
+  @IsString()
+  @IsOptional()
+  userHomeServer?: string;
 }
 
 export class DeleteChatSessionDto extends UserAuthDto {

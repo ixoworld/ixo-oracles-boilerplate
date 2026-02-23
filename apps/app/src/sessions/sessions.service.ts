@@ -3,6 +3,7 @@ import {
   type ListChatSessionsResponseDto,
   SessionManagerService,
 } from '@ixo/common';
+import { OpenIdTokenProvider } from '@ixo/oracles-chain-client';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { type ENV } from 'src/types';
@@ -41,6 +42,7 @@ export class SessionsService {
           did: data.did,
           oracleEntityDid,
           homeServer: data.homeServer,
+          userToken: data.userToken,
         })
         .catch((err) =>
           Logger.error(
@@ -76,6 +78,30 @@ export class SessionsService {
           this.syncService.markUserInactive(data.did);
         });
 
+      // Generate oracle token for memory engine auth
+      const oracleMatrixBaseUrl = this.configService
+        .getOrThrow<string>('MATRIX_BASE_URL')
+        .replace(/\/$/, '');
+
+      let oracleToken: string | undefined;
+      if (data.userToken) {
+        const oracleOpenIdTokenProvider = new OpenIdTokenProvider({
+          matrixAccessToken: this.configService.getOrThrow(
+            'MATRIX_ORACLE_ADMIN_ACCESS_TOKEN',
+          ),
+          homeServerUrl: oracleMatrixBaseUrl,
+          matrixUserId: this.configService.getOrThrow(
+            'MATRIX_ORACLE_ADMIN_USER_ID',
+          ),
+        });
+        oracleToken = await oracleOpenIdTokenProvider.getToken();
+      }
+
+      const oracleHomeServer = oracleMatrixBaseUrl.replace(
+        /^https?:\/\//,
+        '',
+      );
+
       const session = await this.sessionManager.createSession({
         did: data.did,
         homeServer: data.homeServer,
@@ -83,6 +109,10 @@ export class SessionsService {
         oracleEntityDid,
         oracleDid: this.configService.getOrThrow('ORACLE_DID'),
         slackThreadTs: data.slackThreadTs,
+        oracleToken,
+        userToken: data.userToken,
+        oracleHomeServer,
+        userHomeServer: data.homeServer,
       });
       return session;
     } catch (error) {
@@ -142,6 +172,7 @@ export class SessionsService {
           did: data.did,
           oracleEntityDid,
           homeServer: data.homeServer,
+          userToken: data.userToken,
         })
         .catch((err) =>
           Logger.error(

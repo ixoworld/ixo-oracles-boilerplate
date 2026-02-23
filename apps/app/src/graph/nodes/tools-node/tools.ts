@@ -21,15 +21,19 @@ type SupportedTools =
   | 'memory-engine__clear';
 
 interface GetMemoryEngineMcpToolsParams {
-  userDid: string;
-  oracleDid: string;
+  oracleToken: string;
+  userToken: string;
+  oracleHomeServer: string;
+  userHomeServer: string;
   roomId: string;
   selectedTools?: SupportedTools[];
 }
 
 const getMemoryEngineMcpTools = async ({
-  userDid,
-  oracleDid,
+  oracleToken,
+  userToken,
+  oracleHomeServer,
+  userHomeServer,
   roomId,
   selectedTools = [
     'memory-engine__search_memory_engine',
@@ -46,14 +50,12 @@ const getMemoryEngineMcpTools = async ({
           type: 'http',
           transport: 'http',
           url: configService.getOrThrow('MEMORY_MCP_URL'),
-          // Optional: Add auth headers if needed
           headers: {
-            Authorization: `Bearer ${configService.getOrThrow(
-              'MEMORY_SERVICE_API_KEY',
-            )}`,
-            'x-oracle-did': oracleDid,
+            'x-oracle-token': oracleToken,
+            'x-user-token': userToken,
+            'x-oracle-matrix-homeserver': oracleHomeServer,
+            'x-user-matrix-homeserver': userHomeServer,
             'x-room-id': roomId,
-            'x-user-did': userDid,
             'User-Agent': 'LangChain-MCP-Client/1.0',
           },
           // Automatic reconnection
