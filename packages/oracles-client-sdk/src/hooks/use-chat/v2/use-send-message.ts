@@ -292,6 +292,7 @@ const askOracleStream = async (props: {
       ...(props.metadata && { metadata: props.metadata }),
       ...(props.browserTools && { tools: props.browserTools }),
       ...(props.agActions && { agActions: props.agActions }),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     }),
     method: 'POST',
     signal: props.abortSignal,
