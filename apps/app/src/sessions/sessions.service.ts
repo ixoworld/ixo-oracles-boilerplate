@@ -97,7 +97,10 @@ export class SessionsService {
         oracleToken = await oracleOpenIdTokenProvider.getToken();
       }
 
-      const oracleHomeServer = oracleMatrixBaseUrl.replace(/^https?:\/\//, '');
+      const oracleHomeServer = oracleMatrixBaseUrl.replace(
+        /^https?:\/\//,
+        '',
+      );
 
       const session = await this.sessionManager.createSession({
         did: data.did,
