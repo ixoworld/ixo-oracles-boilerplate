@@ -88,19 +88,25 @@ const llm = getOpenRouterChatModel({
 });
 
 export const createMemoryAgent = async ({
-  userDid,
-  oracleDid,
+  oracleToken,
+  userToken,
+  oracleHomeServer,
+  userHomeServer,
   roomId,
   mode,
 }: {
-  userDid: string;
-  oracleDid: string;
+  oracleToken: string;
+  userToken: string;
+  oracleHomeServer: string;
+  userHomeServer: string;
   roomId: string;
   mode: 'user' | 'orgOwner';
 }): Promise<AgentSpec> => {
   const memoryEngineTools = await getMemoryEngineMcpTools({
-    userDid,
-    oracleDid,
+    oracleToken,
+    userToken,
+    oracleHomeServer,
+    userHomeServer,
     roomId,
     selectedTools: [
       'memory-engine__search_memory_engine',

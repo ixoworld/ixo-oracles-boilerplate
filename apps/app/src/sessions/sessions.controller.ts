@@ -40,10 +40,11 @@ export class SessionsController {
   async createSession(
     @Req() req: Request,
   ): Promise<CreateChatSessionResponseDto> {
-    const { did, homeServer } = req.authData;
+    const { did, homeServer, userOpenIdToken } = req.authData;
     return this.sessionsService.createSession({
       did,
       homeServer,
+      userToken: userOpenIdToken,
     });
   }
 
@@ -107,12 +108,14 @@ export class SessionsController {
       userOpenIdToken: matrixAccessToken,
       did,
       homeServer,
+      userOpenIdToken,
     } = req.authData;
     return this.sessionsService.deleteSession({
       matrixAccessToken,
       did,
       sessionId,
       homeServer,
+      userToken: userOpenIdToken,
     });
   }
 }
