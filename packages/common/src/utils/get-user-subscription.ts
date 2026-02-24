@@ -57,7 +57,7 @@ export const getUserSubscription = async ({
     );
 
     if (!response.ok) {
-      console.error(
+      Logger.error(
         `Failed to fetch user subscription: ${response.status} ${response.statusText}`,
       );
       return null;
@@ -78,7 +78,7 @@ export const getUserSubscription = async ({
       adminAddress: subscription.adminAddress,
     };
   } catch (error) {
-    console.error('Error fetching user subscription:', error);
+    Logger.error('Error fetching user subscription:', error);
     return null;
   }
 };

@@ -1,4 +1,5 @@
 import { request, gql } from 'graphql-request';
+import { Logger } from '@ixo/logger';
 import { chainNetwork } from './config.js';
 
 export const MATRIX_SERVICE_TYPE = 'MatrixHomeServer';
@@ -183,7 +184,7 @@ async function queryIidServices(
     }>(getBlocksyncGraphqlUrl(), QUERY_IIDS, { dids });
 
     if (!data?.iids?.nodes) {
-      console.error(
+      Logger.error(
         '[DidMatrixBatcher] Error querying IIDs: no nodes returned',
       );
       dids.forEach((did) => results.set(did, null));
@@ -212,7 +213,7 @@ async function queryIidServices(
       }
     }
   } catch (error) {
-    console.error('[DidMatrixBatcher] Error executing IID query:', error);
+    Logger.error('[DidMatrixBatcher] Error executing IID query:', error);
     dids.forEach((did) => results.set(did, null));
   }
 
@@ -234,7 +235,7 @@ async function queryEntityServices(
     }>(getBlocksyncGraphqlUrl(), QUERY_ENTITIES, { dids: entityDids });
 
     if (!data?.entities?.nodes) {
-      console.error(
+      Logger.error(
         '[DidMatrixBatcher] Error querying entities: no nodes returned',
       );
       entityDids.forEach((did) => results.set(did, null));
@@ -263,7 +264,7 @@ async function queryEntityServices(
       }
     }
   } catch (error) {
-    console.error('[DidMatrixBatcher] Error executing entity query:', error);
+    Logger.error('[DidMatrixBatcher] Error executing entity query:', error);
     entityDids.forEach((did) => results.set(did, null));
   }
 

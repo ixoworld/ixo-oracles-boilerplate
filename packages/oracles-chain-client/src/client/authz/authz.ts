@@ -6,6 +6,7 @@ import {
   type QueryClient,
   utils,
 } from '@ixo/impactxclient-sdk';
+import { Logger } from '@ixo/logger';
 import { gqlClient } from '../../gql/index.js';
 import { addDays } from '../../utils/general.js';
 import { getSettingsResource } from '../../utils/get-settings-resouce.js';
@@ -34,18 +35,18 @@ export class Authz {
       warn: (message: string, ...meta: unknown[]) => void;
     } = {
       info: (message: string, ...meta: unknown[]) => {
-        console.log(message, ...meta);
+        Logger.info(message, ...meta);
       },
       error: (message: string, ...meta: unknown[]) => {
-        console.error(message, ...meta);
+        Logger.error(message, ...meta);
       },
       warn: (message: string, ...meta: unknown[]) => {
-        console.warn(message, ...meta);
+        Logger.warn(message, ...meta);
       },
     },
   ) {
     if (!process.env.RPC_URL && !process.env.NEXT_PUBLIC_RPC_URL) {
-      console.warn(
+      Logger.warn(
         'RPC_URL is not set, using default testnet RPC URL',
         'RPC_URL',
         process.env.RPC_URL,

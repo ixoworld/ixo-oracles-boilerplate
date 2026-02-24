@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { decodeJwt } from 'jose';
 import { type IOpenIDToken } from 'matrix-js-sdk';
 import { useCallback, useState } from 'react';

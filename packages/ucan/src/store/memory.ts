@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * @fileoverview In-memory invocation store for replay protection
  *

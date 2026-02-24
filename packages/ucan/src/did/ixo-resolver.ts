@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * @fileoverview did:ixo resolver for UCAN validation
  *
