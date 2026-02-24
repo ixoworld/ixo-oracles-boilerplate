@@ -17,6 +17,7 @@ The project includes Docker Compose for infrastructure services (Redis, Nginx) a
 <!-- TODO: Required vs optional env vars for production, secrets management best practices -->
 
 See [Environment Variables Reference](./reference/environment-variables.md) for the complete list. Key production requirements:
+
 - All Matrix credentials
 - `OPEN_ROUTER_API_KEY`
 - `NETWORK` set to `testnet` or `mainnet`
@@ -28,11 +29,11 @@ See [Environment Variables Reference](./reference/environment-variables.md) for 
 
 <!-- TODO: Explain devnet → testnet → mainnet progression -->
 
-| Network | Purpose | When to use |
-|---------|---------|-------------|
-| devnet | Development & testing | Building and iterating |
-| testnet | Staging & QA | Pre-production validation |
-| mainnet | Production | Live users and real payments |
+| Network | Purpose               | When to use                  |
+| ------- | --------------------- | ---------------------------- |
+| devnet  | Development & testing | Building and iterating       |
+| testnet | Staging & QA          | Pre-production validation    |
+| mainnet | Production            | Live users and real payments |
 
 Update your entity's network: `oracles-cli update-entity`.
 

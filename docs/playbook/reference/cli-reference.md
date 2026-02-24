@@ -85,11 +85,11 @@ Authenticates via QR code using the IXO Mobile App.
 
 **SignX relay endpoints:**
 
-| Network | URL |
-|---------|-----|
-| Devnet | `https://signx.devnet.ixo.earth` |
+| Network | URL                               |
+| ------- | --------------------------------- |
+| Devnet  | `https://signx.devnet.ixo.earth`  |
 | Testnet | `https://signx.testnet.ixo.earth` |
-| Mainnet | `https://signx.ixo.earth` |
+| Mainnet | `https://signx.ixo.earth`         |
 
 ---
 
@@ -103,11 +103,11 @@ oracles-cli --init
 
 **Prompts:**
 
-| # | Prompt | Validation | Default |
-|---|--------|------------|---------|
-| 1 | **What is your project named?** | 1–50 chars, starts with letter, `[a-zA-Z][a-zA-Z0-9-_]*` | — |
-| 2 | **Select a template to clone** | Valid git URL | `git@github.com:ixoworld/ixo-oracles-boilerplate.git` |
-| 3 | **Confirm creation** | Yes / No | — |
+| #   | Prompt                          | Validation                                               | Default                                               |
+| --- | ------------------------------- | -------------------------------------------------------- | ----------------------------------------------------- |
+| 1   | **What is your project named?** | 1–50 chars, starts with letter, `[a-zA-Z][a-zA-Z0-9-_]*` | —                                                     |
+| 2   | **Select a template to clone**  | Valid git URL                                            | `git@github.com:ixoworld/ixo-oracles-boilerplate.git` |
+| 3   | **Confirm creation**            | Yes / No                                                 | —                                                     |
 
 After confirmation, the CLI runs the **Create Entity** flow (see below), then generates the `.env` file.
 
@@ -131,19 +131,19 @@ Creates a new oracle identity: wallet, DID, Matrix account, and blockchain entit
 
 **Prompts:**
 
-| # | Prompt | Validation | Default |
-|---|--------|------------|---------|
-| 1 | **Matrix homeserver URL** | Must start with `http://` or `https://`, no trailing slash | Derived from wallet |
-| 2 | **Oracle name** | Non-empty string | `My oracle` |
-| 3 | **Oracle price** | Number (IXO CREDITS) | `100` |
-| 4 | **Organization name** | Non-empty string | `IXO` |
-| 5 | **Profile name** | Non-empty string | `My oracle` |
-| 6 | **Logo URL** | Valid URL | DiceBear avatar URL |
-| 7 | **Cover image URL** | Valid URL | Same as logo |
-| 8 | **Location** | Non-empty string | `New York, NY` |
-| 9 | **Description** | Non-empty string | Generic description |
-| 10 | **Website URL** | URL (optional) | — |
-| 11 | **API URL** | Valid URL | `http://localhost:4000` |
+| #   | Prompt                    | Validation                                                 | Default                 |
+| --- | ------------------------- | ---------------------------------------------------------- | ----------------------- |
+| 1   | **Matrix homeserver URL** | Must start with `http://` or `https://`, no trailing slash | Derived from wallet     |
+| 2   | **Oracle name**           | Non-empty string                                           | `My oracle`             |
+| 3   | **Oracle price**          | Number (IXO CREDITS)                                       | `100`                   |
+| 4   | **Organization name**     | Non-empty string                                           | `IXO`                   |
+| 5   | **Profile name**          | Non-empty string                                           | `My oracle`             |
+| 6   | **Logo URL**              | Valid URL                                                  | DiceBear avatar URL     |
+| 7   | **Cover image URL**       | Valid URL                                                  | Same as logo            |
+| 8   | **Location**              | Non-empty string                                           | `New York, NY`          |
+| 9   | **Description**           | Non-empty string                                           | Generic description     |
+| 10  | **Website URL**           | URL (optional)                                             | —                       |
+| 11  | **API URL**               | Valid URL                                                  | `http://localhost:4000` |
 
 **What happens behind the scenes:**
 
@@ -181,11 +181,11 @@ Creates a new blockchain wallet, DID, and Matrix account without creating an ent
 
 **Prompts:**
 
-| # | Prompt | Validation | Default |
-|---|--------|------------|---------|
-| 1 | **Matrix homeserver URL** | Must start with `http://` or `https://` | Derived from wallet |
-| 2 | **6-digit PIN** | Exactly 6 digits | — |
-| 3 | **Oracle name** | Non-empty string | — |
+| #   | Prompt                    | Validation                              | Default             |
+| --- | ------------------------- | --------------------------------------- | ------------------- |
+| 1   | **Matrix homeserver URL** | Must start with `http://` or `https://` | Derived from wallet |
+| 2   | **6-digit PIN**           | Exactly 6 digits                        | —                   |
+| 3   | **Oracle name**           | Non-empty string                        | —                   |
 
 **What gets created:**
 
@@ -205,11 +205,11 @@ Modifies an existing blockchain entity. Currently supports adding controllers.
 
 **Prompts:**
 
-| # | Prompt | Validation | Default |
-|---|--------|------------|---------|
-| 1 | **Entity DID** | Format: `did:ixo:entity:<32-hex-chars>` | — |
-| 2 | **Action** | Currently only: `add-controller` | — |
-| 3 | **Controller DID** | Valid DID string | — |
+| #   | Prompt             | Validation                              | Default |
+| --- | ------------------ | --------------------------------------- | ------- |
+| 1   | **Entity DID**     | Format: `did:ixo:entity:<32-hex-chars>` | —       |
+| 2   | **Action**         | Currently only: `add-controller`        | —       |
+| 3   | **Controller DID** | Valid DID string                        | —       |
 
 Broadcasts `MsgAddController` to add a new controller DID to the entity. Requires mobile signing via SignX QR code.
 
@@ -242,48 +242,48 @@ The CLI generates a complete `.env` file at `apps/app/.env`. Here's what each se
 
 ### Auto-filled (from registration and network)
 
-| Variable | Source | Description |
-|----------|--------|-------------|
-| `PORT` | Default `4000` | Server port |
-| `ORACLE_NAME` | Project name prompt | Oracle display name |
-| `NETWORK` | SignX login | `devnet`, `testnet`, or `mainnet` |
-| `RPC_URL` | Derived from network | Blockchain RPC endpoint |
-| `MATRIX_BASE_URL` | Entity creation prompt | Matrix homeserver URL |
-| `MATRIX_ORACLE_ADMIN_ACCESS_TOKEN` | Fresh Matrix login | Oracle admin access token |
-| `MATRIX_ORACLE_ADMIN_PASSWORD` | Derived from mnemonic | Oracle Matrix password |
-| `MATRIX_ORACLE_ADMIN_USER_ID` | Matrix registration | Oracle Matrix user ID |
-| `MATRIX_RECOVERY_PHRASE` | Cross-signing setup | Recovery phrase for secret storage |
-| `MATRIX_VALUE_PIN` | Entity creation prompt | 6-digit PIN for encrypted vault |
-| `MATRIX_ACCOUNT_ROOM_ID` | Matrix room creation | Oracle's Matrix account room |
-| `SECP_MNEMONIC` | Wallet generation | 24-word BIP39 mnemonic |
-| `ORACLE_ENTITY_DID` | Entity broadcast | Blockchain entity DID |
-| `SQLITE_DATABASE_PATH` | Default `./sqlite-db` | SQLite checkpoint database path |
-| `REDIS_URL` | Default `redis://localhost:6379` | Redis connection URL |
-| `DOMAIN_INDEXER_URL` | Derived from network | Domain Indexer API endpoint |
+| Variable                           | Source                           | Description                        |
+| ---------------------------------- | -------------------------------- | ---------------------------------- |
+| `PORT`                             | Default `4000`                   | Server port                        |
+| `ORACLE_NAME`                      | Project name prompt              | Oracle display name                |
+| `NETWORK`                          | SignX login                      | `devnet`, `testnet`, or `mainnet`  |
+| `RPC_URL`                          | Derived from network             | Blockchain RPC endpoint            |
+| `MATRIX_BASE_URL`                  | Entity creation prompt           | Matrix homeserver URL              |
+| `MATRIX_ORACLE_ADMIN_ACCESS_TOKEN` | Fresh Matrix login               | Oracle admin access token          |
+| `MATRIX_ORACLE_ADMIN_PASSWORD`     | Derived from mnemonic            | Oracle Matrix password             |
+| `MATRIX_ORACLE_ADMIN_USER_ID`      | Matrix registration              | Oracle Matrix user ID              |
+| `MATRIX_RECOVERY_PHRASE`           | Cross-signing setup              | Recovery phrase for secret storage |
+| `MATRIX_VALUE_PIN`                 | Entity creation prompt           | 6-digit PIN for encrypted vault    |
+| `MATRIX_ACCOUNT_ROOM_ID`           | Matrix room creation             | Oracle's Matrix account room       |
+| `SECP_MNEMONIC`                    | Wallet generation                | 24-word BIP39 mnemonic             |
+| `ORACLE_ENTITY_DID`                | Entity broadcast                 | Blockchain entity DID              |
+| `SQLITE_DATABASE_PATH`             | Default `./sqlite-db`            | SQLite checkpoint database path    |
+| `REDIS_URL`                        | Default `redis://localhost:6379` | Redis connection URL               |
+| `DOMAIN_INDEXER_URL`               | Derived from network             | Domain Indexer API endpoint        |
 
 ### Must be filled manually
 
-| Variable | Description |
-|----------|-------------|
+| Variable              | Description                                                                    |
+| --------------------- | ------------------------------------------------------------------------------ |
 | `OPEN_ROUTER_API_KEY` | OpenRouter API key for LLM access ([get one here](https://openrouter.ai/keys)) |
-| `FIRECRAWL_MCP_URL` | Firecrawl MCP server URL |
+| `FIRECRAWL_MCP_URL`   | Firecrawl MCP server URL                                                       |
 
 ### Optional
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `LANGFUSE_PUBLIC_KEY` | — | Langfuse observability public key |
-| `LANGFUSE_SECRET_KEY` | — | Langfuse observability secret key |
-| `LANGFUSE_HOST` | `https://cloud.langfuse.com` | Langfuse host URL |
-| `DISABLE_CREDITS` | `false` | Set to `true` to disable credit/token limiting |
-| `CORS_ORIGIN` | `*` | Allowed CORS origins |
+| Variable              | Default                      | Description                                    |
+| --------------------- | ---------------------------- | ---------------------------------------------- |
+| `LANGFUSE_PUBLIC_KEY` | —                            | Langfuse observability public key              |
+| `LANGFUSE_SECRET_KEY` | —                            | Langfuse observability secret key              |
+| `LANGFUSE_HOST`       | `https://cloud.langfuse.com` | Langfuse host URL                              |
+| `DISABLE_CREDITS`     | `false`                      | Set to `true` to disable credit/token limiting |
+| `CORS_ORIGIN`         | `*`                          | Allowed CORS origins                           |
 
 ### Backup values (commented, for safekeeping)
 
-| Variable | Description |
-|----------|-------------|
+| Variable         | Description               |
+| ---------------- | ------------------------- |
 | `ORACLE_ADDRESS` | Oracle blockchain address |
-| `ORACLE_DID` | Oracle DID |
+| `ORACLE_DID`     | Oracle DID                |
 
 ---
 
@@ -291,21 +291,21 @@ The CLI generates a complete `.env` file at `apps/app/.env`. Here's what each se
 
 The CLI auto-selects infrastructure URLs based on your authenticated network:
 
-| Resource | Devnet | Testnet | Mainnet |
-|----------|--------|---------|---------|
-| Matrix Homeserver | `https://devmx.ixo.earth` | `https://testmx.ixo.earth` | `https://mx.ixo.earth` |
-| Room Bot | `https://rooms.bot.devmx.ixo.earth` | `https://rooms.bot.testmx.ixo.earth` | `https://rooms.bot.mx.ixo.earth` |
-| State Bot | `https://state.bot.devmx.ixo.earth` | `https://state.bot.testmx.ixo.earth` | `https://state.bot.mx.ixo.earth` |
-| Chain RPC | `https://devnet.ixo.earth/rpc/` | `https://testnet.ixo.earth/rpc/` | `https://impacthub.ixo.world/rpc/` |
-| SignX | `https://signx.devnet.ixo.earth` | `https://signx.testnet.ixo.earth` | `https://signx.ixo.earth` |
-| Portal | `https://ixo-portal.vercel.app` | `https://ixo-portal.vercel.app` | `https://ixo-portal.vercel.app` |
-| Domain Indexer | `https://domain-indexer.devnet.ixo.earth/index` | `https://domain-indexer.testnet.ixo.earth/index` | `https://domain-indexer.ixo.earth/index` |
+| Resource          | Devnet                                          | Testnet                                          | Mainnet                                  |
+| ----------------- | ----------------------------------------------- | ------------------------------------------------ | ---------------------------------------- |
+| Matrix Homeserver | `https://devmx.ixo.earth`                       | `https://testmx.ixo.earth`                       | `https://mx.ixo.earth`                   |
+| Room Bot          | `https://rooms.bot.devmx.ixo.earth`             | `https://rooms.bot.testmx.ixo.earth`             | `https://rooms.bot.mx.ixo.earth`         |
+| State Bot         | `https://state.bot.devmx.ixo.earth`             | `https://state.bot.testmx.ixo.earth`             | `https://state.bot.mx.ixo.earth`         |
+| Chain RPC         | `https://devnet.ixo.earth/rpc/`                 | `https://testnet.ixo.earth/rpc/`                 | `https://impacthub.ixo.world/rpc/`       |
+| SignX             | `https://signx.devnet.ixo.earth`                | `https://signx.testnet.ixo.earth`                | `https://signx.ixo.earth`                |
+| Portal            | `https://ixo-portal.vercel.app`                 | `https://ixo-portal.vercel.app`                  | `https://ixo-portal.vercel.app`          |
+| Domain Indexer    | `https://domain-indexer.devnet.ixo.earth/index` | `https://domain-indexer.testnet.ixo.earth/index` | `https://domain-indexer.ixo.earth/index` |
 
 **Relayer Node DIDs:**
 
-| Network | DID |
-|---------|-----|
-| Devnet | `did:ixo:entity:2f22535f8b179a51d77a0e302e68d35d` |
+| Network | DID                                               |
+| ------- | ------------------------------------------------- |
+| Devnet  | `did:ixo:entity:2f22535f8b179a51d77a0e302e68d35d` |
 | Testnet | `did:ixo:entity:3d079ebc0b332aad3305bb4a51c72edb` |
 | Mainnet | `did:ixo:entity:2f22535f8b179a51d77a0e302e68d35d` |
 
@@ -313,14 +313,14 @@ The CLI auto-selects infrastructure URLs based on your authenticated network:
 
 ## Validation Rules
 
-| Input | Rule |
-|-------|------|
-| Project name | `/^[a-zA-Z][a-zA-Z0-9-_]*$/`, max 50 chars |
-| Matrix URL | Must start with `http://` or `https://`, no trailing `/` |
-| PIN | Exactly 6 digits |
-| Entity DID | Format: `did:ixo:entity:[a-f0-9]{32}` |
-| Oracle price | Must be a number |
-| URLs (general) | Must start with `http://` or `https://` |
+| Input          | Rule                                                     |
+| -------------- | -------------------------------------------------------- |
+| Project name   | `/^[a-zA-Z][a-zA-Z0-9-_]*$/`, max 50 chars               |
+| Matrix URL     | Must start with `http://` or `https://`, no trailing `/` |
+| PIN            | Exactly 6 digits                                         |
+| Entity DID     | Format: `did:ixo:entity:[a-f0-9]{32}`                    |
+| Oracle price   | Must be a number                                         |
+| URLs (general) | Must start with `http://` or `https://`                  |
 
 ---
 

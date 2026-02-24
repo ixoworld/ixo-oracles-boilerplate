@@ -12,11 +12,11 @@ The first thing to customize. Located in `apps/app/src/config.ts` (lines 1–10)
 
 ```typescript
 export const oracleConfig = {
-  appName: '',                    // Your oracle's name
-  appPurpose: '',                 // What it does (1-2 sentences)
-  appMainFeatures: '',            // Key capabilities
-  appTargetUsers: '',             // Who it serves
-  appUniqueSellingPoints: '',     // What makes it special
+  appName: '', // Your oracle's name
+  appPurpose: '', // What it does (1-2 sentences)
+  appMainFeatures: '', // Key capabilities
+  appTargetUsers: '', // Who it serves
+  appUniqueSellingPoints: '', // What makes it special
 };
 ```
 
@@ -33,20 +33,20 @@ Located in `apps/app/src/graph/nodes/chat-node/prompt.ts`.
 
 ### Input Variables
 
-| Variable | Source | Description |
-|----------|--------|-------------|
-| `APP_NAME` | `oracleConfig.appName` | Oracle display name |
-| `IDENTITY_CONTEXT` | Memory Agent | User's identity info |
-| `WORK_CONTEXT` | Memory Agent | User's work context |
-| `GOALS_CONTEXT` | Memory Agent | User's goals |
-| `INTERESTS_CONTEXT` | Memory Agent | User's interests |
-| `RELATIONSHIPS_CONTEXT` | Memory Agent | User's relationships |
-| `RECENT_CONTEXT` | Memory Agent | Recent activity |
-| `TIME_CONTEXT` | System | Current timestamp |
-| `EDITOR_DOCUMENTATION` | Conditional | BlockNote editor docs (if editor active) |
-| `AG_UI_TOOLS_DOCUMENTATION` | Conditional | AG-UI component docs (if actions provided) |
-| `CURRENT_ENTITY_DID` | State | Active entity context |
-| `SLACK_FORMATTING_CONSTRAINTS` | Conditional | Slack-specific formatting rules |
+| Variable                       | Source                 | Description                                |
+| ------------------------------ | ---------------------- | ------------------------------------------ |
+| `APP_NAME`                     | `oracleConfig.appName` | Oracle display name                        |
+| `IDENTITY_CONTEXT`             | Memory Agent           | User's identity info                       |
+| `WORK_CONTEXT`                 | Memory Agent           | User's work context                        |
+| `GOALS_CONTEXT`                | Memory Agent           | User's goals                               |
+| `INTERESTS_CONTEXT`            | Memory Agent           | User's interests                           |
+| `RELATIONSHIPS_CONTEXT`        | Memory Agent           | User's relationships                       |
+| `RECENT_CONTEXT`               | Memory Agent           | Recent activity                            |
+| `TIME_CONTEXT`                 | System                 | Current timestamp                          |
+| `EDITOR_DOCUMENTATION`         | Conditional            | BlockNote editor docs (if editor active)   |
+| `AG_UI_TOOLS_DOCUMENTATION`    | Conditional            | AG-UI component docs (if actions provided) |
+| `CURRENT_ENTITY_DID`           | State                  | Active entity context                      |
+| `SLACK_FORMATTING_CONSTRAINTS` | Conditional            | Slack-specific formatting rules            |
 
 ---
 
@@ -70,6 +70,7 @@ The Memory Agent retrieves per-user context on each conversation and injects it 
 <!-- TODO: Explain editor mode, Slack mode, AG-UI mode -->
 
 The prompt dynamically includes or excludes sections based on the client and state:
+
 - **Editor mode** — adds BlockNote documentation when `editorRoomId` is set
 - **Slack mode** — adds formatting constraints when `client === 'slack'`
 - **AG-UI mode** — adds custom component documentation when `agActions` are provided

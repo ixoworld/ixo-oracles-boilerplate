@@ -31,14 +31,14 @@ The Memory Engine is an MCP server that provides persistent memory across conver
 
 <!-- TODO: Expand each with parameters, return types, and usage examples -->
 
-| Tool | Description | Who can use |
-|------|-------------|-------------|
-| `memory-engine__search_memory_engine` | Search across all memory scopes | All users |
-| `memory-engine__add_memory` | Store a personal user memory | All users |
-| `memory-engine__add_oracle_knowledge` | Store org knowledge (public or private scope) | Org owners only |
-| `memory-engine__delete_episode` | Remove a memory episode | Depends on scope |
-| `memory-engine__delete_edge` | Remove a relationship between memories | Depends on scope |
-| `memory-engine__clear` | Clear all memories | Depends on scope |
+| Tool                                  | Description                                   | Who can use      |
+| ------------------------------------- | --------------------------------------------- | ---------------- |
+| `memory-engine__search_memory_engine` | Search across all memory scopes               | All users        |
+| `memory-engine__add_memory`           | Store a personal user memory                  | All users        |
+| `memory-engine__add_oracle_knowledge` | Store org knowledge (public or private scope) | Org owners only  |
+| `memory-engine__delete_episode`       | Remove a memory episode                       | Depends on scope |
+| `memory-engine__delete_edge`          | Remove a relationship between memories        | Depends on scope |
+| `memory-engine__clear`                | Clear all memories                            | Depends on scope |
 
 ---
 
@@ -51,6 +51,7 @@ MEMORY_MCP_URL=https://your-memory-engine.com/mcp
 ```
 
 Per-user headers are set automatically per request:
+
 - `x-oracle-did` — the oracle's DID
 - `x-room-id` — the user's Matrix room ID
 - `x-user-did` — the user's DID
@@ -70,6 +71,7 @@ The main agent determines the mode based on the user's relationship to the oracl
 <!-- TODO: Show key sections of knowledgeAgentPrompt and orgOwnerKnowledgeAgentPrompt -->
 
 Key behaviors:
+
 - **Always search before acting** — check existing memories before adding new ones
 - **User mode:** read all scopes, write personal memories only
 - **Org owner mode:** must confirm scope (public/private) before adding organization knowledge
@@ -82,6 +84,7 @@ Key behaviors:
 <!-- TODO: Step-by-step walkthrough: adding org knowledge, searching memories, user context flow -->
 
 **Source files:**
+
 - `apps/app/src/graph/agents/memory-agent.ts`
 - `apps/app/src/graph/nodes/tools-node/tools.ts`
 - `apps/app/src/graph/agents/main-agent.ts` (lines 196-201)

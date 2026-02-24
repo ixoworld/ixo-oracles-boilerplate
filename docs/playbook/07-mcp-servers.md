@@ -61,8 +61,8 @@ Some MCP servers need per-user authentication. The sandbox pattern creates a new
 
 <!-- TODO: Expand each with configuration and purpose -->
 
-| Server | Scope | Purpose |
-|--------|-------|---------|
+| Server        | Scope    | Purpose                                |
+| ------------- | -------- | -------------------------------------- |
 | Memory Engine | Per-user | Persistent memory across conversations |
-| Firecrawl | Global | Web scraping and search |
-| Sandbox | Per-user | Client-provided tools with OpenID auth |
+| Firecrawl     | Global   | Web scraping and search                |
+| Sandbox       | Per-user | Client-provided tools with OpenID auth |

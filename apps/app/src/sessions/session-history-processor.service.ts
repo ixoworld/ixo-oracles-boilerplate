@@ -202,7 +202,7 @@ export class SessionHistoryProcessor {
       oracleToken,
       userToken,
       oracleHomeServer,
-      userHomeServer: userHomeServer,
+      userHomeServer,
     });
 
     if (!result.success) {

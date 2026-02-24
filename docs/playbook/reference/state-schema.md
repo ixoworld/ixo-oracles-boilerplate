@@ -6,17 +6,17 @@
 
 ## State Fields
 
-| Field | Type | Default | Reducer | Description |
-|-------|------|---------|---------|-------------|
-| `config` | `{ wsId?: string; did: string }` | `{ did: '', wsId: '' }` | merge | User identification — DID and optional WebSocket ID |
-| `client` | `'portal' \| 'matrix' \| 'slack'` | `'portal'` | replace | Source client type |
-| `messages` | `BaseMessage[]` | `[]` | `messagesStateReducer` | Conversation history (LangGraph message reducer) |
-| `editorRoomId` | `string \| undefined` | `undefined` | replace | Active BlockNote editor room (enables editor agent) |
-| `currentEntityDid` | `string \| undefined` | `undefined` | replace | Context entity DID for domain-specific operations |
-| `browserTools` | `BrowserToolCallDto[] \| undefined` | `[]` | replace | Client-provided browser tools (reverse calls) |
-| `agActions` | `AgActionDto[] \| undefined` | `[]` | replace | AG-UI custom actions from client |
-| `userContext` | `UserContextData` | `{ identity, work, goals, interests, relationships, recent }` | merge | Per-user personalization data from Memory Agent |
-| `mcpUcanContext` | `MCPUCANContext \| undefined` | `undefined` | replace | UCAN invocations for authorized MCP tool calls |
+| Field              | Type                                | Default                                                       | Reducer                | Description                                         |
+| ------------------ | ----------------------------------- | ------------------------------------------------------------- | ---------------------- | --------------------------------------------------- |
+| `config`           | `{ wsId?: string; did: string }`    | `{ did: '', wsId: '' }`                                       | merge                  | User identification — DID and optional WebSocket ID |
+| `client`           | `'portal' \| 'matrix' \| 'slack'`   | `'portal'`                                                    | replace                | Source client type                                  |
+| `messages`         | `BaseMessage[]`                     | `[]`                                                          | `messagesStateReducer` | Conversation history (LangGraph message reducer)    |
+| `editorRoomId`     | `string \| undefined`               | `undefined`                                                   | replace                | Active BlockNote editor room (enables editor agent) |
+| `currentEntityDid` | `string \| undefined`               | `undefined`                                                   | replace                | Context entity DID for domain-specific operations   |
+| `browserTools`     | `BrowserToolCallDto[] \| undefined` | `[]`                                                          | replace                | Client-provided browser tools (reverse calls)       |
+| `agActions`        | `AgActionDto[] \| undefined`        | `[]`                                                          | replace                | AG-UI custom actions from client                    |
+| `userContext`      | `UserContextData`                   | `{ identity, work, goals, interests, relationships, recent }` | merge                  | Per-user personalization data from Memory Agent     |
+| `mcpUcanContext`   | `MCPUCANContext \| undefined`       | `undefined`                                                   | replace                | UCAN invocations for authorized MCP tool calls      |
 
 ---
 
@@ -32,12 +32,12 @@
 
 ```typescript
 interface UserContextData {
-  identity?: string;       // Who the user is
-  work?: string;           // What they do
-  goals?: string;          // What they want to achieve
-  interests?: string;      // What they care about
-  relationships?: string;  // Who they work with
-  recent?: string;         // Recent activity summary
+  identity?: string; // Who the user is
+  work?: string; // What they do
+  goals?: string; // What they want to achieve
+  interests?: string; // What they care about
+  relationships?: string; // Who they work with
+  recent?: string; // Recent activity summary
 }
 ```
 
