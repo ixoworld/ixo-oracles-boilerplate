@@ -77,15 +77,15 @@ Entry points: `sendMessage()`, `streamMessage()`, `getGraphState()`.
 
 <!-- TODO: Add "When to use" column with practical guidance -->
 
-| Package | Scope | Purpose | Default? |
-|---------|-------|---------|----------|
-| common | `@ixo/common` | AI services, session management, room management | Yes |
-| matrix | `@ixo/matrix` | E2E encrypted communication | Yes |
-| events | `@ixo/events` | SSE/WebSocket streaming | Yes |
-| data-store | `@ixo/data-store` | ChromaDB + PostgreSQL knowledge | Opt-in |
-| oracles-chain-client | `@ixo/oracles-chain-client` | Blockchain payments, claims | Yes |
-| oracles-client-sdk | `@ixo/oracles-client-sdk` | React hooks (useChat, etc.) | Opt-in |
-| slack | `@ixo/slack` | Slack bot integration | Opt-in |
+| Package              | Scope                       | Purpose                                          | Default? |
+| -------------------- | --------------------------- | ------------------------------------------------ | -------- |
+| common               | `@ixo/common`               | AI services, session management, room management | Yes      |
+| matrix               | `@ixo/matrix`               | E2E encrypted communication                      | Yes      |
+| events               | `@ixo/events`               | SSE/WebSocket streaming                          | Yes      |
+| data-store           | `@ixo/data-store`           | ChromaDB + PostgreSQL knowledge                  | Opt-in   |
+| oracles-chain-client | `@ixo/oracles-chain-client` | Blockchain payments, claims                      | Yes      |
+| oracles-client-sdk   | `@ixo/oracles-client-sdk`   | React hooks (useChat, etc.)                      | Opt-in   |
+| slack                | `@ixo/slack`                | Slack bot integration                            | Opt-in   |
 
 ---
 

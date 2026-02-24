@@ -11,15 +11,19 @@ An IXO Oracle is an AI agent built on four pillars:
 <!-- TODO: Expand each pillar with 2-3 paragraphs -->
 
 ### Blockchain Identity
+
 DID registered on the IXO chain, entity with metadata and pricing configuration.
 
 ### E2E Encrypted Communication
+
 Matrix protocol — each user gets a private encrypted room with the oracle.
 
 ### AI Reasoning
+
 LangGraph state machine with composable sub-agents and tools.
 
 ### API Layer
+
 NestJS server with REST endpoints, SSE streaming, and WebSocket support.
 
 ---
@@ -36,13 +40,13 @@ NestJS server with REST endpoints, SSE streaming, and WebSocket support.
 
 This playbook guides you through progressive milestones:
 
-| Chapter | Outcome |
-|---------|---------|
-| [01 — Quickstart](./01-quickstart.md) | A running oracle that responds to messages |
-| [03 — Customize](./03-customize-your-oracle.md) | An oracle with custom personality and behavior |
-| [04 — Custom Tools](./04-custom-tools.md) | An oracle with custom tools (API calls, DB queries) |
-| [05 — Sub-Agents](./05-sub-agents.md) | An oracle with specialized sub-agents |
-| Guides | Add payments, memory, Slack, knowledge store, etc. |
+| Chapter                                         | Outcome                                             |
+| ----------------------------------------------- | --------------------------------------------------- |
+| [01 — Quickstart](./01-quickstart.md)           | A running oracle that responds to messages          |
+| [03 — Customize](./03-customize-your-oracle.md) | An oracle with custom personality and behavior      |
+| [04 — Custom Tools](./04-custom-tools.md)       | An oracle with custom tools (API calls, DB queries) |
+| [05 — Sub-Agents](./05-sub-agents.md)           | An oracle with specialized sub-agents               |
+| Guides                                          | Add payments, memory, Slack, knowledge store, etc.  |
 
 ---
 

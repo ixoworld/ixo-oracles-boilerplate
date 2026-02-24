@@ -8,12 +8,12 @@
 
 <!-- TODO: Explain each hook with when it fires and what it can do -->
 
-| Hook | When | Purpose |
-|------|------|---------|
-| `beforeModel` | Before LLM call | Modify state, block requests, check permissions |
-| `afterModel` | After LLM response | Post-process, track usage, modify output |
-| `afterAgent` | After full agent turn | Final checks, safety evaluation |
-| `wrapToolCall` | Around each tool call | Catch errors, add retries, log calls |
+| Hook           | When                  | Purpose                                         |
+| -------------- | --------------------- | ----------------------------------------------- |
+| `beforeModel`  | Before LLM call       | Modify state, block requests, check permissions |
+| `afterModel`   | After LLM response    | Post-process, track usage, modify output        |
+| `afterAgent`   | After full agent turn | Final checks, safety evaluation                 |
+| `wrapToolCall` | Around each tool call | Catch errors, add retries, log calls            |
 
 ---
 
@@ -42,6 +42,7 @@
 <!-- TODO: Show code from token-limiter-middleware.ts -->
 
 `apps/app/src/graph/middlewares/token-limiter-middleware.ts`:
+
 - `beforeModel` — checks user's remaining credit balance, blocks if ≤ 0
 - `afterModel` — deducts credits based on token usage
 
@@ -55,10 +56,10 @@ The middleware array order matters:
 
 ```typescript
 const middleware = [
-  createToolValidationMiddleware(),   // Catch tool errors
-  toolRetryMiddleware(),              // Retry transient failures
-  createSafetyGuardrailMiddleware(),  // Check response safety
-  createTokenLimiterMiddleware(),     // Deduct credits (if enabled)
+  createToolValidationMiddleware(), // Catch tool errors
+  toolRetryMiddleware(), // Retry transient failures
+  createSafetyGuardrailMiddleware(), // Check response safety
+  createTokenLimiterMiddleware(), // Deduct credits (if enabled)
 ];
 ```
 

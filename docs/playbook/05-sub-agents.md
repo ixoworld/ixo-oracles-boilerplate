@@ -38,21 +38,27 @@ Wraps an `AgentSpec` into a `StructuredTool` that the main agent can call like a
 <!-- TODO: Expand each with purpose, tools it has access to, and when the main agent invokes it -->
 
 ### Memory Agent (`memory-agent.ts`)
+
 User/orgOwner modes, Memory Engine MCP tools, knowledge scopes (user private, org public, org private).
 
 ### Portal Agent (`portal-agent.ts`)
+
 Browser tools from client SDK, UI actions.
 
 ### Firecrawl Agent (`firecrawl-agent.ts`)
+
 Web scraping and search via Firecrawl MCP server.
 
 ### Domain Indexer Agent (`domain-indexer-agent.ts`)
+
 IXO entity search and domain analysis.
 
 ### Editor Agent (`editor/editor-agent.ts`)
+
 BlockNote document editing, conditionally loaded when `editorRoomId` is set.
 
 ### Skills Agent (`skills-agent/`)
+
 Skills registry interaction — listing and searching available skills.
 
 ---

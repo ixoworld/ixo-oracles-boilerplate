@@ -167,7 +167,7 @@ export interface DefineCapabilityOptions<
  * });
  * ```
  */
-
+ 
 export function defineCapability<
   NBSchema extends Record<string, unknown> = Record<string, never>,
 >(options: DefineCapabilityOptions<NBSchema>) {
