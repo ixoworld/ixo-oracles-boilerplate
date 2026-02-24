@@ -51,8 +51,7 @@ async function getAccountData(
   accessToken: string,
   userId: string,
   type: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Promise<any> {
+): Promise<unknown> {
   const url = `${baseUrl}/_matrix/client/v3/user/${encodeURIComponent(userId)}/account_data/${encodeURIComponent(type)}`;
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
