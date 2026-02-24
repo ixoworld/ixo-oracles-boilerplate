@@ -168,7 +168,7 @@ export interface DefineCapabilityOptions<
  * });
  * ```
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 export function defineCapability<
   NBSchema extends Record<string, any> = Record<string, never>,
 >(options: DefineCapabilityOptions<NBSchema>) {

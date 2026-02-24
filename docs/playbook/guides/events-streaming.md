@@ -8,13 +8,13 @@
 
 <!-- TODO: Expand each with fields, when emitted, and example payloads -->
 
-| Event | Purpose |
-|-------|---------|
-| `ToolCallEvent` | Notify client of tool execution |
-| `RenderComponentEvent` | Request client to render a UI component |
-| `BrowserToolCallEvent` | Invoke a client-side tool (reverse call) |
-| `MessageCacheInvalidationEvent` | Invalidate cached messages |
-| `RouterEvent` | Client-side navigation |
+| Event                           | Purpose                                  |
+| ------------------------------- | ---------------------------------------- |
+| `ToolCallEvent`                 | Notify client of tool execution          |
+| `RenderComponentEvent`          | Request client to render a UI component  |
+| `BrowserToolCallEvent`          | Invoke a client-side tool (reverse call) |
+| `MessageCacheInvalidationEvent` | Invalidate cached messages               |
+| `RouterEvent`                   | Client-side navigation                   |
 
 ---
 

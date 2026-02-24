@@ -30,6 +30,7 @@ oracles-cli --help
 ```
 
 > **Alternative package managers:**
+>
 > ```bash
 > pnpm add -g ixo-oracles-cli
 > yarn global add ixo-oracles-cli
@@ -67,28 +68,28 @@ The CLI walks you through a series of prompts:
 
 ### Project Setup
 
-| Prompt | Description | Validation |
-|--------|-------------|------------|
-| **What is your project named?** | Project name or path (e.g., `my-oracle`) | 1-50 chars, starts with letter, alphanumeric + hyphens/underscores |
-| **Select a template to clone** | Default: `ixo-oracles-boilerplate`, or enter a custom git URL | Valid git URL |
-| **Create IXO project "my-oracle" in "/path/to/my-oracle"?** | Confirmation | Yes/No |
+| Prompt                                                      | Description                                                   | Validation                                                         |
+| ----------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------ |
+| **What is your project named?**                             | Project name or path (e.g., `my-oracle`)                      | 1-50 chars, starts with letter, alphanumeric + hyphens/underscores |
+| **Select a template to clone**                              | Default: `ixo-oracles-boilerplate`, or enter a custom git URL | Valid git URL                                                      |
+| **Create IXO project "my-oracle" in "/path/to/my-oracle"?** | Confirmation                                                  | Yes/No                                                             |
 
 ### Oracle Identity
 
 After confirming, the CLI launches the **Create Entity** flow:
 
-| Prompt | Description | Example |
-|--------|-------------|---------|
-| **Oracle name** | Display name for your oracle | `Customer Support Bot` |
-| **Price** | Cost in IXO Credits per interaction ($1 is 1000 credit) | `100` |
-| **Organization name** | Your organization | `Acme Corp` |
-| **Profile name** | Oracle profile display name | `Acme Support` |
-| **Logo URL** | Public URL to oracle avatar image | `https://example.com/logo.png` |
-| **Cover image URL** | Banner image URL | `https://example.com/cover.png` |
-| **Location** | Where the oracle operates | `Global` |
-| **Description** | What the oracle does | `AI-powered customer support agent` |
-| **API URL** | Where the oracle will be hosted | `https://my-oracle.example.com` |
-| **Parent protocol** | *(optional)* DID of parent protocol entity | `did:ixo:entity:abc123...` |
+| Prompt                | Description                                             | Example                             |
+| --------------------- | ------------------------------------------------------- | ----------------------------------- |
+| **Oracle name**       | Display name for your oracle                            | `Customer Support Bot`              |
+| **Price**             | Cost in IXO Credits per interaction ($1 is 1000 credit) | `100`                               |
+| **Organization name** | Your organization                                       | `Acme Corp`                         |
+| **Profile name**      | Oracle profile display name                             | `Acme Support`                      |
+| **Logo URL**          | Public URL to oracle avatar image                       | `https://example.com/logo.png`      |
+| **Cover image URL**   | Banner image URL                                        | `https://example.com/cover.png`     |
+| **Location**          | Where the oracle operates                               | `Global`                            |
+| **Description**       | What the oracle does                                    | `AI-powered customer support agent` |
+| **API URL**           | Where the oracle will be hosted                         | `https://my-oracle.example.com`     |
+| **Parent protocol**   | _(optional)_ DID of parent protocol entity              | `did:ixo:entity:abc123...`          |
 
 ### What happens behind the scenes
 
@@ -122,7 +123,6 @@ nano my-oracle/apps/app/.env
 OPEN_ROUTER_API_KEY=sk-or-v1-your-key-here
 ```
 
-
 ### Generated `.env` reference
 
 The CLI auto-fills these variables from the registration process:
@@ -139,6 +139,7 @@ cd my-oracle
 pnpm install
 pnpm build
 ```
+
 ---
 
 ## Step 6: Start Infrastructure
@@ -151,10 +152,10 @@ pnpm dev
 
 This starts the Docker services your oracle needs:
 
-| Service | Port | Purpose |
-|---------|------|---------|
-| Redis | 6379 | Session storage, caching |
-| RedisInsight | 8001 | Redis management UI |
+| Service      | Port | Purpose                  |
+| ------------ | ---- | ------------------------ |
+| Redis        | 6379 | Session storage, caching |
+| RedisInsight | 8001 | Redis management UI      |
 
 ---
 
@@ -189,6 +190,7 @@ What starts up:
 4. Send a message
 
 The first portal interaction is special — it:
+
 - Creates a private encrypted Matrix room between you and the oracle
 - Grants AuthZ permissions for the oracle to act on your behalf
 - Establishes your subscription
@@ -275,9 +277,9 @@ You now have a working oracle. Here's where to go from here:
 
 The CLI auto-selects URLs based on your authenticated network:
 
-| Resource | Devnet | Testnet | Mainnet |
-|----------|--------|---------|---------|
-| Matrix Homeserver | `https://devmx.ixo.earth` | `https://testmx.ixo.earth` | `https://mx.ixo.earth` |
-| Chain RPC | `https://devnet.ixo.earth/rpc/` | `https://testnet.ixo.earth/rpc/` | `https://impacthub.ixo.world/rpc/` |
-| Portal | `https://ixo-portal.vercel.app` | `https://ixo-portal.vercel.app` | `https://ixo-portal.vercel.app` |
-| Domain Indexer | `https://domain-indexer.devnet.ixo.earth/index` | `https://domain-indexer.testnet.ixo.earth/index` | `https://domain-indexer.ixo.earth/index` |
+| Resource          | Devnet                                          | Testnet                                          | Mainnet                                  |
+| ----------------- | ----------------------------------------------- | ------------------------------------------------ | ---------------------------------------- |
+| Matrix Homeserver | `https://devmx.ixo.earth`                       | `https://testmx.ixo.earth`                       | `https://mx.ixo.earth`                   |
+| Chain RPC         | `https://devnet.ixo.earth/rpc/`                 | `https://testnet.ixo.earth/rpc/`                 | `https://impacthub.ixo.world/rpc/`       |
+| Portal            | `https://ixo-portal.vercel.app`                 | `https://ixo-portal.vercel.app`                  | `https://ixo-portal.vercel.app`          |
+| Domain Indexer    | `https://domain-indexer.devnet.ixo.earth/index` | `https://domain-indexer.testnet.ixo.earth/index` | `https://domain-indexer.ixo.earth/index` |
