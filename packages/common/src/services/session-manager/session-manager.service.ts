@@ -367,13 +367,20 @@ ___________________________________________________________
 
     // Gather user context from Memory Engine
     let userContext: UserContextData | undefined;
-    if (this.memoryEngineService) {
+    if (
+      this.memoryEngineService &&
+      createSessionDto.oracleToken &&
+      createSessionDto.userToken
+    ) {
       try {
         Logger.debug('Gathering user context from Memory Engine');
         userContext = await this.memoryEngineService.gatherUserContext({
           oracleDid: createSessionDto.oracleDid,
-          userDid: createSessionDto.did,
           roomId,
+          oracleToken: createSessionDto.oracleToken,
+          userToken: createSessionDto.userToken,
+          oracleHomeServer: createSessionDto.oracleHomeServer ?? '',
+          userHomeServer: createSessionDto.userHomeServer ?? '',
         });
       } catch (error) {
         Logger.error('Failed to gather user context:', error);

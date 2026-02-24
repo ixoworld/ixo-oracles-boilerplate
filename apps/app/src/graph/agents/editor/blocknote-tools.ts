@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * LangChain Tools for BlockNote Y.js Editing
  */

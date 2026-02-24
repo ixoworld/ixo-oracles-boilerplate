@@ -1,3 +1,5 @@
+import { Logger } from '@ixo/logger';
+
 const secretStorageKeys = new Map();
 
 export function storePrivateKey(keyId: string, privateKey: Uint8Array) {
@@ -31,7 +33,7 @@ export async function getSecretStorageKey({
 }): Promise<[string, Uint8Array] | null> {
   const keyIds = Object.keys(keys);
   const keyId = keyIds.find(hasPrivateKey);
-  console.info('[]          getSecretStorageKey', keys, keyIds, keyId);
+  Logger.info('[]          getSecretStorageKey', keys, keyIds, keyId);
 
   if (!keyId) {
     return null;

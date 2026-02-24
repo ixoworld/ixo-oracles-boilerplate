@@ -1,3 +1,4 @@
+import { Logger } from '@ixo/logger';
 import * as sdk from 'matrix-js-sdk';
 
 export async function login(
@@ -10,6 +11,6 @@ export async function login(
   });
 
   const loginResponse = await client.loginWithPassword(username, password);
-  console.log('loginResponse', loginResponse);
+  Logger.info('loginResponse', loginResponse);
   return loginResponse;
 }

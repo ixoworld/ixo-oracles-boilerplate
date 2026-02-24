@@ -3,4 +3,5 @@ export class DeleteSessionDto {
   matrixAccessToken: string;
   sessionId: string;
   homeServer?: string;
+  userToken?: string;
 }

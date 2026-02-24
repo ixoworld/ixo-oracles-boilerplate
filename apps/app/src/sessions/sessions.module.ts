@@ -21,10 +21,7 @@ import { SessionsService } from './sessions.service';
       useFactory: (configService: ConfigService<ENV>) => {
         const memoryEngineUrl =
           configService.getOrThrow<string>('MEMORY_ENGINE_URL');
-        const memoryServiceApiKey = configService.getOrThrow<string>(
-          'MEMORY_SERVICE_API_KEY',
-        );
-        return new MemoryEngineService(memoryEngineUrl, memoryServiceApiKey);
+        return new MemoryEngineService(memoryEngineUrl);
       },
       inject: [ConfigService],
     },
