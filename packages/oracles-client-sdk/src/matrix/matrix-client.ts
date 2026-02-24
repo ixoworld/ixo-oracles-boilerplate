@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { request } from '../utils/request.js';
 import { decryptAndRetrieve, encryptAndStore } from '../utils/token-cache.js';
 import { getMatrixUrlsForDid } from '@ixo/oracles-chain-client/react';

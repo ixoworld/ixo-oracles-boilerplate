@@ -70,7 +70,7 @@ async function getEncryptedSigningMnemonic(
 
     return data.encrypted_mnemonic;
   } catch (error) {
-    console.error('Failed to get encrypted mnemonic:', error);
+    Logger.error('Failed to get encrypted mnemonic:', error);
     throw error;
   }
 }
@@ -110,7 +110,7 @@ async function storeEncryptedSigningMnemonic(
 
     return data.event_id;
   } catch (error) {
-    console.error('Failed to store encrypted mnemonic:', error);
+    Logger.error('Failed to store encrypted mnemonic:', error);
     throw error;
   }
 }

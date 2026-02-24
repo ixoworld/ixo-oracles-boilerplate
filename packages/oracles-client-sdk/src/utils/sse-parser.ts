@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * SSE (Server-Sent Events) stream parser for handling real-time events
  * from the backend streaming API.

@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { cosmos, ixo, utils } from '@ixo/impactxclient-sdk';
 import { claimsClient } from '../claims/claims.js';
 import { Client } from '../client.js';

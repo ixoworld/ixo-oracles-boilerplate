@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { type AllEvents } from '@ixo/oracles-events/types';
 import { useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';

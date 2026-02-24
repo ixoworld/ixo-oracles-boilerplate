@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 'use client';
 import { useMutation } from '@tanstack/react-query';
 import { useCallback, useRef } from 'react';

@@ -1,3 +1,4 @@
+import { Logger } from '@ixo/logger';
 import {
   createMatrixApiClient,
   createMatrixClaimBotClient,
@@ -97,7 +98,7 @@ export class MatrixBotService {
       );
       return response.data as T | Record<string, T>;
     } catch (error) {
-      console.error(
+      Logger.error(
         `Error fetching data from type "${key}" with key "${path}" for DID "${did}":`,
         error,
       );
@@ -127,7 +128,7 @@ export class MatrixBotService {
       const { room_id } = await apiClient.room.v1beta1.queryId(roomAlias);
       return room_id;
     } catch (error) {
-      console.error('Error getting room by DID', { error });
+      Logger.error('Error getting room by DID', { error });
       throw new Error(`[getRoomByDid] Error getting room by DID`);
     }
   }
@@ -146,7 +147,7 @@ export class MatrixBotService {
       await claimBot.bot.v1beta1.invite(sourceRoomResponse.roomId);
       return sourceRoomResponse.roomId;
     } catch (error) {
-      console.error('Error sourcing room and joining', { error });
+      Logger.error('Error sourcing room and joining', { error });
       throw new Error(`[sourceRoomAndJoin] Error sourcing room and joining`);
     }
   }
@@ -157,7 +158,7 @@ export class MatrixBotService {
       await claimBot.bot.v1beta1.invite(roomId);
       return 'ok';
     } catch (error) {
-      console.error('Error inviting bot', { error });
+      Logger.error('Error inviting bot', { error });
       throw new Error(`[inviteClaimBot] Error inviting bot: ${error}`);
     }
   }

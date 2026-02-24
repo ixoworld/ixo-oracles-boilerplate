@@ -68,8 +68,7 @@ type InferStruct<U extends Record<string, unknown>> = {
  */
 export interface DefineCapabilityOptions<
   // NBSchema is the schema SHAPE, e.g., { limit: Schema<number | undefined> }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  NBSchema extends Record<string, any> = Record<string, never>,
+  NBSchema extends Record<string, unknown> = Record<string, never>,
 > {
   /**
    * The action this capability authorizes
@@ -168,9 +167,9 @@ export interface DefineCapabilityOptions<
  * });
  * ```
  */
- 
+
 export function defineCapability<
-  NBSchema extends Record<string, any> = Record<string, never>,
+  NBSchema extends Record<string, unknown> = Record<string, never>,
 >(options: DefineCapabilityOptions<NBSchema>) {
   const protocol = (options.protocol ?? 'urn:') as `${string}:`;
   const supportWildcards = options.supportWildcards ?? true;

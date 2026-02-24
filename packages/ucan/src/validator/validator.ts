@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * @fileoverview Framework-agnostic UCAN validator
  *

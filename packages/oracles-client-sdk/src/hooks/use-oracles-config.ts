@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { useOraclesContext } from '../providers/oracles-provider/oracles-context.js';
 
 import { Authz, gqlClient } from '@ixo/oracles-chain-client/react';

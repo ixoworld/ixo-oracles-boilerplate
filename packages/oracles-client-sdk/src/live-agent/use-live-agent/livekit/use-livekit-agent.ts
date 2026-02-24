@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import {
   DeviceUnsupportedError,
   ExternalE2EEKeyProvider,
