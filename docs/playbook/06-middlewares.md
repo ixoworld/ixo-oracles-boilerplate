@@ -1,70 +1,73 @@
-# 06 — Middlewares: Guard and Control
+# 06 — Middlewares
 
-> **What you'll build:** Custom middleware to intercept, validate, and transform messages at each stage of the agent pipeline.
+## 06.1 — What are middlewares?
 
----
+Code that runs before or after every tool call — for safety, validation, and billing.
 
-## Middleware Hooks
-
-<!-- TODO: Explain each hook with when it fires and what it can do -->
-
-| Hook           | When                  | Purpose                                         |
-| -------------- | --------------------- | ----------------------------------------------- |
-| `beforeModel`  | Before LLM call       | Modify state, block requests, check permissions |
-| `afterModel`   | After LLM response    | Post-process, track usage, modify output        |
-| `afterAgent`   | After full agent turn | Final checks, safety evaluation                 |
-| `wrapToolCall` | Around each tool call | Catch errors, add retries, log calls            |
+Think of middlewares as checkpoints. Every time your oracle calls a tool or responds to a user, the request passes through each middleware in order. Any middleware can modify, retry, or block the request.
 
 ---
 
-## Tool Validation Middleware
+## 06.2 — Built-in middlewares
 
-<!-- TODO: Show code from tool-validation-middleware.ts -->
+Your oracle ships with four middlewares already wired up:
 
-`apps/app/src/graph/middlewares/tool-validation-middleware.ts` — catches Zod schema errors from tool calls and returns structured error messages, allowing the LLM to self-correct.
-
----
-
-## Safety Guardrail Middleware
-
-<!-- TODO: Show code from safety-guardrail-middleware.ts -->
-
-`apps/app/src/graph/middlewares/safety-guardrail-middleware.ts` — uses `openai/gpt-oss-safeguard-20b:nitro` to evaluate responses. Runs in the `afterAgent` hook.
-
-**Blocks:** actual API keys, tokens, passwords, security exploits, PII leaks, harmful content.
-
-**Allows:** feature explanations, how-to instructions, system capabilities, AWS pre-signed URLs.
+| Middleware | What it does |
+|---|---|
+| **Tool Validation** | Catches invalid tool inputs and returns helpful errors so the AI can self-correct |
+| **Tool Retry** | Retries tool calls that fail due to temporary issues (network blips, timeouts) |
+| **Safety Guardrail** | Evaluates responses for unsafe content — blocks leaked secrets, PII, and harmful output |
+| **Token Limiter** | Checks the user's remaining credits before each call and deducts after — disable with `DISABLE_CREDITS=true` |
 
 ---
 
-## Token Limiter Middleware
+## 06.3 — Writing a custom middleware
 
-<!-- TODO: Show code from token-limiter-middleware.ts -->
+Here is a logging middleware you can copy-paste. It prints every tool call to the console:
 
-`apps/app/src/graph/middlewares/token-limiter-middleware.ts`:
+```typescript
+// apps/app/src/graph/middlewares/logging-middleware.ts
 
-- `beforeModel` — checks user's remaining credit balance, blocks if ≤ 0
-- `afterModel` — deducts credits based on token usage
+import { createMiddleware, type AgentMiddleware } from 'langchain';
 
-Disabled when `DISABLE_CREDITS=true`.
+export const createLoggingMiddleware = (): AgentMiddleware => {
+  return createMiddleware({
+    name: 'LoggingMiddleware',
+    wrapToolCall: async (toolCallRequest, handler) => {
+      console.log(`Tool called: ${toolCallRequest.tool.name}`);
+      const result = await handler(toolCallRequest);
+      console.log(`Tool result received`);
+      return result;
+    },
+  });
+};
+```
+
+### Available hooks
+
+You can use any combination of these hooks inside `createMiddleware`:
+
+| Hook | When it runs | Use it to... |
+|---|---|---|
+| `beforeModel` | Before the LLM call | Modify state, block requests, check permissions |
+| `afterModel` | After the LLM responds | Post-process output, track usage |
+| `afterAgent` | After a full agent turn | Run final checks, evaluate safety |
+| `wrapToolCall` | Around each tool call | Catch errors, add retries, log calls |
 
 ---
 
-## Execution Order
+## 06.4 — Adding it to your oracle
 
-The middleware array order matters:
+Open `apps/app/src/graph/agents/main-agent.ts` and add your middleware to the array:
 
 ```typescript
 const middleware = [
-  createToolValidationMiddleware(), // Catch tool errors
-  toolRetryMiddleware(), // Retry transient failures
-  createSafetyGuardrailMiddleware(), // Check response safety
-  createTokenLimiterMiddleware(), // Deduct credits (if enabled)
+  createToolValidationMiddleware(),
+  toolRetryMiddleware(),
+  createSafetyGuardrailMiddleware(),
+  createTokenLimiterMiddleware(),
+  createLoggingMiddleware(), // ← add your middleware here
 ];
 ```
 
----
-
-## Custom Middleware Example
-
-<!-- TODO: Build a practical example (e.g., logging middleware, rate limiting, content filtering) -->
+That's it. Your middleware will run on every tool call from now on. Order matters — middlewares execute top to bottom.

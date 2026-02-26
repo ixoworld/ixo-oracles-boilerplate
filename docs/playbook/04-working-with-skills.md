@@ -215,5 +215,5 @@ For more on building complex tools and sub-agents, see [05 — Sub-Agents](./05-
 ## Next Steps
 
 - **[05 — Sub-Agents](./05-sub-agents.md)** — delegate complex tasks to specialist agents
-- **[Building & Publishing Skills](./guides/building-and-publishing-skills.md)** — create and publish professional skills
+- **[Building & Publishing Skills](./guides/building-and-publishing-skills.md)** — deep dive into creating professional skills
 - **[03 — Customize Your Oracle](./03-customize-your-oracle.md)** — change your oracle's personality and purpose

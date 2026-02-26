@@ -1,11 +1,6 @@
 services:
   app:
-    # image: api:latest # whatever image you built
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        PROJECT: app
+    image: api:latest # whatever image you built
     ports:
       - '3000:3000'
     env_file:

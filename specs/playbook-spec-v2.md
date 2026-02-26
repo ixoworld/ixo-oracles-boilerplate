@@ -1,6 +1,6 @@
-# QiForge Playbook — Revised Spec v2
+# IXO Oracles Playbook — Revised Spec v2
 
-> **Goal:** A playbook that enables both AI agents and non-technical humans to build, customize, and deploy QiForge Oracles.
+> **Goal:** A playbook that enables both AI agents and non-technical humans to build, customize, and deploy IXO Oracles.
 > **Key Shift:** Agents are now skill-based. Skills are the building blocks. The [ai-skills](https://github.com/ixoworld/ai-skills) registry + [ai-sandbox](https://github.com/ixoworld/ai-sandbox) are first-class concepts.
 
 ---
@@ -12,18 +12,17 @@
 3. **Skills-first** — Skills are the primary extension mechanism. Tools, sub-agents, and MCP servers are implementation details underneath.
 4. **Progressive disclosure** — Start with a running oracle in minutes, then layer on complexity chapter by chapter.
 5. **Copy-paste ready** — Every chapter includes working code snippets and CLI commands that can be executed as-is.
-6. **No under-the-hood details** — Never explain how the underlying technology works in depth. The reader needs to know _what_ things do and _how to use_ them, not _how they're built_. For any "how it works" context, limit to 1-2 sentences or a simple diagram. No implementation internals, no protocol specs, no deep architecture. Keep it practical: "This is what it does. Here's how you use it." This is a **binding contract** for all current and future spec/content work.
+6. **No under-the-hood details** — Never explain how the underlying technology works in depth. The reader needs to know *what* things do and *how to use* them, not *how they're built*. For any "how it works" context, limit to 1-2 sentences or a simple diagram. No implementation internals, no protocol specs, no deep architecture. Keep it practical: "This is what it does. Here's how you use it." This is a **binding contract** for all current and future spec/content work.
 
 ---
 
 ## Part 1: Core Chapters (sequential, build on each other)
 
-### Chapter 00 — What is a QiForge Oracle?
+### Chapter 00 — What is an IXO Oracle?
 
 **Audience:** Complete beginner, first contact with the project.
 
 **Subsections:**
-
 - 00.1 — **The 30-second pitch**: What oracles do in plain English (AI assistant with blockchain identity, encrypted messaging, and extensible skills)
 - 00.2 — **The four pillars** (1-2 sentences each, no internals):
   - Blockchain Identity — your oracle has a DID, like a passport on-chain
@@ -47,9 +46,8 @@
 **Audience:** Anyone ready to get their hands dirty.
 
 **Subsections:**
-
-- 01.1 — Install the CLI (`npm i -g qiforge-cli`)
-- 01.2 — Scaffold a new oracle (`qiforge --init`) — walkthrough of every prompt
+- 01.1 — Install the CLI (`npm i -g ixo-oracles-cli`)
+- 01.2 — Scaffold a new oracle (`oracles-cli --init`) — walkthrough of every prompt
 - 01.3 — Understand what was generated (brief file tree, point to Ch02 for deep dive)
 - 01.4 — Configure environment (`.env` file walkthrough)
 - 01.5 — Start infrastructure (`pnpm db:up`)
@@ -66,7 +64,6 @@
 **Audience:** Someone who completed quickstart, wants to understand what they're looking at.
 
 **Subsections:**
-
 - 02.1 — **Folder overview** — annotated tree, "what to edit" vs "don't touch". No architecture explanation.
 - 02.2 — **The config file** — what each field in `oracleConfig` does (plain English)
 - 02.3 — **Key files cheat sheet** — the hero section. Table: "I want to X → edit this file". This is what people will come back to.
@@ -80,7 +77,6 @@
 **Audience:** Someone who wants to change what their oracle says and does.
 
 **Subsections:**
-
 - 03.1 — **Oracle identity** — editing `oracleConfig` (appName, appPurpose, appMainFeatures, appTargetUsers, appUniqueSellingPoints)
 - 03.2 — **System prompt** — how `prompt.ts` works, what variables are injected, how to modify personality
 - 03.3 — **Model selection** — switching LLM providers via OpenRouter
@@ -100,7 +96,6 @@
 > **This is a NEW chapter replacing the old "Custom Tools" chapter.** Skills are now the primary extension point.
 
 **Subsections:**
-
 - 04.1 — **What are skills?** — a skill is a folder with a `SKILL.md` instruction file + optional supporting files. Your oracle reads the instructions and follows them. One simple diagram showing: User asks → Oracle finds skill → Reads instructions → Executes → Returns result.
 - 04.2 — **Browsing & searching skills** — show the reader how to ask the oracle to list/search skills. No API internals, just "your oracle can browse a registry of skills."
 - 04.3 — **The AI Sandbox** — 2 sentences: "Skills run in a secure sandbox. Your oracle writes output files there and can return them to the user." No Cloudflare/R2/FUSE details.
@@ -126,7 +121,6 @@
 **Audience:** Someone building a complex oracle with multiple capabilities.
 
 **Subsections:**
-
 - 05.1 — **What are sub-agents?** — 2 sentences: "Your oracle can delegate tasks to specialist agents. Think of them as team members with different skills."
 - 05.2 — **Built-in sub-agents** — table with name + what it does (1 line each). No architecture details.
 - 05.3 — **Creating a custom sub-agent** — copy-paste template with one practical example
@@ -141,7 +135,6 @@
 **Audience:** Someone preparing their oracle for real users.
 
 **Subsections:**
-
 - 06.1 — **What are middlewares?** — 1 sentence: "Code that runs before/after every tool call — for safety, validation, and billing."
 - 06.2 — **Built-in middlewares** — table: name + what it does (1 line each)
 - 06.3 — **Writing a custom middleware** — one copy-paste example (e.g., logging)
@@ -156,7 +149,6 @@
 **Audience:** Someone who wants to connect external services.
 
 **Subsections:**
-
 - 07.1 — **What is MCP?** — 1 sentence: "A way to plug external tools into your oracle, like connecting apps to a phone."
 - 07.2 — **Built-in connections** — table: name + what it gives your oracle (1 line each)
 - 07.3 — **Adding a new MCP server** — copy-paste config example, point to `mcp.ts`
@@ -173,11 +165,10 @@
 > **Key addition: Railway / Fly.io deployment guides.**
 
 **Subsections:**
-
 - 08.1 — **Pre-deployment checklist** — bullet list of what you need ready before deploying
 - 08.2 — **Deploy with Docker** (self-hosted) — copy-paste commands, no Docker internals
-- 08.3 — **Deploy to Railway** _(new)_ — step-by-step with screenshots/commands
-- 08.4 — **Deploy to Fly.io** _(new)_ — step-by-step with commands
+- 08.3 — **Deploy to Railway** *(new)* — step-by-step with screenshots/commands
+- 08.4 — **Deploy to Fly.io** *(new)* — step-by-step with commands
 - 08.5 — **After deployment** — health check, graceful shutdown (1 sentence: "your oracle saves its state before shutting down"), updating/redeploying
 
 **Status:** Skeleton exists, needs full rewrite with deployment platform guides.
@@ -188,12 +179,11 @@
 
 Each guide is independent. Reader only needs to have completed Chapter 01 (Quickstart).
 
-### Guide: Publish Your First Oracle _(NEW)_
+### Guide: Publish Your First Oracle *(NEW)*
 
 > **This is the marquee guide — the "hello world to production" path for non-technical users.**
 
 **Subsections:**
-
 - G.pub.1 — **What you'll build** — a simple assistant oracle with 1-2 skills
 - G.pub.2 — **Step 1: Scaffold** — use CLI to create project
 - G.pub.3 — **Step 2: Customize** — edit oracleConfig for your use case
@@ -208,12 +198,11 @@ Each guide is independent. Reader only needs to have completed Chapter 01 (Quick
 
 ---
 
-### Guide: Building & Publishing Skills _(NEW)_
+### Guide: Building & Publishing Skills *(NEW)*
 
 > **For people who want to contribute skills to the ecosystem.**
 
 **Subsections:**
-
 - G.skills.1 — **What's in a skill** — SKILL.md + supporting files. Show a real example.
 - G.skills.2 — **Writing your SKILL.md** — template + tips for clear instructions
 - G.skills.3 — **Adding supporting files** — when and why (scripts, templates, examples)
@@ -226,37 +215,30 @@ Each guide is independent. Reader only needs to have completed Chapter 01 (Quick
 ---
 
 ### Guide: Memory Engine
-
 - What it does (1 sentence), how to enable it (env vars), what your oracle can remember. No MCP protocol details.
 - **Status:** Partial content exists, needs completion.
 
 ### Guide: Knowledge Store
-
 - What it does (1 sentence), how to add documents, how to query them. No vector DB internals.
 - **Status:** Skeleton exists.
 
 ### Guide: Payments & Claims
-
 - What it does (1 sentence), how to set up pricing, how users pay. No escrow protocol details.
 - **Status:** Skeleton exists.
 
 ### Guide: Events & Streaming
-
 - What it does (1 sentence), how to stream responses to users. One example.
 - **Status:** Skeleton exists.
 
 ### Guide: Slack Integration
-
 - How to connect your oracle to Slack. Step-by-step setup.
 - **Status:** Skeleton exists.
 
 ### Guide: Client SDK (React)
-
 - How to build a chat UI for your oracle. `useChat()` hook + one example.
 - **Status:** Skeleton exists.
 
 ### Guide: Matrix Deep Dive
-
 - For advanced users only. How encrypted messaging works (brief), troubleshooting connectivity.
 - **Status:** Skeleton exists.
 
@@ -265,32 +247,26 @@ Each guide is independent. Reader only needs to have completed Chapter 01 (Quick
 ## Part 3: Reference (lookup material)
 
 ### reference/cli-reference.md
-
 All 7 CLI commands with prompts, validation, flows, network URLs.
 **Status:** COMPLETE ✅
 
 ### reference/environment-variables.md
-
 All EnvSchema vars with descriptions.
 **Status:** COMPLETE ✅
 
 ### reference/state-schema.md
-
 MainAgentGraphState fields.
 **Status:** COMPLETE ✅
 
 ### reference/api-endpoints.md
-
 All REST endpoints.
 **Status:** COMPLETE ✅
 
-### reference/skills-registry-api.md _(NEW)_
-
+### reference/skills-registry-api.md *(NEW)*
 The capsules API: `GET /capsules`, `GET /capsules/search`, capsule schema, CID system.
 **Status:** NEW — needs to be written.
 
-### reference/sandbox-api.md _(NEW)_
-
+### reference/sandbox-api.md *(NEW)*
 AI Sandbox API: `POST /sandbox/run/{id}`, `POST /artifacts/`, artifact retrieval, R2 storage.
 **Status:** NEW — needs to be written.
 
@@ -300,7 +276,7 @@ AI Sandbox API: `POST /sandbox/run/{id}`, `POST /artifacts/`, artifact retrieval
 
 ```
 docs/playbook/
-├── 00-overview.md                        # What is a QiForge Oracle + Skills intro
+├── 00-overview.md                        # What is an IXO Oracle + Skills intro
 ├── 01-quickstart.md                      # CLI → running oracle (~15 min)     ✅
 ├── 02-project-structure.md               # Tour of scaffolded project
 ├── 03-customize-your-oracle.md           # Personality, system prompt, model
@@ -332,34 +308,31 @@ docs/playbook/
 
 ## Key Changes from v1
 
-| What Changed                                             | Why                                                                     |
-| -------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Ch04 renamed from "Custom Tools" → "Working with Skills" | Skills are the primary extension mechanism, tools are secondary         |
-| New guide: "Publish Your First Oracle"                   | End-to-end path for non-technical users, the most important new content |
-| New guide: "Building & Publishing Skills"                | ai-skills ecosystem needs its own guide                                 |
-| Ch08 expanded with Railway + Fly.io                      | Deployment needs to be accessible, not just Docker                      |
-| New references: skills-registry-api, sandbox-api         | Skills + Sandbox are new core concepts that need lookup docs            |
-| Tone shift throughout                                    | Non-technical friendly, AI-readable, plain language                     |
+| What Changed | Why |
+|---|---|
+| Ch04 renamed from "Custom Tools" → "Working with Skills" | Skills are the primary extension mechanism, tools are secondary |
+| New guide: "Publish Your First Oracle" | End-to-end path for non-technical users, the most important new content |
+| New guide: "Building & Publishing Skills" | ai-skills ecosystem needs its own guide |
+| Ch08 expanded with Railway + Fly.io | Deployment needs to be accessible, not just Docker |
+| New references: skills-registry-api, sandbox-api | Skills + Sandbox are new core concepts that need lookup docs |
+| Tone shift throughout | Non-technical friendly, AI-readable, plain language |
 
 ---
 
 ## Implementation Priority
 
 ### Phase 1 — Foundation (do first)
-
 1. `00-overview.md` — rewrite with skills context
 2. `04-working-with-skills.md` — NEW, core concept
 3. `guides/publish-your-first-oracle.md` — NEW, the hero guide
 
 ### Phase 2 — Core chapters
-
 4. `02-project-structure.md` — full prose
 5. `03-customize-your-oracle.md` — full prose + examples
 6. `05-sub-agents.md` — full prose
 7. `08-deployment.md` — add Railway + Fly.io sections
 
 ### Phase 3 — Guides & Reference
-
 8. `guides/building-and-publishing-skills.md` — NEW
 9. `reference/skills-registry-api.md` — NEW
 10. `reference/sandbox-api.md` — NEW

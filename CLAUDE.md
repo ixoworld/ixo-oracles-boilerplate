@@ -125,7 +125,7 @@ Environment variables are validated via Zod schema in `apps/app/src/config.ts`. 
 ### Rules (binding contract)
 
 1. **Track progress:** After completing any playbook task, update `specs/playbook-progress.md` with status → Done, date, and notes. Context resets between sessions — this file is how you know what's done.
-2. **No under-the-hood details:** Never explain how underlying technology works in depth. Only _what it does_ and _how to use it_. Max 1-2 sentences or a simple diagram for "how it works". No implementation internals, no protocol specs, no deep architecture.
+2. **No under-the-hood details:** Never explain how underlying technology works in depth. Only *what it does* and *how to use it*. Max 1-2 sentences or a simple diagram for "how it works". No implementation internals, no protocol specs, no deep architecture.
 3. **Skills-first:** Skills (ai-skills registry + ai-sandbox) are the primary extension mechanism. Frame everything around skills, not raw tools/agents.
 4. **Non-technical tone:** Plain language, analogies, no jargon. Copy-paste ready code blocks.
 5. **Don't duplicate:** Link to existing complete docs instead of rewriting content.
@@ -135,7 +135,6 @@ Environment variables are validated via Zod schema in `apps/app/src/config.ts`. 
 All diagrams in playbook docs use **Mermaid** syntax. GitHub renders Mermaid blocks natively in markdown — no images, no export steps, no external tools.
 
 **Usage in markdown:**
-
 ````markdown
 ```mermaid
 graph LR
@@ -144,13 +143,11 @@ graph LR
 ````
 
 **Supported diagram types (use what fits):**
-
 - `graph LR` / `graph TD` — flowcharts (most common)
 - `sequenceDiagram` — request/response flows
 - `stateDiagram-v2` — state machines
 
 **Tips:**
-
 - Keep diagrams simple — playbook is for non-technical readers
 - Use short labels, avoid cramming too much into one diagram
 - Test rendering by previewing the markdown on GitHub
@@ -160,4 +157,4 @@ graph LR
 
 - Skills registry: `https://github.com/ixoworld/ai-skills`
 - AI Sandbox: `/Users/yousef/ai-sandbox/` (read `ARCHITECTURE.md` for context, but don't put internals in playbook)
-- CLI: `qiforge-cli` (separate repo, scaffolds oracle projects)
+- CLI: `ixo-oracles-cli` (separate repo, scaffolds oracle projects)

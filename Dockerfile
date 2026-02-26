@@ -33,14 +33,14 @@ COPY --from=pruner /app/out/pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY --from=pruner /app/out/json/ .
 
 # First install the dependencies (as they change less often)
-RUN --mount=type=cache,id=pnpm,target=~/.pnpm-store pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=s/b452c08a-e355-4882-9f0e-1ca8de8ae535-/root/.pnpm-store,target=/root/.pnpm-store pnpm install --frozen-lockfile
 
 # Copy source code of isolated subworkspace
 COPY --from=pruner /app/out/full/ .
 
 RUN turbo build --filter=${PROJECT}
 # Remove dev dependencies and hoist production dependencies to top level for proper module resolution
-RUN --mount=type=cache,id=pnpm,target=~/.pnpm-store pnpm install --frozen-lockfile --prod --shamefully-hoist
+RUN --mount=type=cache,id=s/b452c08a-e355-4882-9f0e-1ca8de8ae535-/root/.pnpm-store,target=/root/.pnpm-store pnpm install --frozen-lockfile --prod --shamefully-hoist
 # Remove source files only from workspace packages, not from node_modules
 RUN rm -rf ./packages/*/src ./apps/*/src
 
