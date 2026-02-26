@@ -268,7 +268,7 @@ You now have a working oracle. Here's where to go from here:
 
 - **[02 — Project Structure](./02-project-structure.md)** — understand what's in your codebase
 - **[03 — Customize Your Oracle](./03-customize-your-oracle.md)** — change personality, purpose, and behavior
-- **[04 — Custom Tools](./04-custom-tools.md)** — teach your oracle new capabilities
+- **[04 — Working with Skills](./04-working-with-skills.md)** — extend your oracle with skills
 - **[Memory Engine Guide](./guides/memory-engine.md)** — give your oracle persistent memory
 
 ---

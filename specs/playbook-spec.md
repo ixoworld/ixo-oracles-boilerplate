@@ -31,7 +31,7 @@ docs/playbook/
 ├── 08-deployment.md                   # Docker, production config, graceful shutdown
 ├── guides/
 │   ├── memory-engine.md               # Memory Engine MCP — user memories, org knowledge
-│   ├── knowledge-store.md             # @ixo/data-store — ChromaDB + PostgreSQL
+│   ├── knowledge-store.md             # Memory Engine knowledge store
 │   ├── payments-and-claims.md         # @ixo/oracles-chain-client — escrow, claims, authz
 │   ├── events-streaming.md            # @ixo/events — SSE/WebSocket streaming
 │   ├── slack-integration.md           # @ixo/slack — Socket Mode bot

@@ -1,102 +1,145 @@
 # 02 — Project Structure: Know Your Codebase
 
-> **What you'll learn:** The layout of a scaffolded oracle project, where key files live, and what each package does.
+> **Time to read:** 5 minutes
+> **What you'll learn:** Where everything lives, what the config file does, and a cheat sheet so you always know which file to edit.
 
 ---
 
-## Monorepo Layout
+## 2.1 — Folder Overview
 
-<!-- TODO: Full tree diagram of top-level directories -->
+Here is the full layout of a scaffolded oracle project. The annotations tell you what to touch and what to leave alone.
 
 ```
 my-oracle/
-├── apps/app/              # Main NestJS oracle application
-├── packages/              # Shared @ixo/* packages
-├── turbo.json             # Turborepo build configuration
-├── pnpm-workspace.yaml    # Workspace definitions
-└── docker-compose.yml     # Infrastructure services
+│
+├── apps/app/                        # YOUR ORACLE — almost all your work happens here
+│   ├── src/
+│   │   ├── main.ts                  #   App bootstrap (rarely edit)
+│   │   ├── app.module.ts            #   NestJS module wiring (rarely edit)
+│   │   ├── config.ts                #   Env vars schema (auto-generated, rarely edit)
+│   │   │
+│   │   ├── graph/                   #   ⭐ The brain of your oracle
+│   │   │   ├── agents/              #     Sub-agents (memory, portal, skills, etc.)
+│   │   │   ├── nodes/
+│   │   │   │   ├── chat-node/
+│   │   │   │   │   └── prompt.ts    #     ⭐ System prompt — your oracle's personality
+│   │   │   │   └── tools-node/
+│   │   │   │       └── tools.ts     #     ⭐ Custom tool definitions
+│   │   │   ├── middlewares/         #     Safety, validation, token limits
+│   │   │   ├── mcp.ts              #     MCP server connections
+│   │   │   ├── state.ts            #     Graph state definition
+│   │   │   └── index.ts            #     Main graph entry point
+│   │   │
+│   │   ├── messages/                #   REST controllers (rarely edit)
+│   │   ├── sessions/                #   Session management (rarely edit)
+│   │   └── ucan/                    #   UCAN authorization (rarely edit)
+│   │
+│   └── .env                         #   ⭐ Your credentials — NEVER commit this
+│
+├── packages/                        #   Shared @ixo/* libraries — DON'T EDIT (unless advanced)
+│   ├── common/                      #     AI services, session management
+│   ├── matrix/                      #     E2E encrypted communication
+│   ├── events/                      #     SSE/WebSocket streaming
+│   ├── oracles-chain-client/        #     Blockchain operations
+│   ├── oracles-client-sdk/          #     React client SDK
+│   └── slack/                       #     Slack bot integration
+│
+├── docker-compose.yml               #   Infrastructure services (Redis, etc.)
+├── turbo.json                       #   Build config — DON'T TOUCH
+├── pnpm-workspace.yaml              #   Workspace definitions — ```
+
+### What to edit vs. what to leave alone
+
+| Zone                | Files                                             | Rule                                                                               |
+| ------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| **Your oracle**     | `apps/app/src/config.ts`, `graph/` folder, `.env` | This is where you work. Edit freely.                                               |
+| **REST layer**      | `apps/app/src/messages/`, `sessions/`, `ucan/`    | Rarely needs changes. Only touch if adding new endpoints.                          |
+| **Shared packages** | Everything in `packages/`                         | Don't edit unless you're doing advanced customization. These are shared libraries. |
+| **Build plumbing**  | `turbo.json`, `pnpm-workspace.yaml`               | Don't touch. These wire the monorepo together.                                     |
+
+---
+
+## 2.2 — Key Customization Files
+
+Your oracle's personality is defined by two files:
+
+### Oracle name — `main-agent.ts`
+
+Set your oracle's name in `apps/app/src/graph/agents/main-agent.ts`:
+
+```typescript
+APP_NAME: 'My Oracle',
 ```
 
----
+This value is injected into the system prompt as `{{APP_NAME}}`.
 
-## apps/app/ — The Oracle Application
+### System prompt — `prompt.ts`
 
-### Key Files
+Your oracle's full personality and behavior lives in `apps/app/src/graph/nodes/chat-node/prompt.ts`. This is the main file you'll edit to customize what your oracle says and does.
 
-<!-- TODO: Expand each with 2-3 sentences explaining purpose and key exports -->
+> **Next step:** See [03 — Customize Your Oracle](./03-customize-your-oracle.md) for full examples.
 
-- **`src/main.ts`** — Bootstrap sequence: NestJS factory, Matrix initialization, Swagger docs, graceful shutdown registration.
-- **`src/app.module.ts`** — NestJS module tree with middleware pipeline (auth, subscription, rate limiting).
-- **`src/config.ts`** — Zod-validated environment schema + `oracleConfig` object (your oracle's identity).
-- **`src/graph/`** — The LangGraph core — agents, tools, middlewares, state, MCP config.
-- **`src/messages/`** — REST controllers for sending/receiving messages.
-- **`src/sessions/`** — Session CRUD operations.
-- **`src/ucan/`** — UCAN authorization for MCP tool access.
+### Environment variables — `config.ts`
+
+`apps/app/src/config.ts` defines `EnvSchema` — a validated list of every environment variable your oracle needs. These live in `apps/app/.env` and are auto-generated by the CLI during setup.
+
+> See [Environment Variables Reference](./reference/environment-variables.md) for the complete list with descriptions.
 
 ---
 
-## The Graph Directory
+## 2.3 — Key Files Cheat Sheet
 
-The heart of your oracle lives in `apps/app/src/graph/`:
+This is the table you will come back to. Find what you want to do, then edit the file listed.
 
-<!-- TODO: Expand each section with code examples -->
+### Customizing your oracle
 
-### state.ts — Graph State
+| I want to...                                     | Edit this file                                                     |
+| ------------------------------------------------ | ------------------------------------------------------------------ |
+| Change my oracle's name                          | `apps/app/src/graph/agents/main-agent.ts` — the `APP_NAME` value   |
+| Change my oracle's personality, purpose, or tone | `apps/app/src/graph/nodes/chat-node/prompt.ts` — the system prompt |
+| Add API keys or change credentials               | `apps/app/.env`                                                    |
+| Enable/disable credit billing                    | `apps/app/.env` — set `DISABLE_CREDITS=true`                       |
 
-`MainAgentGraphState` Annotation with fields: `messages`, `userContext`, `config`, `client`, `browserTools`, `agActions`, `mcpUcanContext`, `editorRoomId`, `currentEntityDid`.
+### Adding capabilities
 
-### agents/ — Agent Definitions
+| I want to...                                   | Edit this file                                                                                                             |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Give my oracle a new skill (from the registry) | No code changes — skills are discovered and loaded at runtime. See [04 — Working with Skills](./04-working-with-skills.md) |
+| Add a custom tool (server-side function)       | `apps/app/src/graph/nodes/tools-node/tools.ts` — define the tool                                                           |
+| Register a custom tool with the graph          | `apps/app/src/graph/agents/main-agent.ts` — add it to the tools array                                                      |
+| Connect an external MCP server                 | `apps/app/src/graph/mcp.ts` — add the server URL and config                                                                |
+| Add a new sub-agent                            | Create a file in `apps/app/src/graph/agents/`, then register it in `main-agent.ts`                                         |
 
-- `main-agent.ts` — orchestrator, composes sub-agents + tools into the graph
-- `subagent-as-tool.ts` — `AgentSpec` interface + `createSubagentAsTool()` wrapper
-- `memory-agent.ts`, `portal-agent.ts`, `firecrawl-agent.ts`, `domain-indexer-agent.ts`, `editor/editor-agent.ts`, `skills-agent/`
+### Adjusting behavior
 
-### nodes/chat-node/prompt.ts — System Prompt
+| I want to...                          | Edit this file                                                  |
+| ------------------------------------- | --------------------------------------------------------------- |
+| Change safety/content filtering rules | `apps/app/src/graph/middlewares/safety-guardrail-middleware.ts` |
+| Adjust token/credit limits            | `apps/app/src/graph/middlewares/token-limiter-middleware.ts`    |
+| Change tool input validation          | `apps/app/src/graph/middlewares/tool-validation-middleware.ts`  |
+| Modify graph state (add new fields)   | `apps/app/src/graph/state.ts`                                   |
 
-The 700+ line system prompt template. Input variables: `APP_NAME`, `IDENTITY_CONTEXT`, `WORK_CONTEXT`, `GOALS_CONTEXT`, `INTERESTS_CONTEXT`, `RELATIONSHIPS_CONTEXT`, `RECENT_CONTEXT`, `TIME_CONTEXT`, `EDITOR_DOCUMENTATION`, `AG_UI_TOOLS_DOCUMENTATION`, `CURRENT_ENTITY_DID`, `SLACK_FORMATTING_CONSTRAINTS`.
+### Infrastructure and deployment
 
-### nodes/tools-node/tools.ts — Tool Definitions
+| I want to...                     | Edit this file                      |
+| -------------------------------- | ----------------------------------- |
+| Change which Docker services run | `docker-compose.yml`                |
+| Change the server port           | `apps/app/.env` — set `PORT`        |
+| Configure CORS                   | `apps/app/.env` — set `CORS_ORIGIN` |
+| Build for production             | `Dockerfile`                    |
 
-Tool factory functions including `getMemoryEngineMcpTools()` and `getFirecrawlMcpTools()`.
+### REST API and sessions
 
-### middlewares/ — Execution Guards
+| I want to...                       | Edit this file                                     |
+| ---------------------------------- | -------------------------------------------------- |
+| Add a new API endpoint             | `apps/app/src/messages/` — add a controller        |
+| Change session behavior            | `apps/app/src/sessions/`                           |
+| Modify auth or subscription checks | `apps/app/src/app.module.ts` — middleware pipeline |
 
-Safety guardrail, tool validation, token limiter.
+> **Full API docs:** See [API Endpoints Reference](./reference/api-endpoints.md)
 
-### mcp.ts — MCP Server Configuration
+## Next Steps
 
-`MCPConfigWithUCAN` object connecting external MCP tool servers, with optional UCAN authorization wrapping.
-
-### index.ts — MainAgentGraph Class
-
-Entry points: `sendMessage()`, `streamMessage()`, `getGraphState()`.
-
----
-
-## Packages Overview
-
-<!-- TODO: Add "When to use" column with practical guidance -->
-
-| Package              | Scope                       | Purpose                                          | Default? |
-| -------------------- | --------------------------- | ------------------------------------------------ | -------- |
-| common               | `@ixo/common`               | AI services, session management, room management | Yes      |
-| matrix               | `@ixo/matrix`               | E2E encrypted communication                      | Yes      |
-| events               | `@ixo/events`               | SSE/WebSocket streaming                          | Yes      |
-| data-store           | `@ixo/data-store`           | ChromaDB + PostgreSQL knowledge                  | Opt-in   |
-| oracles-chain-client | `@ixo/oracles-chain-client` | Blockchain payments, claims                      | Yes      |
-| oracles-client-sdk   | `@ixo/oracles-client-sdk`   | React hooks (useChat, etc.)                      | Opt-in   |
-| slack                | `@ixo/slack`                | Slack bot integration                            | Opt-in   |
-
----
-
-## Key Files You'll Edit
-
-Ordered by frequency of customization:
-
-<!-- TODO: Add code snippets showing the relevant section of each file -->
-
-1. **`apps/app/src/config.ts`** — `oracleConfig` object (name, purpose, features, target users)
-2. **`apps/app/src/graph/nodes/chat-node/prompt.ts`** — system prompt template
-3. **`apps/app/src/graph/agents/main-agent.ts`** — agent composition + tool registration
-4. **`apps/app/src/graph/nodes/tools-node/tools.ts`** — custom tool definitions
-5. **`apps/app/src/graph/mcp.ts`** — MCP server connections
+- **[03 — Customize Your Oracle](./03-customize-your-oracle.md)** — change personality, purpose, and behavior with practical examples
+- **[04 — Working with Skills](./04-working-with-skills.md)** — add capabilities without writing code
+- **[05 — Sub-Agents](./05-sub-agents.md)** — add specialized agents for complex tasks

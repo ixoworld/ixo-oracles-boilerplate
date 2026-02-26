@@ -31,18 +31,10 @@
 
 ## Database
 
-| Variable                 | Required | Default                 | Description                     |
-| ------------------------ | -------- | ----------------------- | ------------------------------- |
-| `POSTGRES_USER`          | No       | `postgres`              | PostgreSQL username             |
-| `POSTGRES_HOST`          | No       | `localhost`             | PostgreSQL host                 |
-| `POSTGRES_DB`            | No       | `knowledge`             | PostgreSQL database name        |
-| `POSTGRES_PASSWORD`      | No       | `postgres`              | PostgreSQL password             |
-| `POSTGRES_PORT`          | No       | `5432`                  | PostgreSQL port                 |
-| `DATABASE_USE_SSL`       | No       | `false`                 | Enable SSL for database         |
-| `CHROMA_URL`             | No       | `http://localhost:8000` | ChromaDB server URL             |
-| `CHROMA_COLLECTION_NAME` | No       | `knowledge`             | ChromaDB collection name        |
-| `SQLITE_DATABASE_PATH`   | Yes      | —                       | SQLite checkpoint database path |
-| `REDIS_URL`              | Yes      | —                       | Redis connection URL            |
+| Variable               | Required | Default | Description                     |
+| ---------------------- | -------- | ------- | ------------------------------- |
+| `SQLITE_DATABASE_PATH` | Yes      | —       | SQLite checkpoint database path |
+| `REDIS_URL`            | Yes      | —       | Redis connection URL            |
 
 ## AI / LLM
 

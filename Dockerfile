@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 ARG NODE_VERSION=22.11.0
 
 # Debian-based image (glibc) instead of Alpine (musl)
@@ -14,7 +15,7 @@ RUN pnpm config set store-dir ~/.pnpm-store
 
 # Prune projects
 FROM --platform=linux/amd64 base AS pruner
-ARG PROJECT
+ARG PROJECT=app
 
 WORKDIR /app
 COPY . .
@@ -22,7 +23,7 @@ RUN turbo prune --scope=${PROJECT} --docker
 
 # Build the project
 FROM --platform=linux/amd64 base AS builder
-ARG PROJECT
+ARG PROJECT=app
 
 WORKDIR /app
 
@@ -32,20 +33,20 @@ COPY --from=pruner /app/out/pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY --from=pruner /app/out/json/ .
 
 # First install the dependencies (as they change less often)
-RUN --mount=type=cache,id=pnpm,target=~/.pnpm-store pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=s/b452c08a-e355-4882-9f0e-1ca8de8ae535-/root/.pnpm-store,target=/root/.pnpm-store pnpm install --frozen-lockfile
 
 # Copy source code of isolated subworkspace
 COPY --from=pruner /app/out/full/ .
 
 RUN turbo build --filter=${PROJECT}
 # Remove dev dependencies and hoist production dependencies to top level for proper module resolution
-RUN --mount=type=cache,id=pnpm,target=~/.pnpm-store pnpm install --frozen-lockfile --prod --shamefully-hoist
+RUN --mount=type=cache,id=s/b452c08a-e355-4882-9f0e-1ca8de8ae535-/root/.pnpm-store,target=/root/.pnpm-store pnpm install --frozen-lockfile --prod --shamefully-hoist
 # Remove source files only from workspace packages, not from node_modules
 RUN rm -rf ./packages/*/src ./apps/*/src
 
 # Final image
 FROM --platform=linux/amd64 debian-base AS runner
-ARG PROJECT
+ARG PROJECT=app
 ENV PROJECT=${PROJECT}
 
 # Clean up build dependencies in the final image

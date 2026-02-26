@@ -1,28 +1,11 @@
 import z from 'zod';
 
-export const oracleConfig = {
-  appName: '',
-  appPurpose: 'e-commerce store for selling products and services.',
-  appMainFeatures:
-    'The e-commerce store provides a range of features for selling products and services.',
-  appTargetUsers: 'The e-commerce store is targeted at customers.',
-  appUniqueSellingPoints:
-    'The e-commerce store is a platform for selling products and services.',
-};
-
 export const EnvSchema = z.object({
   NODE_ENV: z
     .enum(['development', 'production', 'test'])
     .default('development'),
   PORT: z.coerce.number().default(3000),
   ORACLE_NAME: z.string(),
-
-  // PostgreSQL
-  POSTGRES_USER: z.string().default('postgres'),
-  POSTGRES_HOST: z.string().default('localhost'),
-  POSTGRES_DB: z.string().default('knowledge'),
-  POSTGRES_PASSWORD: z.string().default('postgres'),
-  POSTGRES_PORT: z.string().default('5432'),
 
   // CORS
   CORS_ORIGIN: z.string().default('*'),
@@ -31,10 +14,6 @@ export const EnvSchema = z.object({
   LANGFUSE_SECRET_KEY: z.string().optional(),
   LANGFUSE_PUBLIC_KEY: z.string().optional(),
   LANGFUSE_HOST: z.string().optional(),
-
-  // Chroma
-  CHROMA_COLLECTION_NAME: z.string().default('knowledge'),
-  CHROMA_URL: z.string().default('http://localhost:8000'),
 
   // Slack
   SLACK_BOT_OAUTH_TOKEN: z.string().optional(),
@@ -65,7 +44,6 @@ export const EnvSchema = z.object({
   SUBSCRIPTION_ORACLE_MCP_URL: z.url().optional(),
   NETWORK: z.enum(['mainnet', 'testnet', 'devnet']),
   BLOCKSYNC_URI: z.string().optional(),
-  DATABASE_USE_SSL: z.string().default('false'),
   SQLITE_DATABASE_PATH: z.string(),
   LIVE_AGENT_AUTH_API_KEY: z.string().optional().default(''),
   MEMORY_MCP_URL: z.url(),
