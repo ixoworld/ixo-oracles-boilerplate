@@ -569,8 +569,8 @@ importers:
         specifier: ^16.4.0
         version: 16.4.2
       matrix-bot-sdk:
-        specifier: npm:@ixo/matrix-bot-sdk@^0.8.0-ixo.5
-        version: '@ixo/matrix-bot-sdk@0.8.0-ixo.5'
+        specifier: npm:@ixo/matrix-bot-sdk@^0.8.0-ixo.6
+        version: '@ixo/matrix-bot-sdk@0.8.0-ixo.6'
       matrix-js-sdk:
         specifier: ^37.11.0
         version: 37.13.0
@@ -3051,8 +3051,8 @@ packages:
   '@ixo/logger@0.0.2':
     resolution: {integrity: sha512-HRoYZXXVoyKRoLXTFhY6wKE/nHcYddzEfk5L9gbcdkPF9+IQ7pQnXzL5yQtuiO8yWP2f6VamP8JAWTlASBTW/w==}
 
-  '@ixo/matrix-bot-sdk@0.8.0-ixo.5':
-    resolution: {integrity: sha512-zJ0rLUPPh7w2UTNoKcM6hOjlMg0CHYJ4B+euNcgmKUKqUxZZfvRysg7VAa855UF8dmeaqQ6g9TZKJc0ZZy7sqg==}
+  '@ixo/matrix-bot-sdk@0.8.0-ixo.6':
+    resolution: {integrity: sha512-uhsZLv/rT2bdwOLLxR+oUb/4jDLg+SblfPtP+2HzKWReH6s/lUHAijxQlj5YMrPp+7sNjtx7XtN92hUWhZymJQ==}
     engines: {node: '>=22.0.0'}
 
   '@ixo/matrix-crdt@1.1.0':
@@ -14942,7 +14942,7 @@ snapshots:
     dependencies:
       winston: 3.18.3
 
-  '@ixo/matrix-bot-sdk@0.8.0-ixo.5':
+  '@ixo/matrix-bot-sdk@0.8.0-ixo.6':
     dependencies:
       '@ixo/matrix-sdk-crypto-nodejs': 0.4.2
       '@types/express': 4.17.25
