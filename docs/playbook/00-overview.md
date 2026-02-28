@@ -78,12 +78,8 @@ This playbook takes you from zero to a fully deployed oracle, step by step:
 |---|---|
 | [Publish Your First Oracle](./guides/publish-your-first-oracle.md) | End-to-end: scaffold, customize, deploy, share |
 | [Memory Engine](./guides/memory-engine.md) | Give your oracle persistent memory across conversations |
-| [Knowledge Store](./guides/knowledge-store.md) | Persistent knowledge and memory via the Memory Engine |
 | [Payments & Claims](./guides/payments-and-claims.md) | Set up pricing and billing for your oracle |
-| [Events & Streaming](./guides/events-streaming.md) | Stream real-time responses to users |
-| [Slack Integration](./guides/slack-integration.md) | Connect your oracle to Slack |
-| [Client SDK](./guides/client-sdk.md) | Build a custom chat UI with React |
-| [Matrix Deep Dive](./guides/matrix-deep-dive.md) | Advanced encrypted messaging setup |
+| [Building & Publishing Skills](./guides/building-and-publishing-skills.md) | Create and publish your own skills |
 
 ---
 
@@ -105,7 +101,7 @@ Before starting, make sure you have:
 
 **Guides** are standalone — pick whichever you need after completing [01 — Quickstart](./01-quickstart.md).
 
-**Reference** pages are lookup material — [environment variables](./reference/environment-variables.md), [CLI commands](./reference/cli-reference.md), [API endpoints](./reference/api-endpoints.md), [state schema](./reference/state-schema.md).
+**Reference** pages are lookup material — [environment variables](./reference/environment-variables.md), [CLI commands](./reference/cli-reference.md), [API endpoints](./reference/api-endpoints.md), [state schema](./reference/state-schema.md), [skills & sandbox API](./reference/skills-and-sandbox-api.md).
 
 ---
 
