@@ -15,7 +15,7 @@ Before deploying, make sure you have:
 - **Oracle entity DID** — `ORACLE_ENTITY_DID`
 - **Network decided** — `NETWORK` set to `devnet`, `testnet`, or `mainnet`
 - **Database credentials** — `REDIS_URL`, `SQLITE_DATABASE_PATH`
-- **Docker installed** — check with `docker --version` (for self-hosted) or a **Railway account** (for cloud deployment)
+- **Docker installed** — check with `docker --version` (for self-hosted) or a **[Fly.io](https://fly.io) account** (for cloud deployment)
 - **Skills configured** — any skills your oracle uses should be tested locally first
 
 > See [Environment Variables Reference](./reference/environment-variables.md) for the complete list of all configuration options.
@@ -84,129 +84,76 @@ docker compose down
 
 ---
 
-## 08.3 — Deploy to Railway
+## 08.3 — Deploy to Fly.io
 
-[Railway](https://railway.com) lets you deploy your oracle from a Docker Compose file — no server management, no Kubernetes. You get a URL, your services run, and Railway handles the rest.
+[Fly.io](https://fly.io) runs your oracle in lightweight VMs close to your users — no server management. You get a URL, persistent storage, and auto-deploys from GitHub.
 
-### Step 1 — Install the Railway CLI and log in
+### Step 1 — Set up Fly.io
+
+Install flyctl, log in, and create your app:
 
 ```bash
 # Install (pick one)
-brew install railway            # macOS
-npm i -g @railway/cli           # any platform with Node.js 16+
-bash <(curl -fsSL cli.new)      # Linux / macOS shell script
+brew install flyctl            # macOS
+curl -L https://fly.io/install.sh | sh  # Linux
+
+# Log in
+fly auth login
+
+# Create your app — uses the fly.toml already in the repo
+fly launch
 ```
 
-Then log in:
+When `fly launch` detects the existing `fly.toml`, it will ask if you want to use it — say **yes**. This creates your app on Fly.io with the correct configuration already set up.
+
+### Step 2 — Set up Redis
 
 ```bash
-railway login
+fly redis create
 ```
 
-### Step 2 — Create a project and link it
+Choose the same region as your app and pick a plan. After creation, copy the **Private URL** from `fly redis status <database-name>` and add it as `REDIS_URL` in your `apps/app/.env` file.
+
+> **Alternative:** Use any external Redis provider — you just need the connection URL.
+
+### Step 3 — Fill in your `.env`
+
+Make sure your `apps/app/.env` has all the production values from the [pre-deployment checklist](#081--pre-deployment-checklist).
+
+### Step 4 — Deploy
+
+Once the setup is done, deploy with a single command:
 
 ```bash
-railway init
+pnpm run deploy
 ```
 
-This creates a new project on Railway and links your local directory to it. You'll choose a project name when prompted.
+This script handles everything for you:
+- Creates the persistent storage volume (if it doesn't exist)
+- Loads all secrets from your `.env` file
+- Sets the correct storage paths for the Fly.io volume
+- Builds and deploys the Docker image
 
-### Step 2.5 — Configure Docker build cache
+First deploy takes a few minutes; subsequent deploys are faster.
 
-Railway supports Docker cache mounts to speed up builds. The `Dockerfile` uses cache mounts for the pnpm store, but they need your Railway **service ID** to work.
-
-After linking your project, get your service ID and update the Dockerfile:
+### Step 5 — Verify
 
 ```bash
-# Get your service ID
-railway status --json | jq -r '.services.edges[0].node.id'
+fly status                                        # machine is running?
+curl https://ixo-oracles-boilerplate.fly.dev/     # oracle is alive?
+fly logs                                          # check logs if needed
 ```
 
-Then replace the existing service ID in the `Dockerfile` cache mount lines with yours:
+### Auto-deploy from GitHub (optional)
 
-```bash
-SERVICE_ID=$(railway status --json | jq -r '.services.edges[0].node.id')
-sed -i'' -e "s|id=s/[a-f0-9-]*-/root/.pnpm-store|id=s/${SERVICE_ID}-/root/.pnpm-store|g" Dockerfile
-echo "Updated Dockerfile with service ID: $SERVICE_ID"
-```
+The repo includes `.github/workflows/fly-deploy.yml` which auto-deploys on every push to `main`. To enable it:
 
-This patches the cache mount lines so Railway persists your pnpm store between builds — cutting install times significantly after the first deploy.
-
-### Step 3 — Import your Docker Compose file
-
-1. Open your project dashboard — run `railway open` or go to [railway.com/dashboard](https://railway.com/dashboard)
-2. Drag and drop your `docker-compose.yml` onto the project canvas
-3. Railway auto-creates each service (app, Redis, redis-insight) as separate items on the canvas
-4. Review the staged changes and click **Deploy**
-
-> Railway supports most Compose configs, but not every option. If something doesn't import cleanly, you can create services manually on the canvas instead.
-
-### Step 4 — Set environment variables
-
-Click on the **app** service → **Variables** tab. Add all the variables from the [pre-deployment checklist](#081--pre-deployment-checklist).
-
-**Quickest way:** Open the **Raw Editor** and paste your entire `.env` file — Railway parses it automatically.
-
-For `REDIS_URL`, use a **reference variable** to point to Railway's internal Redis service:
-
-```
-REDIS_URL=redis://${{Redis.RAILWAY_PRIVATE_DOMAIN}}:6379
-```
-
-Railway's autocomplete dropdown helps you wire up references. This uses private networking — services talk to each other over encrypted internal connections, never touching the public internet.
-
-**Tip:** For variables shared across multiple services, use **Project Settings → Shared Variables** and reference them with `${{shared.VARIABLE_KEY}}`.
-
-> See [Environment Variables Reference](./reference/environment-variables.md) for the full list.
-
-### Step 5 — Add persistent storage
-
-Your oracle stores Matrix encryption keys and SQLite data on disk. Without a volume, this data is lost on every redeploy.
-
-1. Right-click on the canvas (or press `⌘K`) → **Add Volume**
-2. Attach it to the **app** service
-3. Set the mount path to `/app/apps/app/matrix-storage`
-
-For SQLite, make sure `SQLITE_DATABASE_PATH` points to a path inside the same volume mount:
-
-```
-SQLITE_DATABASE_PATH=/app/apps/app/matrix-storage/sqlite.db
-```
-
-### Step 6 — Deploy your code
-
-From your project directory, deploy the app service:
-
-```bash
-railway up
-```
-
-This uploads your local code to Railway, builds it using the `Dockerfile`, and deploys it. Use `railway up --detach` to deploy without streaming the build logs.
-
-**Auto-deploy from GitHub (optional):** Instead of `railway up`, you can connect a GitHub repo for automatic deploys on every push:
-
-1. Click on the **app** service → **Settings → Source**
-2. Connect your GitHub repo and select the branch
-3. Set the **Dockerfile path** to `Dockerfile`
-4. Under **Build Configuration**, add the build argument: `PROJECT` = `app`
-
-### Step 7 — Generate a public domain
-
-1. Click on the **app** service → **Settings → Networking**
-2. Under **Public Networking**, click **Generate Domain**
-3. You'll get a URL like `your-oracle-abc123.up.railway.app`
-
-To use your own domain, add a CNAME record pointing to the Railway domain. Railway handles SSL automatically.
-
-### Step 8 — Verify
-
-Hit your domain to confirm the oracle is alive:
-
-```bash
-curl https://your-oracle-abc123.up.railway.app/
-```
-
-Check the service logs with `railway logs` or in the dashboard if anything looks off.
+1. Generate a deploy token:
+   ```bash
+   fly tokens create deploy -x 999999h
+   ```
+2. Add it as `FLY_API_TOKEN` in your GitHub repo → **Settings → Secrets and variables → Actions**
+3. Every push to `main` now auto-deploys to Fly.io
 
 ---
 
@@ -217,10 +164,10 @@ Check the service logs with `railway logs` or in the dashboard if anything looks
 Hit the root endpoint to verify your oracle is alive:
 
 ```bash
-curl https://your-oracle-domain.com/
+curl https://your-oracle-domain.fly.dev/
 ```
 
-`GET /` returns the application status. Use this URL for load balancer health probes or uptime monitors.
+`GET /` returns the application status. The `fly.toml` already configures automatic health checks — Fly.io will restart the machine if it stops responding.
 
 ### Network selection
 
@@ -242,7 +189,7 @@ oracles-cli update-entity
 
 ### Graceful shutdown
 
-On SIGTERM/SIGINT, the oracle saves its conversation state before shutting down — no data is lost during redeployments.
+On SIGTERM, the oracle saves its conversation state before shutting down — no data is lost during redeployments. The `fly.toml` gives the app 30 seconds to finish cleanup before forcing a stop.
 
 ### Updating and redeploying
 
@@ -257,21 +204,44 @@ docker compose up -d
 
 Docker Compose will replace the `app` container with the new image. The infrastructure services (Redis) keep running and retain their data.
 
-**Railway:**
+**Fly.io:**
 
-If you connected a GitHub repo (Step 6 above), Railway redeploys automatically on every push. No manual steps needed.
+If you set up GitHub Actions (Step 8 above), Fly.io redeploys automatically on every push to `main`. No manual steps needed.
 
-To deploy manually from your local directory:
-
-```bash
-railway up
-```
-
-Or to redeploy the latest version without uploading new code:
+To deploy manually:
 
 ```bash
-railway redeploy
+fly deploy
 ```
+
+### Resetting a stale Matrix token
+
+If your oracle fails on startup with Matrix authentication or crypto errors, the access token has likely gone stale. When this happens, the on-disk crypto store is tied to the old token/device — simply updating the token won't fix it. You need to wipe the storage and get a fresh token together.
+
+The included script handles the full recovery:
+
+```bash
+./scripts/reset-matrix.sh
+```
+
+**What it does:**
+
+1. Destroys the Fly machine (unbinds the volume)
+2. Deletes the volume (wipes the crypto store and all `/data`)
+3. Logs into Matrix with your password to get a fresh access token
+4. Sets the new token as a Fly secret
+5. Creates a fresh volume
+6. Deploys with clean storage and the new token
+
+The script reads `MATRIX_BASE_URL`, `MATRIX_ORACLE_ADMIN_USER_ID`, and `MATRIX_ORACLE_ADMIN_PASSWORD` from your `.env` file. To use a different env file:
+
+```bash
+./scripts/reset-matrix.sh path/to/your/.env
+```
+
+After it finishes, verify with `fly logs` — you should see the oracle log in to Matrix successfully and bootstrap fresh cross-signing.
+
+> **Note:** This wipes all persistent data (checkpoints, crypto store). The oracle will start fresh — conversation history stored in Matrix rooms is unaffected.
 
 ### Monitoring with Langfuse
 

@@ -122,7 +122,7 @@ Once you're happy with how your oracle works locally, it's time to push it to th
 
 Follow the deployment steps in [Chapter 08 — Deployment](../08-deployment.md).
 
-> **Note:** Deployment platform recommendations are still being finalized (Railway and Fly.io are the current candidates). The deployment chapter has the latest instructions.
+> **Note:** The recommended cloud platform is [Fly.io](https://fly.io). See [Chapter 08 — Deployment](../08-deployment.md) for the full walkthrough.
 
 ---
 
@@ -196,6 +196,6 @@ Your oracle is live. Here's how to get it in front of users:
 ## What's Next?
 
 - **Add more skills** — Browse the [skills registry](https://github.com/ixoworld/ai-skills) or [build your own](../04-working-with-skills.md)
-- **Connect Slack** — Let users talk to your oracle in Slack. See the [Slack Integration Guide](./slack-integration.md)
-- **Stream responses** — Use SSE for real-time streaming. See the [Events & Streaming Guide](./events-streaming.md)
+- **Set up payments** — Monetize your oracle with the [Payments & Claims Guide](./payments-and-claims.md)
+- **Add memory** — Give your oracle persistent memory with the [Memory Engine Guide](./memory-engine.md)
 - **Deep customization** — Tweak the system prompt, add sub-agents, or configure middlewares in [Chapter 03](../03-customize-your-oracle.md)

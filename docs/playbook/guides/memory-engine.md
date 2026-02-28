@@ -1,90 +1,87 @@
-# Guide: Memory Engine — Give Your Oracle Memory
+# Guide: Memory Engine
 
-> **What you'll build:** Persistent memory across conversations — user memories, organization knowledge (public and private), powered by the Memory Engine MCP server.
-
----
-
-## What is the Memory Engine
-
-<!-- TODO: Expand with architecture explanation -->
-
-The Memory Engine is an MCP server that provides persistent memory across conversations. It supports three knowledge scopes:
-
-- **User memories (private)** — personal details per user, only that user can access
-- **Organization public knowledge** — customer-facing: docs, FAQs, product info
-- **Organization private knowledge** — internal only: processes, playbooks, policies
+> **What you'll learn:** How your oracle remembers things across conversations using the Memory Engine.
 
 ---
 
-## How It Works in the Framework
+## What It Does
 
-<!-- TODO: Detailed explanation of the integration architecture -->
-
-- Connected as an MCP server via `getMemoryEngineMcpTools()` in `tools.ts`
-- Memory Agent (`memory-agent.ts`) is the sub-agent that orchestrates memory operations
-- Two modes: `user` (read all, write personal only) and `orgOwner` (read all, write all)
-- Main agent calls `call_memory_agent` tool to delegate memory tasks
+The Memory Engine gives your oracle persistent memory. It remembers user preferences, organization knowledge, and context from past conversations — so users don't have to repeat themselves.
 
 ---
 
-## Available MCP Tools
+## Three Knowledge Scopes
 
-<!-- TODO: Expand each with parameters, return types, and usage examples -->
+Your oracle organizes memories into three scopes:
 
-| Tool                                  | Description                                   | Who can use      |
-| ------------------------------------- | --------------------------------------------- | ---------------- |
-| `memory-engine__search_memory_engine` | Search across all memory scopes               | All users        |
-| `memory-engine__add_memory`           | Store a personal user memory                  | All users        |
-| `memory-engine__add_oracle_knowledge` | Store org knowledge (public or private scope) | Org owners only  |
-| `memory-engine__delete_episode`       | Remove a memory episode                       | Depends on scope |
-| `memory-engine__delete_edge`          | Remove a relationship between memories        | Depends on scope |
-| `memory-engine__clear`                | Clear all memories                            | Depends on scope |
+| Scope                         | What it stores                              | Who can access it      |
+|-------------------------------|---------------------------------------------|------------------------|
+| **User memories** (private)   | Personal preferences, past requests, context | Only that specific user |
+| **Organization public**       | Customer-facing docs, FAQs, product info    | All users              |
+| **Organization private**      | Internal processes, policies, playbooks     | Internal members only  |
 
 ---
 
-## Configuration
+## How to Use It
 
-<!-- TODO: Show env vars and per-user header setup -->
+You don't need to configure anything special — just talk to your oracle naturally.
 
-```env
-MEMORY_MCP_URL=https://your-memory-engine.com/mcp
+**Saving memories:**
+
+```
+You: "Remember that I prefer dark mode and weekly reports on Mondays"
+Oracle: Got it — I'll remember your preferences.
 ```
 
-Per-user headers are set automatically per request:
+**Adding organization knowledge (org owners only):**
 
-- `x-oracle-did` — the oracle's DID
-- `x-room-id` — the user's Matrix room ID
-- `x-user-did` — the user's DID
+```
+You: "Add this to the knowledge base: Our refund policy is 30 days, no questions asked"
+Oracle: Should this be public (accessible to customers) or private (internal only)?
+You: "Public"
+Oracle: Added to public knowledge.
+```
+
+**Retrieving memories:**
+
+```
+You: "What do you know about me?"
+Oracle: I know you prefer dark mode and like weekly reports on Mondays.
+
+You: "What's our refund policy?"
+Oracle: Your refund policy is 30 days, no questions asked.
+```
+
+Your oracle automatically searches its memory at the start of each conversation to pull in relevant context.
+
+---
+
+## Available Tools
+
+These are the tools the Memory Engine provides. Your oracle uses them automatically — you just talk naturally.
+
+| Tool                            | What it does                                             |
+|---------------------------------|----------------------------------------------------------|
+| `search_memory_engine`          | Searches across all memory scopes for relevant context   |
+| `add_memory`                    | Saves a personal memory for the current user             |
+| `add_oracle_knowledge`          | Adds organization knowledge (org owners only)            |
+| `delete_episode`                | Removes a specific memory                                |
+| `delete_edge`                   | Removes a relationship between memories                  |
+| `clear`                         | Clears all memories (use with caution)                   |
 
 ---
 
 ## User vs Org Owner Mode
 
-<!-- TODO: Explain how main-agent.ts determines mode and passes it to createMemoryAgent() -->
-
-The main agent determines the mode based on the user's relationship to the oracle entity. Standard users can only add personal memories. Org owners can add public/private organization knowledge.
+Regular users can save personal memories and search all scopes. Org owners can also add organization knowledge (both public and private). When an org owner adds organization knowledge, the oracle always confirms the scope — public or private — before saving.
 
 ---
 
-## Memory Agent Prompts
+## Configuration
 
-<!-- TODO: Show key sections of knowledgeAgentPrompt and orgOwnerKnowledgeAgentPrompt -->
+| Variable             | Description                              |
+|----------------------|------------------------------------------|
+| `MEMORY_MCP_URL`     | URL of the Memory Engine MCP server      |
+| `MEMORY_ENGINE_URL`  | URL of the Memory Engine API             |
 
-Key behaviors:
-
-- **Always search before acting** — check existing memories before adding new ones
-- **User mode:** read all scopes, write personal memories only
-- **Org owner mode:** must confirm scope (public/private) before adding organization knowledge
-- **Prefer precise, structured memories** over vague statements
-
----
-
-## Practical Example
-
-<!-- TODO: Step-by-step walkthrough: adding org knowledge, searching memories, user context flow -->
-
-**Source files:**
-
-- `apps/app/src/graph/agents/memory-agent.ts`
-- `apps/app/src/graph/nodes/tools-node/tools.ts`
-- `apps/app/src/graph/agents/main-agent.ts` (lines 196-201)
+See [Environment Variables](../reference/environment-variables.md) for the full list.
