@@ -1,6 +1,6 @@
 # `@ixo/oracles-events`
 
-Real-time event system for the IXO Oracles Framework. Handles streaming communication between your oracle (server) and client applications via **Server-Sent Events (SSE)** and **WebSocket (WS)** connections.
+Real-time event system for QiForge. Handles streaming communication between your oracle (server) and client applications via **Server-Sent Events (SSE)** and **WebSocket (WS)** connections.
 
 **Table of Contents**
 

@@ -51,9 +51,9 @@ async function getAccountData(
   accessToken: string,
   userId: string,
   type: string,
-): Promise<any | null> {
-  const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
-  const url = `${normalizedBaseUrl}/_matrix/client/v3/user/${encodeURIComponent(userId)}/account_data/${encodeURIComponent(type)}`;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<any> {
+  const url = `${baseUrl}/_matrix/client/v3/user/${encodeURIComponent(userId)}/account_data/${encodeURIComponent(type)}`;
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });

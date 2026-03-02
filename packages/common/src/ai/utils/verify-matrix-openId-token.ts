@@ -16,7 +16,7 @@ export async function verifyMatrixOpenIdToken(
 
     if (response.ok) {
       const userInfo = (await response.json()) as { sub: string };
-      console.log('User info from server:', userInfo);
+      Logger.info('User info from server:', userInfo);
 
       return {
         isValid: true,
@@ -36,7 +36,7 @@ export async function verifyMatrixOpenIdToken(
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorStack = error instanceof Error ? error.stack : undefined;
 
-    console.error(
+    Logger.error(
       'Error verifying Matrix OpenID token:',
       errorMessage,
       errorStack,

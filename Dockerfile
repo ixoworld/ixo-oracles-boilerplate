@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 ARG NODE_VERSION=22.11.0
 
 # Debian-based image (glibc) instead of Alpine (musl)
@@ -14,7 +15,7 @@ RUN pnpm config set store-dir ~/.pnpm-store
 
 # Prune projects
 FROM --platform=linux/amd64 base AS pruner
-ARG PROJECT
+ARG PROJECT=app
 
 WORKDIR /app
 COPY . .
@@ -22,7 +23,7 @@ RUN turbo prune --scope=${PROJECT} --docker
 
 # Build the project
 FROM --platform=linux/amd64 base AS builder
-ARG PROJECT
+ARG PROJECT=app
 
 WORKDIR /app
 
@@ -45,7 +46,7 @@ RUN rm -rf ./packages/*/src ./apps/*/src
 
 # Final image
 FROM --platform=linux/amd64 debian-base AS runner
-ARG PROJECT
+ARG PROJECT=app
 ENV PROJECT=${PROJECT}
 
 # Clean up build dependencies in the final image
@@ -64,4 +65,4 @@ EXPOSE 3000
 CMD sh -c "node --experimental-require-module apps/${PROJECT}/dist/main"
 
 # docker build -t api:latest --build-arg PROJECT=api .
-# docker build -t ghcr.io/ixofoundation/ixo-ai-oracles:v0.0.2 --build-arg PROJECT=guru .
+# docker build -t ghcr.io/ixofoundation/qiforge:v0.0.2 --build-arg PROJECT=guru .

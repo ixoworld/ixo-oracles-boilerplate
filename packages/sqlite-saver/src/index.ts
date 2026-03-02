@@ -17,6 +17,7 @@ import Database, {
 } from 'better-sqlite3';
 import { type BaseMessage } from 'langchain';
 import migration001 from './migrations/001_add_created_at_to_messages';
+import { Logger } from '@ixo/logger';
 import {
   _default,
   type CleanAdditionalKwargs,
@@ -274,21 +275,21 @@ export class SqliteSaver extends BaseCheckpointSaver {
       return;
     }
 
-    console.log(`Running ${pendingMigrations.length} pending migration(s)...`);
+    Logger.info(`Running ${pendingMigrations.length} pending migration(s)...`);
 
     for (const migration of pendingMigrations) {
       try {
-        console.log(
+        Logger.info(
           `Applying migration ${migration.version}: ${migration.name}`,
         );
         migration.up(this.db);
         this.recordMigration(migration);
-        console.log(
-          `✓ Migration ${migration.version}: ${migration.name} applied successfully`,
+        Logger.info(
+          `Migration ${migration.version}: ${migration.name} applied successfully`,
         );
       } catch (error) {
-        console.error(
-          `✗ Failed to apply migration ${migration.version}: ${migration.name}`,
+        Logger.error(
+          `Failed to apply migration ${migration.version}: ${migration.name}`,
           error,
         );
         throw error;
@@ -801,7 +802,7 @@ ON writes(thread_id, checkpoint_id, channel);
     }
 
     if (!config.configurable?.thread_id) {
-      console.error('Missing thread_id field in config.configurable.', {
+      Logger.error('Missing thread_id field in config.configurable.', {
         configurable: config.configurable,
       });
 
@@ -821,7 +822,7 @@ ON writes(thread_id, checkpoint_id, channel);
     }
 
     if (!config.configurable?.checkpoint_id) {
-      console.error('Missing checkpoint_id field in config.configurable.', {
+      Logger.error('Missing checkpoint_id field in config.configurable.', {
         configurable: config.configurable,
       });
       throw new Error(

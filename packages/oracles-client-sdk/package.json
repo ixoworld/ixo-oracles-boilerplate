@@ -3,7 +3,7 @@
   "version": "1.1.2",
   "type": "module",
   "private": false,
-  "description": "Client SDK for interacting with IXO Oracles, designed for React applications",
+  "description": "Client SDK for interacting with QiForge oracles, designed for React applications",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",

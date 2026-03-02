@@ -194,8 +194,10 @@ Promise<ReactAgent<any, any, any, any>> => {
         ) ?? [],
     }),
     createMemoryAgent({
-      userDid: configurable?.configs?.user?.did,
-      oracleDid: matrix?.oracleDid ?? '',
+      oracleToken: oracleOpenIdToken ?? '',
+      userToken: configurable.configs?.user.matrixOpenIdToken ?? '',
+      oracleHomeServer: oracleMatrixBaseUrl.replace(/^https?:\/\//, ''),
+      userHomeServer: configurable.configs?.matrix.homeServerName ?? '',
       roomId: matrix?.roomId ?? '',
       mode: 'user',
     }),

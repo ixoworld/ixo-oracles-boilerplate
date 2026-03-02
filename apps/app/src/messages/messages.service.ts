@@ -220,11 +220,21 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
   }
 
   public async onModuleInit(): Promise<void> {
-    this.cleanUpMatrixListener =
-      this.sessionManagerService.matrixManger.onMessage((roomId, event) => {
-        this.handleMessage(event, roomId).catch((err) => {
-          Logger.error(err);
-        });
+    // Don't block server startup — defer listener until Matrix is ready.
+    // matrixManager.init() is idempotent: returns the existing promise if already in progress.
+    this.sessionManagerService.matrixManger
+      .init()
+      .then(() => {
+        this.cleanUpMatrixListener =
+          this.sessionManagerService.matrixManger.onMessage((roomId, event) => {
+            this.handleMessage(event, roomId).catch((err) => {
+              Logger.error(err);
+            });
+          });
+        Logger.log('Matrix message listener registered');
+      })
+      .catch((err) => {
+        Logger.error('Failed to set up Matrix message listener:', err);
       });
   }
   public async listMessages(

@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 // Types for entity verification methods based on actual response
 interface VerificationMethod {
   id: string;

@@ -1,30 +1,30 @@
-# IXO Oracles Framework
+# QiForge
 
-![IXO Oracles Framework](./cover.jpg)
+![QiForge](./cover.jpg)
 
-A powerful framework for building and deploying **Agentic Oracles** on the IXO network. Built on **LangGraph**, **Matrix**, and **NestJS**, this framework enables developers to create intelligent oracles with secure communication, complex conversation flows, and automatic marketplace integration.
+A powerful framework for building and deploying **Agentic Oracles** on the IXO network. Built on **LangGraph**, **Matrix**, and **NestJS**, QiForge enables developers to create intelligent oracles with secure communication, complex conversation flows, and automatic marketplace integration.
 
 ## What Makes This Special?
 
 - **🔐 Secure by Design**: Every user-oracle interaction happens in private, end-to-end encrypted Matrix rooms
 - **🧠 LangGraph Native**: Pure LangGraph implementation for building complex AI conversation flows
-- **⚡ Zero-Config Deployment**: Deploy once, instantly available in the IXO marketplace with full SDK support
+- **⚡ Zero-Config Deployment**: Deploy once, instantly available in the marketplace with full SDK support
 - **🔗 Blockchain Native**: Each oracle is a registered entity on the IXO blockchain with configurable parameters
 
 ## Prerequisites
 
-- **IXO Account**: You must have a IXO account on the IXO mobile app
+- **IXO Account**: You must have an IXO account on the IXO mobile app
 - **Node.js**: Version 22+ (see `.nvmrc` for exact version)
 - **Package Manager**: pnpm 10+ (required for workspace management)
 
 ## 🚀 Quick Start
 
-**🚨 IMPORTANT**: You **MUST** use the [IXO Oracles CLI](https://github.com/ixoworld/ixo-oracles-cli) to create oracles. The CLI handles all the complex setup including environment variables, and publishing to the IXO marketplace.
+**🚨 IMPORTANT**: You **MUST** use the [QiForge CLI](https://github.com/ixoworld/qiforge-cli) to create oracles. The CLI handles all the complex setup including environment variables, and publishing to the IXO marketplace.
 
-You can start with the IXO Oracles CLI:
+You can start with the QiForge CLI:
 
 ```bash
-npm install -g ixo-oracles-cli
+npm install -g qiforge-cli
 ```
 
 Then create a new project:
@@ -37,8 +37,8 @@ oracles-cli --init
 
 ```bash
 # Clone the repository
-git clone https://github.com/ixoworld/ixo-oracles-boilerplate
-cd ixo-oracles-boilerplate
+git clone https://github.com/ixoworld/qiforge
+cd qiforge
 
 # Install dependencies
 pnpm install
@@ -53,11 +53,11 @@ pnpm start:dev
 
 ## 🏗️ Architecture Overview
 
-This framework creates a seamless bridge between **React applications**, **AI conversation flows**, and the **IXO blockchain**. Each oracle becomes a verified, living entity with its own **Matrix account** and **IXO account** that are registered on the blockchain entity. This allows users to verify oracle authenticity while maintaining complete **data ownership** - all conversation data belongs to the user, stored in their private, encrypted Matrix rooms.
+QiForge creates a seamless bridge between **React applications**, **AI conversation flows**, and the **IXO blockchain**. Each oracle becomes a verified, living entity with its own **Matrix account** and **IXO account** that are registered on the blockchain entity. This allows users to verify oracle authenticity while maintaining complete **data ownership** - all conversation data belongs to the user, stored in their private, encrypted Matrix rooms.
 
-**Optional Memory Engine Integration**: Agentic oracles can optionally integrate with the **IXO Memory Engine** (Neo4j-based) to provide personalized AI experiences by analyzing user patterns, storing key moments, and adapting response styles based on user preferences and conversation history.
+**Optional Memory Engine Integration**: Agentic oracles can optionally integrate with the **Memory Engine** (Neo4j-based) to provide personalized AI experiences by analyzing user patterns, storing key moments, and adapting response styles based on user preferences and conversation history.
 
-**Knowledge Management**: The framework includes a comprehensive knowledge management system that provides AI oracles with access to structured and unstructured data sources. This enables context-aware conversations through semantic search, document storage, and dynamic knowledge retrieval. See [Knowledge Management Architecture](./docs/architecture/knowledge.md) for detailed information.
+**Knowledge Management**: QiForge includes a comprehensive knowledge management system that provides AI oracles with access to structured and unstructured data sources. This enables context-aware conversations through semantic search, document storage, and dynamic knowledge retrieval. See [Knowledge Management Architecture](./docs/architecture/knowledge.md) for detailed information.
 
 ### 1. Runtime Message Processing Flow
 
@@ -120,11 +120,11 @@ flowchart LR
 ```mermaid
 sequenceDiagram
     participant Dev as Developer
-    participant CLI as IXO CLI
+    participant CLI as QiForge CLI
     participant BC as IXO Blockchain
     participant Portal as Web Portal
     participant SDK as Client SDK
-    participant AS as IXO App Service
+    participant AS as App Service
     participant MX as Matrix Server
 
     Note over Dev,MX: 🚀 Oracle Deployment Phase
@@ -149,7 +149,7 @@ sequenceDiagram
 
 ### The Magic: Zero-Config Integration
 
-When you deploy an oracle built with this framework:
+When you deploy an oracle built with QiForge:
 
 1. **Blockchain Registration**: Oracle entity registered on IXO with configs (via CLI)
 2. **Oracle Identity**: Each oracle gets **Matrix account** + **IXO account** linked to blockchain entity
@@ -200,7 +200,7 @@ When you deploy an oracle built with this framework:
 - **React Ready** - Built-in hooks and components for frontend integration
 - **Production Tested** - Battle-tested blockchain client for oracle operations
 
-#### **IXO Memory Engine: Personalized Intelligence**
+#### **Memory Engine: Personalized Intelligence**
 
 - **Neo4j Graph Database** - Built on top of Neo4j for complex relationship mapping
 - **Key Moments Storage** - Captures and stores important conversation highlights
@@ -208,7 +208,7 @@ When you deploy an oracle built with this framework:
 - **User Preferences** - Learns and remembers user preferences over time
 - **Response Styling** - Adapts AI response style based on user interaction patterns
 - **Recent Context** - Maintains awareness of recent memories and events
-- **Optional Integration** - Can be enabled/disabled from IXO portal
+- **Optional Integration** - Can be enabled/disabled from the portal
 - **Enhanced LLM Context** - Provides rich user insights to improve AI responses
 
 #### **LiveAgent: Ultra-Secure Voice & Video Calls** ( [Read more](./docs/architecture/calls.md))
@@ -226,27 +226,27 @@ When you deploy an oracle built with this framework:
 
 ### Core Packages
 
-| Package           | Purpose                                                                               |
-| ----------------- | ------------------------------------------------------------------------------------- |
-| `@ixo/common`     | The core package for the framework including AI services and session service          |
-| `@ixo/data-store` | The package for the data store it handled your knowledge base for the AI to use       |
-| `@ixo/matrix`     | Matrix client for the framework                                                       |
-| `@ixo/events`     | The package for the events for the framework between client and server and vice versa |
+| Package           | Purpose                                                |
+| ----------------- | ------------------------------------------------------ |
+| `@ixo/common`     | Core package including AI services and session service |
+| `@ixo/data-store` | Data store for the knowledge base used by the AI       |
+| `@ixo/matrix`     | Matrix client for QiForge                              |
+| `@ixo/events`     | Events package for client-server communication         |
 
 ### Supporting Packages
 
 | Package                     | Purpose                                                                       |
 | --------------------------- | ----------------------------------------------------------------------------- |
-| `@ixo/slack`                | Slack client for the framework                                                |
+| `@ixo/slack`                | Slack client integration                                                      |
 | `@ixo/oracles-chain-client` | **IXO blockchain client** - Complete toolkit for oracle blockchain operations |
-| `@ixo/api-keys-manager`     | Api keys manager for the framework                                            |
-| `@ixo/logger`               | Logger for the framework                                                      |
+| `@ixo/api-keys-manager`     | API keys manager                                                              |
+| `@ixo/logger`               | Logging utility                                                               |
 
-### External IXO Components
+### External Components
 
-| Component             | Purpose                                                                          |
-| --------------------- | -------------------------------------------------------------------------------- |
-| **IXO Memory Engine** | Neo4j-based graph knowledge system for user personalization and context analysis |
+| Component         | Purpose                                                                          |
+| ----------------- | -------------------------------------------------------------------------------- |
+| **Memory Engine** | Neo4j-based graph knowledge system for user personalization and context analysis |
 
 ## Running Tests
 
@@ -283,7 +283,7 @@ pnpm format
 
 ## 🔧 Environment Setup
 
-When using the IXO Oracles CLI, all required environment variables and database configurations are automatically generated. The CLI creates:
+When using the QiForge CLI, all required environment variables and database configurations are automatically generated. The CLI creates:
 
 - **Environment Files**: `.env` with all necessary configuration
 - **Matrix Server**: Connection details for secure communication
@@ -306,8 +306,8 @@ For manual setup (advanced users only), refer to the [Knowledge Management Archi
 
 ## 🆘 Support
 
-- **Issues**: [GitHub Issues](https://github.com/ixoworld/ixo-oracles-boilerplate/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/ixoworld/ixo-oracles-boilerplate/discussions)
+- **Issues**: [GitHub Issues](https://github.com/ixoworld/qiforge/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/ixoworld/qiforge/discussions)
 - **Documentation**: [Full docs](./docs/)
 
 ## License

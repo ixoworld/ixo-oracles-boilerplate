@@ -2,7 +2,7 @@
 
 ## 📖 Overview
 
-The `@ixo/oracles-events` package is the real-time communication backbone of the IXO Oracles Framework. It handles streaming communication between your oracle (server) and client applications through Server-Sent Events (SSE) and WebSocket (WS) connections.
+The `@ixo/oracles-events` package is the real-time communication backbone of QiForge. It handles streaming communication between your oracle (server) and client applications through Server-Sent Events (SSE) and WebSocket (WS) connections.
 
 **Key Capabilities:**
 

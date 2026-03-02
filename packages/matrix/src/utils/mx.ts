@@ -1,3 +1,4 @@
+import { Logger } from '@ixo/logger';
 import { ClientEvent, createClient } from 'matrix-js-sdk';
 import {
   cacheSecretStorageKey,
@@ -48,26 +49,26 @@ export async function createMatrixClient({
   await new Promise<void>((resolve, reject) => {
     const sync = {
       NULL: () => {
-        console.info('[NULL] state');
+        Logger.info('[NULL] state');
       },
       SYNCING: () => {
         void 0;
       },
       PREPARED: () => {
-        console.info(`[PREPARED] state: user ${userId}`);
+        Logger.info(`[PREPARED] state: user ${userId}`);
         resolve();
       },
       RECONNECTING: () => {
-        console.info('[RECONNECTING] state');
+        Logger.info('[RECONNECTING] state');
       },
       CATCHUP: () => {
-        console.info('[CATCHUP] state');
+        Logger.info('[CATCHUP] state');
       },
       ERROR: () => {
         reject(new Error('[ERROR] state: starting matrix client'));
       },
       STOPPED: () => {
-        console.info('[STOPPED] state');
+        Logger.info('[STOPPED] state');
       },
     };
     mxClient.on(ClientEvent.Sync, (state) => {

@@ -1,48 +1,44 @@
-version: '3.8'
-
 services:
-   app:
-    image: api:latest # whatever image you built
-    expose:
-      - '5678'
+  app:
+    # image: api:latest # whatever image you built
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        PROJECT: app
     ports:
-      - '5678:5678'
+      - '3000:3000'
     env_file:
       - apps/app/.env
     environment:
-      - CHROMA_URL=http://chroma:8000
       - REDIS_URL=redis://redis:6379
     volumes:
       - ./apps/app/matrix-storage:/app/matrix-storage
+    depends_on:
+      redis:
+        condition: service_healthy
 
   redis:
     image: redis:alpine
-    container_name: ixo-redis
+    container_name: qiforge-redis
     ports:
       - '6379:6379'
     volumes:
       - redis-data:/data
     command: redis-server --appendonly yes
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   redis-insight:
     image: redis/redisinsight:latest
-    container_name: ixo-redis-insight
+    container_name: qiforge-redis-insight
     ports:
-      - '8001:8001'
-    volumes:
-      - redis-data:/db
-    environment:
-      - REDIS_HOST=redis
-
-  nginx:
-    image: nginx:alpine
-    container_name: ixo-nginx
-    ports:
-      - '5678:80'
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - '8001:5540'
     depends_on:
-      - app
+      - redis
 
 volumes:
   redis-data:

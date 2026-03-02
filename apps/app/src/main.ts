@@ -90,42 +90,55 @@ async function bootstrap(): Promise<void> {
   });
 
   const matrixManager = MatrixManager.getInstance();
-  await matrixManager.init();
-
-  const editorMatrixClient = EditorMatrixClient.getInstance();
-  editorMatrixClient.init().catch((error) => {
-    Logger.error('Failed to initialize EditorMatrixClient:', error);
-    Logger.warn('Editor functionality may be limited until sync completes');
-  });
-  Logger.log('EditorMatrixClient initialization started in background...');
 
   registerGracefulShutdown({ app, matrixManager });
 
-  const matrixAccountRoomId = configService.get('MATRIX_ACCOUNT_ROOM_ID');
-  const disableCredits =
-    configService.get('DISABLE_CREDITS', false) || !matrixAccountRoomId;
-  if (!disableCredits) {
-    Logger.log('Setting up claim signing mnemonics...');
-    Logger.log(`Matrix account room id: ${matrixAccountRoomId}`);
-    await setupClaimSigningMnemonics({
-      matrixRoomId: matrixAccountRoomId,
-      matrixAccessToken: configService.getOrThrow(
-        'MATRIX_ORACLE_ADMIN_ACCESS_TOKEN',
-      ),
-      walletMnemonic: configService.getOrThrow('SECP_MNEMONIC'),
-      pin: configService.getOrThrow('MATRIX_VALUE_PIN'),
-      signerDid: configService.getOrThrow('ORACLE_DID'),
-      network: configService.getOrThrow('NETWORK'),
-    });
-    Logger.log('Claim signing mnemonics setup complete');
-  } else {
-    Logger.log('Signing mnemonic creation skipped (DISABLE_CREDITS=true)');
-  }
+  // Fire Matrix init in background (don't await — let server start for health checks).
+  // MessagesService.onModuleInit defers its listener until this completes.
+  Logger.log('Initializing MatrixManager (background)...');
+  matrixManager
+    .init()
+    .then(async () => {
+      Logger.log('MatrixManager initialized successfully');
+      Logger.log(`Oracle: ${matrixManager.getClient()?.userId}`);
 
-  await app.listen(port);
+      // Initialize non-critical services after Matrix is ready
+      const editorMatrixClient = EditorMatrixClient.getInstance();
+      editorMatrixClient.init().catch((error) => {
+        Logger.error('Failed to initialize EditorMatrixClient:', error);
+        Logger.warn('Editor functionality may be limited until sync completes');
+      });
+      Logger.log('EditorMatrixClient initialization started in background...');
+
+      const matrixAccountRoomId = configService.get('MATRIX_ACCOUNT_ROOM_ID');
+      const disableCredits =
+        configService.get('DISABLE_CREDITS', false) || !matrixAccountRoomId;
+      if (!disableCredits) {
+        Logger.log('Setting up claim signing mnemonics...');
+        Logger.log(`Matrix account room id: ${matrixAccountRoomId}`);
+        await setupClaimSigningMnemonics({
+          matrixRoomId: matrixAccountRoomId,
+          matrixAccessToken: configService.getOrThrow(
+            'MATRIX_ORACLE_ADMIN_ACCESS_TOKEN',
+          ),
+          walletMnemonic: configService.getOrThrow('SECP_MNEMONIC'),
+          pin: configService.getOrThrow('MATRIX_VALUE_PIN'),
+          signerDid: configService.getOrThrow('ORACLE_DID'),
+          network: configService.getOrThrow('NETWORK'),
+        });
+        Logger.log('Claim signing mnemonics setup complete');
+      } else {
+        Logger.log('Signing mnemonic creation skipped (DISABLE_CREDITS=true)');
+      }
+    })
+    .catch((error) => {
+      Logger.error('Failed to initialize MatrixManager:', error);
+    });
+
+  // Server starts immediately — health checks pass while Matrix syncs in background
+  await app.listen(port, '0.0.0.0');
   Logger.log(`Application is running on: ${await app.getUrl()}`);
   Logger.log(`Swagger UI available at: ${await app.getUrl()}/docs`);
-  Logger.log(`Oracle: ${matrixManager.getClient()?.userId}`);
   Logger.log(
     `subscription: ${configService.get('SUBSCRIPTION_URL') ?? getSubscriptionUrlByNetwork(configService.getOrThrow('NETWORK'))}`,
   );

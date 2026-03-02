@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { type IOpenIDToken } from 'matrix-js-sdk';
 
 interface CachedTokenData {

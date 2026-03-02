@@ -1,6 +1,6 @@
 # Usage Guide
 
-Complete guide to building AI-powered applications with the IXO Oracles Client SDK.
+Complete guide to building AI-powered applications with the QiForge Client SDK.
 
 ## Table of Contents
 
