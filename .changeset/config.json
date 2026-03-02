@@ -3,7 +3,7 @@
   "changelog": [
     "@changesets/changelog-github",
     {
-      "repo": "ixoworld/ixo-oracles-boilerplate"
+      "repo": "ixoworld/qiforge"
     }
   ],
   "commit": false,

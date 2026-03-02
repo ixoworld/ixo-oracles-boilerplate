@@ -1,6 +1,6 @@
 # @ixo/oracles-client-sdk
 
-> Production-ready React SDK for building AI-powered applications with IXO Oracles
+> Production-ready React SDK for building AI-powered applications with QiForge
 
 [![npm version](https://badge.fury.io/js/%40ixo%2Foracles-client-sdk.svg)](https://www.npmjs.com/package/@ixo/oracles-client-sdk)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
@@ -213,7 +213,7 @@ Licensed under the terms specified in [License.txt](../../License.txt)
 - [IXO Website](https://www.ixo.world/)
 - [Documentation](./docs/)
 - [Examples](./docs/EXAMPLES.md)
-- [GitHub Repository](https://github.com/ixoworld/ixo-oracles-boilerplate)
+- [GitHub Repository](https://github.com/ixoworld/qiforge)
 
 ---
 

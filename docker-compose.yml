@@ -20,7 +20,7 @@ services:
 
   redis:
     image: redis:alpine
-    container_name: ixo-redis
+    container_name: qiforge-redis
     ports:
       - '6379:6379'
     volumes:
@@ -34,7 +34,7 @@ services:
 
   redis-insight:
     image: redis/redisinsight:latest
-    container_name: ixo-redis-insight
+    container_name: qiforge-redis-insight
     ports:
       - '8001:5540'
     depends_on:

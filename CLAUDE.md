@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-IXO Oracles Framework - a monorepo for building Agentic Oracles on the IXO network. Combines LangGraph (AI conversation flows), Matrix (E2E encrypted communication), NestJS (API layer), and IXO blockchain integration.
+QiForge - a monorepo for building Agentic Oracles on the IXO network. Combines LangGraph (AI conversation flows), Matrix (E2E encrypted communication), NestJS (API layer), and IXO blockchain integration.
 
 ## Build & Development Commands
 
@@ -157,4 +157,4 @@ graph LR
 
 - Skills registry: `https://github.com/ixoworld/ai-skills`
 - AI Sandbox: `/Users/yousef/ai-sandbox/` (read `ARCHITECTURE.md` for context, but don't put internals in playbook)
-- CLI: `ixo-oracles-cli` (separate repo, scaffolds oracle projects)
+- CLI: `qiforge-cli` (separate repo, scaffolds oracle projects)

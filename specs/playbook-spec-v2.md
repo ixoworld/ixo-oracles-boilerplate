@@ -1,6 +1,6 @@
-# IXO Oracles Playbook — Revised Spec v2
+# QiForge Playbook — Revised Spec v2
 
-> **Goal:** A playbook that enables both AI agents and non-technical humans to build, customize, and deploy IXO Oracles.
+> **Goal:** A playbook that enables both AI agents and non-technical humans to build, customize, and deploy QiForge Oracles.
 > **Key Shift:** Agents are now skill-based. Skills are the building blocks. The [ai-skills](https://github.com/ixoworld/ai-skills) registry + [ai-sandbox](https://github.com/ixoworld/ai-sandbox) are first-class concepts.
 
 ---
@@ -18,7 +18,7 @@
 
 ## Part 1: Core Chapters (sequential, build on each other)
 
-### Chapter 00 — What is an IXO Oracle?
+### Chapter 00 — What is a QiForge Oracle?
 
 **Audience:** Complete beginner, first contact with the project.
 
@@ -46,8 +46,8 @@
 **Audience:** Anyone ready to get their hands dirty.
 
 **Subsections:**
-- 01.1 — Install the CLI (`npm i -g ixo-oracles-cli`)
-- 01.2 — Scaffold a new oracle (`oracles-cli --init`) — walkthrough of every prompt
+- 01.1 — Install the CLI (`npm i -g qiforge-cli`)
+- 01.2 — Scaffold a new oracle (`qiforge --init`) — walkthrough of every prompt
 - 01.3 — Understand what was generated (brief file tree, point to Ch02 for deep dive)
 - 01.4 — Configure environment (`.env` file walkthrough)
 - 01.5 — Start infrastructure (`pnpm db:up`)
@@ -276,7 +276,7 @@ AI Sandbox API: `POST /sandbox/run/{id}`, `POST /artifacts/`, artifact retrieval
 
 ```
 docs/playbook/
-├── 00-overview.md                        # What is an IXO Oracle + Skills intro
+├── 00-overview.md                        # What is a QiForge Oracle + Skills intro
 ├── 01-quickstart.md                      # CLI → running oracle (~15 min)     ✅
 ├── 02-project-structure.md               # Tour of scaffolded project
 ├── 03-customize-your-oracle.md           # Personality, system prompt, model

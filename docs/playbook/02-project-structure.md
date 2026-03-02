@@ -36,7 +36,7 @@ my-oracle/
 │   │
 │   └── .env                         #   ⭐ Your credentials — NEVER commit this
 │
-├── packages/                        #   Shared @ixo/* libraries — DON'T EDIT (unless advanced)
+├── packages/                        #   Shared libraries — DON'T EDIT (unless advanced)
 │   ├── common/                      #     AI services, session management
 │   ├── matrix/                      #     E2E encrypted communication
 │   ├── events/                      #     SSE/WebSocket streaming

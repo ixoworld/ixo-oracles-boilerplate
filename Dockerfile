@@ -65,4 +65,4 @@ EXPOSE 3000
 CMD sh -c "node --experimental-require-module apps/${PROJECT}/dist/main"
 
 # docker build -t api:latest --build-arg PROJECT=api .
-# docker build -t ghcr.io/ixofoundation/ixo-ai-oracles:v0.0.2 --build-arg PROJECT=guru .
+# docker build -t ghcr.io/ixofoundation/qiforge:v0.0.2 --build-arg PROJECT=guru .

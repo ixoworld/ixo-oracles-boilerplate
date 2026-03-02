@@ -1,4 +1,4 @@
-# 00 — What is an IXO Oracle?
+# 00 — What is a QiForge Oracle?
 
 > **Purpose:** Understand what an oracle is, what it can do, and what you'll build in this playbook.
 
@@ -6,7 +6,7 @@
 
 ## The 30-Second Pitch
 
-An IXO Oracle is an AI assistant that lives on the internet with its own identity, its own encrypted communication channels, and a growing library of **skills** it can use to get things done.
+A QiForge Oracle is an AI assistant that lives on the internet with its own identity, its own encrypted communication channels, and a growing library of **skills** it can use to get things done.
 
 Think of it like hiring a team member who:
 - Has a verified identity on the blockchain (so people know it's legit)
@@ -20,7 +20,7 @@ You're about to build one.
 
 ## The Four Pillars
 
-Every IXO Oracle is built on four pillars:
+Every QiForge Oracle is built on four pillars:
 
 ### Blockchain Identity
 Your oracle gets a DID (Decentralized Identifier) — like a digital passport registered on the IXO blockchain. This lets anyone verify who your oracle is and what it's authorized to do.

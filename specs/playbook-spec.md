@@ -1,7 +1,7 @@
-# IXO Oracles Playbook — Spec & Implementation Plan
+# QiForge Playbook — Spec & Implementation Plan
 
 > **Status:** In Progress
-> **Location:** `docs/playbook/` in `ixo-oracles-boilerplate`
+> **Location:** `docs/playbook/` in `qiforge`
 
 ---
 
@@ -9,8 +9,8 @@
 
 The playbook bridges two repos:
 
-- **ixo-oracles-cli** — scaffolds projects, creates DIDs, registers Matrix accounts, generates `.env`
-- **ixo-oracles-boilerplate** — runtime framework: NestJS + LangGraph + Matrix + IXO blockchain
+- **qiforge-cli** — scaffolds projects, creates DIDs, registers Matrix accounts, generates `.env`
+- **qiforge** — runtime framework: NestJS + LangGraph + Matrix + IXO blockchain
 
 Progressive guide from "install the CLI" to "deploy a production oracle with payments, knowledge, and Slack."
 
@@ -20,7 +20,7 @@ Progressive guide from "install the CLI" to "deploy a production oracle with pay
 
 ```
 docs/playbook/
-├── 00-overview.md                     # What is an IXO Oracle, architecture, prerequisites
+├── 00-overview.md                     # What is a QiForge Oracle, architecture, prerequisites
 ├── 01-quickstart.md                   # CLI install → running oracle (~15 min) ✅ COMPLETE
 ├── 02-project-structure.md            # Tour of scaffolded project, key files
 ├── 03-customize-your-oracle.md        # System prompt, oracleConfig, personality
@@ -78,11 +78,11 @@ docs/playbook/
 | Messages controller | `apps/app/src/messages/messages.controller.ts`                | ref/api-endpoints            |
 | Sessions controller | `apps/app/src/sessions/sessions.controller.ts`                | ref/api-endpoints            |
 | Bootstrap           | `apps/app/src/main.ts`                                        | 01, 08                       |
-| CLI init            | `ixo-oracles-cli/src/commands/init.command.ts`                | 01, ref/cli                  |
-| CLI env generator   | `ixo-oracles-cli/src/utils/create-project-env-file.ts`        | 01, ref/env-vars             |
-| CLI entity          | `ixo-oracles-cli/src/utils/entity.ts`                         | 01, ref/cli                  |
-| CLI registration    | `ixo-oracles-cli/src/utils/account/simplifiedRegistration.ts` | 01                           |
-| CLI network config  | `ixo-oracles-cli/src/utils/common.ts`                         | ref/cli                      |
+| CLI init            | `qiforge-cli/src/commands/init.command.ts`                | 01, ref/cli                  |
+| CLI env generator   | `qiforge-cli/src/utils/create-project-env-file.ts`        | 01, ref/env-vars             |
+| CLI entity          | `qiforge-cli/src/utils/entity.ts`                         | 01, ref/cli                  |
+| CLI registration    | `qiforge-cli/src/utils/account/simplifiedRegistration.ts` | 01                           |
+| CLI network config  | `qiforge-cli/src/utils/common.ts`                         | ref/cli                      |
 
 ---
 
@@ -120,6 +120,6 @@ docs/playbook/
 
 | Date       | Change                                                                                                                                                                                             | Files Modified                                         |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| 2026-02-23 | Fixed CLI `.env` generation — added 15 missing required vars, fixed 3 name mismatches (`ORACLE_MNEMONIC`→`SECP_MNEMONIC`, `ENTITY_DID`→`ORACLE_ENTITY_DID`, `MATRIX_VAULT_PIN`→`MATRIX_VALUE_PIN`) | `ixo-oracles-cli/src/utils/create-project-env-file.ts` |
+| 2026-02-23 | Fixed CLI `.env` generation — added 15 missing required vars, fixed 3 name mismatches (`ORACLE_MNEMONIC`→`SECP_MNEMONIC`, `ENTITY_DID`→`ORACLE_ENTITY_DID`, `MATRIX_VAULT_PIN`→`MATRIX_VALUE_PIN`) | `qiforge-cli/src/utils/create-project-env-file.ts` |
 | 2026-02-23 | Wrote complete CLI reference — all 7 commands, prompts, validation rules, entity creation flow (11 steps), env var breakdown, network URLs, troubleshooting                                        | `docs/playbook/reference/cli-reference.md`             |
 | 2026-02-23 | Updated quickstart Step 4 — new `.env` template reflecting complete CLI output                                                                                                                     | `docs/playbook/01-quickstart.md`                       |

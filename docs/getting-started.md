@@ -1,6 +1,6 @@
-# Getting Started with IXO Oracles Framework
+# Getting Started with QiForge
 
-Welcome to the IXO Oracles Framework! This guide will walk you through building and deploying your first AI-powered oracle on the IXO network.
+Welcome to QiForge! This guide will walk you through building and deploying your first AI-powered oracle on the IXO network.
 
 ## 🎯 What You'll Build
 
@@ -18,17 +18,17 @@ Before you begin, ensure you have:
 
 ## 🚀 Quick Start (5 minutes)
 
-### Step 1: Install IXO Oracles CLI
+### Step 1: Install QiForge CLI
 
 ```bash
-npm install -g ixo-oracles-cli
+npm install -g qiforge-cli
 ```
 
 ### Step 2: Create Your First Oracle
 
 ```bash
 # Create a new oracle project
-oracles-cli --init
+qiforge --init
 
 # Follow the interactive prompts from the CLI
 
