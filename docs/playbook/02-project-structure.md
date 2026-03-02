@@ -9,7 +9,7 @@
 
 Here is the full layout of a scaffolded oracle project. The annotations tell you what to touch and what to leave alone.
 
-```
+````
 my-oracle/
 │
 ├── apps/app/                        # YOUR ORACLE — almost all your work happens here
@@ -69,7 +69,7 @@ Set your oracle's name in `apps/app/src/graph/agents/main-agent.ts`:
 
 ```typescript
 APP_NAME: 'My Oracle',
-```
+````
 
 This value is injected into the system prompt as `{{APP_NAME}}`.
 
@@ -126,7 +126,7 @@ This is the table you will come back to. Find what you want to do, then edit the
 | Change which Docker services run | `docker-compose.yml`                |
 | Change the server port           | `apps/app/.env` — set `PORT`        |
 | Configure CORS                   | `apps/app/.env` — set `CORS_ORIGIN` |
-| Build for production             | `Dockerfile`                    |
+| Build for production             | `Dockerfile`                        |
 
 ### REST API and sessions
 

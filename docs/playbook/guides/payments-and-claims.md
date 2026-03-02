@@ -119,11 +119,11 @@ The first time a user visits your oracle's portal, they grant your oracle permis
 
 ## Configuration
 
-| Variable            | Description                                         |
-|---------------------|-----------------------------------------------------|
-| `DISABLE_CREDITS`   | Set to `true` to disable all billing (default: off) |
-| `SECP_MNEMONIC`     | Mnemonic for signing claims on-chain                |
-| `ORACLE_ENTITY_DID` | Your oracle's entity DID on the blockchain          |
+| Variable            | Description                                               |
+| ------------------- | --------------------------------------------------------- |
+| `DISABLE_CREDITS`   | Set to `true` to disable all billing (default: off)       |
+| `SECP_MNEMONIC`     | Mnemonic for signing claims on-chain                      |
+| `ORACLE_ENTITY_DID` | Your oracle's entity DID on the blockchain                |
 | `NETWORK`           | Which blockchain network (`devnet`, `testnet`, `mainnet`) |
 
 See [Environment Variables](../reference/environment-variables.md) for the full list.

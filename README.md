@@ -226,26 +226,26 @@ When you deploy an oracle built with QiForge:
 
 ### Core Packages
 
-| Package           | Purpose                                                                               |
-| ----------------- | ------------------------------------------------------------------------------------- |
-| `@ixo/common`     | Core package including AI services and session service          |
+| Package           | Purpose                                                |
+| ----------------- | ------------------------------------------------------ |
+| `@ixo/common`     | Core package including AI services and session service |
 | `@ixo/data-store` | Data store for the knowledge base used by the AI       |
-| `@ixo/matrix`     | Matrix client for QiForge                                                       |
-| `@ixo/events`     | Events package for client-server communication |
+| `@ixo/matrix`     | Matrix client for QiForge                              |
+| `@ixo/events`     | Events package for client-server communication         |
 
 ### Supporting Packages
 
 | Package                     | Purpose                                                                       |
 | --------------------------- | ----------------------------------------------------------------------------- |
-| `@ixo/slack`                | Slack client integration                                                |
+| `@ixo/slack`                | Slack client integration                                                      |
 | `@ixo/oracles-chain-client` | **IXO blockchain client** - Complete toolkit for oracle blockchain operations |
-| `@ixo/api-keys-manager`     | API keys manager                                            |
-| `@ixo/logger`               | Logging utility                                                      |
+| `@ixo/api-keys-manager`     | API keys manager                                                              |
+| `@ixo/logger`               | Logging utility                                                               |
 
 ### External Components
 
-| Component             | Purpose                                                                          |
-| --------------------- | -------------------------------------------------------------------------------- |
+| Component         | Purpose                                                                          |
+| ----------------- | -------------------------------------------------------------------------------- |
 | **Memory Engine** | Neo4j-based graph knowledge system for user personalization and context analysis |
 
 ## Running Tests

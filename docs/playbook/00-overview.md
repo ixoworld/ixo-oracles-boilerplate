@@ -9,6 +9,7 @@
 A QiForge Oracle is an AI assistant that lives on the internet with its own identity, its own encrypted communication channels, and a growing library of **skills** it can use to get things done.
 
 Think of it like hiring a team member who:
+
 - Has a verified identity on the blockchain (so people know it's legit)
 - Talks to every user through a private, encrypted channel (so conversations stay confidential)
 - Can learn new skills from a shared registry (so it gets more capable over time)
@@ -23,21 +24,24 @@ You're about to build one.
 Every QiForge Oracle is built on four pillars:
 
 ### Blockchain Identity
+
 Your oracle gets a DID (Decentralized Identifier) — like a digital passport registered on the IXO blockchain. This lets anyone verify who your oracle is and what it's authorized to do.
 
 ### E2E Encrypted Communication
+
 Every conversation between a user and your oracle happens in a private, encrypted room. Nobody else can read those messages — not even you.
 
 ### AI Reasoning
+
 Your oracle uses a large language model (like GPT or Claude) to understand messages, think step by step, and respond intelligently. It can also use **skills** and **sub-agents** to handle complex tasks.
 
 ### API Layer
+
 A server that ties everything together — receives messages, routes them through the AI, and streams responses back to the user.
 
 ---
 
 ## Architecture at a Glance
-
 
 > ![alt text](assets/arch.svg)
 
@@ -61,25 +65,25 @@ You can use skills that already exist, or publish your own for others to use.
 
 This playbook takes you from zero to a fully deployed oracle, step by step:
 
-| Chapter | What You'll Achieve |
-|---|---|
-| [01 — Quickstart](./01-quickstart.md) | A running oracle that responds to messages |
-| [02 — Project Structure](./02-project-structure.md) | Understand your codebase and know where to find things |
-| [03 — Customize Your Oracle](./03-customize-your-oracle.md) | Give your oracle a unique personality and purpose |
-| [04 — Working with Skills](./04-working-with-skills.md) | Use existing skills and build your own |
-| [05 — Sub-Agents](./05-sub-agents.md) | Add specialist agents for complex workflows |
-| [06 — Middlewares](./06-middlewares.md) | Add safety checks and billing |
-| [07 — MCP Servers](./07-mcp-servers.md) | Connect external services and tools |
-| [08 — Deployment](./08-deployment.md) | Ship your oracle to production |
+| Chapter                                                     | What You'll Achieve                                    |
+| ----------------------------------------------------------- | ------------------------------------------------------ |
+| [01 — Quickstart](./01-quickstart.md)                       | A running oracle that responds to messages             |
+| [02 — Project Structure](./02-project-structure.md)         | Understand your codebase and know where to find things |
+| [03 — Customize Your Oracle](./03-customize-your-oracle.md) | Give your oracle a unique personality and purpose      |
+| [04 — Working with Skills](./04-working-with-skills.md)     | Use existing skills and build your own                 |
+| [05 — Sub-Agents](./05-sub-agents.md)                       | Add specialist agents for complex workflows            |
+| [06 — Middlewares](./06-middlewares.md)                     | Add safety checks and billing                          |
+| [07 — MCP Servers](./07-mcp-servers.md)                     | Connect external services and tools                    |
+| [08 — Deployment](./08-deployment.md)                       | Ship your oracle to production                         |
 
 **Guides** are standalone — pick any after completing the Quickstart:
 
-| Guide | What It Covers |
-|---|---|
-| [Publish Your First Oracle](./guides/publish-your-first-oracle.md) | End-to-end: scaffold, customize, deploy, share |
-| [Memory Engine](./guides/memory-engine.md) | Give your oracle persistent memory across conversations |
-| [Payments & Claims](./guides/payments-and-claims.md) | Set up pricing and billing for your oracle |
-| [Building & Publishing Skills](./guides/building-and-publishing-skills.md) | Create and publish your own skills |
+| Guide                                                                      | What It Covers                                          |
+| -------------------------------------------------------------------------- | ------------------------------------------------------- |
+| [Publish Your First Oracle](./guides/publish-your-first-oracle.md)         | End-to-end: scaffold, customize, deploy, share          |
+| [Memory Engine](./guides/memory-engine.md)                                 | Give your oracle persistent memory across conversations |
+| [Payments & Claims](./guides/payments-and-claims.md)                       | Set up pricing and billing for your oracle              |
+| [Building & Publishing Skills](./guides/building-and-publishing-skills.md) | Create and publish your own skills                      |
 
 ---
 

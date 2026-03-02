@@ -12,12 +12,12 @@ Think of middlewares as checkpoints. Every time your oracle calls a tool or resp
 
 Your oracle ships with four middlewares already wired up:
 
-| Middleware | What it does |
-|---|---|
-| **Tool Validation** | Catches invalid tool inputs and returns helpful errors so the AI can self-correct |
-| **Tool Retry** | Retries tool calls that fail due to temporary issues (network blips, timeouts) |
-| **Safety Guardrail** | Evaluates responses for unsafe content — blocks leaked secrets, PII, and harmful output |
-| **Token Limiter** | Checks the user's remaining credits before each call and deducts after — disable with `DISABLE_CREDITS=true` |
+| Middleware           | What it does                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------ |
+| **Tool Validation**  | Catches invalid tool inputs and returns helpful errors so the AI can self-correct                            |
+| **Tool Retry**       | Retries tool calls that fail due to temporary issues (network blips, timeouts)                               |
+| **Safety Guardrail** | Evaluates responses for unsafe content — blocks leaked secrets, PII, and harmful output                      |
+| **Token Limiter**    | Checks the user's remaining credits before each call and deducts after — disable with `DISABLE_CREDITS=true` |
 
 ---
 
@@ -47,12 +47,12 @@ export const createLoggingMiddleware = (): AgentMiddleware => {
 
 You can use any combination of these hooks inside `createMiddleware`:
 
-| Hook | When it runs | Use it to... |
-|---|---|---|
-| `beforeModel` | Before the LLM call | Modify state, block requests, check permissions |
-| `afterModel` | After the LLM responds | Post-process output, track usage |
-| `afterAgent` | After a full agent turn | Run final checks, evaluate safety |
-| `wrapToolCall` | Around each tool call | Catch errors, add retries, log calls |
+| Hook           | When it runs            | Use it to...                                    |
+| -------------- | ----------------------- | ----------------------------------------------- |
+| `beforeModel`  | Before the LLM call     | Modify state, block requests, check permissions |
+| `afterModel`   | After the LLM responds  | Post-process output, track usage                |
+| `afterAgent`   | After a full agent turn | Run final checks, evaluate safety               |
+| `wrapToolCall` | Around each tool call   | Catch errors, add retries, log calls            |
 
 ---
 
