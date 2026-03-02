@@ -25,7 +25,7 @@
     "db:test": "ts-node src/scripts/test-connections.ts"
   },
   "dependencies": {
-    "@ixo/common": "1.1.2",
+    "@ixo/common": "workspace:*",
     "@ixo/matrix": "1.2.2",
     "@ixo/matrix-crdt": "^1.1.0",
     "@ixo/oracles-chain-client": "1.2.0",
