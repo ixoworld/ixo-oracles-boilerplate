@@ -9,13 +9,13 @@ on:
       packages:
         description: 'Comma-separated list of packages to publish (default: all app and root dependencies)'
         required: false
-        default: "@ixo/logger,@ixo/oracles-chain-client,@ixo/oracles-client-sdk,@ixo/oracles-events,@ixo/common,@ixo/data-store,@ixo/matrix,@ixo/slack,@ixo/sqlite-saver,@ixo/ucan,@ixo/eslint-config,@ixo/typescript-config,@ixo/vitest-config"
+        default: "@ixo/logger,@ixo/oracles-chain-client,@ixo/oracles-client-sdk,@ixo/oracles-events,@ixo/common,@ixo/matrix,@ixo/slack,@ixo/sqlite-saver,@ixo/ucan,@ixo/eslint-config,@ixo/typescript-config,@ixo/vitest-config"
         type: string
 
 jobs:
   publish-npm:
     # needs: [build, versioning]
-    runs-on: buildjet-4vcpu-ubuntu-2204
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - name: Setup pnpm
@@ -43,6 +43,6 @@ jobs:
           for pkg in "${PACKAGES[@]}"; do
             FILTERS="$FILTERS --filter=$pkg"
           done
-          pnpm publish $FILTERS --access public
+          pnpm publish $FILTERS --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{secrets.npm_token}}
