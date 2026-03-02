@@ -1,5 +1,7 @@
 import EventEmitter2 from 'eventemitter2';
 
+const GLOBAL_KEY = Symbol.for('@ixo/oracles-events:root-event-emitter');
+
 export class RootEventEmitter {
   private static instance: RootEventEmitter | null = null;
   private readonly emitter: EventEmitter2;
@@ -13,9 +15,17 @@ export class RootEventEmitter {
       throw new Error('RootEventEmitter should not be used in the browser.');
     }
 
+    // Use a process-global symbol to ensure a single instance across
+    // duplicate copies of this package (npm + workspace link)
+    const globalRegistry = globalThis as Record<symbol, RootEventEmitter>;
+    if (globalRegistry[GLOBAL_KEY]) {
+      return globalRegistry[GLOBAL_KEY];
+    }
+
     if (!RootEventEmitter.instance) {
       RootEventEmitter.instance = new RootEventEmitter();
     }
+    globalRegistry[GLOBAL_KEY] = RootEventEmitter.instance;
     return RootEventEmitter.instance;
   }
 

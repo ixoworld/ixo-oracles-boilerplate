@@ -86,8 +86,8 @@ importers:
         specifier: 1.2.0
         version: 1.2.0
       '@ixo/oracles-events':
-        specifier: 1.0.3
-        version: 1.0.3
+        specifier: 1.0.4
+        version: 1.0.4
       '@ixo/slack':
         specifier: 1.0.0
         version: 1.0.0(@types/express@5.0.5)
@@ -3071,8 +3071,8 @@ packages:
   '@ixo/oracles-chain-client@1.2.0':
     resolution: {integrity: sha512-AYZZ70uS2AkcrXIFHjFbsu5nia52AULzcG0EsAlLGKkOQYVWVOkVINura7ADTrRks3IBSmLG6SpplP9v0jI4mw==}
 
-  '@ixo/oracles-events@1.0.3':
-    resolution: {integrity: sha512-wQh9Zvah9kzqrzhwX+dK+N7InYTAg1Gam7f/OZkSRKjfmBjVmPakIZ0RB0p7uEqDdIbq+A42bqGy+zo4rT3ACw==}
+  '@ixo/oracles-events@1.0.4':
+    resolution: {integrity: sha512-fCl0My0v3Oba94DzmoIanU+zfrU04lilwTPHhqBKpQf4NH++oFXIwoIgFlLOa03vFGxfYD3VbzJNb+vgtcEd/g==}
 
   '@ixo/slack@1.0.0':
     resolution: {integrity: sha512-DOr43XgGjmCmm8psFdOA72o3U4JzoBv8y+vtuXphF6LAFcJ3NO+YjzMsqrM0CRhrRH6V1j8Yp67h21sq8mXfww==}
@@ -14873,7 +14873,7 @@ snapshots:
       - utf-8-validate
       - web-streams-polyfill
 
-  '@ixo/oracles-events@1.0.3':
+  '@ixo/oracles-events@1.0.4':
     dependencies:
       eventemitter2: 6.4.9
 
