@@ -68,11 +68,11 @@ The CLI walks you through a series of prompts:
 
 ### Project Setup
 
-| Prompt                                                      | Description                                                   | Validation                                                         |
-| ----------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------ |
-| **What is your project named?**                             | Project name or path (e.g., `my-oracle`)                      | 1-50 chars, starts with letter, alphanumeric + hyphens/underscores |
+| Prompt                                                      | Description                                   | Validation                                                         |
+| ----------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------ |
+| **What is your project named?**                             | Project name or path (e.g., `my-oracle`)      | 1-50 chars, starts with letter, alphanumeric + hyphens/underscores |
 | **Select a template to clone**                              | Default: `qiforge`, or enter a custom git URL | Valid git URL                                                      |
-| **Create IXO project "my-oracle" in "/path/to/my-oracle"?** | Confirmation                                                  | Yes/No                                                             |
+| **Create IXO project "my-oracle" in "/path/to/my-oracle"?** | Confirmation                                  | Yes/No                                                             |
 
 ### Oracle Identity
 

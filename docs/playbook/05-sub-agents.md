@@ -14,14 +14,14 @@ Your oracle can delegate tasks to specialist agents. Think of them as team membe
 
 Your oracle ships with these sub-agents out of the box:
 
-| Sub-Agent | What it does |
-|-----------|-------------|
-| **Memory Agent** | Retrieves user context (identity, goals, recent activity) to personalize responses |
-| **Portal Agent** | Handles browser and UI interactions from the client SDK |
-| **Firecrawl Agent** | Web scraping and search via Firecrawl |
-| **Domain Indexer Agent** | Searches IXO entities and analyzes domains |
-| **Editor Agent** | Edits BlockNote documents (only active when an editor room is open) |
-| **Skills Agent** | Lists and searches available skills from the [ai-skills registry](https://github.com/ixoworld/ai-skills) |
+| Sub-Agent                | What it does                                                                                             |
+| ------------------------ | -------------------------------------------------------------------------------------------------------- |
+| **Memory Agent**         | Retrieves user context (identity, goals, recent activity) to personalize responses                       |
+| **Portal Agent**         | Handles browser and UI interactions from the client SDK                                                  |
+| **Firecrawl Agent**      | Web scraping and search via Firecrawl                                                                    |
+| **Domain Indexer Agent** | Searches IXO entities and analyzes domains                                                               |
+| **Editor Agent**         | Edits BlockNote documents (only active when an editor room is open)                                      |
+| **Skills Agent**         | Lists and searches available skills from the [ai-skills registry](https://github.com/ixoworld/ai-skills) |
 
 You don't need to configure these — they're already wired into your oracle. The main agent calls them automatically when it decides a task fits their specialty.
 
@@ -37,10 +37,10 @@ Here's the shape of an `AgentSpec`:
 
 ```typescript
 interface AgentSpec {
-  name: string;           // e.g. "Weather Agent"
-  description: string;    // One line: what it does
+  name: string; // e.g. "Weather Agent"
+  description: string; // One line: what it does
   tools?: StructuredTool[];
-  systemPrompt: string;   // Instructions for this agent
+  systemPrompt: string; // Instructions for this agent
   model?: Model;
   middleware?: AgentMiddleware[];
 }
@@ -150,7 +150,7 @@ const agent = createAgent({
   // ...
   tools: [
     // ...existing tools...
-    callWeatherAgentTool,   // <-- add this
+    callWeatherAgentTool, // <-- add this
   ],
 });
 ```
@@ -161,11 +161,11 @@ Restart your oracle and it can now answer weather questions by delegating to you
 
 ## When to Use a Sub-Agent vs. a Skill vs. a Tool
 
-| Use a... | When... |
-|----------|---------|
-| **Skill** | You want to add a new capability without changing oracle code. Skills are files in a registry — no deploys needed. |
+| Use a...        | When...                                                                                                                                      |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Skill**       | You want to add a new capability without changing oracle code. Skills are files in a registry — no deploys needed.                           |
 | **Custom tool** | You need a single function (e.g., call an API). See [04 — Custom Tools](./04-working-with-skills.md#custom-tools--when-skills-arent-enough). |
-| **Sub-agent** | You need a specialist that has its own tools, prompt, and reasoning — more than a single function call. |
+| **Sub-agent**   | You need a specialist that has its own tools, prompt, and reasoning — more than a single function call.                                      |
 
 Most of the time, **skills are the right choice**. Use sub-agents when the task requires multi-step reasoning with its own set of tools.
 

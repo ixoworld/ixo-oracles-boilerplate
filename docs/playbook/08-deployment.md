@@ -129,6 +129,7 @@ pnpm run deploy
 ```
 
 This script handles everything for you:
+
 - Creates the persistent storage volume (if it doesn't exist)
 - Loads all secrets from your `.env` file
 - Sets the correct storage paths for the Fly.io volume

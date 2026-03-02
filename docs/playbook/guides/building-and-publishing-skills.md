@@ -31,7 +31,7 @@ This is the most important part. A well-written `SKILL.md` means your oracle pro
 
 ### Template
 
-```markdown
+````markdown
 # Skill Name
 
 ## Description
@@ -54,6 +54,7 @@ One clear sentence: what this skill produces.
 ### Step 1: Gather inputs
 
 Ask the user for:
+
 - Client name
 - Line items (description, quantity, price)
 - Due date
@@ -67,10 +68,11 @@ Write a JSON file to `/workspace/input.json`:
 ```json
 {
   "client": "Acme Corp",
-  "items": [{"description": "Consulting", "qty": 10, "price": 150}],
+  "items": [{ "description": "Consulting", "qty": 10, "price": 150 }],
   "due_date": "2026-03-15"
 }
 ```
+````
 
 ### Step 3: Run the script
 
@@ -95,7 +97,8 @@ Copy the output to `/workspace/output/` and use `artifact_get_presigned_url` to 
 **User says:** "Create an invoice for Acme Corp, 10 hours of consulting at $150/hr, due March 15"
 
 **Oracle produces:** `invoice_acme_corp.pdf` in `/workspace/output/`
-```
+
+````
 
 ### Tips for a Great SKILL.md
 
@@ -123,7 +126,7 @@ Run the generator script:
 
 Use the template at:
 `/workspace/skills/my-skill/templates/base.html`
-```
+````
 
 ---
 
@@ -169,6 +172,7 @@ Skills are published to [github.com/ixoworld/ai-skills](https://github.com/ixowo
 ## Tips for Good Skills
 
 **Do:**
+
 - Use clear, descriptive folder names (e.g., `invoice-creator`, not `inv1`)
 - Write trigger phrases that match how real users talk
 - Always output to `/workspace/output/`
@@ -177,6 +181,7 @@ Skills are published to [github.com/ixoworld/ai-skills](https://github.com/ixowo
 - Test with your own oracle before publishing
 
 **Don't:**
+
 - Assume the oracle knows anything not in the `SKILL.md`
 - Write inside the skills folder (it's read-only)
 - Use relative paths (they break in the sandbox)

@@ -64,20 +64,20 @@ docs/playbook/
 
 ## 4. Critical Source Files Reference
 
-| File                | Path                                                          | Used In                      |
-| ------------------- | ------------------------------------------------------------- | ---------------------------- |
-| App config          | `apps/app/src/config.ts`                                      | 01, 02, 03, 08, ref/env-vars |
-| Main agent          | `apps/app/src/graph/agents/main-agent.ts`                     | 02, 03, 04, 05, 06, 07       |
-| Sub-agent pattern   | `apps/app/src/graph/agents/subagent-as-tool.ts`               | 05                           |
-| Memory agent        | `apps/app/src/graph/agents/memory-agent.ts`                   | 05, guides/memory-engine     |
-| System prompt       | `apps/app/src/graph/nodes/chat-node/prompt.ts`                | 02, 03                       |
-| Tools               | `apps/app/src/graph/nodes/tools-node/tools.ts`                | 02, 04, guides/memory-engine |
-| State               | `apps/app/src/graph/state.ts`                                 | 02, ref/state-schema         |
-| MCP config          | `apps/app/src/graph/mcp.ts`                                   | 07                           |
-| Middlewares         | `apps/app/src/graph/middlewares/*.ts`                         | 06                           |
-| Messages controller | `apps/app/src/messages/messages.controller.ts`                | ref/api-endpoints            |
-| Sessions controller | `apps/app/src/sessions/sessions.controller.ts`                | ref/api-endpoints            |
-| Bootstrap           | `apps/app/src/main.ts`                                        | 01, 08                       |
+| File                | Path                                                      | Used In                      |
+| ------------------- | --------------------------------------------------------- | ---------------------------- |
+| App config          | `apps/app/src/config.ts`                                  | 01, 02, 03, 08, ref/env-vars |
+| Main agent          | `apps/app/src/graph/agents/main-agent.ts`                 | 02, 03, 04, 05, 06, 07       |
+| Sub-agent pattern   | `apps/app/src/graph/agents/subagent-as-tool.ts`           | 05                           |
+| Memory agent        | `apps/app/src/graph/agents/memory-agent.ts`               | 05, guides/memory-engine     |
+| System prompt       | `apps/app/src/graph/nodes/chat-node/prompt.ts`            | 02, 03                       |
+| Tools               | `apps/app/src/graph/nodes/tools-node/tools.ts`            | 02, 04, guides/memory-engine |
+| State               | `apps/app/src/graph/state.ts`                             | 02, ref/state-schema         |
+| MCP config          | `apps/app/src/graph/mcp.ts`                               | 07                           |
+| Middlewares         | `apps/app/src/graph/middlewares/*.ts`                     | 06                           |
+| Messages controller | `apps/app/src/messages/messages.controller.ts`            | ref/api-endpoints            |
+| Sessions controller | `apps/app/src/sessions/sessions.controller.ts`            | ref/api-endpoints            |
+| Bootstrap           | `apps/app/src/main.ts`                                    | 01, 08                       |
 | CLI init            | `qiforge-cli/src/commands/init.command.ts`                | 01, ref/cli                  |
 | CLI env generator   | `qiforge-cli/src/utils/create-project-env-file.ts`        | 01, ref/env-vars             |
 | CLI entity          | `qiforge-cli/src/utils/entity.ts`                         | 01, ref/cli                  |
@@ -118,8 +118,8 @@ docs/playbook/
 
 ## 7. Changelog
 
-| Date       | Change                                                                                                                                                                                             | Files Modified                                         |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Date       | Change                                                                                                                                                                                             | Files Modified                                     |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
 | 2026-02-23 | Fixed CLI `.env` generation — added 15 missing required vars, fixed 3 name mismatches (`ORACLE_MNEMONIC`→`SECP_MNEMONIC`, `ENTITY_DID`→`ORACLE_ENTITY_DID`, `MATRIX_VAULT_PIN`→`MATRIX_VALUE_PIN`) | `qiforge-cli/src/utils/create-project-env-file.ts` |
-| 2026-02-23 | Wrote complete CLI reference — all 7 commands, prompts, validation rules, entity creation flow (11 steps), env var breakdown, network URLs, troubleshooting                                        | `docs/playbook/reference/cli-reference.md`             |
-| 2026-02-23 | Updated quickstart Step 4 — new `.env` template reflecting complete CLI output                                                                                                                     | `docs/playbook/01-quickstart.md`                       |
+| 2026-02-23 | Wrote complete CLI reference — all 7 commands, prompts, validation rules, entity creation flow (11 steps), env var breakdown, network URLs, troubleshooting                                        | `docs/playbook/reference/cli-reference.md`         |
+| 2026-02-23 | Updated quickstart Step 4 — new `.env` template reflecting complete CLI output                                                                                                                     | `docs/playbook/01-quickstart.md`                   |

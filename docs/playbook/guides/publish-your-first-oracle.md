@@ -171,7 +171,7 @@ Your oracle is live. Here's how to get it in front of users:
 ### Oracle responds but ignores skills
 
 - Skills are fetched from the remote registry. Make sure your oracle has internet access.
-- Try asking explicitly: *"Search for skills related to [topic]"* — this triggers the skill discovery tools.
+- Try asking explicitly: _"Search for skills related to [topic]"_ — this triggers the skill discovery tools.
 - Check that the `OPENROUTER_API_KEY` (or your LLM API key) is valid — skill execution requires LLM reasoning.
 
 ### `qiforge` command not found

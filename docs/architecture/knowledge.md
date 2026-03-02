@@ -10,11 +10,11 @@ The Memory Engine connects to your oracle via MCP (Model Context Protocol). The 
 
 ## Knowledge Scopes
 
-| Scope | Access | Use case |
-|-------|--------|----------|
-| **User memories** | Private to each user | Preferences, personal context, past interactions |
-| **Organization public knowledge** | All users | FAQs, product docs, how-to guides |
-| **Organization private knowledge** | Org members only | Internal processes, policies |
+| Scope                              | Access               | Use case                                         |
+| ---------------------------------- | -------------------- | ------------------------------------------------ |
+| **User memories**                  | Private to each user | Preferences, personal context, past interactions |
+| **Organization public knowledge**  | All users            | FAQs, product docs, how-to guides                |
+| **Organization private knowledge** | Org members only     | Internal processes, policies                     |
 
 ## Configuration
 

@@ -103,11 +103,11 @@ qiforge --init
 
 **Prompts:**
 
-| #   | Prompt                          | Validation                                               | Default                                               |
-| --- | ------------------------------- | -------------------------------------------------------- | ----------------------------------------------------- |
-| 1   | **What is your project named?** | 1–50 chars, starts with letter, `[a-zA-Z][a-zA-Z0-9-_]*` | —                                                     |
+| #   | Prompt                          | Validation                                               | Default                               |
+| --- | ------------------------------- | -------------------------------------------------------- | ------------------------------------- |
+| 1   | **What is your project named?** | 1–50 chars, starts with letter, `[a-zA-Z][a-zA-Z0-9-_]*` | —                                     |
 | 2   | **Select a template to clone**  | Valid git URL                                            | `git@github.com:ixoworld/qiforge.git` |
-| 3   | **Confirm creation**            | Yes / No                                                 | —                                                     |
+| 3   | **Confirm creation**            | Yes / No                                                 | —                                     |
 
 After confirmation, the CLI runs the **Create Entity** flow (see below), then generates the `.env` file.
 

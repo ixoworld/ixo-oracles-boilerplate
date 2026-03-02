@@ -37,20 +37,20 @@ The prompt is a template with placeholders (variables) that get filled in automa
 
 ### Variables injected at runtime
 
-| Variable | Filled by | What it contains |
-|---|---|---|
-| `APP_NAME` | `main-agent.ts` | Your oracle's name |
-| `IDENTITY_CONTEXT` | Memory Agent | Who the user is (name, preferences) |
-| `WORK_CONTEXT` | Memory Agent | What the user works on |
-| `GOALS_CONTEXT` | Memory Agent | What the user is trying to achieve |
-| `INTERESTS_CONTEXT` | Memory Agent | User's interests and expertise |
-| `RELATIONSHIPS_CONTEXT` | Memory Agent | User's social/professional context |
-| `RECENT_CONTEXT` | Memory Agent | Recent conversation history |
-| `TIME_CONTEXT` | System | Current date and time |
-| `CURRENT_ENTITY_DID` | State | The blockchain entity the user is viewing |
-| `EDITOR_DOCUMENTATION` | Conditional | Included when the user has an editor open |
-| `AG_UI_TOOLS_DOCUMENTATION` | Conditional | Included when interactive UI tools are available |
-| `SLACK_FORMATTING_CONSTRAINTS` | Conditional | Included when the user is chatting from Slack |
+| Variable                       | Filled by       | What it contains                                 |
+| ------------------------------ | --------------- | ------------------------------------------------ |
+| `APP_NAME`                     | `main-agent.ts` | Your oracle's name                               |
+| `IDENTITY_CONTEXT`             | Memory Agent    | Who the user is (name, preferences)              |
+| `WORK_CONTEXT`                 | Memory Agent    | What the user works on                           |
+| `GOALS_CONTEXT`                | Memory Agent    | What the user is trying to achieve               |
+| `INTERESTS_CONTEXT`            | Memory Agent    | User's interests and expertise                   |
+| `RELATIONSHIPS_CONTEXT`        | Memory Agent    | User's social/professional context               |
+| `RECENT_CONTEXT`               | Memory Agent    | Recent conversation history                      |
+| `TIME_CONTEXT`                 | System          | Current date and time                            |
+| `CURRENT_ENTITY_DID`           | State           | The blockchain entity the user is viewing        |
+| `EDITOR_DOCUMENTATION`         | Conditional     | Included when the user has an editor open        |
+| `AG_UI_TOOLS_DOCUMENTATION`    | Conditional     | Included when interactive UI tools are available |
+| `SLACK_FORMATTING_CONSTRAINTS` | Conditional     | Included when the user is chatting from Slack    |
 
 The Memory Agent variables are the reason your oracle feels personal — it remembers each user across conversations and adapts its responses.
 
@@ -65,9 +65,8 @@ Open `prompt.ts` and look for the `AI_ASSISTANT_PROMPT` template. The template i
 ```typescript
 // Find this line:
 `You are a skills-native AI companion powered by {{APP_NAME}}.`
-
 // Change it to match your oracle's personality:
-`You are a friendly customer support specialist for {{APP_NAME}}.`
+`You are a friendly customer support specialist for {{APP_NAME}}.`;
 ```
 
 2. **The communication style section** — Look for the "Communication" heading and adjust the tone:
@@ -86,6 +85,7 @@ Open `prompt.ts` and look for the `AI_ASSISTANT_PROMPT` template. The template i
 3. **The core capabilities section** — Edit the "Core Capabilities" heading to describe what YOUR oracle does instead of the generic defaults.
 
 **Leave these sections alone** unless you know what you are doing:
+
 - The priority hierarchy (controls how the AI weighs instructions)
 - The skills system section (controls file creation workflows)
 - The agent tools reference (controls how sub-agents are called)
@@ -117,13 +117,13 @@ const llm = getOpenRouterChatModel({
 
 Change the `model` field to any model available on OpenRouter. Some popular choices:
 
-| Model | Best for | Relative cost |
-|---|---|---|
-| `openai/gpt-4o` | General purpose, fast | Medium |
-| `anthropic/claude-sonnet-4` | Nuanced reasoning, long context | Medium |
-| `anthropic/claude-opus-4` | Complex analysis, highest quality | High |
-| `google/gemini-2.5-pro-preview` | Large context windows, multimodal | Medium |
-| `meta-llama/llama-4-maverick` | Cost-effective, open source | Low |
+| Model                           | Best for                          | Relative cost |
+| ------------------------------- | --------------------------------- | ------------- |
+| `openai/gpt-4o`                 | General purpose, fast             | Medium        |
+| `anthropic/claude-sonnet-4`     | Nuanced reasoning, long context   | Medium        |
+| `anthropic/claude-opus-4`       | Complex analysis, highest quality | High          |
+| `google/gemini-2.5-pro-preview` | Large context windows, multimodal | Medium        |
+| `meta-llama/llama-4-maverick`   | Cost-effective, open source       | Low           |
 
 **Example — switching to Claude Sonnet:**
 

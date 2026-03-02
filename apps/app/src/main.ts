@@ -106,9 +106,7 @@ async function bootstrap(): Promise<void> {
       const editorMatrixClient = EditorMatrixClient.getInstance();
       editorMatrixClient.init().catch((error) => {
         Logger.error('Failed to initialize EditorMatrixClient:', error);
-        Logger.warn(
-          'Editor functionality may be limited until sync completes',
-        );
+        Logger.warn('Editor functionality may be limited until sync completes');
       });
       Logger.log('EditorMatrixClient initialization started in background...');
 
