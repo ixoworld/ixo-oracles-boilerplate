@@ -1,21 +1,21 @@
 # Reference: CLI Commands
 
-> Complete reference for `ixo-oracles-cli` (v1.1.0) — the CLI tool for creating and managing IXO Oracle projects.
+> Complete reference for `qiforge-cli` (v1.1.0) — the CLI tool for creating and managing QiForge Oracle projects.
 
 ---
 
 ## Installation
 
 ```bash
-npm install -g ixo-oracles-cli
+npm install -g qiforge-cli
 ```
 
-Binary name: `oracles-cli`
+Binary name: `qiforge`
 
 Verify:
 
 ```bash
-oracles-cli --help
+qiforge --help
 ```
 
 ---
@@ -23,10 +23,10 @@ oracles-cli --help
 ## Usage
 
 ```bash
-oracles-cli              # Interactive menu
-oracles-cli --init       # Jump straight to project scaffolding
-oracles-cli --help       # Show help
-oracles-cli -h           # Show help (short form)
+qiforge              # Interactive menu
+qiforge --init       # Jump straight to project scaffolding
+qiforge --help       # Show help
+qiforge -h           # Show help (short form)
 ```
 
 When run without flags, the CLI shows an interactive menu with all available commands.
@@ -98,7 +98,7 @@ Authenticates via QR code using the IXO Mobile App.
 Full project scaffolding: clones the boilerplate, creates a blockchain entity, registers a Matrix account, and generates `.env`.
 
 ```bash
-oracles-cli --init
+qiforge --init
 ```
 
 **Prompts:**
@@ -106,7 +106,7 @@ oracles-cli --init
 | #   | Prompt                          | Validation                                               | Default                                               |
 | --- | ------------------------------- | -------------------------------------------------------- | ----------------------------------------------------- |
 | 1   | **What is your project named?** | 1–50 chars, starts with letter, `[a-zA-Z][a-zA-Z0-9-_]*` | —                                                     |
-| 2   | **Select a template to clone**  | Valid git URL                                            | `git@github.com:ixoworld/ixo-oracles-boilerplate.git` |
+| 2   | **Select a template to clone**  | Valid git URL                                            | `git@github.com:ixoworld/qiforge.git` |
 | 3   | **Confirm creation**            | Yes / No                                                 | —                                                     |
 
 After confirmation, the CLI runs the **Create Entity** flow (see below), then generates the `.env` file.
@@ -162,7 +162,7 @@ Creates a new oracle identity: wallet, DID, Matrix account, and blockchain entit
 9. **Broadcast `MsgCreateEntity`** — creates the blockchain entity with:
    - Profile linked resource
    - API service and WebSocket service endpoints
-   - Parent protocol: `did:ixo:entity:1a76366f16570483cea72b111b27fd78` (IXO Oracle Protocol)
+   - Parent protocol: `did:ixo:entity:1a76366f16570483cea72b111b27fd78` (QiForge Oracle Protocol)
    - Linked accounts: Memory Engine + oracle account
    - Requires **mobile signing** via QR code (SignX)
 10. **Upload domain card** — creates a W3C verifiable credential, uploads to Matrix, attaches to entity via `MsgAddLinkedResource`
@@ -218,7 +218,7 @@ Broadcasts `MsgAddController` to add a new controller DID to the entity. Require
 ### `logout` — Clear Local Wallet
 
 ```bash
-oracles-cli logout
+qiforge logout
 ```
 
 Clears `~/.wallet.json`. You will need to log in again via SignX to use other commands.
@@ -228,8 +228,8 @@ Clears `~/.wallet.json`. You will need to log in again via SignX to use other co
 ### `help` — Show Available Commands
 
 ```bash
-oracles-cli --help
-oracles-cli -h
+qiforge --help
+qiforge -h
 ```
 
 Displays all available commands with descriptions.
@@ -328,7 +328,7 @@ The CLI auto-selects infrastructure URLs based on your authenticated network:
 
 ### "No wallet found"
 
-Run `oracles-cli` and select **Login** to authenticate via SignX first. You need the IXO Mobile App.
+Run `qiforge` and select **Login** to authenticate via SignX first. You need the IXO Mobile App.
 
 ### QR code not scanning
 

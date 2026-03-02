@@ -1,7 +1,7 @@
 # Publish Your First Oracle
 
 > **Time:** ~30 minutes
-> **What you'll build:** A "Research Buddy" oracle that can search the web, summarize documents, and organize knowledge — live on the IXO network, accessible to anyone you share it with.
+> **What you'll build:** A "Research Buddy" oracle that can search the web, summarize documents, and organize knowledge — live on the network, accessible to anyone you share it with.
 
 ---
 
@@ -9,8 +9,8 @@
 
 By the end of this guide, you'll have a working oracle that:
 
-- Has its own identity on the IXO blockchain
-- Responds to users through the [IXO Portal](https://ixo-portal.vercel.app)
+- Has its own identity on the blockchain
+- Responds to users through the [Portal](https://ixo-portal.vercel.app)
 - Uses skills to search the web, summarize content, and format citations
 - Runs in the cloud, available 24/7
 
@@ -37,7 +37,7 @@ Your oracle's personality is defined by two things: its **name** and its **syste
 Open `apps/app/src/graph/agents/main-agent.ts` and find this line:
 
 ```typescript
-APP_NAME: 'IXO | IXO Portal',
+APP_NAME: 'My Oracle',
 ```
 
 Change it to your oracle's name:
@@ -128,12 +128,12 @@ Follow the deployment steps in [Chapter 08 — Deployment](../08-deployment.md).
 
 ## Step 6: Register On-Chain
 
-Your oracle was registered on the IXO blockchain during the initial `oracles-cli --init` step in the quickstart. This gave it a DID (decentralized identity) and an on-chain entity.
+Your oracle was registered on the blockchain during the initial `qiforge --init` step in the quickstart. This gave it a DID (decentralized identity) and an on-chain entity.
 
 If you need to update your oracle's metadata or switch networks later, use:
 
 ```bash
-oracles-cli update-entity
+qiforge update-entity
 ```
 
 This lets you change the oracle's name, description, or other on-chain details without starting over.
@@ -146,13 +146,13 @@ For the full list of CLI commands, see the [CLI Reference](../reference/cli-refe
 
 Your oracle is live. Here's how to get it in front of users:
 
-1. **Get the portal URL** — Your oracle is accessible through the IXO Portal at:
+1. **Get the portal URL** — Your oracle is accessible through the Portal at:
 
    ```
    https://ixo-portal.vercel.app
    ```
 
-   Users connect to your oracle through this portal using the IXO Mobile App for authentication.
+   Users connect to your oracle through this portal using the mobile app for authentication.
 
 2. **Share the oracle's DID** — Every oracle has a unique DID (created during registration). Share this with anyone who needs to find your oracle on the network.
 
@@ -174,15 +174,15 @@ Your oracle is live. Here's how to get it in front of users:
 - Try asking explicitly: *"Search for skills related to [topic]"* — this triggers the skill discovery tools.
 - Check that the `OPENROUTER_API_KEY` (or your LLM API key) is valid — skill execution requires LLM reasoning.
 
-### `oracles-cli` command not found
+### `qiforge` command not found
 
-- Reinstall the CLI: `npm install -g ixo-oracles-cli`
+- Reinstall the CLI: `npm install -g qiforge-cli`
 - Make sure your global npm bin directory is in your PATH. Run `npm bin -g` to check the location.
 
 ### Registration or entity update fails
 
 - Make sure you have the IXO Mobile App ready for SignX authentication.
-- Check your internet connection — registration writes to the IXO blockchain and needs network access.
+- Check your internet connection — registration writes to the blockchain and needs network access.
 - If you're on testnet, make sure you have testnet tokens (the CLI handles this during init).
 
 ### Messages return errors or empty responses

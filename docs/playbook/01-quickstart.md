@@ -1,7 +1,7 @@
 # 01 — Quickstart: Zero to Running Oracle
 
 > **Time:** ~15 minutes
-> **What you'll build:** A fully functional AI oracle with blockchain identity, E2E encrypted communication, and LLM reasoning — responding to messages on the IXO Portal.
+> **What you'll build:** A fully functional AI oracle with blockchain identity, E2E encrypted communication, and LLM reasoning — responding to messages on the Portal.
 
 ---
 
@@ -20,20 +20,20 @@ Before starting, make sure you have:
 ## Step 1: Install the CLI
 
 ```bash
-npm install -g ixo-oracles-cli
+npm install -g qiforge-cli
 ```
 
 Verify the installation:
 
 ```bash
-oracles-cli --help
+qiforge --help
 ```
 
 > **Alternative package managers:**
 >
 > ```bash
-> pnpm add -g ixo-oracles-cli
-> yarn global add ixo-oracles-cli
+> pnpm add -g qiforge-cli
+> yarn global add qiforge-cli
 > ```
 
 ---
@@ -43,7 +43,7 @@ oracles-cli --help
 Run the CLI in interactive mode:
 
 ```bash
-oracles-cli
+qiforge
 ```
 
 Select **"Login"** from the menu. A QR code appears in your terminal.
@@ -61,7 +61,7 @@ The CLI stores your wallet credentials at `~/.wallet.json`, which includes your 
 ## Step 3: Scaffold Your Project
 
 ```bash
-oracles-cli --init
+qiforge --init
 ```
 
 The CLI walks you through a series of prompts:
@@ -71,7 +71,7 @@ The CLI walks you through a series of prompts:
 | Prompt                                                      | Description                                                   | Validation                                                         |
 | ----------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------ |
 | **What is your project named?**                             | Project name or path (e.g., `my-oracle`)                      | 1-50 chars, starts with letter, alphanumeric + hyphens/underscores |
-| **Select a template to clone**                              | Default: `ixo-oracles-boilerplate`, or enter a custom git URL | Valid git URL                                                      |
+| **Select a template to clone**                              | Default: `qiforge`, or enter a custom git URL | Valid git URL                                                      |
 | **Create IXO project "my-oracle" in "/path/to/my-oracle"?** | Confirmation                                                  | Yes/No                                                             |
 
 ### Oracle Identity
@@ -95,7 +95,7 @@ After confirming, the CLI launches the **Create Entity** flow:
 
 When you confirm, the CLI executes a multi-step setup:
 
-1. **Clones the boilerplate** — downloads `ixo-oracles-boilerplate` via git, removes `.git` history, reinitializes a fresh repo
+1. **Clones the boilerplate** — downloads `qiforge` via git, removes `.git` history, reinitializes a fresh repo
 2. **Creates a blockchain entity** — registers an oracle-type entity on the IXO chain with your metadata, pricing, and service configuration
 3. **Uploads linked resources** — attaches AuthZ config (permissions), fees config (pricing model), and domain card (verifiable credential) to your entity
 4. **Generates a wallet** — creates a secp256k1 wallet and registers a DID on-chain
@@ -207,7 +207,7 @@ Here's what happens when you send a message:
 
 ```
 Your message
-  → IXO Portal (Client SDK)
+  → Portal (Client SDK)
   → POST /messages/:sessionId
   → AuthHeaderMiddleware
       validates x-did, x-matrix-access-token

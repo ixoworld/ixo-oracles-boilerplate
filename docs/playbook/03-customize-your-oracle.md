@@ -10,7 +10,7 @@
 Your oracle's name is set in `apps/app/src/graph/agents/main-agent.ts`. Find this line:
 
 ```typescript
-APP_NAME: 'IXO | IXO Portal',
+APP_NAME: 'My Oracle',
 ```
 
 Change it to your oracle's name:

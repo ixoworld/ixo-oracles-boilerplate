@@ -157,4 +157,4 @@ graph LR
 
 - Skills registry: `https://github.com/ixoworld/ai-skills`
 - AI Sandbox: `/Users/yousef/ai-sandbox/` (read `ARCHITECTURE.md` for context, but don't put internals in playbook)
-- CLI: `ixo-oracles-cli` (separate repo, scaffolds oracle projects)
+- CLI: `qiforge-cli` (separate repo, scaffolds oracle projects)

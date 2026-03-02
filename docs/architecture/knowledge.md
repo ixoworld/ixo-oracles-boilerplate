@@ -2,7 +2,7 @@
 
 ## Overview
 
-Knowledge management in the IXO Oracles Framework is handled by the **Memory Engine** — a managed service that gives your oracle persistent memory and knowledge across conversations.
+Knowledge management in QiForge is handled by the **Memory Engine** — a managed service that gives your oracle persistent memory and knowledge across conversations.
 
 ## How It Works
 

@@ -140,7 +140,7 @@ First deploy takes a few minutes; subsequent deploys are faster.
 
 ```bash
 fly status                                        # machine is running?
-curl https://ixo-oracles-boilerplate.fly.dev/     # oracle is alive?
+curl https://your-app-name.fly.dev/                # oracle is alive?
 fly logs                                          # check logs if needed
 ```
 
@@ -182,7 +182,7 @@ Your oracle connects to a specific IXO network. Choose based on where you are in
 To switch networks, update the `NETWORK` variable in your environment, then update your on-chain entity:
 
 ```bash
-oracles-cli update-entity
+qiforge update-entity
 ```
 
 > See [Network URLs Reference](./01-quickstart.md#network-urls-reference) for the full list of Matrix, RPC, and Portal URLs per network.

@@ -1,9 +1,9 @@
-# fly.toml app configuration file generated for ixo-oracles-boilerplate on 2026-02-28T10:21:22+02:00
+# fly.toml app configuration file generated for qiforge on 2026-02-28T10:21:22+02:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'ixo-oracles-boilerplate'
+app = 'qiforge'
 primary_region = 'ams'
 kill_signal = 'SIGTERM'
 kill_timeout = '2m0s'
