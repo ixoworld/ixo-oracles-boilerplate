@@ -47,6 +47,7 @@ import {
 } from 'src/utils/sse.utils';
 import { type ListMessagesDto } from './dto/list-messages.dto';
 import { type SendMessagePayload } from './dto/send-message.dto';
+import { FileProcessingService } from './file-processing.service';
 
 @Injectable()
 export class MessagesService implements OnModuleInit, OnModuleDestroy {
@@ -61,6 +62,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     private readonly sessionManagerService: SessionManagerService,
     private readonly config: ConfigService<ENV>,
     private readonly checkpointStorageSyncService: UserMatrixSqliteSyncService,
+    private readonly fileProcessingService: FileProcessingService,
     @Optional() private readonly ucanService?: UcanService,
   ) {
     this.matrixManager = this.sessionManagerService.matrixManger;
@@ -320,6 +322,19 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       const { runnableConfig, sessionId, roomId, userContext, targetSession } =
         await this.prepareForQuery(params);
 
+      // Process file attachments into text and append to message
+      let messageInput = params.message;
+      if (params.attachments?.length) {
+        const fileTexts =
+          await this.fileProcessingService.processAttachments(
+            params.attachments,
+            roomId,
+          );
+        if (fileTexts.length > 0) {
+          messageInput = params.message + '\n\n---\n' + fileTexts.join('\n\n');
+        }
+      }
+
       if (!params.msgFromMatrixRoom) {
         this.sessionManagerService.matrixManger
           .sendMessage({
@@ -381,7 +396,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
               );
 
               const stream = await this.mainAgent.streamMessage(
-                params.message,
+                messageInput,
                 runnableConfig,
                 params.tools ?? [],
                 params.msgFromMatrixRoom,
@@ -773,7 +788,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       }
 
       const result = await this.mainAgent.sendMessage(
-        params.message,
+        messageInput,
         runnableConfig,
         params.tools ?? [],
         params.msgFromMatrixRoom,

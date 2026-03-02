@@ -88,6 +88,14 @@ export interface IChatOptions {
   streamingMode?: 'batched' | 'immediate';
 }
 
+export interface Attachment {
+  mxcUri?: string;
+  eventId?: string;
+  filename: string;
+  mimetype: string;
+  size?: number;
+}
+
 export interface ISendMessageOptions {
   oracleDid: string;
   sessionId: string;
