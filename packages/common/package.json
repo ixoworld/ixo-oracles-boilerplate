@@ -1,6 +1,6 @@
 {
   "name": "@ixo/common",
-  "version": "1.1.3",
+  "version": "1.1.31",
   "private": false,
   "publishConfig": {
     "access": "public"
