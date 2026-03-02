@@ -4,4 +4,5 @@ export interface IChatSession {
   lastUpdatedAt: string;
   createdAt: string;
   oracleName: string;
+  roomId?: string;
 }

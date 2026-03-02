@@ -125,7 +125,7 @@ ___________________________________________________________
     messages,
     oracleEntityDid,
     oracleName,
-    roomId: _roomId,
+    roomId,
     lastProcessedCount,
     oracleDid,
     userContext,
@@ -158,6 +158,7 @@ ___________________________________________________________
         oracleEntityDid,
         oracleDid,
         userContext,
+        roomId,
         slackThreadTs,
       };
 
