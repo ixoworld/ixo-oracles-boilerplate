@@ -285,9 +285,7 @@ export class FileProcessingService {
     roomId: string,
     eventId: string,
   ): Promise<Buffer> {
-    this.logger.log(
-      `Fetching Matrix event ${eventId} from room ${roomId}`,
-    );
+    this.logger.log(`Fetching Matrix event ${eventId} from room ${roomId}`);
     const client = MatrixManager.getInstance().getClient();
     if (!client) {
       throw new Error('Matrix client not available');
@@ -314,9 +312,7 @@ export class FileProcessingService {
       data = result.data;
     }
 
-    this.logger.log(
-      `Downloaded ${data.length} bytes from event ${eventId}`,
-    );
+    this.logger.log(`Downloaded ${data.length} bytes from event ${eventId}`);
     return data;
   }
 
@@ -449,7 +445,11 @@ export class FileProcessingService {
    */
   private async headUrl(
     url: string,
-  ): Promise<{ contentType?: string; contentLength?: number; finalUrl: string }> {
+  ): Promise<{
+    contentType?: string;
+    contentLength?: number;
+    finalUrl: string;
+  }> {
     this.validateUrlTarget(url);
 
     const abortController = new AbortController();
@@ -594,7 +594,11 @@ export class FileProcessingService {
     // CSV is plain text — parse directly, no AI needed
     if (attachment.mimetype === 'text/csv') {
       const text = buffer.toString('utf-8');
-      return this.formatContent('Content', safeFilename, this.truncateText(text));
+      return this.formatContent(
+        'Content',
+        safeFilename,
+        this.truncateText(text),
+      );
     }
 
     // Try local parsing first (free)
@@ -899,7 +903,10 @@ export class FileProcessingService {
     const magicMime = this.detectMimeFromMagicBytes(buffer);
     const extensionMime = this.guessMimeFromFilename(filename);
     const mimetype =
-      hints?.mimetype ?? extensionMime ?? magicMime ?? 'application/octet-stream';
+      hints?.mimetype ??
+      extensionMime ??
+      magicMime ??
+      'application/octet-stream';
 
     this.logger.log(
       `[processFileFromEventId] Resolved — filename="${filename}", mimetype="${mimetype}" ` +
@@ -939,11 +946,15 @@ export class FileProcessingService {
     url: string,
     hints?: { filename?: string; mimetype?: string },
   ): Promise<string> {
-    this.logger.log(`[processFileFromUrl] Starting — url=${url}, hints=${JSON.stringify(hints)}`);
+    this.logger.log(
+      `[processFileFromUrl] Starting — url=${url}, hints=${JSON.stringify(hints)}`,
+    );
 
     // Validate URI scheme
     if (!ALLOWED_URI_SCHEMES.test(url)) {
-      throw new Error('Invalid URI scheme — only http, https, and mxc are allowed');
+      throw new Error(
+        'Invalid URI scheme — only http, https, and mxc are allowed',
+      );
     }
 
     // ── mxc:// — always download (private Matrix media, not accessible by AI) ──
@@ -952,8 +963,7 @@ export class FileProcessingService {
     }
 
     // ── HTTPS — try to determine type and route accordingly ──
-    const filename =
-      hints?.filename ?? this.extractFilenameFromUrl(url);
+    const filename = hints?.filename ?? this.extractFilenameFromUrl(url);
     const extensionMime = this.guessMimeFromFilename(filename);
     const knownMime = hints?.mimetype ?? extensionMime;
     const knownCategory = knownMime ? this.categorizeFile(knownMime) : null;
@@ -995,13 +1005,20 @@ export class FileProcessingService {
       // Ignore text/html — web pages usually wrap embedded media (YouTube, etc.)
       // and should fall through to the AI video passthrough below.
       const isHtmlPage = headContentType.startsWith('text/html');
-      const headCategory = isHtmlPage ? 'unsupported' : this.categorizeFile(headContentType);
+      const headCategory = isHtmlPage
+        ? 'unsupported'
+        : this.categorizeFile(headContentType);
 
       if (headCategory === 'image' || headCategory === 'video') {
         this.logger.log(
           `[processFileFromUrl] HEAD says ${headCategory} (${headContentType}) — URL passthrough`,
         );
-        return this.tryUrlPassthrough(resolvedUrl, headContentType, headCategory, filename);
+        return this.tryUrlPassthrough(
+          resolvedUrl,
+          headContentType,
+          headCategory,
+          filename,
+        );
       }
 
       if (headCategory === 'audio' || headCategory === 'document') {
@@ -1060,7 +1077,12 @@ export class FileProcessingService {
     filename: string,
   ): Promise<string> {
     try {
-      const description = await this.aiProcessFromUrl(url, mimetype, category, filename);
+      const description = await this.aiProcessFromUrl(
+        url,
+        mimetype,
+        category,
+        filename,
+      );
       if (description && description.trim().length > 0) {
         return this.formatContent(
           'Description',

@@ -68,9 +68,7 @@ export function transformGraphStateMessageToListMessageResponse(
 
         // Extract attachment metadata for human messages
         const attachment =
-          message.type === 'human'
-            ? additionalKwargs?.attachment
-            : undefined;
+          message.type === 'human' ? additionalKwargs?.attachment : undefined;
 
         acc.push({
           type: message.type === 'ai' ? 'ai' : 'human',

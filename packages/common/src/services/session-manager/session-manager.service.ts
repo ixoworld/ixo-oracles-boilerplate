@@ -374,11 +374,13 @@ ___________________________________________________________
     if (!roomId) {
       throw new Error('Room ID not found');
     }
-    const eventId = overrideEventId ?? await this.matrixManger.sendMessage({
-      message: 'New Conversation Started',
-      roomId,
-      isOracleAdmin: true,
-    });
+    const eventId =
+      overrideEventId ??
+      (await this.matrixManger.sendMessage({
+        message: 'New Conversation Started',
+        roomId,
+        isOracleAdmin: true,
+      }));
 
     // Gather user context from Memory Engine
     let userContext: UserContextData | undefined;

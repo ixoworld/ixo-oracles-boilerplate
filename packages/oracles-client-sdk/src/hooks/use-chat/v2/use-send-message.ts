@@ -14,7 +14,11 @@ import {
 } from '../../../utils/sse-parser.js';
 import { useGetOpenIdToken } from '../../use-get-openid-token/use-get-openid-token.js';
 import { useOraclesConfig } from '../../use-oracles-config.js';
-import { type Attachment, type IMessage, type ISendMessageOptions } from './types.js';
+import {
+  type Attachment,
+  type IMessage,
+  type ISendMessageOptions,
+} from './types.js';
 
 interface IUseSendMessageReturn {
   sendMessage: (
