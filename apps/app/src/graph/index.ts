@@ -1,12 +1,13 @@
 import { type IRunnableConfigWithRequiredFields } from '@ixo/matrix';
 import { Logger } from '@nestjs/common';
 import 'dotenv/config';
-import { HumanMessage } from 'langchain';
+import { type BaseMessage, HumanMessage } from 'langchain';
 import {
   type AgActionDto,
   type BrowserToolCallDto,
 } from 'src/messages/dto/send-message.dto';
 import { type UcanService } from 'src/ucan/ucan.service';
+import { type FileProcessingService } from 'src/messages/file-processing.service';
 import { createMainAgent } from './agents/main-agent';
 import { type MCPUCANContext } from './mcp';
 import { type TMainAgentGraphState } from './state';
@@ -23,7 +24,7 @@ interface UCANOptions {
 
 export class MainAgentGraph {
   async sendMessage(
-    input: string,
+    input: string | BaseMessage[],
     runnableConfig: IRunnableConfigWithRequiredFields & {
       configurable: {
         sessionId: string;
@@ -36,12 +37,27 @@ export class MainAgentGraph {
     currentEntityDid?: string,
     clientType?: 'matrix' | 'slack',
     ucanOptions?: UCANOptions,
+    fileProcessingService?: FileProcessingService,
   ): Promise<Pick<TMainAgentGraphState, 'messages'>> {
     if (!runnableConfig.configurable.sessionId) {
       throw new Error('sessionId is required');
     }
+
+    const messages: BaseMessage[] =
+      typeof input === 'string'
+        ? [
+            new HumanMessage({
+              content: input,
+              additional_kwargs: {
+                msgFromMatrixRoom,
+                timestamp: new Date().toISOString(),
+              },
+            }),
+          ]
+        : input;
+
     Logger.log(
-      `[sendMessage]: msgFromMatrixRoom: ${msgFromMatrixRoom} input: ${input}`,
+      `[sendMessage]: msgFromMatrixRoom: ${msgFromMatrixRoom} messages: ${messages.length}`,
     );
 
     // Build UCAN context if invocations are provided
@@ -51,16 +67,7 @@ export class MainAgentGraph {
         : undefined;
 
     const state = {
-      messages: [
-        new HumanMessage({
-          content: input,
-          // this is to prevent the matrix manager to log this message as this message is from the matrix room itself not from the REST api
-          additional_kwargs: {
-            msgFromMatrixRoom,
-            timestamp: new Date().toISOString(),
-          },
-        }),
-      ],
+      messages,
       browserTools,
       editorRoomId,
       currentEntityDid,
@@ -84,22 +91,18 @@ export class MainAgentGraph {
         },
       },
       ucanService: ucanOptions?.ucanService,
+      fileProcessingService,
     });
 
     const result = await agent.invoke(
+      { messages },
       {
-        messages: [
-          new HumanMessage({
-            content: input,
-            // this is to prevent the matrix manager to log this message as this message is from the matrix room itself not from the REST api
-            additional_kwargs: {
-              msgFromMatrixRoom,
-              timestamp: new Date().toISOString(),
-            },
-          }),
-        ],
-      },
-      {
+        ...runnableConfig,
+        recursionLimit: 150,
+        configurable: {
+          ...runnableConfig.configurable,
+          thread_id: runnableConfig.configurable.sessionId,
+        },
         context: {
           userDid: runnableConfig.configurable.configs?.user.did ?? '',
         },
@@ -113,7 +116,7 @@ export class MainAgentGraph {
   }
 
   async streamMessage(
-    input: string,
+    input: string | BaseMessage[],
     runnableConfig: IRunnableConfigWithRequiredFields & {
       configurable: {
         sessionId: string;
@@ -127,6 +130,7 @@ export class MainAgentGraph {
     currentEntityDid?: string,
     agActions?: AgActionDto[],
     ucanOptions?: UCANOptions,
+    fileProcessingService?: FileProcessingService,
   ) {
     if (!runnableConfig.configurable.sessionId) {
       throw new Error('sessionId is required');
@@ -142,6 +146,19 @@ export class MainAgentGraph {
       });
     }
 
+    const messages: BaseMessage[] =
+      typeof input === 'string'
+        ? [
+            new HumanMessage({
+              content: input,
+              additional_kwargs: {
+                msgFromMatrixRoom,
+                timestamp: new Date().toISOString(),
+              },
+            }),
+          ]
+        : input;
+
     // Build UCAN context if invocations are provided
     const mcpUcanContext: MCPUCANContext | undefined =
       ucanOptions?.mcpInvocations
@@ -149,16 +166,7 @@ export class MainAgentGraph {
         : undefined;
 
     const state = {
-      messages: [
-        new HumanMessage({
-          content: input,
-          // this is to prevent the matrix manager to log this message as this message is from the matrix room itself not from the REST api
-          additional_kwargs: {
-            msgFromMatrixRoom,
-            timestamp: new Date().toISOString(),
-          },
-        }),
-      ],
+      messages,
       browserTools,
       editorRoomId,
       currentEntityDid,
@@ -182,21 +190,11 @@ export class MainAgentGraph {
         },
       },
       ucanService: ucanOptions?.ucanService,
+      fileProcessingService,
     });
 
     const stream = agent.streamEvents(
-      {
-        messages: [
-          new HumanMessage({
-            content: input,
-            // this is to prevent the matrix manager to log this message as this message is from the matrix room itself not from the REST api
-            additional_kwargs: {
-              msgFromMatrixRoom,
-              timestamp: new Date().toISOString(),
-            },
-          }),
-        ],
-      },
+      { messages },
       {
         version: 'v2',
         ...runnableConfig,

@@ -119,6 +119,25 @@ export function useSendMessage({
         };
         await chatRef?.current?.addUserMessage(userMessage);
 
+        // Add optimistic file messages (one per attachment)
+        if (attachments?.length) {
+          for (const attachment of attachments) {
+            const fileMessage: IMessage = {
+              id: window.crypto.randomUUID(),
+              content: `[Processing file: ${attachment.filename}]`,
+              type: 'human',
+              attachment: {
+                filename: attachment.filename,
+                mimetype: attachment.mimetype,
+                size: attachment.size,
+                mxcUri: attachment.mxcUri,
+                eventId: attachment.eventId,
+              },
+            };
+            await chatRef?.current?.addUserMessage(fileMessage);
+          }
+        }
+
         // 2. Stream AI response
         chatRef?.current?.setStatus('streaming');
 

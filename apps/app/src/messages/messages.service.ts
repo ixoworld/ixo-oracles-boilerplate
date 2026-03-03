@@ -28,7 +28,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
-import { AIMessageChunk, ToolMessage } from 'langchain';
+import { AIMessageChunk, HumanMessage, ToolMessage } from 'langchain';
 import * as crypto from 'node:crypto';
 import { MainAgentGraph } from 'src/graph';
 import { cleanAdditionalKwargs } from 'src/graph/nodes/chat-node/utils';
@@ -55,6 +55,24 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
   private threadRootCache = new Map<string, string>(); // eventId → rootEventId
   private abortControllers = new Map<string, AbortController>(); // sessionId → AbortController
 
+  /**
+   * Per-thread debounce buffer for Matrix events.
+   * When a user sends text + file, Matrix delivers them as separate events.
+   * We batch events arriving within MATRIX_DEBOUNCE_MS into a single sendMessage() call.
+   */
+  private matrixEventBuffer = new Map<
+    string,
+    {
+      events: Array<{
+        event: MessageEvent<MessageEventContent>;
+        roomId: string;
+      }>;
+      timer: NodeJS.Timeout;
+    }
+  >();
+
+  private readonly MATRIX_DEBOUNCE_MS = 500;
+
   matrixManager: MatrixManager;
 
   constructor(
@@ -69,7 +87,15 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
   }
 
   public onModuleDestroy(): void {
-    this.cleanUpMatrixListener();
+    // Clear all pending debounce timers to prevent flushes after destroy
+    for (const [, entry] of this.matrixEventBuffer) {
+      clearTimeout(entry.timer);
+    }
+    this.matrixEventBuffer.clear();
+
+    if (this.cleanUpMatrixListener) {
+      this.cleanUpMatrixListener();
+    }
   }
 
   private async getThreadRoot(
@@ -162,6 +188,14 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     return fallbackRoot;
   }
 
+  /** Supported Matrix file message types */
+  private static readonly FILE_MSGTYPES = new Set([
+    'm.file',
+    'm.image',
+    'm.video',
+    'm.audio',
+  ]);
+
   private async handleMessage(
     event: MessageEvent<MessageEventContent>,
     roomId: string,
@@ -172,53 +206,178 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    if (
-      event.content.msgtype === 'm.text' &&
-      'body' in event.content &&
-      typeof event.content.body === 'string' &&
-      !('INTERNAL' in event.content)
-    ) {
-      const text = event.content.body;
-      const threadId = await this.getThreadRoot(event, roomId);
+    // Skip internal messages
+    if ('INTERNAL' in event.content) {
+      return;
+    }
 
-      if (!threadId) {
+    const msgtype = event.content.msgtype;
+    const isText =
+      msgtype === 'm.text' &&
+      'body' in event.content &&
+      typeof event.content.body === 'string';
+    const isFile =
+      typeof msgtype === 'string' && MessagesService.FILE_MSGTYPES.has(msgtype);
+
+    if (!isText && !isFile) {
+      return;
+    }
+
+    const threadId = await this.getThreadRoot(event, roomId);
+    if (!threadId) {
+      return;
+    }
+
+    const hasSession = await this.sessionManagerService.getSession(
+      event.eventId,
+      did,
+      false,
+    );
+
+    if (!hasSession) {
+      const userHomeServer = event.sender.split(':').slice(1).join(':');
+      const oracleHomeServer = this.config
+        .getOrThrow<string>('MATRIX_BASE_URL')
+        .replace(/\/$/, '')
+        .replace(/^https?:\/\//, '');
+
+      await this.sessionManagerService.createSession(
+        {
+          did,
+          oracleDid: this.config.getOrThrow('ORACLE_DID'),
+          oracleEntityDid: this.config.getOrThrow('ORACLE_ENTITY_DID'),
+          oracleName: this.config.getOrThrow('ORACLE_NAME'),
+          homeServer: userHomeServer,
+          oracleHomeServer,
+          userHomeServer,
+        },
+        event.eventId,
+      );
+    }
+    // Buffer the event — the debounce timer will flush once no more events arrive
+    const existing = this.matrixEventBuffer.get(threadId);
+    if (existing) {
+      clearTimeout(existing.timer);
+      existing.events.push({ event, roomId });
+    } else {
+      this.matrixEventBuffer.set(threadId, {
+        events: [{ event, roomId }],
+        timer: null as unknown as NodeJS.Timeout,
+      });
+    }
+
+    const entry = this.matrixEventBuffer.get(threadId)!;
+    entry.timer = setTimeout(() => {
+      this.flushMatrixEvents(threadId).catch((err) => {
+        Logger.error(
+          `Failed to flush Matrix events for thread ${threadId}`,
+          err,
+        );
+      });
+    }, this.MATRIX_DEBOUNCE_MS);
+  }
+
+  /**
+   * Flush all buffered Matrix events for a thread into a single sendMessage() call.
+   * Separates text messages from file attachments and batches them together.
+   */
+  private async flushMatrixEvents(threadId: string): Promise<void> {
+    const entry = this.matrixEventBuffer.get(threadId);
+    if (!entry) return;
+    this.matrixEventBuffer.delete(threadId);
+
+    const { events } = entry;
+    if (events.length === 0) return;
+
+    // Use the roomId from the first event (all events in a thread share the same room)
+    const roomId = events[0].roomId;
+    const did = normalizeDid(events[0].event.sender);
+    const homeServer = events[0].event.sender.split(':')[1];
+
+    // Separate text and file events
+    let textBody: string | undefined;
+    const attachments: Array<{
+      eventId: string;
+      filename: string;
+      mimetype: string;
+      size?: number;
+    }> = [];
+
+    for (const { event } of events) {
+      const msgtype = event.content.msgtype;
+
+      if (
+        msgtype === 'm.text' &&
+        'body' in event.content &&
+        typeof event.content.body === 'string'
+      ) {
+        // Use the last text message if multiple arrive (unlikely but safe)
+        textBody = event.content.body;
+      } else if (
+        typeof msgtype === 'string' &&
+        MessagesService.FILE_MSGTYPES.has(msgtype)
+      ) {
+        attachments.push(this.buildAttachmentFromEvent(event));
+      }
+    }
+
+    // Build the message text — fall back to a description if only files were sent
+    const message =
+      textBody ??
+      (attachments.length === 1
+        ? `User shared a file: ${attachments[0].filename}`
+        : `User shared ${attachments.length} file(s): ${attachments.map((a) => a.filename).join(', ')}`);
+
+    try {
+      const aiMessage = await this.sendMessage({
+        clientType: 'matrix',
+        message,
+        did,
+        sessionId: threadId,
+        homeServer,
+        msgFromMatrixRoom: true,
+        userMatrixOpenIdToken: '',
+
+        ...(attachments.length > 0 && { attachments }),
+      });
+      if (!aiMessage) {
         return;
       }
 
-      try {
-        const homeServer = event.sender.split(':')[1];
-        const aiMessage = await this.sendMessage({
-          clientType: 'matrix',
-          message: text,
-          did,
-          sessionId: threadId,
-          homeServer,
-          msgFromMatrixRoom: true,
-          userMatrixOpenIdToken: '',
-        });
-        if (!aiMessage) {
-          return;
-        }
-
-        // Send AI response to Matrix
-        await this.sessionManagerService.matrixManger.sendMessage({
-          message: aiMessage.message.content,
-          roomId,
-          threadId,
-          isOracleAdmin: true,
-          disablePrefix: true,
-        });
-      } catch (error) {
-        Logger.error('Failed to send message', error);
-        await this.sessionManagerService.matrixManger.sendMessage({
-          message: `sorry, I'm having trouble processing your message. Please try again later.`,
-          roomId,
-          threadId,
-          isOracleAdmin: true,
-          disablePrefix: true,
-        });
-      }
+      await this.sessionManagerService.matrixManger.sendMessage({
+        message: aiMessage.message.content,
+        roomId,
+        threadId,
+        isOracleAdmin: true,
+        disablePrefix: true,
+      });
+    } catch (error) {
+      Logger.error('Failed to send message', error);
     }
+  }
+
+  /**
+   * Build an AttachmentDto-compatible object from a Matrix file event.
+   * Uses eventId (not mxcUri) because downloadFromMatrixEvent handles both
+   * encrypted and unencrypted files transparently.
+   */
+  private buildAttachmentFromEvent(event: MessageEvent<MessageEventContent>): {
+    eventId: string;
+    filename: string;
+    mimetype: string;
+    size?: number;
+  } {
+    const content = event.content as unknown as Record<string, unknown>;
+    const info = content.info as
+      | { mimetype?: string; size?: number }
+      | undefined;
+    return {
+      eventId: event.eventId,
+      filename:
+        (content.filename as string) ?? (content.body as string) ?? 'file',
+      mimetype: info?.mimetype ?? 'application/octet-stream',
+      size: info?.size,
+    };
   }
 
   public async onModuleInit(): Promise<void> {
@@ -322,17 +481,42 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       const { runnableConfig, sessionId, roomId, userContext, targetSession } =
         await this.prepareForQuery(params);
 
-      // Process file attachments into text and append to message
-      let messageInput = params.message;
+      // Build messages array: user text message + separate file messages
+      const msgFromMatrixRoom = params.msgFromMatrixRoom ?? false;
+      const timestamp = new Date().toISOString();
+      const inputMessages: HumanMessage[] = [
+        new HumanMessage({
+          content: params.message,
+          additional_kwargs: { msgFromMatrixRoom, timestamp },
+        }),
+      ];
+
       if (params.attachments?.length) {
-        const fileTexts =
+        Logger.log(
+          `sendMessage: ${params.attachments.length} attachment(s) received for session ${sessionId}, room ${roomId}`,
+          'MessagesService',
+        );
+        const { texts, metadata } =
           await this.fileProcessingService.processAttachments(
             params.attachments,
             roomId,
           );
-        if (fileTexts.length > 0) {
-          messageInput = params.message + '\n\n---\n' + fileTexts.join('\n\n');
-        }
+        Logger.log(
+          `sendMessage: attachments processed — ${texts.length} text result(s), creating separate messages`,
+          'MessagesService',
+        );
+        texts.forEach((text, i) => {
+          inputMessages.push(
+            new HumanMessage({
+              content: text,
+              additional_kwargs: {
+                msgFromMatrixRoom,
+                timestamp: new Date().toISOString(),
+                attachment: metadata[i],
+              },
+            }),
+          );
+        });
       }
 
       if (!params.msgFromMatrixRoom) {
@@ -396,10 +580,10 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
               );
 
               const stream = await this.mainAgent.streamMessage(
-                messageInput,
+                inputMessages,
                 runnableConfig,
                 params.tools ?? [],
-                params.msgFromMatrixRoom,
+                msgFromMatrixRoom,
                 userContext,
                 abortController,
                 params.metadata?.editorRoomId,
@@ -410,6 +594,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
                   ucanService: this.ucanService,
                   mcpInvocations: params.mcpInvocations,
                 },
+                this.fileProcessingService,
               );
 
               let fullContent = '';
@@ -788,14 +973,20 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       }
 
       const result = await this.mainAgent.sendMessage(
-        messageInput,
+        inputMessages,
         runnableConfig,
         params.tools ?? [],
-        params.msgFromMatrixRoom,
+        msgFromMatrixRoom,
         userContext,
         params.metadata?.editorRoomId,
         params.metadata?.currentEntityDid,
         params.clientType,
+        // UCAN options for MCP tool authorization
+        {
+          ucanService: this.ucanService,
+          mcpInvocations: params.mcpInvocations,
+        },
+        this.fileProcessingService,
       );
       const lastMessage = result.messages.at(-1);
       if (!lastMessage) {

@@ -59,6 +59,7 @@ export interface IMessage {
   reasoning?: string;
   isComplete?: boolean;
   isReasoning?: boolean;
+  attachment?: Attachment;
 }
 
 export type ChatStatus = 'submitted' | 'streaming' | 'ready' | 'error';
@@ -94,6 +95,7 @@ export interface Attachment {
   filename: string;
   mimetype: string;
   size?: number;
+  category?: string;
 }
 
 export interface ISendMessageOptions {
