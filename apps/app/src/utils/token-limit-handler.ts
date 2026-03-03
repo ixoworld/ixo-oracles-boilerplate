@@ -72,7 +72,7 @@ export class TokenLimiter {
     // GROQ - OSS 120b model
     // Returns credits as float (1 credit = 1 uixo)
 
-    const markup = configService.getOrThrow('NETWORK') === 'mainnet' ? 1.3 : 10;
+    const markup = configService.getOrThrow('NETWORK') === 'mainnet' ? 1.6 : 10;
     const costPerMillionTokens = 0.75 * markup; // 30% markup for profit
     const tokensPerMillion =
       configService.getOrThrow('NETWORK') === 'mainnet' ? 1_000_000 : 1;

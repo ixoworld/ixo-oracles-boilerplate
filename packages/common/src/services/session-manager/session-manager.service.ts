@@ -51,8 +51,8 @@ export class SessionManagerService {
       },
     });
     const response = await llm.invoke(
-      `Based on this messages messages, Add a title for this convo and only based on the messages? MAKE SURE TO ONLY RESPOND WITH THE TITLE. 
-      
+      `Based on this messages messages, Add a title for this convo and only based on the messages? MAKE SURE TO ONLY RESPOND WITH THE TITLE.
+
       ## RESPONSE FORMAT
       ONLY RESPOND WITH THE TITLE not anything else that title will be saved to the store directly from your response so generated based on the messages.
 
@@ -166,8 +166,8 @@ ___________________________________________________________
       db.prepare(
         `
         INSERT INTO sessions (
-          session_id, title, last_updated_at, created_at, oracle_name, 
-          oracle_did, oracle_entity_did, last_processed_count, 
+          session_id, title, last_updated_at, created_at, oracle_name,
+          oracle_did, oracle_entity_did, last_processed_count,
           user_context, room_id, slack_thread_ts
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -204,6 +204,19 @@ ___________________________________________________________
         })
       : selectedSession.title;
 
+    if (allowTitleUpdate && roomId && title) {
+      this.matrixManger
+        .editMessage({
+          messageId: sessionId,
+          roomId,
+          message: title,
+          isOracleAdmin: true,
+        })
+        .catch((err) => {
+          Logger.error('Failed to update conversation title in Matrix:', err);
+        });
+    }
+
     const lastUpdatedAt = new Date().toISOString();
     const updatedSession: ChatSession = {
       ...selectedSession,
@@ -215,7 +228,7 @@ ___________________________________________________________
 
     db.prepare(
       `
-      UPDATE sessions 
+      UPDATE sessions
       SET title = ?, last_updated_at = ?, last_processed_count = ?, slack_thread_ts = ?
       WHERE session_id = ?
     `,
@@ -238,11 +251,11 @@ ___________________________________________________________
     const db = await this.syncService.getUserDatabase(did);
     const row = db
       .prepare(
-        `SELECT 
+        `SELECT
           session_id, title, last_updated_at, created_at, oracle_name,
           oracle_did, oracle_entity_did, last_processed_count,
           user_context, room_id, slack_thread_ts
-         FROM sessions 
+         FROM sessions
          WHERE session_id = ?`,
       )
       .get(sessionId) as
@@ -301,12 +314,12 @@ ___________________________________________________________
     // Get paginated sessions with total count
     const rows = db
       .prepare(
-        `SELECT 
+        `SELECT
           session_id, title, last_updated_at, created_at, oracle_name,
           oracle_did, oracle_entity_did, last_processed_count,
           user_context, room_id, slack_thread_ts,
           COUNT(*) OVER() as total
-         FROM sessions 
+         FROM sessions
          ORDER BY last_updated_at DESC
          LIMIT ? OFFSET ?`,
       )
@@ -347,6 +360,7 @@ ___________________________________________________________
 
   public async createSession(
     createSessionDto: CreateChatSessionDto,
+    overrideEventId?: string,
   ): Promise<CreateChatSessionResponseDto> {
     const userHomeServer =
       createSessionDto.homeServer ||
@@ -360,11 +374,13 @@ ___________________________________________________________
     if (!roomId) {
       throw new Error('Room ID not found');
     }
-    const eventId = await this.matrixManger.sendMessage({
-      message: 'New Conversation Started',
-      roomId,
-      isOracleAdmin: true,
-    });
+    const eventId =
+      overrideEventId ??
+      (await this.matrixManger.sendMessage({
+        message: 'New Conversation Started',
+        roomId,
+        isOracleAdmin: true,
+      }));
 
     // Gather user context from Memory Engine
     let userContext: UserContextData | undefined;

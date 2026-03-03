@@ -46,11 +46,16 @@ import {
   listSkillsTool,
   searchSkillsTool,
 } from '../nodes/tools-node/skills-tools';
+import { createFileProcessingTool } from '../nodes/tools-node/file-processing-tool';
+import { createListRoomFilesTool } from '../nodes/tools-node/list-room-files-tool';
+import { type FileProcessingService } from 'src/messages/file-processing.service';
 interface InvokeMainAgentParams {
   state: Partial<TMainAgentGraphState>;
   config: IRunnableConfigWithRequiredFields;
   /** Optional UCAN service for MCP tool authorization */
   ucanService?: UcanService;
+  /** Optional file processing service for the process_file tool */
+  fileProcessingService?: FileProcessingService;
 }
 
 const configService = new ConfigService<ENV>();
@@ -82,6 +87,7 @@ export const createMainAgent = async ({
   state,
   config,
   ucanService,
+  fileProcessingService,
 }: InvokeMainAgentParams): // eslint-disable-next-line @typescript-eslint/no-explicit-any
 Promise<ReactAgent<any, any, any, any>> => {
   const msgFromMatrixRoom = Boolean(
@@ -265,6 +271,10 @@ Promise<ReactAgent<any, any, any, any>> => {
       callFirecrawlAgentTool,
       callDomainIndexerAgentTool,
       ...(callEditorAgentTool ? [callEditorAgentTool] : []),
+      ...(fileProcessingService
+        ? [createFileProcessingTool(fileProcessingService, matrix?.roomId)]
+        : []),
+      ...(matrix?.roomId ? [createListRoomFilesTool(matrix.roomId)] : []),
     ],
     middleware,
     systemPrompt,

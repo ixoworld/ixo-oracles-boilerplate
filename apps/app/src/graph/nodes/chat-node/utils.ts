@@ -1,4 +1,4 @@
-import { type CleanAdditionalKwargs } from '@ixo/common';
+import { type AttachmentMeta, type CleanAdditionalKwargs } from '@ixo/common';
 
 /**
  * Cleans up additional_kwargs by extracting reasoning information and keeping only essential fields
@@ -31,6 +31,9 @@ export function cleanAdditionalKwargs(
     msgFromMatrixRoom,
     timestamp: new Date().toISOString(),
     oracleName: process.env.ORACLE_NAME || 'IXO Oracle',
+    ...(additionalKwargs.attachment
+      ? { attachment: additionalKwargs.attachment as AttachmentMeta }
+      : {}),
   };
 
   // Add reasoning fields only if they exist

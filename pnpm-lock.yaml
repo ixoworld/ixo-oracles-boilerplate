@@ -74,8 +74,8 @@ importers:
   apps/app:
     dependencies:
       '@ixo/common':
-        specifier: 1.1.3
-        version: 1.1.3(@browserbasehq/sdk@2.6.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.56.1)(deepmerge@4.3.1)(dotenv@16.6.1)(openai@6.9.1(ws@8.18.2)(zod@4.1.12))(zod@4.1.12))(@ibm-cloud/watsonx-ai@1.7.3)(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.0(@opentelemetry/api@1.9.0))(@upstash/ratelimit@2.0.7(@upstash/redis@1.35.6))(@upstash/redis@1.35.6)(better-sqlite3@12.4.6)(cborg@4.3.2)(chromadb@1.10.5(openai@6.9.1(ws@8.18.2)(zod@4.1.12)))(fast-xml-parser@4.5.3)(ibm-cloud-sdk-core@5.4.4)(ignore@5.3.2)(ioredis@5.8.2)(jsdom@28.1.0(@noble/hashes@1.8.0))(jsonwebtoken@9.0.2)(lodash@4.17.21)(neo4j-driver@5.28.2)(pg@8.16.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(ws@8.18.2)(zod-to-json-schema@3.25.0(zod@4.1.12))
+        specifier: ^1.1.32
+        version: 1.1.32(@browserbasehq/sdk@2.6.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.56.1)(deepmerge@4.3.1)(dotenv@16.6.1)(openai@6.9.1(ws@8.18.2)(zod@4.1.12))(zod@4.1.12))(@ibm-cloud/watsonx-ai@1.7.3)(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.0(@opentelemetry/api@1.9.0))(@upstash/ratelimit@2.0.7(@upstash/redis@1.35.6))(@upstash/redis@1.35.6)(better-sqlite3@12.4.6)(cborg@4.3.2)(chromadb@1.10.5(openai@6.9.1(ws@8.18.2)(zod@4.1.12)))(fast-xml-parser@4.5.3)(ibm-cloud-sdk-core@5.4.4)(ignore@5.3.2)(ioredis@5.8.2)(jsdom@28.1.0(@noble/hashes@1.8.0))(jsonwebtoken@9.0.2)(lodash@4.17.21)(neo4j-driver@5.28.2)(pg@8.16.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(ws@8.18.2)(zod-to-json-schema@3.25.0(zod@4.1.12))
       '@ixo/matrix':
         specifier: 1.2.2
         version: 1.2.2(@langchain/core@1.0.6(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.0(@opentelemetry/api@1.9.0))(openai@6.9.1(ws@8.18.2)(zod@4.1.12)))
@@ -92,8 +92,8 @@ importers:
         specifier: 1.0.0
         version: 1.0.0(@types/express@5.0.5)
       '@ixo/sqlite-saver':
-        specifier: ^1.0.5
-        version: 1.0.5(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.0(@opentelemetry/api@1.9.0))(openai@6.9.1(ws@8.18.2)(zod@4.1.12))
+        specifier: ^1.0.52
+        version: 1.0.52(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.0(@opentelemetry/api@1.9.0))(openai@6.9.1(ws@8.18.2)(zod@4.1.12))
       '@ixo/ucan':
         specifier: 1.0.1
         version: 1.0.1(@cosmjs/crypto@0.33.1)(@cosmjs/encoding@0.33.1)(typescript@5.9.3)
@@ -3022,8 +3022,8 @@ packages:
     resolution: {integrity: sha512-ZXRY4jNvVgSVQ8DL3LTcakaAtXwTVUxE81hslsyD2AtoXW/wVob10HkOJ1X/pAlcI7D+2YoZKg5do8G/w6RYgA==}
     engines: {node: '>=8'}
 
-  '@ixo/common@1.1.3':
-    resolution: {integrity: sha512-eat15xLt7tePY3rX1KrDsw2jtzrHvmP+SFwAqqHqm6TWGPeXWfT/2EWk00RvYEK7nwUN+zyRd+5HVq9gYLPC1A==}
+  '@ixo/common@1.1.32':
+    resolution: {integrity: sha512-08jKLaJMhV5ojUKv9OvcwzqnzzbI9NQTcVvgw73DS3wuKN/7t+3L8gAwb8I7v54uFieHuBuryIYyLd5L9DDmJQ==}
 
   '@ixo/did-provider-x@0.0.2':
     resolution: {integrity: sha512-QOZH3i68pGfRZSyU+OSu3OkplfB5UIj6nRrm0ieD827/OyAQXu+uTyz+POoD9Icrn9OVFP3gl7b3b0sgpaeavg==}
@@ -3077,8 +3077,8 @@ packages:
   '@ixo/slack@1.0.0':
     resolution: {integrity: sha512-DOr43XgGjmCmm8psFdOA72o3U4JzoBv8y+vtuXphF6LAFcJ3NO+YjzMsqrM0CRhrRH6V1j8Yp67h21sq8mXfww==}
 
-  '@ixo/sqlite-saver@1.0.5':
-    resolution: {integrity: sha512-4PwB68SInusG8l08tuqOD8zke4yygVDuiTQmRXuhs0IOatiP+bPIntF6rn17J+6qeXm8AHvp7rySaiaMPafwRA==}
+  '@ixo/sqlite-saver@1.0.52':
+    resolution: {integrity: sha512-DmGdyq/BLRSIqmqp8mje/tTdRbpyqM8rDuzK5zRaWouUvU9UkcKV5IgxBGoxhEZDXcrEbdAaPLanctDMsvp2rw==}
 
   '@ixo/typescript-config@1.0.0':
     resolution: {integrity: sha512-reavFCnQlEY3efgDMBJoUbHJUIhlpFgf/LS0Q1Vqz+y/mbXymItF82unAzcmRFjb5fE+ANgYpj0k22njWs/tzg==}
@@ -14542,7 +14542,7 @@ snapshots:
 
   '@istanbuljs/schema@0.1.3': {}
 
-  '@ixo/common@1.1.3(@browserbasehq/sdk@2.6.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.56.1)(deepmerge@4.3.1)(dotenv@16.6.1)(openai@6.9.1(ws@8.18.2)(zod@4.1.12))(zod@4.1.12))(@ibm-cloud/watsonx-ai@1.7.3)(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.0(@opentelemetry/api@1.9.0))(@upstash/ratelimit@2.0.7(@upstash/redis@1.35.6))(@upstash/redis@1.35.6)(better-sqlite3@12.4.6)(cborg@4.3.2)(chromadb@1.10.5(openai@6.9.1(ws@8.18.2)(zod@4.1.12)))(fast-xml-parser@4.5.3)(ibm-cloud-sdk-core@5.4.4)(ignore@5.3.2)(ioredis@5.8.2)(jsdom@28.1.0(@noble/hashes@1.8.0))(jsonwebtoken@9.0.2)(lodash@4.17.21)(neo4j-driver@5.28.2)(pg@8.16.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(ws@8.18.2)(zod-to-json-schema@3.25.0(zod@4.1.12))':
+  '@ixo/common@1.1.32(@browserbasehq/sdk@2.6.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.56.1)(deepmerge@4.3.1)(dotenv@16.6.1)(openai@6.9.1(ws@8.18.2)(zod@4.1.12))(zod@4.1.12))(@ibm-cloud/watsonx-ai@1.7.3)(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.0(@opentelemetry/api@1.9.0))(@upstash/ratelimit@2.0.7(@upstash/redis@1.35.6))(@upstash/redis@1.35.6)(better-sqlite3@12.4.6)(cborg@4.3.2)(chromadb@1.10.5(openai@6.9.1(ws@8.18.2)(zod@4.1.12)))(fast-xml-parser@4.5.3)(ibm-cloud-sdk-core@5.4.4)(ignore@5.3.2)(ioredis@5.8.2)(jsdom@28.1.0(@noble/hashes@1.8.0))(jsonwebtoken@9.0.2)(lodash@4.17.21)(neo4j-driver@5.28.2)(pg@8.16.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(ws@8.18.2)(zod-to-json-schema@3.25.0(zod@4.1.12))':
     dependencies:
       '@cosmjs/proto-signing': 0.33.1
       '@cosmjs/stargate': 0.33.1
@@ -14890,7 +14890,7 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@ixo/sqlite-saver@1.0.5(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.0(@opentelemetry/api@1.9.0))(openai@6.9.1(ws@8.18.2)(zod@4.1.12))':
+  '@ixo/sqlite-saver@1.0.52(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.0(@opentelemetry/api@1.9.0))(openai@6.9.1(ws@8.18.2)(zod@4.1.12))':
     dependencies:
       '@ixo/logger': 0.0.2
       '@langchain/core': 1.0.6(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.0(@opentelemetry/api@1.9.0))(openai@6.9.1(ws@8.18.2)(zod@4.1.12))

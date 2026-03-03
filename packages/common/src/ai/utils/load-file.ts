@@ -107,6 +107,23 @@ export const loadFile = async (
   }
 };
 
+/**
+ * Loads a file from a buffer and returns processed content.
+ * Useful when you already have the file data (e.g., downloaded from Matrix).
+ */
+export const loadFileFromBuffer = async (
+  buffer: Buffer,
+  mimetype: string,
+  filename?: string,
+): Promise<Document[]> => {
+  const fileType = determineFileType(filename ?? '', mimetype);
+  if (!fileType) {
+    throw new Error(`Unsupported file type: ${mimetype}`);
+  }
+  const blob = new Blob([buffer], { type: mimetype });
+  return processFile(blob, fileType);
+};
+
 const processFile = async (
   blob: Blob,
   fileType: SupportedFileType,

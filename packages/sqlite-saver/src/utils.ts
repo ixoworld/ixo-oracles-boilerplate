@@ -276,6 +276,15 @@ export function _default(obj: any): any {
   }
 }
 
+export interface AttachmentMeta {
+  filename: string;
+  mimetype: string;
+  size?: number;
+  mxcUri?: string;
+  eventId?: string;
+  category: string;
+}
+
 export interface CleanAdditionalKwargs {
   msgFromMatrixRoom: boolean;
   timestamp: string;
@@ -285,6 +294,7 @@ export interface CleanAdditionalKwargs {
     type: string;
     text: string;
   }>;
+  attachment?: AttachmentMeta;
   [key: string]: unknown; // Allow additional properties for LangChain compatibility
 }
 
@@ -318,6 +328,9 @@ export function cleanAdditionalKwargs(
     msgFromMatrixRoom,
     timestamp: new Date().toISOString(),
     oracleName: process.env.ORACLE_NAME || 'IXO Oracle',
+    ...(additionalKwargs.attachment && {
+      attachment: additionalKwargs.attachment as AttachmentMeta,
+    }),
   };
 
   // Add reasoning fields only if they exist

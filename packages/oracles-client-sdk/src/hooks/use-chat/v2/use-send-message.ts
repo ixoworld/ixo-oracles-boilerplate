@@ -14,12 +14,17 @@ import {
 } from '../../../utils/sse-parser.js';
 import { useGetOpenIdToken } from '../../use-get-openid-token/use-get-openid-token.js';
 import { useOraclesConfig } from '../../use-oracles-config.js';
-import { type IMessage, type ISendMessageOptions } from './types.js';
+import {
+  type Attachment,
+  type IMessage,
+  type ISendMessageOptions,
+} from './types.js';
 
 interface IUseSendMessageReturn {
   sendMessage: (
     message: string,
     metadata?: Record<string, unknown>,
+    attachments?: Attachment[],
   ) => Promise<void>;
   abortStream: () => Promise<void>;
   isSending: boolean;
@@ -81,9 +86,11 @@ export function useSendMessage({
     mutationFn: async ({
       message,
       metadata,
+      attachments,
     }: {
       message: string;
       metadata?: Record<string, unknown>;
+      attachments?: Attachment[];
     }) => {
       const openidToken = openIdToken ?? (await refetchOpenIdToken());
       if (!apiUrl) {
@@ -116,6 +123,25 @@ export function useSendMessage({
         };
         await chatRef?.current?.addUserMessage(userMessage);
 
+        // Add optimistic file messages (one per attachment)
+        if (attachments?.length) {
+          for (const attachment of attachments) {
+            const fileMessage: IMessage = {
+              id: window.crypto.randomUUID(),
+              content: `[Processing file: ${attachment.filename}]`,
+              type: 'human',
+              attachment: {
+                filename: attachment.filename,
+                mimetype: attachment.mimetype,
+                size: attachment.size,
+                mxcUri: attachment.mxcUri,
+                eventId: attachment.eventId,
+              },
+            };
+            await chatRef?.current?.addUserMessage(fileMessage);
+          }
+        }
+
         // 2. Stream AI response
         chatRef?.current?.setStatus('streaming');
 
@@ -129,6 +155,7 @@ export function useSendMessage({
           matrixAccessToken: openidToken.access_token,
           sessionId,
           metadata,
+          attachments,
           browserTools: browserTools
             ? Object.values(browserTools).map((tool) => ({
                 name: tool.toolName,
@@ -222,8 +249,12 @@ export function useSendMessage({
   });
 
   const sendMessage = useCallback(
-    async (message: string, metadata?: Record<string, unknown>) => {
-      await mutateAsync({ message, metadata });
+    async (
+      message: string,
+      metadata?: Record<string, unknown>,
+      attachments?: Attachment[],
+    ) => {
+      await mutateAsync({ message, metadata, attachments });
     },
     [mutateAsync],
   );
@@ -245,6 +276,7 @@ const askOracleStream = async (props: {
   sessionId: string;
   matrixAccessToken: string;
   metadata?: Record<string, unknown>;
+  attachments?: Attachment[];
   browserTools?: {
     name: string;
     description: string;
@@ -291,6 +323,7 @@ const askOracleStream = async (props: {
       message: props.message,
       stream: true,
       ...(props.metadata && { metadata: props.metadata }),
+      ...(props.attachments?.length && { attachments: props.attachments }),
       ...(props.browserTools && { tools: props.browserTools }),
       ...(props.agActions && { agActions: props.agActions }),
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,

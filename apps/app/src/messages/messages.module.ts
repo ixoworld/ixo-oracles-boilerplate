@@ -8,6 +8,7 @@ import { MatrixManager } from '@ixo/matrix';
 import { CheckpointStorageSyncModule } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.module';
 import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 import { MessagesController } from './messages.controller';
+import { FileProcessingService } from './file-processing.service';
 import { MessagesService } from './messages.service';
 
 @Module({
@@ -15,6 +16,7 @@ import { MessagesService } from './messages.service';
   controllers: [MessagesController],
   providers: [
     MessagesService,
+    FileProcessingService,
     MainAgentGraph,
     {
       provide: MemoryEngineService,
