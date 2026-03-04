@@ -100,6 +100,7 @@ type BlocknoteToolset =
       readSurveyTool: StructuredTool;
       fillSurveyAnswersTool: StructuredTool;
       validateSurveyAnswersTool: StructuredTool;
+      executeActionTool: StructuredTool;
     };
 
 export type EditorAgentMode = 'edit' | 'readOnly';
@@ -148,6 +149,7 @@ const resolveTools = (
       readSurveyTool: StructuredTool;
       fillSurveyAnswersTool: StructuredTool;
       validateSurveyAnswersTool: StructuredTool;
+      executeActionTool: StructuredTool;
     }
   >;
 
@@ -169,6 +171,7 @@ const resolveTools = (
     writableToolset.readSurveyTool,
     writableToolset.fillSurveyAnswersTool,
     writableToolset.validateSurveyAnswersTool,
+    writableToolset.executeActionTool,
   ];
 };
 

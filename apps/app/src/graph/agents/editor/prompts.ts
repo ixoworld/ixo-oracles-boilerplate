@@ -29,6 +29,11 @@ Execution mode:
 - Only ask clarifying questions when the instruction is genuinely ambiguous
   (e.g., no block ID specified and multiple blocks could match).
 - If an operation fails, return the error details so the main agent can retry or inform the user.
+
+Action execution:
+- For action blocks in flow documents, ALWAYS use execute_action. Never use edit_block
+  with runtimeUpdates on action blocks in flow mode.
+- Action blocks are identified by having an actionType property.
 `.trim();
 
 export const EDITOR_DOCUMENTATION_CONTENT = `---
@@ -59,6 +64,14 @@ You have access to tools for editing collaborative documents backed by Y.js CRDT
 - \`read_survey\` — survey structure, current answers, missing required fields
 - \`fill_survey_answers\` — merge or replace survey answers
 - \`validate_survey_answers\` — check completeness, validity, and completion percentage
+
+### Action Execution
+
+- \`execute_action\` — executes an action block through the flow engine
+  (activation → authorization → execution → runtime state update)
+- Supports: http.request, email.send, notification.push, human.checkbox.set, form.submit, protocol.select
+- Returns: { success, stage, error, result, blockId, actionType }
+- Use this instead of \`edit_block\` with \`runtimeUpdates\` for action blocks in flow documents
 
 ### Block Props vs Runtime State
 

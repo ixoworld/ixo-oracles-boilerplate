@@ -41,6 +41,15 @@ import {
   type SurveySchema,
   validateAnswersAgainstSchema,
 } from './survey-helpers';
+import {
+  getAction,
+  getAllActions,
+  buildFlowNodeFromBlock,
+  executeNode,
+  type ActionServices,
+  type FlowRuntimeStateManager,
+  type FlowNodeRuntimeState,
+} from '@ixo/editor/core';
 
 const configService = new ConfigService<ENV>();
 
@@ -71,6 +80,90 @@ export const BLOCKNOTE_TOOLS_CONFIG = {
  */
 
 const logger = new Logger('BlocknoteTools');
+
+// ── DID Helpers ───────────────────────────────────────────────────────
+
+/**
+ * Extracts a valid DID from a Matrix user ID.
+ * Matrix format: @did-ixo-ixo1abc123def:mx.server.com
+ * Result:        did:ixo:ixo1abc123def
+ *
+ * The localpart encodes the DID with hyphens instead of colons.
+ */
+function matrixUserIdToDid(matrixUserId: string): string {
+  // Strip leading @ and remove homeserver (:server.com)
+  const localpart = matrixUserId.replace(/^@/, '').replace(/:.*$/, '');
+  // Convert hyphens back to colons: did-ixo-ixo1abc → did:ixo:ixo1abc
+  // Only replace the first two hyphens (did-method-identifier)
+  const parts = localpart.split('-');
+  if (parts.length >= 3 && parts[0] === 'did') {
+    return `${parts[0]}:${parts[1]}:${parts.slice(2).join('-')}`;
+  }
+  // Fallback: return as-is if it doesn't match expected pattern
+  return localpart;
+}
+
+// ── Flow Engine Helpers ───────────────────────────────────────────────
+
+/**
+ * Creates a FlowRuntimeStateManager backed by a Y.Doc's 'runtime' map.
+ * Mirrors the pattern from the editor's runtime.ts.
+ * Wraps mutations in doc.transact for reliable CRDT sync.
+ */
+function createYDocRuntimeManager(doc: Y.Doc): FlowRuntimeStateManager {
+  const map = doc.getMap('runtime');
+  return {
+    get: (nodeId: string): FlowNodeRuntimeState => {
+      const stored = map.get(nodeId);
+      if (!stored || typeof stored !== 'object') return {};
+      return { ...(stored as FlowNodeRuntimeState) };
+    },
+    update: (nodeId: string, updates: Partial<FlowNodeRuntimeState>) => {
+      doc.transact(() => {
+        const current = map.get(nodeId);
+        const existing =
+          current && typeof current === 'object'
+            ? { ...(current as FlowNodeRuntimeState) }
+            : {};
+        map.set(nodeId, { ...existing, ...updates });
+      }, 'oracle-runtime-update');
+    },
+  };
+}
+
+/**
+ * Oracle-side ActionServices — MVP supports HTTP only.
+ * Additional services (email, notify) can be wired up when the oracle has those capabilities.
+ */
+const oracleActionServices: ActionServices = {
+  http: {
+    request: async (params: {
+      url: string;
+      method: string;
+      headers?: Record<string, string>;
+      body?: unknown;
+    }) => {
+      const { url, method, headers = {}, body } = params;
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', ...headers },
+        ...(body !== undefined && { body: JSON.stringify(body) }),
+      });
+      const data = await res.text();
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(data);
+      } catch {
+        parsed = data;
+      }
+      const responseHeaders: Record<string, string> = {};
+      res.headers.forEach((v, k) => {
+        responseHeaders[k] = v;
+      });
+      return { status: res.status, headers: responseHeaders, data: parsed };
+    },
+  },
+};
 
 /**
  * Creates BlockNote tools that use a shared Matrix client
@@ -293,6 +386,34 @@ List blocks without text content (faster):
 
       try {
         const { doc } = await providerManager.init();
+
+        // Guard: reject runtimeUpdates on action blocks in flow mode — use execute_action instead
+        if (
+          runtimeUpdates &&
+          typeof runtimeUpdates === 'object' &&
+          Object.keys(runtimeUpdates as Record<string, unknown>).length > 0
+        ) {
+          const blockDetail = getBlockDetail(doc, blockId, false);
+          const blockProps = blockDetail
+            ? extractBlockProperties(blockDetail)
+            : {};
+          const hasActionType = blockProps.actionType !== undefined;
+
+          if (hasActionType) {
+            const flowMeta = readFlowMetadata(doc);
+            const isFlow = flowMeta['_type'] === 'ixo.flow.crdt';
+
+            if (isFlow) {
+              return JSON.stringify({
+                success: false,
+                error: `Cannot apply runtimeUpdates directly to action block "${blockId}" in a flow document. ` +
+                  `Use the execute_action tool instead — it runs the action through the flow engine ` +
+                  `(activation → authorization → execution → runtime state update) for a proper audit trail.`,
+              });
+            }
+          }
+        }
+
         // Wrap updates in 'props' for consistency with CLI pattern
         const attributes =
           Object.keys(updates).length > 0 ? { props: updates } : {};
@@ -1668,6 +1789,229 @@ Examples:
   );
 
   // ============================================================================
+  // Tool 14: Execute Action (flow engine integration)
+  // ============================================================================
+
+  /**
+   * Executes an action block through the flow engine pipeline:
+   * activation → authorization → execution → runtime state update.
+   *
+   * Supports: http.request, email.send, notification.push,
+   * human.checkbox.set, form.submit, protocol.select
+   */
+  const executeActionTool = tool(
+    async ({ blockId, inputOverrides = {} }) => {
+      Logger.log(`⚡ execute_action tool invoked for block: ${blockId}`);
+
+      const isInRoom = await checkIfInRoomAndJoinPublicRoom(
+        matrixClient,
+        roomId,
+      );
+
+      if (!isInRoom) {
+        return JSON.stringify({
+          success: false,
+          error: `Companion is not in the room ${roomId}, please invite companion to the room. companion user id: ${matrixClient.getUserId()}`,
+        });
+      }
+
+      const providerManager = new MatrixProviderManager(matrixClient, config);
+
+      try {
+        const { doc } = await providerManager.init();
+
+        // 1. Verify this is a flow document (not a template)
+        const flowMeta = readFlowMetadata(doc);
+        if (flowMeta['_type'] !== 'ixo.flow.crdt') {
+          return JSON.stringify({
+            success: false,
+            error:
+              'execute_action is only supported on flow documents, not templates.',
+          });
+        }
+
+        // 2. Read the block and extract actionType
+        const blockDetail = getBlockDetail(doc, blockId, false);
+        if (!blockDetail) {
+          return JSON.stringify({
+            success: false,
+            error: `Block "${blockId}" not found.`,
+          });
+        }
+
+        const blockProps = extractBlockProperties(blockDetail);
+        const actionType = blockProps.actionType as string | undefined;
+        if (!actionType) {
+          return JSON.stringify({
+            success: false,
+            error: `Block "${blockId}" is not an action block (no actionType property).`,
+          });
+        }
+
+        // 3. Look up registered action
+        const actionDef = getAction(actionType);
+        if (!actionDef) {
+          const available = getAllActions().map((a) => a.type);
+          return JSON.stringify({
+            success: false,
+            error: `Unknown action type "${actionType}". Available: ${available.join(', ')}`,
+          });
+        }
+
+        // 4. Parse inputs from block props and merge with overrides
+        let inputs: Record<string, unknown> = {};
+        if (blockProps.inputs) {
+          try {
+            inputs =
+              typeof blockProps.inputs === 'string'
+                ? JSON.parse(blockProps.inputs)
+                : (blockProps.inputs as Record<string, unknown>);
+          } catch {
+            inputs = {};
+          }
+        }
+        if (inputOverrides && Object.keys(inputOverrides).length > 0) {
+          inputs = { ...inputs, ...inputOverrides };
+        }
+
+        // 5. Resolve {{blockId.prop}} references in input values
+        const allBlocks = collectAllBlocks(doc.getXmlFragment('document'));
+        for (const [key, val] of Object.entries(inputs)) {
+          if (
+            typeof val === 'string' &&
+            val.includes('{{') &&
+            val.includes('}}')
+          ) {
+            inputs[key] = resolveBlockReferences(val, allBlocks);
+          }
+        }
+
+        // 6. Build FlowNode from block
+        const flowNode = buildFlowNodeFromBlock({
+          id: blockId,
+          type: blockDetail.blockType || 'action',
+          props: blockProps as Record<string, any>,
+        });
+
+        // 7. Build runtime state manager from Y.Doc
+        const runtimeManager = createYDocRuntimeManager(doc);
+
+        // 8. Derive oracle DID from Matrix user ID
+        // Matrix format: @did-ixo-ixo1abc123:mx.server.com → did:ixo:ixo1abc123
+        const oracleUserId =
+          configService.get('MATRIX_ORACLE_ADMIN_USER_ID') ?? '';
+        const actorDid = matrixUserIdToDid(oracleUserId);
+
+        const flowId = (flowMeta.doc_id as string) ?? roomId;
+
+        // 9. Execute through the flow engine (V1 — no UCAN invocation for MVP)
+        // executeNode handles: activation check → authorization check → action() → runtime update
+        const outcome = await executeNode({
+          node: flowNode,
+          actorDid,
+          context: {
+            runtime: runtimeManager,
+          },
+          action: async () => {
+            const result = await actionDef.run(inputs as Record<string, any>, {
+              actorDid,
+              flowId,
+              nodeId: blockId,
+              services: oracleActionServices,
+            });
+            return { payload: result.output };
+          },
+        });
+
+        // Supplement runtime with V1 lifecycle fields + action output
+        // (executeNode's updateRuntimeAfterSuccess only writes legacy compat fields)
+        if (outcome.success && outcome.result) {
+          runtimeManager.update(blockId, {
+            state: 'completed',
+            output: outcome.result.payload as Record<string, any>,
+            executedByDid: actorDid,
+            executedAt: Date.now(),
+          });
+        } else if (!outcome.success) {
+          runtimeManager.update(blockId, {
+            state: 'failed',
+            error: {
+              message: outcome.error ?? 'Unknown error',
+              at: Date.now(),
+            },
+          });
+        }
+
+        return JSON.stringify({
+          success: outcome.success,
+          stage: outcome.stage,
+          ...(outcome.error && { error: outcome.error }),
+          ...(outcome.result && { result: outcome.result }),
+          blockId,
+          actionType,
+        });
+      } catch (error) {
+        Logger.error('Error executing action:', error);
+        return JSON.stringify({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        await providerManager.dispose();
+      }
+    },
+    {
+      name: 'execute_action',
+      description: `Executes an action block through the flow engine pipeline.
+
+**Flow engine gates:** activation → authorization → execution → runtime state update
+
+**Supported actions:** http.request, email.send, notification.push, human.checkbox.set, form.submit, protocol.select
+
+**Usage:**
+- Pass the blockId of an action block (a block with an \`actionType\` property)
+- Optionally provide inputOverrides to override/supplement the block's stored inputs
+- The tool resolves \`{{blockId.prop}}\` references in inputs automatically
+- Returns the execution outcome including success/failure, stage reached, and result data
+
+**Example:**
+\`\`\`json
+{"blockId": "550e8400-e29b-41d4-a716-446655440000"}
+\`\`\`
+
+**With input overrides:**
+\`\`\`json
+{"blockId": "550e8400-e29b-41d4-a716-446655440000", "inputOverrides": {"url": "https://api.example.com/data"}}
+\`\`\`
+
+**Returns:**
+\`\`\`json
+{
+  "success": true,
+  "stage": "execution",
+  "result": {"status": 200, "data": {...}},
+  "blockId": "...",
+  "actionType": "http.request"
+}
+\`\`\``,
+      schema: z.object({
+        blockId: z
+          .string()
+          .describe(
+            'The exact ID of the action block to execute (must have actionType property)',
+          ),
+        inputOverrides: z
+          .record(z.any(), z.any())
+          .optional()
+          .default({})
+          .describe(
+            'Optional: override or supplement the block\'s stored inputs. Example: {"url": "https://..."}',
+          ),
+      }),
+    },
+  );
+
+  // ============================================================================
   // Return tools based on mode
   // ============================================================================
 
@@ -1699,6 +2043,7 @@ Examples:
     readSurveyTool,
     fillSurveyAnswersTool,
     validateSurveyAnswersTool,
+    executeActionTool,
   };
 };
 
