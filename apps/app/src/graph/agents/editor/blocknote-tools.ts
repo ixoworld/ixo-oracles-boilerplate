@@ -406,7 +406,8 @@ List blocks without text content (faster):
             if (isFlow) {
               return JSON.stringify({
                 success: false,
-                error: `Cannot apply runtimeUpdates directly to action block "${blockId}" in a flow document. ` +
+                error:
+                  `Cannot apply runtimeUpdates directly to action block "${blockId}" in a flow document. ` +
                   `Use the execute_action tool instead — it runs the action through the flow engine ` +
                   `(activation → authorization → execution → runtime state update) for a proper audit trail.`,
               });
@@ -1890,7 +1891,7 @@ Examples:
         const flowNode = buildFlowNodeFromBlock({
           id: blockId,
           type: blockDetail.blockType || 'action',
-          props: blockProps as Record<string, any>,
+          props: blockProps,
         });
 
         // 7. Build runtime state manager from Y.Doc
@@ -1913,7 +1914,7 @@ Examples:
             runtime: runtimeManager,
           },
           action: async () => {
-            const result = await actionDef.run(inputs as Record<string, any>, {
+            const result = await actionDef.run(inputs, {
               actorDid,
               flowId,
               nodeId: blockId,
@@ -1928,7 +1929,7 @@ Examples:
         if (outcome.success && outcome.result) {
           runtimeManager.update(blockId, {
             state: 'completed',
-            output: outcome.result.payload as Record<string, any>,
+            output: outcome.result.payload as Record<string, unknown>,
             executedByDid: actorDid,
             executedAt: Date.now(),
           });
