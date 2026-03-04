@@ -78,12 +78,25 @@ type BlocknoteToolset =
   | {
       listBlocksTool: StructuredTool;
       readBlockByIdTool: StructuredTool;
+      searchBlocksTool: StructuredTool;
+      readFlowContextTool: StructuredTool;
+      readFlowStatusTool: StructuredTool;
+      readBlockHistoryTool: StructuredTool;
+      readPermissionsTool: StructuredTool;
+      readSurveyTool: StructuredTool;
+      validateSurveyAnswersTool: StructuredTool;
     }
   | {
       listBlocksTool: StructuredTool;
       editBlockTool: StructuredTool;
       createBlockTool: StructuredTool;
+      deleteBlockTool: StructuredTool;
       readBlockByIdTool: StructuredTool;
+      searchBlocksTool: StructuredTool;
+      readFlowContextTool: StructuredTool;
+      readFlowStatusTool: StructuredTool;
+      readBlockHistoryTool: StructuredTool;
+      readPermissionsTool: StructuredTool;
       readSurveyTool: StructuredTool;
       fillSurveyAnswersTool: StructuredTool;
       validateSurveyAnswersTool: StructuredTool;
@@ -106,7 +119,17 @@ const resolveTools = (
   toolset: BlocknoteToolset,
 ): StructuredTool[] => {
   if (mode === 'readOnly') {
-    return [toolset.listBlocksTool, toolset.readBlockByIdTool];
+    return [
+      toolset.listBlocksTool,
+      toolset.readBlockByIdTool,
+      toolset.searchBlocksTool,
+      toolset.readFlowContextTool,
+      toolset.readFlowStatusTool,
+      toolset.readBlockHistoryTool,
+      toolset.readPermissionsTool,
+      toolset.readSurveyTool,
+      toolset.validateSurveyAnswersTool,
+    ];
   }
 
   const writableToolset = toolset as Extract<
@@ -115,7 +138,13 @@ const resolveTools = (
       listBlocksTool: StructuredTool;
       editBlockTool: StructuredTool;
       createBlockTool: StructuredTool;
+      deleteBlockTool: StructuredTool;
       readBlockByIdTool: StructuredTool;
+      searchBlocksTool: StructuredTool;
+      readFlowContextTool: StructuredTool;
+      readFlowStatusTool: StructuredTool;
+      readBlockHistoryTool: StructuredTool;
+      readPermissionsTool: StructuredTool;
       readSurveyTool: StructuredTool;
       fillSurveyAnswersTool: StructuredTool;
       validateSurveyAnswersTool: StructuredTool;
@@ -130,7 +159,13 @@ const resolveTools = (
     writableToolset.listBlocksTool,
     writableToolset.editBlockTool,
     writableToolset.createBlockTool,
+    writableToolset.deleteBlockTool,
     writableToolset.readBlockByIdTool,
+    writableToolset.searchBlocksTool,
+    writableToolset.readFlowContextTool,
+    writableToolset.readFlowStatusTool,
+    writableToolset.readBlockHistoryTool,
+    writableToolset.readPermissionsTool,
     writableToolset.readSurveyTool,
     writableToolset.fillSurveyAnswersTool,
     writableToolset.validateSurveyAnswersTool,

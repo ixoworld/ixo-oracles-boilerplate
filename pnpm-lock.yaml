@@ -83,8 +83,8 @@ importers:
         specifier: ^1.1.0
         version: 1.1.0(lib0@0.2.114)(matrix-js-sdk@37.13.0)(y-protocols@1.0.6(yjs@13.6.27))(yjs@13.6.27)
       '@ixo/oracles-chain-client':
-        specifier: 1.2.0
-        version: 1.2.0
+        specifier: workspace:*
+        version: link:../../packages/oracles-chain-client
       '@ixo/oracles-events':
         specifier: 1.0.4
         version: 1.0.4
@@ -637,6 +637,9 @@ importers:
       graphql-tag:
         specifier: ^2.12.6
         version: 2.12.6(graphql@16.12.0)
+      jose:
+        specifier: ^6.0.8
+        version: 6.1.2
       limiter:
         specifier: 2.1.0
         version: 2.1.0
@@ -20352,7 +20355,7 @@ snapshots:
       isstream: 0.1.2
       jsonwebtoken: 9.0.2
       mime-types: 2.1.35
-      retry-axios: 2.6.0(axios@1.13.2(debug@4.4.3))
+      retry-axios: 2.6.0(axios@1.13.2)
       tough-cookie: 4.1.4
     transitivePeerDependencies:
       - supports-color
@@ -23471,7 +23474,7 @@ snapshots:
       onetime: 5.1.2
       signal-exit: 3.0.7
 
-  retry-axios@2.6.0(axios@1.13.2(debug@4.4.3)):
+  retry-axios@2.6.0(axios@1.13.2):
     dependencies:
       axios: 1.13.2(debug@4.4.3)
 

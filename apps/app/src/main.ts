@@ -1,6 +1,9 @@
 import { getSubscriptionUrlByNetwork } from '@ixo/common';
 import { MatrixManager } from '@ixo/matrix';
-import { setupClaimSigningMnemonics } from '@ixo/oracles-chain-client';
+import {
+  setupClaimSigningMnemonics,
+  loadEncryptionKey,
+} from '@ixo/oracles-chain-client';
 import { type INestApplication, Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
@@ -9,6 +12,7 @@ import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { type ENV } from './config';
 import { EditorMatrixClient } from './graph/agents/editor/editor-mx';
+import { SecretsService } from './secrets/secrets.service';
 import { UserMatrixSqliteSyncService } from './user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 
 async function bootstrap(): Promise<void> {
@@ -129,6 +133,30 @@ async function bootstrap(): Promise<void> {
         Logger.log('Claim signing mnemonics setup complete');
       } else {
         Logger.log('Signing mnemonic creation skipped (DISABLE_CREDITS=true)');
+      }
+
+      // Load P-256 encryption key for user secrets
+      if (matrixAccountRoomId) {
+        Logger.log('Loading P-256 encryption key...');
+        const encryptionKeyResult = await loadEncryptionKey({
+          matrixRoomId: matrixAccountRoomId,
+          matrixAccessToken: configService.getOrThrow(
+            'MATRIX_ORACLE_ADMIN_ACCESS_TOKEN',
+          ),
+          pin: configService.getOrThrow('MATRIX_VALUE_PIN'),
+          signerDid: configService.getOrThrow('ORACLE_DID'),
+        });
+        if (encryptionKeyResult) {
+          SecretsService.getInstance().setEncryptionKey(
+            encryptionKeyResult.privateJwk,
+          );
+          Logger.log('P-256 encryption key loaded successfully');
+        } else {
+          Logger.warn(
+            'No P-256 encryption key found. User secrets will be unavailable. ' +
+              'Run "oracles-cli setup-encryption-key" to provision one.',
+          );
+        }
       }
     })
     .catch((error) => {

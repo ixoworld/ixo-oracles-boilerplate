@@ -333,6 +333,7 @@ export class MatrixProviderManager {
 
     if (this.provider) {
       try {
+        await this.provider.waitForFlush();
         this.provider.dispose();
       } catch (error) {
         Logger.warn('Error while disposing MatrixProvider', error as Error);
