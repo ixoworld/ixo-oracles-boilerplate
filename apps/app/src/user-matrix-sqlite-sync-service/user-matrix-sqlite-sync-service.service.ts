@@ -6,7 +6,6 @@ import {
   NotFoundException,
   OnModuleInit,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { createHash } from 'crypto';
 
 import { Cron, CronExpression } from '@nestjs/schedule';
@@ -28,7 +27,7 @@ import {
   uploadMediaToRoom,
 } from './matrix-upload-utils';
 import { type BaseSyncArgs } from './type';
-import { ENV } from '../config';
+import { getConfig } from '../config';
 
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
@@ -65,7 +64,7 @@ function isUnrecoverableDownloadError(error: unknown): boolean {
   return [...cryptoPatterns, ...matrixPatterns].some((p) => p.test(message));
 }
 
-const configService = new ConfigService<ENV>();
+const config = getConfig();
 
 /** Configure a SQLite connection with busy timeout for safe concurrent access */
 /** Configure a SQLite connection with pragmas for safe concurrent access on VPS */
@@ -82,21 +81,17 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
   private constructor() {
     // check if path exists
     const pathExists = fsSync.existsSync(
-      path.join(configService.getOrThrow('SQLITE_DATABASE_PATH')),
+      path.join(config.getOrThrow('SQLITE_DATABASE_PATH')),
     );
 
     if (!pathExists) {
-      fsSync.mkdirSync(
-        path.join(configService.getOrThrow('SQLITE_DATABASE_PATH')),
-        { recursive: true },
-      );
+      fsSync.mkdirSync(path.join(config.getOrThrow('SQLITE_DATABASE_PATH')), {
+        recursive: true,
+      });
     }
 
     this.fileEventsDatabase = new Database(
-      path.join(
-        configService.getOrThrow('SQLITE_DATABASE_PATH'),
-        'file_events.db',
-      ),
+      path.join(config.getOrThrow('SQLITE_DATABASE_PATH'), 'file_events.db'),
     );
     configureSqliteConnection(this.fileEventsDatabase);
   }
@@ -149,7 +144,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
     return (this.activeUsers.get(userDid) ?? 0) > 0;
   }
   static createUserStorageKey(userDid: string): string {
-    const key = `checkpoint_${userDid}_${configService.getOrThrow('ORACLE_DID')}`;
+    const key = `checkpoint_${userDid}_${config.getOrThrow('ORACLE_DID')}`;
     return createHash('sha256').update(key).digest('hex').substring(0, 17);
   }
 
@@ -163,7 +158,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
   }
 
   static checkpointsFolder = path.join(
-    configService.getOrThrow('SQLITE_DATABASE_PATH'),
+    config.getOrThrow('SQLITE_DATABASE_PATH'),
     'user_dbs',
   );
 
@@ -694,7 +689,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
         const userHomeServer = await getMatrixHomeServerCroppedForDid(userDid);
         const { roomId } = await mxManager.getOracleRoomIdWithHomeServer({
           userDid,
-          oracleEntityDid: configService.getOrThrow('ORACLE_ENTITY_DID'),
+          oracleEntityDid: config.getOrThrow('ORACLE_ENTITY_DID'),
           userHomeServer,
         });
 
@@ -884,7 +879,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
     const userHomeServer = await getMatrixHomeServerCroppedForDid(userDid);
     const { roomId } = await mxManager.getOracleRoomIdWithHomeServer({
       userDid,
-      oracleEntityDid: configService.getOrThrow('ORACLE_ENTITY_DID'),
+      oracleEntityDid: config.getOrThrow('ORACLE_ENTITY_DID'),
       userHomeServer,
     });
 
@@ -974,7 +969,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
     const userHomeServer = await getMatrixHomeServerCroppedForDid(userDid);
     const { roomId } = await mxManager.getOracleRoomIdWithHomeServer({
       userDid,
-      oracleEntityDid: configService.getOrThrow('ORACLE_ENTITY_DID'),
+      oracleEntityDid: config.getOrThrow('ORACLE_ENTITY_DID'),
       userHomeServer,
     });
 

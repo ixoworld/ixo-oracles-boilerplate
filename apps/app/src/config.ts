@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import z from 'zod';
 
 export const EnvSchema = z.object({
@@ -69,3 +70,36 @@ export const EnvSchema = z.object({
 export type ENV = z.infer<typeof EnvSchema> & {
   ORACLE_DID: string;
 };
+
+/**
+ * Centralized config accessor. Works with both NestJS-injected ConfigService
+ * and standalone (module-level) usage via the singleton fallback.
+ *
+ * Usage:
+ *   const config = getConfig();          // standalone (reads from process.env)
+ *   const config = getConfig(injected);  // NestJS DI context
+ *
+ *   config.get('PORT')                   // returns value or undefined
+ *   config.getOrThrow('ORACLE_DID')      // throws if missing
+ */
+export function getConfig(configService?: ConfigService<ENV>) {
+  const svc = configService ?? singletonConfigService();
+  return {
+    get<K extends keyof ENV>(key: K): ENV[K] | undefined {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return svc.get(key as any);
+    },
+    getOrThrow<K extends keyof ENV>(key: K): ENV[K] {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return svc.getOrThrow(key as any);
+    },
+  };
+}
+
+let _singleton: ConfigService<ENV> | undefined;
+function singletonConfigService(): ConfigService<ENV> {
+  if (!_singleton) {
+    _singleton = new ConfigService<ENV>();
+  }
+  return _singleton;
+}

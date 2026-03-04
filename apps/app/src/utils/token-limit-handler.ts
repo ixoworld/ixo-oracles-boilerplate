@@ -3,13 +3,12 @@ import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 import { type Serialized } from '@langchain/core/load/serializable';
 import { type LLMResult } from '@langchain/core/outputs';
 import { HttpException, HttpStatus, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import crypto from 'node:crypto';
-import { type ENV } from 'src/config';
+import { getConfig } from 'src/config';
 import z from 'zod';
 import { RedisService } from './redis.service';
 
-const configService = new ConfigService<ENV>();
+const config = getConfig();
 
 export class TokenLimiter {
   static readonly KEY_PREFIX = 'token_limit:';
@@ -72,10 +71,10 @@ export class TokenLimiter {
     // GROQ - OSS 120b model
     // Returns credits as float (1 credit = 1 uixo)
 
-    const markup = configService.getOrThrow('NETWORK') === 'mainnet' ? 1.6 : 10;
+    const markup = config.getOrThrow('NETWORK') === 'mainnet' ? 1.6 : 10;
     const costPerMillionTokens = 0.75 * markup; // 30% markup for profit
     const tokensPerMillion =
-      configService.getOrThrow('NETWORK') === 'mainnet' ? 1_000_000 : 1;
+      config.getOrThrow('NETWORK') === 'mainnet' ? 1_000_000 : 1;
 
     return Math.round((tokenCount / tokensPerMillion) * costPerMillionTokens);
   }
@@ -169,7 +168,7 @@ export class TokenLimiter {
         '0',
       );
 
-      if (configService.getOrThrow('DISABLE_CREDITS')) {
+      if (config.getOrThrow('DISABLE_CREDITS')) {
         return '0';
       }
       throw new HttpException(

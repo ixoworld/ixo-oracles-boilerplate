@@ -1,12 +1,11 @@
 import { tool } from '@langchain/core/tools';
-import { ConfigService } from '@nestjs/config';
 import 'dotenv/config';
-import { type ENV } from 'src/config';
+import { getConfig } from 'src/config';
 import z from 'zod';
 
-const configService = new ConfigService<ENV>();
+const config = getConfig();
 
-const baseUrl = () => configService.getOrThrow('DOMAIN_INDEXER_URL');
+const baseUrl = () => config.getOrThrow('DOMAIN_INDEXER_URL');
 
 /**
  * Search the domain indexer to find entities and retrieve their summaries, overviews, and FAQs

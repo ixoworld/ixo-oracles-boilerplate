@@ -12,9 +12,8 @@ import { OpenIdTokenProvider } from '@ixo/oracles-chain-client';
 import { type IRunnableConfigWithRequiredFields } from '@ixo/matrix';
 import { SqliteSaver } from '@ixo/sqlite-saver';
 import { Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { createAgent, type ReactAgent, toolRetryMiddleware } from 'langchain';
-import { type ENV } from 'src/config';
+import { getConfig } from 'src/config';
 import { type UcanService } from 'src/ucan/ucan.service';
 import { createSafetyGuardrailMiddleware } from '../middlewares/safety-guardrail-middleware';
 import { createTokenLimiterMiddleware } from '../middlewares/token-limiter-middelware';
@@ -58,7 +57,7 @@ interface InvokeMainAgentParams {
   fileProcessingService?: FileProcessingService;
 }
 
-const configService = new ConfigService<ENV>();
+const appConfig = getConfig();
 const llm = getOpenRouterChatModel({
   model: 'openai/gpt-oss-120b:nitro',
   __includeRawResponse: true,
@@ -71,16 +70,14 @@ const llm = getOpenRouterChatModel({
   },
 });
 
-const oracleMatrixBaseUrl = configService
+const oracleMatrixBaseUrl = appConfig
   .getOrThrow('MATRIX_BASE_URL')
   .replace(/\/$/, '');
 
 const oracleOpenIdTokenProvider = new OpenIdTokenProvider({
-  matrixAccessToken: configService.getOrThrow(
-    'MATRIX_ORACLE_ADMIN_ACCESS_TOKEN',
-  ),
+  matrixAccessToken: appConfig.getOrThrow('MATRIX_ORACLE_ADMIN_ACCESS_TOKEN'),
   homeServerUrl: oracleMatrixBaseUrl,
-  matrixUserId: configService.getOrThrow('MATRIX_ORACLE_ADMIN_USER_ID'),
+  matrixUserId: appConfig.getOrThrow('MATRIX_ORACLE_ADMIN_USER_ID'),
 });
 
 export const createMainAgent = async ({
@@ -108,7 +105,7 @@ Promise<ReactAgent<any, any, any, any>> => {
           mcpServers: {
             sandbox: {
               type: 'http',
-              url: configService.getOrThrow('SANDBOX_MCP_URL'),
+              url: appConfig.getOrThrow('SANDBOX_MCP_URL'),
               transport: 'http',
               headers: {
                 Authorization: `Bearer ${configurable.configs?.user.matrixOpenIdToken}`,
@@ -244,7 +241,7 @@ Promise<ReactAgent<any, any, any, any>> => {
   }
 
   // Build middleware list conditionally
-  const disableCredits = configService.get('DISABLE_CREDITS', false);
+  const disableCredits = appConfig.get('DISABLE_CREDITS');
 
   const middleware = [
     createToolValidationMiddleware(),

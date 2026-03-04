@@ -412,14 +412,14 @@ export class FileProcessingService {
       const chunks: Uint8Array[] = [];
       let totalBytes = 0;
 
-      // eslint-disable-next-line no-constant-condition
+       
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         totalBytes += value.byteLength;
         if (totalBytes > MAX_FILE_SIZE) {
-          reader.cancel();
+          void reader.cancel();
           throw new Error(
             `File exceeds maximum size (${Math.round(MAX_FILE_SIZE / 1024 / 1024)} MB) — download aborted`,
           );
@@ -443,9 +443,7 @@ export class FileProcessingService {
    * Perform a HEAD request to determine Content-Type and Content-Length
    * without downloading the body. Follows redirects with SSRF validation.
    */
-  private async headUrl(
-    url: string,
-  ): Promise<{
+  private async headUrl(url: string): Promise<{
     contentType?: string;
     contentLength?: number;
     finalUrl: string;
@@ -691,7 +689,7 @@ export class FileProcessingService {
     url: string,
     mimetype: string,
     category: 'image' | 'video',
-    filename: string,
+    _filename: string,
   ): Promise<string> {
     const prompt = PROMPTS[category];
 
@@ -861,8 +859,8 @@ export class FileProcessingService {
    */
   private sanitizeFilename(filename: string): string {
     return filename
-      .replace(/[\x00-\x1f\x7f]/g, '') // strip control chars
-      .replace(/[\[\]]/g, '') // strip brackets to prevent [SYSTEM: ...] injection
+      .replace(/[\u0000-\u001f\u007f]/g, '') // strip control chars
+      .replace(/[[\]]/g, '') // strip brackets to prevent [SYSTEM: ...] injection
       .slice(0, 255);
   }
 

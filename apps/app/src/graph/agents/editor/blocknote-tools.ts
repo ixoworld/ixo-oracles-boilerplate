@@ -7,10 +7,9 @@ import { tool } from '@langchain/core/tools';
 import * as z from 'zod';
 
 import { Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import type { MatrixClient } from 'matrix-js-sdk';
 import { randomUUID } from 'node:crypto';
-import { type ENV } from 'src/config';
+import { getConfig } from 'src/config';
 import * as Y from 'yjs';
 import {
   appendBlock,
@@ -31,12 +30,12 @@ import {
   validateAnswersAgainstSchema,
 } from './survey-helpers';
 
-const configService = new ConfigService<ENV>();
+const config = getConfig();
 
 const matrixConfig = {
-  baseUrl: configService.getOrThrow('MATRIX_BASE_URL'),
-  accessToken: configService.getOrThrow('MATRIX_ORACLE_ADMIN_ACCESS_TOKEN'),
-  userId: configService.getOrThrow('MATRIX_ORACLE_ADMIN_USER_ID'),
+  baseUrl: config.getOrThrow('MATRIX_BASE_URL'),
+  accessToken: config.getOrThrow('MATRIX_ORACLE_ADMIN_ACCESS_TOKEN'),
+  userId: config.getOrThrow('MATRIX_ORACLE_ADMIN_USER_ID'),
   initialSyncTimeoutMs: 30_000,
 } as const;
 
