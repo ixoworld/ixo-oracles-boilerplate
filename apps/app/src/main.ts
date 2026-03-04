@@ -4,12 +4,14 @@ import {
   setupClaimSigningMnemonics,
   loadEncryptionKey,
 } from '@ixo/oracles-chain-client';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { type INestApplication, Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import type { Cache } from 'cache-manager';
 import { type ENV } from './config';
 import { EditorMatrixClient } from './graph/agents/editor/editor-mx';
 import { SecretsService } from './secrets/secrets.service';
@@ -96,6 +98,10 @@ async function bootstrap(): Promise<void> {
   const matrixManager = MatrixManager.getInstance();
 
   registerGracefulShutdown({ app, matrixManager });
+
+  // SecretsService is a manual singleton (not @Injectable) because it's accessed from
+  // LangGraph agent code outside NestJS DI. Pass the cache manager here at bootstrap.
+  SecretsService.getInstance().setCacheManager(app.get<Cache>(CACHE_MANAGER));
 
   // Fire Matrix init in background (don't await — let server start for health checks).
   // MessagesService.onModuleInit defers its listener until this completes.

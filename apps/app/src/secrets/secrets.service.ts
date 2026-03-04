@@ -1,6 +1,7 @@
 import { decryptJWE, type JWK } from '@ixo/oracles-chain-client';
 import { MatrixManager } from '@ixo/matrix';
 import { Logger } from '@nestjs/common';
+import type { Cache } from 'cache-manager';
 
 export interface SecretIndexEntry {
   name: string;
@@ -13,11 +14,12 @@ interface CachedSecret {
   eventId: string;
 }
 
+const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+
 export class SecretsService {
   private static instance: SecretsService;
 
-  // Cache: roomId -> Map<secretName, CachedSecret>
-  private cache = new Map<string, Map<string, CachedSecret>>();
+  private cacheManager: Cache | null = null;
 
   // TODO: Key rotation — change to Map<string, JWK> keyed by publicKeyId to support multiple keys
   private encryptionKey: JWK | null = null;
@@ -26,6 +28,10 @@ export class SecretsService {
 
   setEncryptionKey(key: JWK): void {
     this.encryptionKey = key;
+  }
+
+  setCacheManager(cache: Cache): void {
+    this.cacheManager = cache;
   }
 
   static getInstance(): SecretsService {
@@ -79,24 +85,26 @@ export class SecretsService {
     }
   }
 
+  private cacheKey(roomId: string, name: string): string {
+    return `secret:${roomId}:${name}`;
+  }
+
   /**
    * Load secret values from timeline events, using cache where possible.
    * Only fetches timeline events for secrets whose eventId has changed.
+   * Stale entries (deleted secrets) expire naturally via the 24h TTL.
    */
   async loadSecretValues(
     roomId: string,
     index: SecretIndexEntry[],
   ): Promise<Record<string, string>> {
     const result: Record<string, string> = {};
-    if (!this.cache.has(roomId)) {
-      this.cache.set(roomId, new Map());
-    }
-    const roomCache = this.cache.get(roomId)!;
-
     const toFetch: SecretIndexEntry[] = [];
 
     for (const entry of index) {
-      const cached = roomCache.get(entry.name);
+      const cached = await this.cacheManager?.get<CachedSecret>(
+        this.cacheKey(roomId, entry.name),
+      );
       if (cached && cached.eventId === entry.eventId) {
         // Cache hit — same eventId means value hasn't changed
         result[entry.name] = cached.value;
@@ -135,10 +143,11 @@ export class SecretsService {
           `[SecretsService] Decrypted secret "${entry.name}" (${value.length} chars)`,
         );
         result[entry.name] = value;
-        roomCache.set(entry.name, {
-          value,
-          eventId: entry.eventId,
-        });
+        await this.cacheManager?.set(
+          this.cacheKey(roomId, entry.name),
+          { value, eventId: entry.eventId } satisfies CachedSecret,
+          TWENTY_FOUR_HOURS,
+        );
       } catch (error) {
         Logger.error(
           `[SecretsService] Failed to fetch/decrypt secret "${entry.name}" (event ${entry.eventId}):`,
@@ -146,14 +155,6 @@ export class SecretsService {
         );
       }
     }
-
-    // Clean up cache entries that no longer exist in the index
-    const indexNames = new Set(index.map((e) => e.name));
-    Array.from(roomCache.keys()).forEach((cachedName) => {
-      if (!indexNames.has(cachedName)) {
-        roomCache.delete(cachedName);
-      }
-    });
 
     return result;
   }
