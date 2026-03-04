@@ -15,7 +15,12 @@ import { MatrixProviderManager } from './provider';
 import { parseSurveyAnswers, parseSurveySchema } from './survey-helpers';
 
 // Re-export helpers from blockActions for consistency
-export { appendBlock, editBlock, deleteBlock, type BlockSnapshot } from './block-actions';
+export {
+  appendBlock,
+  editBlock,
+  deleteBlock,
+  type BlockSnapshot,
+} from './block-actions';
 
 // ─── Core Block Detail ───────────────────────────────────────────────
 
@@ -405,9 +410,7 @@ export function readRuntimeState(
 ): Record<string, Record<string, unknown>> {
   const runtimeMap = doc.getMap('runtime');
   if (nodeId) {
-    const state = runtimeMap.get(nodeId) as
-      | Record<string, unknown>
-      | undefined;
+    const state = runtimeMap.get(nodeId) as Record<string, unknown> | undefined;
     return state ? { [nodeId]: state } : {};
   }
   const result: Record<string, Record<string, unknown>> = {};
@@ -430,8 +433,7 @@ export function updateRuntimeState(
   updates: Record<string, unknown>,
 ): Record<string, unknown> {
   const runtimeMap = doc.getMap('runtime');
-  const existing =
-    (runtimeMap.get(blockId) as Record<string, unknown>) || {};
+  const existing = (runtimeMap.get(blockId) as Record<string, unknown>) || {};
   const merged = { ...existing, ...updates };
   runtimeMap.set(blockId, merged);
   return merged;
@@ -479,9 +481,7 @@ export function readInvocations(
     const bTime = typeof b.executedAt === 'number' ? b.executedAt : 0;
     return bTime - aTime;
   });
-  return blockId
-    ? sorted.filter((i) => i.blockId === blockId)
-    : sorted;
+  return blockId ? sorted.filter((i) => i.blockId === blockId) : sorted;
 }
 
 /**
@@ -558,10 +558,8 @@ export function evaluateBlockConditions(
   allBlocks.forEach((b) => {
     // Merge direct attributes and nested attrs.props
     const attrs = b.attributes || {};
-    const attrsObj =
-      (attrs.attrs as Record<string, unknown> | undefined) || {};
-    const props =
-      (attrsObj.props as Record<string, unknown> | undefined) || {};
+    const attrsObj = (attrs.attrs as Record<string, unknown> | undefined) || {};
+    const props = (attrsObj.props as Record<string, unknown> | undefined) || {};
     blockPropsMap.set(b.id, { ...attrs, ...attrsObj, ...props });
   });
 
@@ -646,9 +644,7 @@ export function evaluateBlockConditions(
   const isVisible = hasVisibilityConditions
     ? hideActions.length === 0 && (showActions.length > 0 || !allPass)
     : true;
-  const isEnabled = hasEnableConditions
-    ? disableActions.length === 0
-    : true;
+  const isEnabled = hasEnableConditions ? disableActions.length === 0 : true;
 
   return { isVisible, isEnabled, actions };
 }
@@ -667,10 +663,8 @@ export function resolveBlockReferences(
   const blockPropsMap = new Map<string, Record<string, unknown>>();
   allBlocks.forEach((b) => {
     const attrs = b.attributes || {};
-    const attrsObj =
-      (attrs.attrs as Record<string, unknown> | undefined) || {};
-    const props =
-      (attrsObj.props as Record<string, unknown> | undefined) || {};
+    const attrsObj = (attrs.attrs as Record<string, unknown> | undefined) || {};
+    const props = (attrsObj.props as Record<string, unknown> | undefined) || {};
     blockPropsMap.set(b.id, { ...attrs, ...attrsObj, ...props });
   });
 
@@ -691,10 +685,7 @@ export function resolveBlockReferences(
     }
 
     // For response props stored as JSON strings, parse and navigate
-    if (
-      pathParts[0] === 'response' &&
-      typeof props['response'] === 'string'
-    ) {
+    if (pathParts[0] === 'response' && typeof props['response'] === 'string') {
       try {
         const parsed = JSON.parse(props['response']);
         let innerValue: unknown = parsed;
@@ -706,8 +697,7 @@ export function resolveBlockReferences(
           }
         }
         if (innerValue === undefined || innerValue === null) return '';
-        if (typeof innerValue === 'object')
-          return JSON.stringify(innerValue);
+        if (typeof innerValue === 'object') return JSON.stringify(innerValue);
         return String(innerValue);
       } catch {
         /* fall through to default */

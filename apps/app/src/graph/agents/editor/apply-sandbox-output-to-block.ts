@@ -73,7 +73,12 @@ function parseSandboxResult(raw: unknown): {
   }
 
   // Already parsed
-  return raw as { output: string; success: boolean; error?: string; exitCode?: number };
+  return raw as {
+    output: string;
+    success: boolean;
+    error?: string;
+    exitCode?: number;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -88,9 +93,7 @@ const applySandboxOutputToBlockSchema = z.object({
     ),
   blockId: z
     .string()
-    .describe(
-      'The exact UUID of the block to update (get from list_blocks)',
-    ),
+    .describe('The exact UUID of the block to update (get from list_blocks)'),
   fieldMapping: z
     .record(z.string(), z.string())
     .optional()
@@ -146,7 +149,10 @@ export function createApplySandboxOutputToBlockTool({
 
         const parsed = parseSandboxResult(execResult);
 
-        if (!parsed.success || (parsed.exitCode != null && parsed.exitCode !== 0)) {
+        if (
+          !parsed.success ||
+          (parsed.exitCode != null && parsed.exitCode !== 0)
+        ) {
           return JSON.stringify({
             success: false,
             error: `Failed to read sandbox file: ${parsed.error || 'Unknown error'}`,
@@ -204,7 +210,9 @@ export function createApplySandboxOutputToBlockTool({
           if (sourceKey in data) {
             updates[targetProp] = data[sourceKey];
           } else {
-            warnings.push(`Source field "${sourceKey}" not found in sandbox output`);
+            warnings.push(
+              `Source field "${sourceKey}" not found in sandbox output`,
+            );
           }
         }
 
@@ -238,7 +246,10 @@ export function createApplySandboxOutputToBlockTool({
         blocknote: { ...BLOCKNOTE_TOOLS_CONFIG.blocknote },
       };
 
-      const providerManager = new MatrixProviderManager(matrixClient, appConfig);
+      const providerManager = new MatrixProviderManager(
+        matrixClient,
+        appConfig,
+      );
 
       try {
         const { doc } = await providerManager.init();

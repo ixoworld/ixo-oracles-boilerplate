@@ -442,9 +442,7 @@ export class FileProcessingService {
    * Perform a HEAD request to determine Content-Type and Content-Length
    * without downloading the body. Follows redirects with SSRF validation.
    */
-  private async headUrl(
-    url: string,
-  ): Promise<{
+  private async headUrl(url: string): Promise<{
     contentType?: string;
     contentLength?: number;
     finalUrl: string;
@@ -859,11 +857,13 @@ export class FileProcessingService {
    * to prevent prompt injection when interpolated into LLM context.
    */
   private sanitizeFilename(filename: string): string {
-    return filename
-      // eslint-disable-next-line no-control-regex
-      .replace(/[\x00-\x1f\x7f]/gu, '') // strip control chars
-      .replace(/[[\]]/g, '') // strip brackets to prevent [SYSTEM: ...] injection
-      .slice(0, 255);
+    return (
+      filename
+        // eslint-disable-next-line no-control-regex
+        .replace(/[\x00-\x1f\x7f]/gu, '') // strip control chars
+        .replace(/[[\]]/g, '') // strip brackets to prevent [SYSTEM: ...] injection
+        .slice(0, 255)
+    );
   }
 
   private formatContent(

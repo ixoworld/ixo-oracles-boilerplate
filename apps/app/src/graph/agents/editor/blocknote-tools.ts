@@ -268,7 +268,13 @@ List blocks without text content (faster):
    * Changes are synced to all connected clients via Matrix CRDT
    */
   const editBlockTool = tool(
-    async ({ blockId, updates, removeAttributes = [], text = null, runtimeUpdates = undefined }) => {
+    async ({
+      blockId,
+      updates,
+      removeAttributes = [],
+      text = null,
+      runtimeUpdates = undefined,
+    }) => {
       Logger.log(`✏️ edit_block tool invoked for block: ${blockId}`);
 
       const isInRoom = await checkIfInRoomAndJoinPublicRoom(
@@ -302,9 +308,17 @@ List blocks without text content (faster):
 
         // Apply runtime state updates if provided
         let updatedRuntimeState: Record<string, unknown> | undefined;
-        if (runtimeUpdates && typeof runtimeUpdates === 'object' && Object.keys(runtimeUpdates as Record<string, unknown>).length > 0) {
+        if (
+          runtimeUpdates &&
+          typeof runtimeUpdates === 'object' &&
+          Object.keys(runtimeUpdates as Record<string, unknown>).length > 0
+        ) {
           doc.transact(() => {
-            updatedRuntimeState = updateRuntimeState(doc, blockId, runtimeUpdates as Record<string, unknown>);
+            updatedRuntimeState = updateRuntimeState(
+              doc,
+              blockId,
+              runtimeUpdates as Record<string, unknown>,
+            );
           }, 'blocknote-crdt-playground');
         }
 
@@ -582,8 +596,10 @@ The returned block includes the auto-generated UUID that you can use for future 
               ) as ConditionConfig;
               const fragment = doc.getXmlFragment('document');
               const allBlocks = collectAllBlocks(fragment);
-              result.conditionEvaluation =
-                evaluateBlockConditions(conditionConfig, allBlocks);
+              result.conditionEvaluation = evaluateBlockConditions(
+                conditionConfig,
+                allBlocks,
+              );
             } catch {
               result.conditionEvaluation = {
                 error: 'Failed to parse conditions JSON',
@@ -944,7 +960,9 @@ Optional flags:
 - Answers are validated automatically
 - Only visible questions (based on visibility conditions) are considered`,
       schema: z.object({
-        blockId: z.string().describe('The ID of the block containing the survey'),
+        blockId: z
+          .string()
+          .describe('The ID of the block containing the survey'),
         answers: z
           .record(z.any(), z.any())
           .describe(
@@ -1171,10 +1189,7 @@ This is a lightweight call that gives you the full picture before diving into sp
         }
 
         const flowNodes = readFlowNodes(doc);
-        const runtimeState = readRuntimeState(
-          doc,
-          nodeId ?? undefined,
-        );
+        const runtimeState = readRuntimeState(doc, nodeId ?? undefined);
 
         // Enrich runtime state with human-readable dates
         const enrichedState: Record<string, Record<string, unknown>> = {};
@@ -1237,9 +1252,7 @@ Pass nodeId to check a specific node, or omit to get all nodes.`,
           .string()
           .optional()
           .nullable()
-          .describe(
-            'Optional: specific node ID to check. Omit for all nodes.',
-          ),
+          .describe('Optional: specific node ID to check. Omit for all nodes.'),
       }),
     },
   );
@@ -1250,9 +1263,7 @@ Pass nodeId to check a specific node, or omit to get all nodes.`,
 
   const readBlockHistoryTool = tool(
     async ({ blockId }) => {
-      logger.log(
-        `📜 read_block_history tool invoked for block: ${blockId}`,
-      );
+      logger.log(`📜 read_block_history tool invoked for block: ${blockId}`);
       const providerManager = new MatrixProviderManager(matrixClient, config);
 
       try {
@@ -1292,18 +1303,26 @@ Pass nodeId to check a specific node, or omit to get all nodes.`,
         });
 
         // Find most recent activity
-        const lastAuditEvent = auditEvents.length > 0
-          ? auditEvents[auditEvents.length - 1]
-          : undefined;
-        const lastAuditMeta = lastAuditEvent && typeof lastAuditEvent['meta'] === 'object' && lastAuditEvent['meta'] !== null
-          ? (lastAuditEvent['meta'] as Record<string, unknown>)
-          : undefined;
+        const lastAuditEvent =
+          auditEvents.length > 0
+            ? auditEvents[auditEvents.length - 1]
+            : undefined;
+        const lastAuditMeta =
+          lastAuditEvent &&
+          typeof lastAuditEvent['meta'] === 'object' &&
+          lastAuditEvent['meta'] !== null
+            ? (lastAuditEvent['meta'] as Record<string, unknown>)
+            : undefined;
         const lastAuditTs = lastAuditMeta?.['timestamp'] as string | undefined;
-        const firstInv = enrichedInvocations.length > 0 ? enrichedInvocations[0] : undefined;
+        const firstInv =
+          enrichedInvocations.length > 0 ? enrichedInvocations[0] : undefined;
         const lastInvTs = firstInv?.['executedDate'] as string | undefined;
-        const lastActivity = lastAuditTs && lastInvTs
-          ? lastAuditTs > lastInvTs ? lastAuditTs : lastInvTs
-          : lastAuditTs || lastInvTs;
+        const lastActivity =
+          lastAuditTs && lastInvTs
+            ? lastAuditTs > lastInvTs
+              ? lastAuditTs
+              : lastInvTs
+            : lastAuditTs || lastInvTs;
 
         return JSON.stringify(
           {
@@ -1339,9 +1358,7 @@ Use this to answer: "What happened with block X?", "Who executed this?", "When w
 
 Returns audit events (timestamped actions) and invocations (UCAN-authorized executions with results and transaction hashes).`,
       schema: z.object({
-        blockId: z
-          .string()
-          .describe('The block ID to read history for'),
+        blockId: z.string().describe('The block ID to read history for'),
       }),
     },
   );
@@ -1374,9 +1391,7 @@ Returns audit events (timestamped actions) and invocations (UCAN-authorized exec
         // Apply filters using bracket notation on generic records
         let filtered = delegations;
         if (audienceDid) {
-          filtered = filtered.filter(
-            (d) => d['audienceDid'] === audienceDid,
-          );
+          filtered = filtered.filter((d) => d['audienceDid'] === audienceDid);
         }
         if (capability) {
           filtered = filtered.filter((d) => {
@@ -1387,9 +1402,7 @@ Returns audit events (timestamped actions) and invocations (UCAN-authorized exec
                 c['can'] === capability ||
                 (typeof c['can'] === 'string' &&
                   c['can'].endsWith('/*') &&
-                  capability.startsWith(
-                    c['can'].slice(0, -2),
-                  )),
+                  capability.startsWith(c['can'].slice(0, -2))),
             );
           });
         }
@@ -1594,8 +1607,7 @@ Optionally filter by audienceDid (recipient) or capability action (e.g., "flow/b
         if (textContains) {
           const searchLower = textContains.toLowerCase();
           blocks = blocks.filter(
-            (b) =>
-              b.text && b.text.toLowerCase().includes(searchLower),
+            (b) => b.text && b.text.toLowerCase().includes(searchLower),
           );
         }
 

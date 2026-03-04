@@ -116,13 +116,9 @@ Promise<ReactAgent<any, any, any, any>> => {
   // Build base headers for sandbox MCP (auth only — secrets added lazily)
   const sandboxHeaders: Record<string, string> = {
     Authorization: `Bearer ${configurable.configs?.user.matrixOpenIdToken}`,
-    'x-matrix-homeserver':
-      configurable.configs?.matrix.homeServerName ?? '',
+    'x-matrix-homeserver': configurable.configs?.matrix.homeServerName ?? '',
     'X-oracle-openid-token': oracleOpenIdToken ?? '',
-    'x-oracle-homeserver': oracleMatrixBaseUrl.replace(
-      /^https?:\/\//,
-      '',
-    ),
+    'x-oracle-homeserver': oracleMatrixBaseUrl.replace(/^https?:\/\//, ''),
   };
 
   // Create sandbox MCP with auth headers (for tool schema discovery)
@@ -235,7 +231,7 @@ Promise<ReactAgent<any, any, any, any>> => {
   // Wrap sandbox_run for lazy secret injection (both oracle and user secrets).
   // MCP adapters snapshot headers at construction time, so we create a new
   // MCP client with all secrets on first sandbox_run call.
-  let enrichedRunTool: typeof sandboxTools[number] | null = null;
+  let enrichedRunTool: (typeof sandboxTools)[number] | null = null;
   let enrichedRunPromise: Promise<void> | null = null;
 
   const wrappedSandboxTools = sandboxTools.map((t) => {

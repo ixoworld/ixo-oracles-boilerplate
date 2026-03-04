@@ -28,10 +28,10 @@ const querySchema = z.object({
 
 const REFUSAL_PATTERNS = [
   "i'm sorry, but i can't",
-  "i cannot comply",
+  'i cannot comply',
   "i can't comply",
   "i'm unable to",
-  "i cannot provide",
+  'i cannot provide',
   "i can't provide",
   "i'm not able to",
 ];

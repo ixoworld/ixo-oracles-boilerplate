@@ -150,9 +150,7 @@ export async function loadEncryptionKey({
   const entries = Object.entries(indexContent.keys);
   const activeKv = entries.find(([, entry]) => entry.active);
   if (!activeKv) {
-    Logger.warn(
-      '[loadEncryptionKey] Key index exists but no active key found',
-    );
+    Logger.warn('[loadEncryptionKey] Key index exists but no active key found');
     return null;
   }
 
