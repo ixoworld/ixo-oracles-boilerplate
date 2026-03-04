@@ -1387,8 +1387,8 @@ Returns audit events (timestamped actions) and invocations (UCAN-authorized exec
                 c['can'] === capability ||
                 (typeof c['can'] === 'string' &&
                   c['can'].endsWith('/*') &&
-                  (capability as string).startsWith(
-                    (c['can'] as string).slice(0, -2),
+                  capability.startsWith(
+                    c['can'].slice(0, -2),
                   )),
             );
           });

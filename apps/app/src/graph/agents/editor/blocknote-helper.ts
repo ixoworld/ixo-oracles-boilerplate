@@ -696,7 +696,7 @@ export function resolveBlockReferences(
       typeof props['response'] === 'string'
     ) {
       try {
-        const parsed = JSON.parse(props['response'] as string);
+        const parsed = JSON.parse(props['response']);
         let innerValue: unknown = parsed;
         for (const part of pathParts.slice(1)) {
           if (innerValue && typeof innerValue === 'object') {

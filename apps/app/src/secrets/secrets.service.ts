@@ -118,7 +118,9 @@ export class SecretsService {
           roomId,
           entry.eventId,
         );
-        let value = (event as any)?.content?.value ?? '';
+        let value =
+          (event as unknown as Record<string, Record<string, string>>)?.content
+            ?.value ?? '';
 
         if (!this.encryptionKey) {
           Logger.error(
