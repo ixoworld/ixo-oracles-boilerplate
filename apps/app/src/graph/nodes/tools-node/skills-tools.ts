@@ -1,8 +1,13 @@
 /* eslint-disable no-console */
 import { tool } from '@langchain/core/tools';
+import { ConfigService } from '@nestjs/config';
 import z from 'zod';
+import { type ENV } from 'src/config';
 
-const SKILLS_CAPSULES_BASE_URL = 'https://capsules.skills.ixo.earth';
+const configService = new ConfigService<ENV>();
+const SKILLS_CAPSULES_BASE_URL = configService.getOrThrow(
+  'SKILLS_CAPSULES_BASE_URL',
+);
 
 type Capsule = {
   cid: string;

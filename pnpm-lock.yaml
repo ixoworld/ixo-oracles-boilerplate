@@ -83,8 +83,8 @@ importers:
         specifier: ^1.1.0
         version: 1.1.0(lib0@0.2.114)(matrix-js-sdk@37.13.0)(y-protocols@1.0.6(yjs@13.6.27))(yjs@13.6.27)
       '@ixo/oracles-chain-client':
-        specifier: 1.2.0
-        version: 1.2.0
+        specifier: 1.2.1
+        version: 1.2.1
       '@ixo/oracles-events':
         specifier: 1.0.4
         version: 1.0.4
@@ -637,6 +637,9 @@ importers:
       graphql-tag:
         specifier: ^2.12.6
         version: 2.12.6(graphql@16.12.0)
+      jose:
+        specifier: ^6.0.8
+        version: 6.1.2
       limiter:
         specifier: 2.1.0
         version: 2.1.0
@@ -3070,6 +3073,9 @@ packages:
 
   '@ixo/oracles-chain-client@1.2.0':
     resolution: {integrity: sha512-AYZZ70uS2AkcrXIFHjFbsu5nia52AULzcG0EsAlLGKkOQYVWVOkVINura7ADTrRks3IBSmLG6SpplP9v0jI4mw==}
+
+  '@ixo/oracles-chain-client@1.2.1':
+    resolution: {integrity: sha512-Pea3qD+kH1LtwD5lWEh5rWvKcaNHFmOGAZOOzkkTFFtv6gK4fWfeJaulm+2nmaUjjhAIa4EKd8035zyW5zXwjA==}
 
   '@ixo/oracles-events@1.0.4':
     resolution: {integrity: sha512-fCl0My0v3Oba94DzmoIanU+zfrU04lilwTPHhqBKpQf4NH++oFXIwoIgFlLOa03vFGxfYD3VbzJNb+vgtcEd/g==}
@@ -14855,6 +14861,54 @@ snapshots:
       graphql: 16.12.0
       graphql-request: 7.1.2(graphql@16.12.0)
       graphql-tag: 2.12.6(graphql@16.12.0)
+      limiter: 2.1.0
+      store: 2.0.12
+      zod: 4.1.12
+    transitivePeerDependencies:
+      - bufferutil
+      - debug
+      - domexception
+      - encoding
+      - expo
+      - expo-crypto
+      - msrcrypt
+      - msrcrypto
+      - react-native
+      - react-native-securerandom
+      - supports-color
+      - utf-8-validate
+      - web-streams-polyfill
+
+  '@ixo/oracles-chain-client@1.2.1':
+    dependencies:
+      '@cosmjs/crypto': 0.32.4
+      '@cosmjs/encoding': 0.32.4
+      '@cosmjs/proto-signing': 0.32.4
+      '@cosmjs/stargate': 0.32.4
+      '@ixo/did-provider-x': 0.0.2
+      '@ixo/impactxclient-sdk': 2.4.1
+      '@ixo/logger': 0.0.2
+      '@ixo/matrixclient-sdk': 1.0.0
+      '@veramo/core': 6.0.0
+      '@veramo/credential-ld': 6.0.0(patch_hash=e114fa24a6a69a75a8d20f63634eb0407cceb1bb95508703271e00865798c1ad)(expo@54.0.25(@babel/core@7.28.5)(@modelcontextprotocol/sdk@1.22.0(@cfworker/json-schema@4.1.1))(graphql@16.12.0)(react-native@0.82.1(@babel/core@7.28.5)(react@18.3.1))(react@18.3.1))(msrcrypto@1.5.8)(react-native@0.82.1(@babel/core@7.28.5)(react@18.3.1))(web-streams-polyfill@3.3.3)
+      '@veramo/credential-w3c': 6.0.0(expo@54.0.25(@babel/core@7.28.5)(@modelcontextprotocol/sdk@1.22.0(@cfworker/json-schema@4.1.1))(graphql@16.12.0)(react-native@0.82.1(@babel/core@7.28.5)(react@18.3.1))(react@18.3.1))(msrcrypto@1.5.8)(react-native@0.82.1(@babel/core@7.28.5)(react@18.3.1))(web-streams-polyfill@3.3.3)
+      '@veramo/did-manager': 6.0.0
+      '@veramo/did-provider-key': 6.0.0
+      '@veramo/did-resolver': 6.0.0
+      '@veramo/key-manager': 6.0.0
+      '@veramo/kms-local': 6.0.0
+      ajv: 8.17.1
+      ajv-formats: 3.0.1(ajv@8.17.1)
+      axios: 1.7.8
+      axios-retry: 4.5.0(axios@1.7.8)
+      bs58: 6.0.0
+      did-resolver: 4.1.0
+      dotenv: 17.2.3
+      eciesjs: 0.4.16
+      graphql: 16.12.0
+      graphql-request: 7.1.2(graphql@16.12.0)
+      graphql-tag: 2.12.6(graphql@16.12.0)
+      jose: 6.1.2
       limiter: 2.1.0
       store: 2.0.12
       zod: 4.1.12

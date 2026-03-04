@@ -64,6 +64,13 @@ export const EnvSchema = z.object({
 
   MATRIX_ACCOUNT_ROOM_ID: z.string(),
   SANDBOX_MCP_URL: z.url(),
+  SKILLS_CAPSULES_BASE_URL: z
+    .url()
+    .default('https://capsules.skills.ixo.earth'),
+
+  // Oracle operator secrets exposed to sandbox as x-os-* headers
+  // Format: "KEY1=value1,KEY2=value2"
+  ORACLE_SECRETS: z.string().default(''),
 });
 
 export type ENV = z.infer<typeof EnvSchema> & {

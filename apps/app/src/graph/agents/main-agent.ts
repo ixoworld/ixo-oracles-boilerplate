@@ -33,9 +33,12 @@ import { createFirecrawlAgent } from './firecrawl-agent';
 import { createMemoryAgent } from './memory-agent';
 import { createPortalAgent } from './portal-agent';
 import { createSubagentAsTool } from './subagent-as-tool';
+import { createApplySandboxOutputToBlockTool } from './editor/apply-sandbox-output-to-block';
 
+import { DynamicStructuredTool } from 'langchain';
 import fs from 'node:fs';
 import path from 'node:path';
+import { SecretsService } from 'src/secrets/secrets.service';
 import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 import {
   createMCPClient,
@@ -61,6 +64,7 @@ interface InvokeMainAgentParams {
 const configService = new ConfigService<ENV>();
 const llm = getOpenRouterChatModel({
   model: 'openai/gpt-oss-120b:nitro',
+  // model: 'deepseek/deepseek-v3.2',
   __includeRawResponse: true,
   modelKwargs: {
     require_parameters: true,
@@ -102,6 +106,22 @@ Promise<ReactAgent<any, any, any, any>> => {
   const oracleOpenIdToken = configurable.configs?.user.matrixOpenIdToken
     ? await oracleOpenIdTokenProvider.getToken()
     : undefined;
+
+  // Load secret index (cheap — one state query per message)
+  const roomId = configurable.configs?.matrix.roomId;
+  const secretIndex = roomId
+    ? await SecretsService.getInstance().getSecretIndex(roomId)
+    : [];
+
+  // Build base headers for sandbox MCP (auth only — secrets added lazily)
+  const sandboxHeaders: Record<string, string> = {
+    Authorization: `Bearer ${configurable.configs?.user.matrixOpenIdToken}`,
+    'x-matrix-homeserver': configurable.configs?.matrix.homeServerName ?? '',
+    'X-oracle-openid-token': oracleOpenIdToken ?? '',
+    'x-oracle-homeserver': oracleMatrixBaseUrl.replace(/^https?:\/\//, ''),
+  };
+
+  // Create sandbox MCP with auth headers (for tool schema discovery)
   const sandboxMCP =
     configurable.configs?.user.matrixOpenIdToken && oracleOpenIdToken
       ? createMCPClient({
@@ -110,16 +130,7 @@ Promise<ReactAgent<any, any, any, any>> => {
               type: 'http',
               url: configService.getOrThrow('SANDBOX_MCP_URL'),
               transport: 'http',
-              headers: {
-                Authorization: `Bearer ${configurable.configs?.user.matrixOpenIdToken}`,
-                'x-matrix-homeserver':
-                  configurable.configs?.matrix.homeServerName ?? '',
-                'X-oracle-openid-token': oracleOpenIdToken,
-                'x-oracle-homeserver': oracleMatrixBaseUrl.replace(
-                  /^https?:\/\//,
-                  '',
-                ),
-              },
+              headers: sandboxHeaders,
             },
           },
           defaultToolTimeout: 180_000,
@@ -188,6 +199,10 @@ Promise<ReactAgent<any, any, any, any>> => {
         state.client === 'slack' ? SLACK_FORMATTING_CONSTRAINTS_CONTENT : '',
       AG_UI_TOOLS_DOCUMENTATION:
         agActionTools.length > 0 ? AG_UI_TOOLS_DOCUMENTATION : '',
+      USER_SECRETS_CONTEXT:
+        secretIndex.length > 0
+          ? secretIndex.map((s) => `- _USER_SECRET_${s.name}`).join('\n')
+          : '',
     }),
     createPortalAgent({
       tools:
@@ -213,6 +228,79 @@ Promise<ReactAgent<any, any, any, any>> => {
     sandboxMCP?.getTools() ?? Promise.resolve([]),
   ]);
 
+  // Wrap sandbox_run for lazy secret injection (both oracle and user secrets).
+  // MCP adapters snapshot headers at construction time, so we create a new
+  // MCP client with all secrets on first sandbox_run call.
+  let enrichedRunTool: (typeof sandboxTools)[number] | null = null;
+  let enrichedRunPromise: Promise<void> | null = null;
+
+  const wrappedSandboxTools = sandboxTools.map((t) => {
+    if (t.name !== 'sandbox_run') return t;
+
+    return new DynamicStructuredTool({
+      name: t.name,
+      description: t.description,
+      schema: t.schema,
+      func: async (input) => {
+        // Lazily create enriched MCP client on first sandbox_run call (promise-safe)
+        if (!enrichedRunPromise) {
+          enrichedRunPromise = (async () => {
+            const enrichedHeaders = { ...sandboxHeaders };
+
+            // Add oracle secrets as x-os-* headers
+            const oracleSecretsStr = configService.get('ORACLE_SECRETS', '');
+            if (oracleSecretsStr) {
+              for (const pair of oracleSecretsStr.split(',')) {
+                const eqIdx = pair.indexOf('=');
+                if (eqIdx > 0) {
+                  const key = pair.slice(0, eqIdx).trim();
+                  const val = pair.slice(eqIdx + 1).trim();
+                  if (key && val)
+                    enrichedHeaders[`x-os-${key.toLowerCase()}`] = val;
+                }
+              }
+            }
+
+            // Add user secrets as x-us-* headers
+            if (secretIndex.length > 0 && roomId) {
+              const values =
+                await SecretsService.getInstance().loadSecretValues(
+                  roomId,
+                  secretIndex,
+                );
+              for (const [name, value] of Object.entries(values)) {
+                enrichedHeaders[`x-us-${name.toLowerCase()}`] = value;
+              }
+            }
+
+            const enrichedMCP = createMCPClient({
+              mcpServers: {
+                sandbox: {
+                  type: 'http',
+                  url: configService.getOrThrow('SANDBOX_MCP_URL'),
+                  transport: 'http',
+                  headers: enrichedHeaders,
+                },
+              },
+              defaultToolTimeout: 180_000,
+            });
+            const enrichedTools = (await enrichedMCP?.getTools()) ?? [];
+            enrichedRunTool =
+              enrichedTools.find((et) => et.name === 'sandbox_run') ?? null;
+          })();
+        }
+
+        await enrichedRunPromise;
+
+        if (enrichedRunTool) {
+          return enrichedRunTool.invoke(input);
+        }
+        // Fallback to original tool (without secrets)
+        return t.invoke(input);
+      },
+    });
+  });
+
   // Conditionally create BlockNote (editor) agent tool if editorRoomId is provided
   let blockNoteAgentSpec:
     | Awaited<ReturnType<typeof createEditorAgent>>
@@ -224,6 +312,23 @@ Promise<ReactAgent<any, any, any, any>> => {
       room: state.editorRoomId,
       mode: 'edit',
     });
+  }
+
+  // Create apply_sandbox_output_to_block tool when both sandbox and editor are available
+  let applySandboxOutputToBlockTool: ReturnType<
+    typeof createApplySandboxOutputToBlockTool
+  > | null = null;
+  if (state.editorRoomId) {
+    const sandboxRunTool = wrappedSandboxTools.find(
+      (t) => t.name === 'sandbox_run',
+    );
+    if (sandboxRunTool) {
+      applySandboxOutputToBlockTool = createApplySandboxOutputToBlockTool({
+        sandboxRunTool,
+        editorRoomId: state.editorRoomId,
+      });
+      Logger.log('📦 Created apply_sandbox_output_to_block tool');
+    }
   }
 
   const callPortalAgentTool = createSubagentAsTool(portalAgent);
@@ -262,7 +367,7 @@ Promise<ReactAgent<any, any, any, any>> => {
     contextSchema: contextSchema as any,
     tools: [
       ...mcpTools,
-      ...sandboxTools,
+      ...wrappedSandboxTools,
       ...agActionTools,
       listSkillsTool,
       searchSkillsTool,
@@ -275,6 +380,7 @@ Promise<ReactAgent<any, any, any, any>> => {
         ? [createFileProcessingTool(fileProcessingService, matrix?.roomId)]
         : []),
       ...(matrix?.roomId ? [createListRoomFilesTool(matrix.roomId)] : []),
+      ...(applySandboxOutputToBlockTool ? [applySandboxOutputToBlockTool] : []),
     ],
     middleware,
     systemPrompt,

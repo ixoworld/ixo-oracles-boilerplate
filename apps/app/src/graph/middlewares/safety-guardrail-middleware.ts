@@ -4,7 +4,8 @@ import { Logger } from '@nestjs/common';
 import { type AgentMiddleware, AIMessage, createMiddleware } from 'langchain';
 
 const safetyModel = getOpenRouterChatModel({
-  model: 'openai/gpt-oss-safeguard-20b:nitro',
+  // model: 'openai/gpt-oss-safeguard-20b:nitro',
+  model: 'meta-llama/llama-3.1-8b-instruct:nitro',
   __includeRawResponse: true,
   modelKwargs: {
     require_parameters: true,
@@ -24,6 +25,12 @@ export const createSafetyGuardrailMiddleware = (): AgentMiddleware => {
 
         const lastMessage = state.messages[state.messages.length - 1];
         if (lastMessage.type !== 'ai') {
+          return;
+        }
+
+        // Skip safety check for tool call messages (internal operations, not user-facing)
+        const aiMessage = lastMessage as AIMessage;
+        if (aiMessage.tool_calls && aiMessage.tool_calls.length > 0) {
           return;
         }
 
@@ -52,6 +59,10 @@ ALWAYS mark as SAFE if the response:
 - Describes general system functionality or capabilities
 - Mentions tool names or agent names in the context of explaining features
 - ALLOW AWS pre-signed url to be used in the response
+- Describes document/block editing operations (status updates, property changes, block creation/deletion)
+- References block IDs (UUIDs), block properties, or CRDT/Y.js synchronization
+- Contains URLs in the context of document block properties (kycUrl, redirectUrl, callback URLs)
+- Describes survey answers, form data, or workflow state changes
 `;
 
         const result = await safetyModel.invoke([
