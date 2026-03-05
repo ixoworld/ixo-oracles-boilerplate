@@ -13,6 +13,9 @@ const MATRIX_DOWNLOAD_TIMEOUT_MS = 60_000; // 60s
 const AI_PROCESS_TIMEOUT_MS = 120_000; // 120s
 const MAX_ERROR_BODY_LENGTH = 1024; // Cap error response bodies
 
+const SANDBOX_TRUNCATE_LIMIT = 500;
+const SANDBOX_OUTPUT_PREFIX = '/workspace/output';
+
 const ALLOWED_URI_SCHEMES = /^(mxc|https?):\/\//i;
 const MAX_REDIRECT_COUNT = 5;
 
@@ -94,6 +97,15 @@ export interface ProcessedAttachment {
   mxcUri?: string;
   eventId?: string;
   category: Exclude<FileCategory, 'unsupported'>;
+  sandboxPath?: string;
+}
+
+export interface SandboxUploadConfig {
+  sandboxMcpUrl: string;
+  userToken: string;
+  oracleToken: string;
+  homeServerName: string;
+  oracleHomeServerUrl: string;
 }
 
 const PROMPTS: Record<Exclude<FileCategory, 'unsupported'>, string> = {
@@ -119,6 +131,7 @@ export class FileProcessingService {
   async processAttachments(
     attachments: AttachmentDto[],
     roomId: string,
+    sandboxConfig?: SandboxUploadConfig,
   ): Promise<{ texts: string[]; metadata: ProcessedAttachment[] }> {
     const texts: string[] = [];
     const metadata: ProcessedAttachment[] = [];
@@ -133,11 +146,13 @@ export class FileProcessingService {
         `Attachment: "${attachment.filename}" (${attachment.mimetype}, ${attachment.size ?? 'unknown'} bytes) — source: ${attachment.eventId ? `eventId=${attachment.eventId}` : `mxcUri=${attachment.mxcUri}`}`,
       );
       try {
-        const { text, downloadedSize } = await this.processAttachment(
-          attachment,
-          totalDownloaded,
-          roomId,
-        );
+        const { text, downloadedSize, sandboxPath } =
+          await this.processAttachment(
+            attachment,
+            totalDownloaded,
+            roomId,
+            sandboxConfig,
+          );
         totalDownloaded += downloadedSize;
         this.logger.log(
           `Attachment "${attachment.filename}" processed — downloaded ${downloadedSize} bytes, text extracted: ${text ? text.length + ' chars' : 'none'}`,
@@ -152,6 +167,7 @@ export class FileProcessingService {
             mxcUri: attachment.mxcUri,
             eventId: attachment.eventId,
             category: category === 'unsupported' ? 'document' : category,
+            sandboxPath,
           });
         }
       } catch (error) {
@@ -183,7 +199,12 @@ export class FileProcessingService {
     attachment: AttachmentDto,
     currentTotalSize: number,
     roomId: string,
-  ): Promise<{ text: string | null; downloadedSize: number }> {
+    sandboxConfig?: SandboxUploadConfig,
+  ): Promise<{
+    text: string | null;
+    downloadedSize: number;
+    sandboxPath?: string;
+  }> {
     // Validate that at least one source is provided
     if (!attachment.eventId && !attachment.mxcUri) {
       throw new Error('Either mxcUri or eventId must be provided');
@@ -256,6 +277,45 @@ export class FileProcessingService {
       case 'video':
         text = await this.processVideo(buffer, attachment);
         break;
+    }
+
+    // Upload to sandbox if config provided
+    if (sandboxConfig) {
+      try {
+        const destPath = `${SANDBOX_OUTPUT_PREFIX}/${this.sanitizeSandboxPath(attachment.filename)}`;
+        const { path: actualPath } = await this.uploadToSandbox(
+          buffer,
+          attachment.filename,
+          destPath,
+          sandboxConfig,
+          attachment.mimetype,
+        );
+
+        if (text.length > SANDBOX_TRUNCATE_LIMIT) {
+          return {
+            text:
+              text.slice(0, SANDBOX_TRUNCATE_LIMIT) +
+              `\n\n[Full file saved to sandbox at ${actualPath}]`,
+            downloadedSize: buffer.length,
+            sandboxPath: actualPath,
+          };
+        }
+        return {
+          text: text + `\n\n[File also saved to sandbox at ${actualPath}]`,
+          downloadedSize: buffer.length,
+          sandboxPath: actualPath,
+        };
+      } catch (uploadError) {
+        this.logger.warn(
+          `Sandbox upload failed for ${attachment.filename}: ${uploadError instanceof Error ? uploadError.message : String(uploadError)}`,
+        );
+        return {
+          text:
+            text +
+            '\n\n[Warning: sandbox upload failed — file content is included above]',
+          downloadedSize: buffer.length,
+        };
+      }
     }
 
     return { text, downloadedSize: buffer.length };
@@ -850,6 +910,143 @@ export class FileProcessingService {
     if (mimetype.includes('flac')) return 'flac';
     if (mimetype.includes('webm')) return 'webm';
     return 'mp3'; // default
+  }
+
+  private sanitizeSandboxPath(p: string): string {
+    return p.replace(/[^a-zA-Z0-9._\-/]/g, '_');
+  }
+
+  async uploadToSandbox(
+    buffer: Buffer,
+    filename: string,
+    destPath: string,
+    sandboxConfig: SandboxUploadConfig,
+    mimetype?: string,
+  ): Promise<{ path: string; url?: string; previewUrl?: string }> {
+    const baseUrl = sandboxConfig.sandboxMcpUrl.replace(/\/mcp\/?$/, '');
+    const resolvedMime =
+      mimetype ??
+      this.guessMimeFromFilename(filename) ??
+      'application/octet-stream';
+    const safeName = this.sanitizeSandboxPath(filename);
+    const safeDest = this.sanitizeSandboxPath(destPath);
+
+    const formData = new FormData();
+    formData.append(
+      'file',
+      new Blob([buffer], { type: resolvedMime }),
+      safeName,
+    );
+    formData.append('destination', safeDest);
+
+    const response = await fetch(`${baseUrl}/artifacts/upload`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${sandboxConfig.userToken}`,
+        'x-matrix-homeserver': sandboxConfig.homeServerName,
+        'X-oracle-openid-token': sandboxConfig.oracleToken,
+        'x-oracle-homeserver': sandboxConfig.oracleHomeServerUrl,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `Sandbox upload failed (${response.status}): ${errorText.slice(0, MAX_ERROR_BODY_LENGTH)}`,
+      );
+    }
+
+    return (await response.json()) as {
+      path: string;
+      url?: string;
+      previewUrl?: string;
+    };
+  }
+
+  async downloadAndProcessFile(
+    source: { url: string } | { eventId: string; roomId?: string },
+    hints?: { filename?: string; mimetype?: string },
+  ): Promise<{
+    buffer: Buffer;
+    text: string;
+    resolvedFilename: string;
+    resolvedMimetype: string;
+  }> {
+    let buffer: Buffer;
+    let httpContentType: string | undefined;
+
+    if ('eventId' in source) {
+      const roomId = source.roomId;
+      if (!roomId) throw new Error('roomId required for eventId source');
+      buffer = await this.downloadFromMatrixEvent(roomId, source.eventId);
+    } else {
+      if (source.url.startsWith('mxc://')) {
+        buffer = await this.downloadFromMatrix(source.url);
+      } else {
+        const result = await this.downloadFromUrl(source.url);
+        buffer = result.data;
+        httpContentType = result.contentType;
+      }
+    }
+
+    if (buffer.length > MAX_FILE_SIZE) {
+      throw new Error('File exceeds maximum size (25 MB)');
+    }
+
+    const filename =
+      hints?.filename ??
+      ('url' in source ? this.extractFilenameFromUrl(source.url) : 'file');
+    const extensionMime = this.guessMimeFromFilename(filename);
+    const magicMime = this.detectMimeFromMagicBytes(buffer);
+    const mimetype =
+      hints?.mimetype ??
+      extensionMime ??
+      magicMime ??
+      httpContentType ??
+      'application/octet-stream';
+
+    const category = this.categorizeFile(mimetype);
+
+    if (category === 'unsupported') {
+      const fallbackMime = magicMime ?? httpContentType;
+      const fallbackCategory = fallbackMime
+        ? this.categorizeFile(fallbackMime)
+        : 'unsupported';
+
+      if (fallbackCategory !== 'unsupported' && fallbackMime) {
+        const attachment: AttachmentDto = { filename, mimetype: fallbackMime };
+        this.verifyMagicBytes(buffer, fallbackCategory, attachment);
+        const text = await this.processCategory(
+          buffer,
+          fallbackCategory,
+          attachment,
+        );
+        return {
+          buffer,
+          text,
+          resolvedFilename: filename,
+          resolvedMimetype: fallbackMime,
+        };
+      }
+
+      return {
+        buffer,
+        text: `[File "${this.sanitizeFilename(filename)}" (${mimetype}) is not a supported file type.]`,
+        resolvedFilename: filename,
+        resolvedMimetype: mimetype,
+      };
+    }
+
+    const attachment: AttachmentDto = { filename, mimetype };
+    this.verifyMagicBytes(buffer, category, attachment);
+    const text = await this.processCategory(buffer, category, attachment);
+    return {
+      buffer,
+      text,
+      resolvedFilename: filename,
+      resolvedMimetype: mimetype,
+    };
   }
 
   /**

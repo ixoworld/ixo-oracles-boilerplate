@@ -50,7 +50,10 @@ import {
 } from '../nodes/tools-node/skills-tools';
 import { createFileProcessingTool } from '../nodes/tools-node/file-processing-tool';
 import { createListRoomFilesTool } from '../nodes/tools-node/list-room-files-tool';
-import { type FileProcessingService } from 'src/messages/file-processing.service';
+import {
+  type FileProcessingService,
+  type SandboxUploadConfig,
+} from 'src/messages/file-processing.service';
 interface InvokeMainAgentParams {
   state: Partial<TMainAgentGraphState>;
   config: IRunnableConfigWithRequiredFields;
@@ -133,6 +136,19 @@ Promise<ReactAgent<any, any, any, any>> => {
           defaultToolTimeout: 180_000,
         })
       : undefined;
+
+  // Build sandbox upload config for file processing (HTTP upload, no MCP needed)
+  const sandboxUploadConfig: SandboxUploadConfig | undefined =
+    configurable.configs?.user.matrixOpenIdToken && oracleOpenIdToken
+      ? {
+          sandboxMcpUrl: appConfig.getOrThrow('SANDBOX_MCP_URL'),
+          userToken: configurable.configs.user.matrixOpenIdToken,
+          oracleToken: oracleOpenIdToken,
+          homeServerName: configurable.configs.matrix.homeServerName,
+          oracleHomeServerUrl: oracleMatrixBaseUrl.replace(/^https?:\/\//, ''),
+        }
+      : undefined;
+
   Logger.log(`msgFromMatrixRoom: ${msgFromMatrixRoom}`);
 
   // Extract timezone and current time from config
@@ -374,7 +390,13 @@ Promise<ReactAgent<any, any, any, any>> => {
       callDomainIndexerAgentTool,
       ...(callEditorAgentTool ? [callEditorAgentTool] : []),
       ...(fileProcessingService
-        ? [createFileProcessingTool(fileProcessingService, matrix?.roomId)]
+        ? [
+            createFileProcessingTool(
+              fileProcessingService,
+              matrix?.roomId,
+              sandboxUploadConfig,
+            ),
+          ]
         : []),
       ...(matrix?.roomId ? [createListRoomFilesTool(matrix.roomId)] : []),
       ...(applySandboxOutputToBlockTool ? [applySandboxOutputToBlockTool] : []),

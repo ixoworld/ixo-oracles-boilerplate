@@ -10,7 +10,10 @@ import {
   type MessageEvent,
   type MessageEventContent,
 } from '@ixo/matrix';
-import { getMatrixHomeServerCroppedForDid } from '@ixo/oracles-chain-client';
+import {
+  getMatrixHomeServerCroppedForDid,
+  OpenIdTokenProvider,
+} from '@ixo/oracles-chain-client';
 import {
   ActionCallEvent,
   ReasoningEvent,
@@ -47,13 +50,18 @@ import {
 } from 'src/utils/sse.utils';
 import { type ListMessagesDto } from './dto/list-messages.dto';
 import { type SendMessagePayload } from './dto/send-message.dto';
-import { FileProcessingService } from './file-processing.service';
+import {
+  FileProcessingService,
+  type SandboxUploadConfig,
+} from './file-processing.service';
 
 @Injectable()
 export class MessagesService implements OnModuleInit, OnModuleDestroy {
   private cleanUpMatrixListener: () => void;
   private threadRootCache = new Map<string, string>(); // eventId → rootEventId
   private abortControllers = new Map<string, AbortController>(); // sessionId → AbortController
+  private readonly oracleOpenIdTokenProvider: OpenIdTokenProvider;
+  private readonly oracleMatrixBaseUrl: string;
 
   /**
    * Per-thread debounce buffer for Matrix events.
@@ -84,6 +92,16 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     @Optional() private readonly ucanService?: UcanService,
   ) {
     this.matrixManager = this.sessionManagerService.matrixManger;
+    this.oracleMatrixBaseUrl = this.config
+      .getOrThrow<string>('MATRIX_BASE_URL')
+      .replace(/\/$/, '');
+    this.oracleOpenIdTokenProvider = new OpenIdTokenProvider({
+      matrixAccessToken: this.config.getOrThrow(
+        'MATRIX_ORACLE_ADMIN_ACCESS_TOKEN',
+      ),
+      homeServerUrl: this.oracleMatrixBaseUrl,
+      matrixUserId: this.config.getOrThrow('MATRIX_ORACLE_ADMIN_USER_ID'),
+    });
   }
 
   public onModuleDestroy(): void {
@@ -496,23 +514,61 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
           `sendMessage: ${params.attachments.length} attachment(s) received for session ${sessionId}, room ${roomId}`,
           'MessagesService',
         );
+
+        // Build sandbox config if user has tokens for sandbox access
+        let sandboxConfig: SandboxUploadConfig | undefined;
+        if (params.userMatrixOpenIdToken) {
+          try {
+            const oracleToken = await this.oracleOpenIdTokenProvider.getToken();
+            const homeServerName =
+              params.homeServer ||
+              (await getMatrixHomeServerCroppedForDid(params.did));
+            sandboxConfig = {
+              sandboxMcpUrl: this.config.getOrThrow<string>('SANDBOX_MCP_URL'),
+              userToken: params.userMatrixOpenIdToken,
+              oracleToken,
+              homeServerName,
+              oracleHomeServerUrl: this.oracleMatrixBaseUrl.replace(
+                /^https?:\/\//,
+                '',
+              ),
+            };
+          } catch (error) {
+            Logger.warn(
+              `Failed to build sandbox config: ${error instanceof Error ? error.message : String(error)}`,
+              'MessagesService',
+            );
+          }
+        }
+
         const { texts, metadata } =
           await this.fileProcessingService.processAttachments(
             params.attachments,
             roomId,
+            sandboxConfig,
           );
         Logger.log(
           `sendMessage: attachments processed — ${texts.length} text result(s), creating separate messages`,
           'MessagesService',
         );
         texts.forEach((text, i) => {
+          const meta = metadata[i];
+          // Prepend source reference so the agent can use process_file
+          // with the correct eventId/url if it needs to re-process later
+          const sourceRef = meta.eventId
+            ? `[source: eventId="${meta.eventId}"]`
+            : meta.mxcUri
+              ? `[source: url="${meta.mxcUri}"]`
+              : '';
+          const content = sourceRef ? `${sourceRef}\n${text}` : text;
+
           inputMessages.push(
             new HumanMessage({
-              content: text,
+              content,
               additional_kwargs: {
                 msgFromMatrixRoom,
                 timestamp: new Date().toISOString(),
-                attachment: metadata[i],
+                attachment: meta,
               },
             }),
           );
