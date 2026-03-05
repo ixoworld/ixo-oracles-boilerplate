@@ -71,10 +71,7 @@ const llm = getOpenRouterChatModel({
   modelKwargs: {
     require_parameters: true,
     include_reasoning: true,
-    models: [
-      'google/gemini-2.5-flash-lite:nitro',
-      'z-ai/glm-5',
-    ],
+    models: ['google/gemini-2.5-flash-lite:nitro', 'z-ai/glm-5'],
     provider: {
       sort: 'latency',
     },
