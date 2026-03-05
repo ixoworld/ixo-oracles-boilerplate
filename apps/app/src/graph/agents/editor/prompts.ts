@@ -108,6 +108,13 @@ Block types and their properties may evolve over time. Always use \`list_blocks\
 3. \`edit_block\` with \`updates\` for block properties and/or \`runtimeUpdates\` for runtime state
 4. Properties are passed as plain key-value pairs (e.g., \`{status: "open"}\`)
 
+**Skill execution (triggered from form submission):**
+1. \`read_flow_context\` — **MANDATORY FIRST STEP**: get flow metadata and settings (e.g. protocolDid, custom parameters set by template creators). These may be required environment variables for skills.
+2. \`list_blocks\` — understand all blocks in the flow (their types, IDs, and roles) so you know which blocks to update with skill outputs.
+3. Execute the skill scripts with parameters from flow context. Always pass the skill CID to sandbox_run.
+4. Use \`edit_block\` to update subsequent blocks with skill outputs (e.g. set URL on flowLink blocks, set inputs on credential.store blocks).
+5. Use \`execute_action\` to trigger action blocks (e.g. form.submit, protocol.select).
+
 ### Important Notes
 
 - Block IDs are UUIDs — always get them from \`list_blocks\` or \`search_blocks\` first

@@ -124,6 +124,11 @@ Instead, use \`apply_sandbox_output_to_block\`:
 3. Call \`apply_sandbox_output_to_block\` with the file path and block UUID
 4. Values are transferred server-side — never passing through LLM generation
 
+**For action blocks:** Use dot-notation \`fieldMapping\` to nest values into the \`inputs\` JSON-string prop:
+- Entire file as one input field: \`{"fieldMapping": {".": "inputs.credential"}}\`
+- Multiple fields: \`{"fieldMapping": {"credential": "inputs.credential", "roomId": "inputs.roomId"}}\`
+- Do NOT use direct transfer (no fieldMapping) on action blocks — it spreads fields as top-level props.
+
 Use this for any value longer than ~200 characters or any encoded/opaque data.
 Short values (statuses, names) can still be set via the Editor Agent's \`edit_block\`.
 
@@ -320,6 +325,22 @@ Execution flow:
 - Ensure output is in /workspace/output/ (full path)
 - artifact_get_presigned_url to get previewUrl and downloadUrl for /workspace/output/file.ext. The UI shows the file automatically. Reply with a very nice markdown message.
 </example-execution-pattern:create-document>
+
+### Pattern 1b: Flow-Triggered Skill Execution (Form Submit → Skill)
+
+<example-execution-pattern:flow-skill>
+Triggered when: A form.submit action block sends a companion prompt with skill name, CID, and form answers.
+
+Execution flow:
+1. **Read flow context FIRST** — call_editor_agent with "read_flow_context" to get flow-level settings and metadata (custom parameters set by template creators). These settings may be required environment variables for the skill.
+2. **Read flow blocks** — call_editor_agent with "list_blocks" to understand all blocks in the flow (their types, IDs, roles). This tells you which blocks to update with skill outputs (e.g. flowLink blocks need URLs, credential.store blocks need inputs).
+3. **Load & read** the skill SKILL.md to understand the script sequence and required env vars.
+4. **Execute** skill scripts with: form data from the trigger, flow settings from step 1, and the skill CID passed to sandbox_run (required for secrets injection).
+5. **Update blocks** with skill outputs. For flowLink blocks, use call_editor_agent to update the \`links\` array with items containing \`externalUrl\` for external URLs (e.g. \`{"links": [{"id": "link-1", "title": "Verify", "description": "Click to verify", "captionText": "", "position": 0, "externalUrl": "https://..."}]}\`). For action blocks with long/opaque values (credentials, JWTs, tokens), use \`apply_sandbox_output_to_block\` with dot-notation fieldMapping to write into the \`inputs\` prop (e.g. \`{"fieldMapping": {"credential": "inputs.credential", "credentialKey": "inputs.credentialKey"}}\`). Do NOT pass credentials through edit_block — they will be truncated. Short values like status strings can still use call_editor_agent.
+6. **Execute action** to trigger action blocks (e.g. form.submit, protocol.select).
+
+CRITICAL: Steps 1-2 are mandatory. Flow settings often contain parameters like protocolDid that skills need. Without reading flow context first, skill execution will fail due to missing parameters.
+</example-execution-pattern:flow-skill>
 
 ### Pattern 2: Multi-Step Tasks (Data Processing, Visualization, Complex Workflows)
 
@@ -800,7 +821,7 @@ After ANY successful sandbox_run or skill execution:
 
 3. **Your Editor Agent query MUST include exact values:**
    - BAD: "Update the block with the skill results"
-   - GOOD: "Use list_blocks to find the kycVerification block. Then call edit_block on that block with updates: {status: 'session_ready', kycUrl: 'https://exact-url-from-skill-output'}"
+   - GOOD: "Use list_blocks to find the flowLink block. Then call edit_block on that block with updates: {links: [{id: 'link-1', title: 'Verify Identity', description: 'Click to verify', captionText: '', position: 0, externalUrl: 'https://exact-url-from-skill-output'}]}"
 
 4. **Copy URLs and identifiers verbatim** from the skill output into your Editor Agent query.
 

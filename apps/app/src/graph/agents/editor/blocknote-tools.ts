@@ -479,9 +479,18 @@ List blocks without text content (faster):
 - Use \`runtimeUpdates\` to update runtime state (execution status, timestamps, etc.) — merges with existing state, never overwrites
 - Changes sync to all clients via CRDT
 
+**JSON-string properties (inputs, links):**
+- Some properties like \`inputs\` and \`links\` are stored as JSON strings internally
+- When reading blocks, these are returned as parsed objects/arrays
+- When updating, pass them as objects/arrays — they are auto-serialized back to JSON strings
+- For \`inputs\` (object): your updates are MERGED with existing values. Example: \`{"inputs": {"credential": "abc"}}\` merges into existing inputs
+- For \`links\` (array): your value REPLACES the existing array. Each link item needs: \`id\`, \`title\`, \`description\`, \`position\`. For external URLs add \`externalUrl\`. For internal flow links add \`docRoomId\`.
+
 **Examples:**
 - Update status: \`{"blockId": "uuid", "updates": {"status": "open"}}\`
 - Update text: \`{"blockId": "uuid", "updates": {}, "text": "New content"}\`
+- Update action inputs: \`{"blockId": "uuid", "updates": {"inputs": {"credential": "data", "roomId": "!room:server"}}}\`
+- Update flowLink with external URL: \`{"blockId": "uuid", "updates": {"links": [{"id": "link-1", "title": "Verify Identity", "description": "Click to verify", "captionText": "", "position": 0, "externalUrl": "https://example.com/verify"}]}}\`
 - Update runtime: \`{"blockId": "uuid", "updates": {}, "runtimeUpdates": {"evaluationStatus": "approved"}}\`
 - Remove attrs: \`{"blockId": "uuid", "updates": {}, "removeAttributes": ["oldProp"]}\`
 
