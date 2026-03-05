@@ -412,6 +412,7 @@ export class FileProcessingService {
       const chunks: Uint8Array[] = [];
       let totalBytes = 0;
 
+       
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -857,8 +858,8 @@ export class FileProcessingService {
    * to prevent prompt injection when interpolated into LLM context.
    */
   private sanitizeFilename(filename: string): string {
-    return filename // eslint-disable-next-line no-control-regex
-      .replace(/[\x00-\x1f\x7f]/g, '') // strip control chars
+    return filename
+      .replace(/[\u0000-\u001f\u007f]/g, '') // strip control chars
       .replace(/[[\]]/g, '') // strip brackets to prevent [SYSTEM: ...] injection
       .slice(0, 255);
   }
