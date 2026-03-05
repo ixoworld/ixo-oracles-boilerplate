@@ -74,6 +74,12 @@ export const EnvSchema = z.object({
   ORACLE_SECRETS: z.string().default(''),
 });
 
+export const matrixAccountRoomId = {
+  mainnet: '!ekfOXRmXCdBkDaRDDr:mx.ixo.earth',
+  testnet: '!HLRUpfYhwoLYDSEVcX:testmx.ixo.earth',
+  devnet: '!RHtTYnmThqJKAPqYXR:devmx.ixo.earth',
+}[(process.env.NETWORK as keyof typeof matrixAccountRoomId) ?? 'devnet'];
+
 export type ENV = z.infer<typeof EnvSchema> & {
   ORACLE_DID: string;
 };
@@ -92,9 +98,12 @@ export type ENV = z.infer<typeof EnvSchema> & {
 export function getConfig(configService?: ConfigService<ENV>) {
   const svc = configService ?? singletonConfigService();
   return {
-    get<K extends keyof ENV>(key: K): ENV[K] | undefined {
+    get<K extends keyof ENV>(
+      key: K,
+      defaultValue?: ENV[K],
+    ): ENV[K] | undefined {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return svc.get(key as any);
+      return svc.get(key as any, defaultValue);
     },
     getOrThrow<K extends keyof ENV>(key: K): ENV[K] {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -106,7 +115,9 @@ export function getConfig(configService?: ConfigService<ENV>) {
 let _singleton: ConfigService<ENV> | undefined;
 function singletonConfigService(): ConfigService<ENV> {
   if (!_singleton) {
-    _singleton = new ConfigService<ENV>();
+    const parsed = EnvSchema.safeParse(process.env);
+    const envVars = parsed.success ? parsed.data : process.env;
+    _singleton = new ConfigService<ENV>(envVars as Record<string, unknown>);
   }
   return _singleton;
 }
