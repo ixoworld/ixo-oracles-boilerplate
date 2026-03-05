@@ -1,10 +1,9 @@
 /* eslint-disable no-console */
 import { tool } from '@langchain/core/tools';
-import { ConfigService } from '@nestjs/config';
+import { getConfig } from 'src/config';
 import z from 'zod';
-import { type ENV } from 'src/config';
 
-const configService = new ConfigService<ENV>();
+const configService = getConfig();
 const SKILLS_CAPSULES_BASE_URL = configService.getOrThrow(
   'SKILLS_CAPSULES_BASE_URL',
 );
@@ -124,7 +123,7 @@ const searchSkills = async (params: { q: string; limit?: number }) => {
 export const listSkillsTool = tool(listSkills, {
   name: 'list_skills',
   description: `List available skills (capsules) from the IXO skills registry. Use this to discover what skills exist before delegating to the Skills Agent.
-  
+
   Return the output in the following format:
   - skills: list of skills
     - title: skill name

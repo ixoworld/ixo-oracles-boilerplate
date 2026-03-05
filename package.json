@@ -63,15 +63,16 @@
       "@digitalbazaar/http-client": "4.2.0"
     },
     "onlyBuiltDependencies": [
-      "@nestjs/core",
       "@ixo/matrix-sdk-crypto-nodejs",
       "@matrix-org/matrix-sdk-crypto-nodejs",
+      "@nestjs/core",
       "@scarf/scarf",
       "@swc/core",
+      "@veramo/credential-ld",
       "better-sqlite3",
       "cpu-features",
-      "@veramo/credential-ld",
       "esbuild",
+      "maplibre-gl",
       "msgpackr-extract",
       "protobufjs",
       "secp256k1",

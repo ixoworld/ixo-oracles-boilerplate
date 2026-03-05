@@ -50,12 +50,12 @@ import {
   type FlowNodeRuntimeState,
 } from '@ixo/editor/core';
 
-const config = getConfig();
+const configService = getConfig();
 
 const matrixConfig = {
-  baseUrl: config.getOrThrow('MATRIX_BASE_URL'),
-  accessToken: config.getOrThrow('MATRIX_ORACLE_ADMIN_ACCESS_TOKEN'),
-  userId: config.getOrThrow('MATRIX_ORACLE_ADMIN_USER_ID'),
+  baseUrl: configService.getOrThrow('MATRIX_BASE_URL'),
+  accessToken: configService.getOrThrow('MATRIX_ORACLE_ADMIN_ACCESS_TOKEN'),
+  userId: configService.getOrThrow('MATRIX_ORACLE_ADMIN_USER_ID'),
   initialSyncTimeoutMs: 30_000,
 } as const;
 

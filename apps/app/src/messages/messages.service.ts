@@ -10,7 +10,10 @@ import {
   type MessageEvent,
   type MessageEventContent,
 } from '@ixo/matrix';
-import { getMatrixHomeServerCroppedForDid } from '@ixo/oracles-chain-client';
+import {
+  getMatrixHomeServerCroppedForDid,
+  OpenIdTokenProvider,
+} from '@ixo/oracles-chain-client';
 import {
   ActionCallEvent,
   ReasoningEvent,
@@ -47,13 +50,18 @@ import {
 } from 'src/utils/sse.utils';
 import { type ListMessagesDto } from './dto/list-messages.dto';
 import { type SendMessagePayload } from './dto/send-message.dto';
-import { FileProcessingService } from './file-processing.service';
+import {
+  FileProcessingService,
+  type SandboxUploadConfig,
+} from './file-processing.service';
 
 @Injectable()
 export class MessagesService implements OnModuleInit, OnModuleDestroy {
   private cleanUpMatrixListener: () => void;
   private threadRootCache = new Map<string, string>(); // eventId → rootEventId
   private abortControllers = new Map<string, AbortController>(); // sessionId → AbortController
+  private readonly oracleOpenIdTokenProvider: OpenIdTokenProvider;
+  private readonly oracleMatrixBaseUrl: string;
 
   /**
    * Per-thread debounce buffer for Matrix events.
@@ -84,6 +92,16 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     @Optional() private readonly ucanService?: UcanService,
   ) {
     this.matrixManager = this.sessionManagerService.matrixManger;
+    this.oracleMatrixBaseUrl = this.config
+      .getOrThrow<string>('MATRIX_BASE_URL')
+      .replace(/\/$/, '');
+    this.oracleOpenIdTokenProvider = new OpenIdTokenProvider({
+      matrixAccessToken: this.config.getOrThrow(
+        'MATRIX_ORACLE_ADMIN_ACCESS_TOKEN',
+      ),
+      homeServerUrl: this.oracleMatrixBaseUrl,
+      matrixUserId: this.config.getOrThrow('MATRIX_ORACLE_ADMIN_USER_ID'),
+    });
   }
 
   public onModuleDestroy(): void {
@@ -478,8 +496,33 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     this.checkpointStorageSyncService.markUserActive(params.did);
 
     try {
-      const { runnableConfig, sessionId, roomId, userContext, targetSession } =
-        await this.prepareForQuery(params);
+      // Run prepareForQuery and oracle token fetch in parallel
+      const hasAttachments = !!params.attachments?.length;
+      const needsSandbox = hasAttachments && !!params.userMatrixOpenIdToken;
+
+      const [queryResult, oracleToken] = await Promise.all([
+        this.prepareForQuery(params),
+        needsSandbox
+          ? this.oracleOpenIdTokenProvider
+              .getToken()
+              .catch((error: unknown) => {
+                Logger.warn(
+                  `Failed to get oracle token: ${error instanceof Error ? error.message : String(error)}`,
+                  'MessagesService',
+                );
+                return undefined;
+              })
+          : Promise.resolve(undefined),
+      ]);
+
+      const {
+        runnableConfig,
+        sessionId,
+        roomId,
+        homeServerName,
+        userContext,
+        targetSession,
+      } = queryResult;
 
       // Build messages array: user text message + separate file messages
       const msgFromMatrixRoom = params.msgFromMatrixRoom ?? false;
@@ -491,28 +534,62 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         }),
       ];
 
-      if (params.attachments?.length) {
+      if (hasAttachments) {
         Logger.log(
-          `sendMessage: ${params.attachments.length} attachment(s) received for session ${sessionId}, room ${roomId}`,
+          `sendMessage: ${params.attachments!.length} attachment(s) received for session ${sessionId}, room ${roomId}`,
           'MessagesService',
         );
+
+        // Build sandbox config using pre-fetched oracle token and cached homeServer
+        let sandboxConfig: SandboxUploadConfig | undefined;
+        if (oracleToken && params.userMatrixOpenIdToken) {
+          try {
+            sandboxConfig = {
+              sandboxMcpUrl: this.config.getOrThrow<string>('SANDBOX_MCP_URL'),
+              userToken: params.userMatrixOpenIdToken,
+              oracleToken,
+              homeServerName,
+              oracleHomeServerUrl: this.oracleMatrixBaseUrl.replace(
+                /^https?:\/\//,
+                '',
+              ),
+            };
+          } catch (error) {
+            Logger.warn(
+              `Failed to build sandbox config: ${error instanceof Error ? error.message : String(error)}`,
+              'MessagesService',
+            );
+          }
+        }
+
         const { texts, metadata } =
           await this.fileProcessingService.processAttachments(
-            params.attachments,
+            params.attachments!,
             roomId,
+            sandboxConfig,
           );
         Logger.log(
           `sendMessage: attachments processed — ${texts.length} text result(s), creating separate messages`,
           'MessagesService',
         );
         texts.forEach((text, i) => {
+          const meta = metadata[i];
+          // Prepend source reference so the agent can use process_file
+          // with the correct eventId/url if it needs to re-process later
+          const sourceRef = meta.eventId
+            ? `[source: eventId="${meta.eventId}"]`
+            : meta.mxcUri
+              ? `[source: url="${meta.mxcUri}"]`
+              : '';
+          const content = sourceRef ? `${sourceRef}\n${text}` : text;
+
           inputMessages.push(
             new HumanMessage({
-              content: text,
+              content,
               additional_kwargs: {
                 msgFromMatrixRoom,
                 timestamp: new Date().toISOString(),
-                attachment: metadata[i],
+                attachment: meta,
               },
             }),
           );
@@ -1158,6 +1235,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
   ): Promise<{
     sessionId: string;
     roomId: string;
+    homeServerName: string;
     runnableConfig: IRunnableConfigWithRequiredFields & {
       configurable: {
         sessionId: string;
@@ -1173,15 +1251,17 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         ? (payload.requestId as string)
         : crypto.randomUUID();
 
-    await this.checkpointStorageSyncService.syncLocalStorageFromMatrixStorage({
-      userDid: did,
-    });
+    // Resolve homeServer once — used for room lookup and config
+    const homeServerName =
+      payload.homeServer || (await getMatrixHomeServerCroppedForDid(did));
 
-    const targetSession = await this.sessionManagerService.getSession(
-      sessionId,
-      did,
-      false,
-    );
+    // Run sync and session lookup in parallel — they're independent
+    const [, targetSession] = await Promise.all([
+      this.checkpointStorageSyncService.syncLocalStorageFromMatrixStorage({
+        userDid: did,
+      }),
+      this.sessionManagerService.getSession(sessionId, did, false),
+    ]);
 
     if (!targetSession) {
       throw new NotFoundException('Session not found');
@@ -1190,14 +1270,12 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     // Use cached roomId if available, otherwise fetch it
     let roomId = targetSession?.roomId;
     if (!roomId) {
-      const userHomeServer =
-        payload.homeServer || (await getMatrixHomeServerCroppedForDid(did));
       const roomResult =
         await this.sessionManagerService.matrixManger.getOracleRoomIdWithHomeServer(
           {
             userDid: did,
             oracleEntityDid: this.config.getOrThrow('ORACLE_ENTITY_DID'),
-            userHomeServer,
+            userHomeServer: homeServerName,
           },
         );
       roomId = roomResult.roomId;
@@ -1225,9 +1303,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
           matrix: {
             roomId,
             oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
-            homeServerName:
-              payload.homeServer ||
-              (await getMatrixHomeServerCroppedForDid(did)),
+            homeServerName,
           },
           user: {
             did,
@@ -1241,6 +1317,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
 
     return {
       roomId,
+      homeServerName,
       runnableConfig,
       sessionId,
       userContext: targetSession?.userContext,
