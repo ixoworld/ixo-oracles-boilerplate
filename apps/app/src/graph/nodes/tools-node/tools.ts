@@ -1,15 +1,14 @@
 import { MultiServerMCPClient } from '@langchain/mcp-adapters';
 import { Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import 'dotenv/config';
 import { type StructuredTool } from 'langchain';
-import { type ENV } from 'src/config';
+import { getConfig } from 'src/config';
 import {
   domainIndexerSearchTool,
   getDomainCardTool,
 } from './domain-indexer-tool';
 
-const configService = new ConfigService<ENV>();
+const config = getConfig();
 const logger = new Logger('MemoryEngineMCP');
 
 type SupportedTools =
@@ -58,7 +57,7 @@ const getMemoryEngineMcpTools = async ({
         'memory-engine': {
           type: 'http',
           transport: 'http',
-          url: configService.getOrThrow('MEMORY_MCP_URL'),
+          url: config.getOrThrow('MEMORY_MCP_URL'),
           headers: {
             'x-oracle-token': oracleToken,
             'x-user-token': userToken,
@@ -100,7 +99,7 @@ const getFirecrawlMcpTools = async () => {
         firecrawl: {
           type: 'http',
           transport: 'http',
-          url: configService.getOrThrow('FIRECRAWL_MCP_URL'),
+          url: config.getOrThrow('FIRECRAWL_MCP_URL'),
           reconnect: {
             enabled: true,
             maxAttempts: 3,

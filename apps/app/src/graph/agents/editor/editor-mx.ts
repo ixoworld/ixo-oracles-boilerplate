@@ -1,8 +1,6 @@
 import { Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import type { MatrixClient, SyncStateData } from 'matrix-js-sdk';
 import { ClientEvent, createClient, SyncState } from 'matrix-js-sdk';
-import { type ENV } from 'src/config';
 import { BLOCKNOTE_TOOLS_CONFIG } from './blocknote-tools';
 
 /**
@@ -31,7 +29,6 @@ export class EditorMatrixClient {
     | null = null;
 
   private readonly logger = new Logger('EditorMatrixClient');
-  private readonly configService = new ConfigService<ENV>();
 
   // Configuration
   private readonly SYNC_POLL_TIMEOUT = 30000; // 30 seconds - standard for Matrix

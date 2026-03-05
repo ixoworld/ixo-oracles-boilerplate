@@ -857,13 +857,10 @@ export class FileProcessingService {
    * to prevent prompt injection when interpolated into LLM context.
    */
   private sanitizeFilename(filename: string): string {
-    return (
-      filename
-        // eslint-disable-next-line no-control-regex
-        .replace(/[\x00-\x1f\x7f]/gu, '') // strip control chars
-        .replace(/[[\]]/g, '') // strip brackets to prevent [SYSTEM: ...] injection
-        .slice(0, 255)
-    );
+    return filename // eslint-disable-next-line no-control-regex
+      .replace(/[\x00-\x1f\x7f]/g, '') // strip control chars
+      .replace(/[[\]]/g, '') // strip brackets to prevent [SYSTEM: ...] injection
+      .slice(0, 255);
   }
 
   private formatContent(
