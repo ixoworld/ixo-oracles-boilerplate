@@ -14,12 +14,23 @@ import * as Y from 'yjs';
 import {
   appendBlock,
   collectAllBlocks,
+  deleteBlock,
   editBlock,
+  evaluateBlockConditions,
   extractBlockProperties,
   findBlockById,
   getBlockDetail,
+  readAuditTrailForBlock,
+  readDelegations,
+  readFlowMetadata,
+  readFlowNodes,
+  readInvocations,
+  readRuntimeState,
+  resolveBlockReferences,
   simplifyBlockForAgent,
+  updateRuntimeState,
   type BlockSnapshot,
+  type ConditionConfig,
 } from './blocknote-helper';
 import { type AppConfig, MatrixProviderManager } from './provider';
 import {
@@ -29,6 +40,15 @@ import {
   type SurveySchema,
   validateAnswersAgainstSchema,
 } from './survey-helpers';
+import {
+  getAction,
+  getAllActions,
+  buildFlowNodeFromBlock,
+  executeNode,
+  type ActionServices,
+  type FlowRuntimeStateManager,
+  type FlowNodeRuntimeState,
+} from '@ixo/editor/core';
 
 const config = getConfig();
 
@@ -59,6 +79,90 @@ export const BLOCKNOTE_TOOLS_CONFIG = {
  */
 
 const logger = new Logger('BlocknoteTools');
+
+// ── DID Helpers ───────────────────────────────────────────────────────
+
+/**
+ * Extracts a valid DID from a Matrix user ID.
+ * Matrix format: @did-ixo-ixo1abc123def:mx.server.com
+ * Result:        did:ixo:ixo1abc123def
+ *
+ * The localpart encodes the DID with hyphens instead of colons.
+ */
+function matrixUserIdToDid(matrixUserId: string): string {
+  // Strip leading @ and remove homeserver (:server.com)
+  const localpart = matrixUserId.replace(/^@/, '').replace(/:.*$/, '');
+  // Convert hyphens back to colons: did-ixo-ixo1abc → did:ixo:ixo1abc
+  // Only replace the first two hyphens (did-method-identifier)
+  const parts = localpart.split('-');
+  if (parts.length >= 3 && parts[0] === 'did') {
+    return `${parts[0]}:${parts[1]}:${parts.slice(2).join('-')}`;
+  }
+  // Fallback: return as-is if it doesn't match expected pattern
+  return localpart;
+}
+
+// ── Flow Engine Helpers ───────────────────────────────────────────────
+
+/**
+ * Creates a FlowRuntimeStateManager backed by a Y.Doc's 'runtime' map.
+ * Mirrors the pattern from the editor's runtime.ts.
+ * Wraps mutations in doc.transact for reliable CRDT sync.
+ */
+function createYDocRuntimeManager(doc: Y.Doc): FlowRuntimeStateManager {
+  const map = doc.getMap('runtime');
+  return {
+    get: (nodeId: string): FlowNodeRuntimeState => {
+      const stored = map.get(nodeId);
+      if (!stored || typeof stored !== 'object') return {};
+      return { ...(stored as FlowNodeRuntimeState) };
+    },
+    update: (nodeId: string, updates: Partial<FlowNodeRuntimeState>) => {
+      doc.transact(() => {
+        const current = map.get(nodeId);
+        const existing =
+          current && typeof current === 'object'
+            ? { ...(current as FlowNodeRuntimeState) }
+            : {};
+        map.set(nodeId, { ...existing, ...updates });
+      }, 'oracle-runtime-update');
+    },
+  };
+}
+
+/**
+ * Oracle-side ActionServices — MVP supports HTTP only.
+ * Additional services (email, notify) can be wired up when the oracle has those capabilities.
+ */
+const oracleActionServices: ActionServices = {
+  http: {
+    request: async (params: {
+      url: string;
+      method: string;
+      headers?: Record<string, string>;
+      body?: unknown;
+    }) => {
+      const { url, method, headers = {}, body } = params;
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', ...headers },
+        ...(body !== undefined && { body: JSON.stringify(body) }),
+      });
+      const data = await res.text();
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(data);
+      } catch {
+        parsed = data;
+      }
+      const responseHeaders: Record<string, string> = {};
+      res.headers.forEach((v, k) => {
+        responseHeaders[k] = v;
+      });
+      return { status: res.status, headers: responseHeaders, data: parsed };
+    },
+  },
+};
 
 /**
  * Creates BlockNote tools that use a shared Matrix client
@@ -256,7 +360,13 @@ List blocks without text content (faster):
    * Changes are synced to all connected clients via Matrix CRDT
    */
   const editBlockTool = tool(
-    async ({ blockId, updates, removeAttributes = [], text = null }) => {
+    async ({
+      blockId,
+      updates,
+      removeAttributes = [],
+      text = null,
+      runtimeUpdates = undefined,
+    }) => {
       Logger.log(`✏️ edit_block tool invoked for block: ${blockId}`);
 
       const isInRoom = await checkIfInRoomAndJoinPublicRoom(
@@ -275,6 +385,35 @@ List blocks without text content (faster):
 
       try {
         const { doc } = await providerManager.init();
+
+        // Guard: reject runtimeUpdates on action blocks in flow mode — use execute_action instead
+        if (
+          runtimeUpdates &&
+          typeof runtimeUpdates === 'object' &&
+          Object.keys(runtimeUpdates as Record<string, unknown>).length > 0
+        ) {
+          const blockDetail = getBlockDetail(doc, blockId, false);
+          const blockProps = blockDetail
+            ? extractBlockProperties(blockDetail)
+            : {};
+          const hasActionType = blockProps.actionType !== undefined;
+
+          if (hasActionType) {
+            const flowMeta = readFlowMetadata(doc);
+            const isFlow = flowMeta['_type'] === 'ixo.flow.crdt';
+
+            if (isFlow) {
+              return JSON.stringify({
+                success: false,
+                error:
+                  `Cannot apply runtimeUpdates directly to action block "${blockId}" in a flow document. ` +
+                  `Use the execute_action tool instead — it runs the action through the flow engine ` +
+                  `(activation → authorization → execution → runtime state update) for a proper audit trail.`,
+              });
+            }
+          }
+        }
+
         // Wrap updates in 'props' for consistency with CLI pattern
         const attributes =
           Object.keys(updates).length > 0 ? { props: updates } : {};
@@ -288,8 +427,21 @@ List blocks without text content (faster):
           docName: 'document',
         });
 
-        // Wait for sync
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        // Apply runtime state updates if provided
+        let updatedRuntimeState: Record<string, unknown> | undefined;
+        if (
+          runtimeUpdates &&
+          typeof runtimeUpdates === 'object' &&
+          Object.keys(runtimeUpdates as Record<string, unknown>).length > 0
+        ) {
+          doc.transact(() => {
+            updatedRuntimeState = updateRuntimeState(
+              doc,
+              blockId,
+              runtimeUpdates as Record<string, unknown>,
+            );
+          }, 'blocknote-crdt-playground');
+        }
 
         // Create simplified response for agents
         const updatedBlock = getBlockDetail(doc, blockId, true);
@@ -298,6 +450,7 @@ List blocks without text content (faster):
           success: true,
           message: `Successfully updated block ${blockId}`,
           block: updatedBlock,
+          ...(updatedRuntimeState && { runtimeState: updatedRuntimeState }),
         });
       } catch (error) {
         Logger.error('Error editing block:', error);
@@ -312,117 +465,30 @@ List blocks without text content (faster):
     },
     {
       name: 'edit_block',
-      description: `Edits an existing block's properties and content.
+      description: `Edits an existing block's properties, content, and/or runtime state.
 
-**⚠️ CRITICAL WORKFLOW:**
+**CRITICAL WORKFLOW:**
 1. Call list_blocks FIRST to get the exact UUID
-2. Extract UUID from results (UUIDs are like: 550e8400-e29b-41d4-a716-446655440000)
-3. Pass updates as plain key-value pairs (tool wraps them automatically)
-4. Never guess or invent block IDs
+2. Pass updates as plain key-value pairs (tool wraps them automatically)
+3. Never guess or invent block IDs
 
 **How Updates Work:**
 - Pass properties as plain objects like \`{status: "open", title: "New Title"}\`
 - Tool automatically wraps them in the internal \`props\` structure
+- Use \`runtimeUpdates\` to update runtime state (execution status, timestamps, etc.) — merges with existing state, never overwrites
 - Changes sync to all clients via CRDT
 
-**Example 1 - Update proposal status:**
-\`\`\`json
-{
-  "blockId": "550e8400-e29b-41d4-a716-446655440000",
-  "updates": {
-    "status": "open",
-    "title": "Updated Proposal Title"
-  }
-}
-\`\`\`
+**Examples:**
+- Update status: \`{"blockId": "uuid", "updates": {"status": "open"}}\`
+- Update text: \`{"blockId": "uuid", "updates": {}, "text": "New content"}\`
+- Update runtime: \`{"blockId": "uuid", "updates": {}, "runtimeUpdates": {"evaluationStatus": "approved"}}\`
+- Remove attrs: \`{"blockId": "uuid", "updates": {}, "removeAttributes": ["oldProp"]}\`
 
-**Example 2 - Update paragraph text:**
-\`\`\`json
-{
-  "blockId": "abc-123-def-456",
-  "updates": {},
-  "text": "New paragraph content here"
-}
-\`\`\`
+**Note:** Block properties vary by block type and may evolve. Use \`list_blocks\` or \`read_block_by_id\` to discover current properties for any block type.
 
-**Example 3 - Update checkbox state:**
-\`\`\`json
-{
-  "blockId": "checkbox-uuid-here",
-  "updates": {
-    "checked": true,
-    "title": "Task completed"
-  }
-}
-\`\`\`
+**Returns:** Block details including id, type, properties, text, and runtimeState (if updated).
 
-**Example 4 - Remove attributes:**
-\`\`\`json
-{
-  "blockId": "some-uuid",
-  "updates": {},
-  "removeAttributes": ["oldProperty", "tempData"]
-}
-\`\`\`
-
-**Example 5 - Update API request:**
-\`\`\`json
-{
-  "blockId": "api-block-uuid",
-  "updates": {
-    "status": "success",
-    "response": "{\\"data\\": \\"result\\"}"
-  }
-}
-\`\`\`
-
-**Complete Property Reference by Block Type:**
-
-**proposal** - Blockchain proposals
-  - status: "draft" | "open" | "passed" | "rejected" | "executed" | "closed" | "execution_failed" | "veto_timelock"
-  - title: string
-  - description: string
-  - proposalId: string
-  - actions: string (JSON array)
-  - voteEnabled: boolean
-  - voteTitle: string
-  - voteSubtitle: string
-  - voteIcon: string
-  - daysLeft: number
-  - proposalContractAddress: string
-  - coreAddress: string
-  - conditions: string (JSON)
-
-**checkbox** - Interactive checkboxes
-  - checked: boolean
-  - title: string
-  - description: string
-  - icon: string
-  - allowedCheckers: "all" | "specific" | string array
-  - initialChecked: boolean
-  - conditions: string (JSON)
-
-**apiRequest** - API call blocks
-  - endpoint: string
-  - method: "GET" | "POST" | "PUT" | "DELETE"
-  - headers: string (JSON array of key-value pairs)
-  - body: string (JSON array of key-value pairs)
-  - response: string
-  - status: "idle" | "loading" | "success" | "error"
-  - title: string
-  - description: string
-  - conditions: string (JSON)
-
-**list** - Data list blocks
-  - title: string
-  - did: string (Decentralized Identifier)
-  - fragmentIdentifier: string
-  - conditions: string (JSON)
-
-**paragraph** - Text blocks
-  - No special properties (use 'text' parameter to update content)
-
-**Returns:**
+**Example response:**
 \`\`\`json
 {
   "success": true,
@@ -462,6 +528,12 @@ List blocks without text content (faster):
           .describe(
             'New text content for the block. Use null to keep existing, empty string to clear',
           ),
+        runtimeUpdates: z
+          .record(z.any(), z.any())
+          .optional()
+          .describe(
+            'Optional: merge updates into the block runtime state (execution status, claims, timestamps, etc.). Merges with existing state — never overwrites.',
+          ),
       }),
     },
   );
@@ -471,22 +543,8 @@ List blocks without text content (faster):
   // ============================================================================
 
   /**
-   * Creates a new block in the document
-   *
-   * Uses the production-tested appendBlock helper from blockActions.ts
-   * which includes:
-   * - Dual-storage pattern (attrs + direct attributes)
-   * - Proper block structure creation
-   * - Consistent with CLI add-block command
-   *
-   * Supports all block types:
-   * - paragraph: Simple text blocks
-   * - proposal: Blockchain proposals
-   * - checkbox: Interactive checkboxes
-   * - apiRequest: API call blocks
-   * - list: Data list blocks
-   *
-   * New blocks are appended to the end of the document
+   * Creates a new block in the document using appendBlock from blockActions.ts.
+   * Supports all block types — new blocks are appended to the end of the document.
    */
   const createBlockTool = tool(
     async ({ blockType, text = '', attributes = {}, blockId = null }) => {
@@ -523,9 +581,6 @@ List blocks without text content (faster):
           namespace: undefined,
         });
 
-        // Wait for Matrix sync to complete
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
         // Get simplified view for agents
 
         const createdBlock = getBlockDetail(doc, snapshot.id, true);
@@ -556,131 +611,16 @@ List blocks without text content (faster):
 
 **Usage:**
 - Add new blocks to the document (appended at the end)
-- Initialize blocks with specific properties
+- Initialize blocks with specific properties as key-value pairs
 - Block ID (UUID) is auto-generated unless you provide one
+- Use \`read_block_by_id\` on existing blocks to discover available properties for any block type
 
-**Example 1 - Create paragraph:**
-\`\`\`json
-{
-  "blockType": "paragraph",
-  "text": "This is a new paragraph in the document."
-}
-\`\`\`
+**Examples:**
+- Paragraph: \`{"blockType": "paragraph", "text": "Hello world"}\`
+- Proposal: \`{"blockType": "proposal", "attributes": {"status": "draft", "title": "My Proposal"}}\`
+- Checkbox: \`{"blockType": "checkbox", "attributes": {"checked": false, "title": "Task"}}\`
 
-**Example 2 - Create proposal:**
-\`\`\`json
-{
-  "blockType": "proposal",
-  "text": "",
-  "attributes": {
-    "status": "draft",
-    "title": "New Governance Proposal",
-    "description": "Detailed proposal description",
-    "proposalId": "",
-    "voteEnabled": true,
-    "voteTitle": "Vote on this proposal",
-    "icon": "square-check"
-  }
-}
-\`\`\`
-
-**Example 3 - Create checkbox:**
-\`\`\`json
-{
-  "blockType": "checkbox",
-  "attributes": {
-    "checked": false,
-    "title": "Complete KYC verification",
-    "description": "Submit required documents",
-    "icon": "square-check",
-    "allowedCheckers": "all",
-    "initialChecked": false
-  }
-}
-\`\`\`
-
-**Example 4 - Create API request:**
-\`\`\`json
-{
-  "blockType": "apiRequest",
-  "attributes": {
-    "title": "Fetch user data",
-    "description": "Get user profile from API",
-    "endpoint": "https://api.example.com/users/123",
-    "method": "GET",
-    "headers": "[]",
-    "body": "[]",
-    "status": "idle"
-  }
-}
-\`\`\`
-
-**Example 5 - Create list:**
-\`\`\`json
-{
-  "blockType": "list",
-  "attributes": {
-    "title": "DAO Members",
-    "did": "did:ixo:entity123",
-    "fragmentIdentifier": "members"
-  }
-}
-\`\`\`
-
-**Complete Attributes by Block Type:**
-
-**paragraph**
-  - No special attributes (just use 'text' parameter)
-
-**proposal** (typical defaults shown)
-  - status: "draft" (or "open" | "passed" | "rejected" | "executed" | "closed" | "execution_failed" | "veto_timelock")
-  - title: string
-  - description: string
-  - proposalId: string (usually empty initially, filled when created on-chain)
-  - actions: string (JSON array, e.g., "[]")
-  - voteEnabled: boolean (default: false)
-  - voteTitle: string
-  - voteSubtitle: string
-  - voteIcon: string (default: "checklist")
-  - daysLeft: number (default: 0)
-  - proposalContractAddress: string
-  - coreAddress: string
-  - conditions: string (JSON, default: "")
-
-**checkbox** (typical defaults shown)
-  - checked: boolean (default: false)
-  - title: string
-  - description: string
-  - icon: string (default: "square-check")
-  - allowedCheckers: "all" | "specific" | string array (default: "all")
-  - initialChecked: boolean (default: false)
-  - conditions: string (JSON, default: "")
-
-**apiRequest** (typical defaults shown)
-  - title: string
-  - description: string
-  - endpoint: string
-  - method: "GET" | "POST" | "PUT" | "DELETE" (default: "GET")
-  - headers: string (JSON array, default: "[]")
-  - body: string (JSON array, default: "[]")
-  - response: string (default: "")
-  - status: "idle" | "loading" | "success" | "error" (default: "idle")
-  - conditions: string (JSON, default: "")
-
-**list** (typical defaults shown)
-  - title: string
-  - did: string (Decentralized Identifier)
-  - fragmentIdentifier: string (e.g., "assets", "members", "proposals")
-  - conditions: string (JSON, default: "")
-
-**domainCreator** - Survey forms
-  - title: string
-  - description: string
-  - icon: string
-  - surveySchema: string (JSON string of SurveyJS schema)
-  - answers: string (JSON string of current answers)
-  - lastSubmission: string
-  - Note: For domainCreator blocks, use read_survey, fill_survey_answers, and validate_survey_answers tools instead of direct edit_block for survey operations
+**Note:** Block attributes vary by type and may evolve. Use \`read_block_by_id\` on existing blocks to discover available properties. For survey-capable blocks (domainCreator, form, etc.), use the dedicated survey tools (read_survey, fill_survey_answers, validate_survey_answers).
 
 **Returns:**
 \`\`\`json
@@ -732,27 +672,92 @@ The returned block includes the auto-generated UUID that you can use for future 
   );
 
   const readBlockByIdTool = tool(
-    async ({ blockId }) => {
+    async ({
+      blockId,
+      evaluateConditions: evalConds = false,
+      resolveReferences: resolveRefs = false,
+    }) => {
       Logger.log(`📄 read_block_by_id tool invoked for block: ${blockId}`);
       const providerManager = new MatrixProviderManager(matrixClient, config);
       try {
         const { doc } = await providerManager.init();
         const block = getBlockDetail(doc, blockId, true);
 
-        // Parse survey data if it's a domainCreator block
-        if (block) {
-          const simplified = simplifyBlockForAgent(block);
-          // surveySchema and answers are already parsed in extractBlockProperties
-          return JSON.stringify({
-            success: true,
-            block: simplified,
-          });
+        if (!block) {
+          return JSON.stringify({ success: true, block: null });
         }
 
-        return JSON.stringify({
+        const simplified = simplifyBlockForAgent(block);
+        const result: Record<string, unknown> = {
           success: true,
-          block: null,
-        });
+          block: simplified,
+        };
+
+        // Include runtime state for this block if it exists
+        const blockRuntimeState = readRuntimeState(doc, blockId);
+        const runtimeData = blockRuntimeState[blockId];
+        if (runtimeData && Object.keys(runtimeData).length > 0) {
+          result.runtimeState = runtimeData;
+        }
+
+        // Optional: evaluate conditions
+        if (evalConds) {
+          const attrs = block.attributes || {};
+          const attrsObj =
+            (attrs.attrs as Record<string, unknown> | undefined) || {};
+          const props =
+            (attrsObj.props as Record<string, unknown> | undefined) || {};
+          const conditionsJson =
+            (props.conditions as string) || (attrs.conditions as string) || '';
+
+          if (conditionsJson) {
+            try {
+              const conditionConfig = JSON.parse(
+                conditionsJson,
+              ) as ConditionConfig;
+              const fragment = doc.getXmlFragment('document');
+              const allBlocks = collectAllBlocks(fragment);
+              result.conditionEvaluation = evaluateBlockConditions(
+                conditionConfig,
+                allBlocks,
+              );
+            } catch {
+              result.conditionEvaluation = {
+                error: 'Failed to parse conditions JSON',
+              };
+            }
+          } else {
+            result.conditionEvaluation = {
+              isVisible: true,
+              isEnabled: true,
+              actions: [],
+            };
+          }
+        }
+
+        // Optional: resolve references in string props
+        if (resolveRefs) {
+          const fragment = doc.getXmlFragment('document');
+          const allBlocks = collectAllBlocks(fragment);
+          const resolvedProps: Record<string, unknown> = {};
+          const blockProps = simplified.properties || {};
+
+          for (const [key, val] of Object.entries(blockProps)) {
+            if (
+              typeof val === 'string' &&
+              val.includes('{{') &&
+              val.includes('}}')
+            ) {
+              resolvedProps[key] = resolveBlockReferences(val, allBlocks);
+            }
+          }
+
+          if (Object.keys(resolvedProps).length > 0) {
+            result.resolvedReferences = resolvedProps;
+          }
+        }
+
+        return JSON.stringify(result, null, 2);
       } catch (error) {
         return JSON.stringify({
           success: false,
@@ -764,9 +769,29 @@ The returned block includes the auto-generated UUID that you can use for future 
     },
     {
       name: 'read_block_by_id',
-      description: `Reads a block by its ID. For domainCreator blocks, automatically parses surveySchema and answers as structured JSON.`,
+      description: `Reads a block by its ID. Returns block properties AND runtime state (execution status, claims, timestamps, etc.) in a single call.
+
+Automatically includes runtimeState from Y.Map('runtime') when data exists for this block. Parses surveySchema and answers for survey blocks.
+
+Optional flags:
+- evaluateConditions: true → evaluates the block's condition config against all blocks, returns { isVisible, isEnabled, conditionActions[] }
+- resolveReferences: true → resolves {{blockId.prop}} patterns in block props, returns resolved values`,
       schema: z.object({
         blockId: z.string().describe('The ID of the block to read'),
+        evaluateConditions: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe(
+            'If true, evaluates the block conditions and returns visibility/enabled state',
+          ),
+        resolveReferences: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe(
+            'If true, resolves {{blockId.prop}} template references in block props',
+          ),
       }),
     },
   );
@@ -814,7 +839,7 @@ The returned block includes the auto-generated UUID that you can use for future 
           Logger.error('Block does not contain a surveySchema:', block);
           return JSON.stringify({
             success: false,
-            error: `Block ${blockId} does not contain a surveySchema. This tool is only for domainCreator blocks.`,
+            error: `Block ${blockId} does not contain a surveySchema property. This tool works with any block that has a surveySchema (domainCreator, form, governanceGroup, bid, claim, etc.)`,
           });
         }
 
@@ -856,7 +881,7 @@ The returned block includes the auto-generated UUID that you can use for future 
     },
     {
       name: 'read_survey',
-      description: `Reads survey schema and current answers from a domainCreator block in structured format.
+      description: `Reads survey schema and current answers from any block with a surveySchema property.
 
 **Purpose:**
 - View complete survey structure (ALL questions including hidden ones)
@@ -865,74 +890,22 @@ The returned block includes the auto-generated UUID that you can use for future 
 - Understand why fields are hidden (via visibleIf conditions)
 - Find missing required fields (only for visible questions)
 - Automatically fetches choices from choicesByUrl for dropdown questions
+- Works with any block type that has a surveySchema (domainCreator, form, governanceGroup, bid, claim, etc.)
 
 **Important:**
 - ALL questions are returned (both visible and hidden), not just visible ones
 - \`isVisible: true\` means the field is currently shown in the UI
 - \`isVisible: false\` means the field is hidden by a \`visibleIf\` condition
-- \`visibleIf\` field shows the condition that controls visibility (e.g., \`"{ixo:advancedDomainSettings} = true"\`)
-- Hidden fields can be made visible by changing the controlling answer (e.g., set \`ixo:advancedDomainSettings: true\`)
+- \`visibleIf\` field shows the condition that controls visibility
+- Hidden fields can be made visible by changing the controlling answer
 - Nested dynamic panel template elements are included in the questions array
+- Choices from choicesByUrl are automatically fetched and included
 
-**Example:**
-\`\`\`json
-{
-  "blockId": "271fc5de-bcd8-4de0-8dd7-fb3dd5c13785"
-}
-\`\`\`
-
-**Returns:**
-\`\`\`json
-{
-  "success": true,
-  "survey": {
-    "title": "Domain Card Creation",
-    "description": "Survey description"
-  },
-  "questions": [
-    {
-      "name": "schema:name",
-      "title": "Domain Name",
-      "type": "text",
-      "isRequired": true,
-      "isVisible": true,
-      "visibleIf": undefined,
-      "pageName": "domainDetails",
-      "pageTitle": "Domain Information"
-    },
-    {
-      "name": "schema:itemOffered.type",
-      "title": "Category",
-      "type": "dropdown",
-      "isRequired": false,
-      "isVisible": false,
-      "visibleIf": "{ixo:advancedDomainSettings} = true",
-      "pageName": "composition",
-      "pageTitle": "Composition",
-      "choices": [
-        {"value": "product", "text": "Product"},
-        {"value": "service", "text": "Service"}
-      ]
-    }
-  ],
-  "answers": {
-    "schema:name": "My Domain",
-    "schema:makesOffer": [{"schema:itemOffered.type": "product"}]
-  },
-  "missingRequiredFields": ["schema.description"],
-  "totalQuestions": 150,
-  "visibleQuestionsCount": 28
-}
-\`\`\`
-
-**Note:** 
-- Only works with domainCreator blocks. Use list_blocks to find domainCreator block IDs.
-- Choices from choicesByUrl are automatically fetched and included in the choices array for dropdown questions.
-- The \`answers\` object may contain data for hidden fields - use the \`questions\` array to understand the schema for those fields.`,
+**Note:** The \`answers\` object may contain data for hidden fields — use the \`questions\` array to understand the schema for those fields.`,
       schema: z.object({
         blockId: z
           .string()
-          .describe('The ID of the domainCreator block containing the survey'),
+          .describe('The ID of the block containing the survey'),
       }),
     },
   );
@@ -977,7 +950,7 @@ The returned block includes the auto-generated UUID that you can use for future 
         if (!surveySchema) {
           return JSON.stringify({
             success: false,
-            error: `Block ${blockId} does not contain a surveySchema. This tool is only for domainCreator blocks.`,
+            error: `Block ${blockId} does not contain a surveySchema property. This tool works with any block that has a surveySchema (domainCreator, form, governanceGroup, bid, claim, etc.)`,
           });
         }
 
@@ -999,8 +972,6 @@ The returned block includes the auto-generated UUID that you can use for future 
         );
 
         // Update the block's answers attribute
-        // The answers need to be stored as a JSON string in the domainCreator child element
-        // Use Y.js transaction to update the answers attribute
         const fragment = doc.getXmlFragment('document');
         const blockContainer = findBlockById(fragment, blockId);
 
@@ -1013,28 +984,27 @@ The returned block includes the auto-generated UUID that you can use for future 
 
         // Use Y.js transaction to update the answers
         doc.transact(() => {
-          // Find the domainCreator child element
-          const domainCreatorElement = blockContainer
+          // Find the content child element that has an answers attribute
+          const contentElement = blockContainer
             .toArray()
             .find(
               (node): node is Y.XmlElement =>
                 node instanceof Y.XmlElement &&
-                node.nodeName === 'domainCreator',
+                node.nodeName !== 'blockGroup' &&
+                node.nodeName !== 'blockContainer',
             );
 
-          if (domainCreatorElement) {
+          if (contentElement) {
             // Update the answers attribute as JSON string directly on the child element
-            domainCreatorElement.setAttribute(
+            contentElement.setAttribute(
               'answers',
               JSON.stringify(updatedAnswers),
             );
           } else {
             logger.error(
-              'DomainCreator element not found, falling back to edit_block helper',
+              'Content element not found, falling back to edit_block helper',
             );
-            // This will update via the props mechanism');
             // Fallback: use edit_block helper which handles the structure properly
-            // This will update via the props mechanism
             editBlock(doc, {
               blockId,
               attributes: {
@@ -1044,9 +1014,6 @@ The returned block includes the auto-generated UUID that you can use for future 
             });
           }
         }, 'blocknote-crdt-playground');
-
-        // Wait for sync
-        await new Promise((resolve) => setTimeout(resolve, 1000));
 
         return JSON.stringify(
           {
@@ -1074,13 +1041,14 @@ The returned block includes the auto-generated UUID that you can use for future 
     },
     {
       name: 'fill_survey_answers',
-      description: `Fills in survey answers for a domainCreator block. Intelligently merges with existing answers and validates against schema.
+      description: `Fills in survey answers for any block with a surveySchema. Intelligently merges with existing answers and validates against schema.
 
 **Purpose:**
 - Fill in partial or complete survey answers
 - Merge with existing answers (default) or replace them
 - Automatically validates answers against schema
 - Respects visibility conditions
+- Works with any block type that has a surveySchema (domainCreator, form, governanceGroup, bid, claim, etc.)
 
 **Example 1 - Fill single answer:**
 \`\`\`json
@@ -1107,38 +1075,15 @@ The returned block includes the auto-generated UUID that you can use for future 
 }
 \`\`\`
 
-**Returns:**
-\`\`\`json
-{
-  "success": true,
-  "message": "Successfully merged survey answers",
-  "answers": {
-    "schema:name": "My New Domain",
-    "schema.description": "A description",
-    "type_2": "dao"
-  },
-  "validation": {
-    "valid": false,
-    "errors": [
-      {
-        "field": "schema:validFrom",
-        "message": "Valid From is required",
-        "type": "required"
-      }
-    ],
-    "warnings": []
-  },
-  "missingRequiredFields": ["schema:validFrom", "schema:validUntil"]
-}
-\`\`\`
-
-**Note:** 
+**Note:**
 - Use merge=true (default) to keep existing answers and only update specified fields
 - Use merge=false to replace all answers
 - Answers are validated automatically
 - Only visible questions (based on visibility conditions) are considered`,
       schema: z.object({
-        blockId: z.string().describe('The ID of the domainCreator block'),
+        blockId: z
+          .string()
+          .describe('The ID of the block containing the survey'),
         answers: z
           .record(z.any(), z.any())
           .describe(
@@ -1198,7 +1143,7 @@ The returned block includes the auto-generated UUID that you can use for future 
         if (!surveySchema) {
           return JSON.stringify({
             success: false,
-            error: `Block ${blockId} does not contain a surveySchema. This tool is only for domainCreator blocks.`,
+            error: `Block ${blockId} does not contain a surveySchema property. This tool works with any block that has a surveySchema (domainCreator, form, governanceGroup, bid, claim, etc.)`,
           });
         }
 
@@ -1250,51 +1195,14 @@ The returned block includes the auto-generated UUID that you can use for future 
     },
     {
       name: 'validate_survey_answers',
-      description: `Validates current survey answers against the schema requirements.
+      description: `Validates current survey answers against the schema requirements. Works with any block that has a surveySchema.
 
 **Purpose:**
 - Check if all required fields are filled
 - Validate answer types and formats
 - Identify validation errors and warnings
 - Calculate completion percentage
-
-**Example:**
-\`\`\`json
-{
-  "blockId": "271fc5de-bcd8-4de0-8dd7-fb3dd5c13785"
-}
-\`\`\`
-
-**Returns:**
-\`\`\`json
-{
-  "success": true,
-  "valid": false,
-  "errors": [
-    {
-      "field": "schema:name",
-      "message": "Domain Name is required",
-      "type": "required"
-    },
-    {
-      "field": "schema:url",
-      "message": "URL must be a valid URL",
-      "type": "format"
-    }
-  ],
-  "warnings": [
-    {
-      "field": "unknown_field",
-      "message": "Answer for 'unknown_field' does not correspond to any question"
-    }
-  ],
-  "missingRequiredFields": ["schema:name", "schema.description"],
-  "answeredQuestions": 5,
-  "visibleQuestionsCount": 10,
-  "totalRequiredFields": 7,
-  "completionPercentage": 71
-}
-\`\`\`
+- Works with any block type that has a surveySchema (domainCreator, form, governanceGroup, bid, claim, etc.)
 
 **Validation Types:**
 - required: Field is required but missing or empty
@@ -1306,16 +1214,816 @@ The returned block includes the auto-generated UUID that you can use for future 
       schema: z.object({
         blockId: z
           .string()
-          .describe('The ID of the domainCreator block to validate'),
+          .describe('The ID of the block to validate survey answers for'),
       }),
     },
   );
 
-  // Return only read-only tool if readOnly mode is enabled
+  // ============================================================================
+  // Tool 8: Read Flow Context
+  // ============================================================================
+
+  const readFlowContextTool = tool(
+    async () => {
+      logger.log('📊 read_flow_context tool invoked');
+      const providerManager = new MatrixProviderManager(matrixClient, config);
+
+      try {
+        const { doc } = await providerManager.init();
+
+        const isInRoom = await checkIfInRoomAndJoinPublicRoom(
+          matrixClient,
+          roomId,
+        );
+        if (!isInRoom) {
+          return JSON.stringify({
+            success: false,
+            error: `Companion is not in the room ${roomId}, please invite companion to the room. companion user id: ${matrixClient.getUserId()}`,
+          });
+        }
+
+        const flowMetadata = readFlowMetadata(doc);
+        const fragment = doc.getXmlFragment('document');
+        const blocks = collectAllBlocks(fragment);
+        const flowNodes = readFlowNodes(doc);
+        const runtimeMap = doc.getMap('runtime');
+        const delegationsMap = doc.getMap('delegations');
+
+        return JSON.stringify(
+          {
+            success: true,
+            flowMetadata,
+            summary: {
+              blockCount: blocks.length,
+              flowNodeCount: flowNodes.length,
+              isFlowDocument: flowMetadata['_type'] === 'ixo.flow.crdt',
+              hasRuntimeState: runtimeMap.size > 0,
+              hasDelegations: delegationsMap.size > 1,
+            },
+          },
+          null,
+          2,
+        );
+      } catch (error) {
+        return JSON.stringify({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        await providerManager.dispose();
+      }
+    },
+    {
+      name: 'read_flow_context',
+      description: `Reads flow-level metadata and document context. **Call this FIRST** in any new conversation to understand what document you're working with.
+
+Returns: flow metadata (title, owner DID, doc type, schema version, creation date), block count, flow node count, and whether runtime state/delegations exist.
+
+This is a lightweight call that gives you the full picture before diving into specific blocks.`,
+      schema: z.object({}),
+    },
+  );
+
+  // ============================================================================
+  // Tool 9: Read Flow Status
+  // ============================================================================
+
+  const readFlowStatusTool = tool(
+    async ({ nodeId = null }) => {
+      logger.log(
+        `📈 read_flow_status tool invoked${nodeId ? ` for node: ${nodeId}` : ''}`,
+      );
+      const providerManager = new MatrixProviderManager(matrixClient, config);
+
+      try {
+        const { doc } = await providerManager.init();
+
+        const isInRoom = await checkIfInRoomAndJoinPublicRoom(
+          matrixClient,
+          roomId,
+        );
+        if (!isInRoom) {
+          return JSON.stringify({
+            success: false,
+            error: `Companion is not in the room ${roomId}, please invite companion to the room. companion user id: ${matrixClient.getUserId()}`,
+          });
+        }
+
+        const flowNodes = readFlowNodes(doc);
+        const runtimeState = readRuntimeState(doc, nodeId ?? undefined);
+
+        // Enrich runtime state with human-readable dates
+        const enrichedState: Record<string, Record<string, unknown>> = {};
+        for (const [id, state] of Object.entries(runtimeState)) {
+          const enriched: Record<string, unknown> = { ...state };
+          const ts = state['executionTimestamp'];
+          if (typeof ts === 'number') {
+            enriched['executionDate'] = new Date(ts).toISOString();
+          }
+          enrichedState[id] = enriched;
+        }
+
+        // Build summary — graceful field checks for generic data
+        const allRuntimeState = readRuntimeState(doc);
+        const stateValues = Object.values(allRuntimeState);
+        const executedNodes = stateValues.filter(
+          (s) => s['executionTimestamp'],
+        ).length;
+
+        return JSON.stringify(
+          {
+            success: true,
+            flowNodes,
+            runtimeState: enrichedState,
+            summary: {
+              totalNodes: flowNodes.length,
+              executedNodes,
+              pendingNodes: stateValues.filter(
+                (s) => s['evaluationStatus'] === 'pending',
+              ).length,
+              approvedNodes: stateValues.filter(
+                (s) => s['evaluationStatus'] === 'approved',
+              ).length,
+              rejectedNodes: stateValues.filter(
+                (s) => s['evaluationStatus'] === 'rejected',
+              ).length,
+            },
+          },
+          null,
+          2,
+        );
+      } catch (error) {
+        return JSON.stringify({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        await providerManager.dispose();
+      }
+    },
+    {
+      name: 'read_flow_status',
+      description: `Reads the execution status of flow nodes. Shows which blocks have been executed, by whom, when, and their evaluation status (pending/approved/rejected).
+
+Use this to answer: "What's the status of this flow?", "Which steps are done?", "Who executed block X?"
+
+Pass nodeId to check a specific node, or omit to get all nodes.`,
+      schema: z.object({
+        nodeId: z
+          .string()
+          .optional()
+          .nullable()
+          .describe('Optional: specific node ID to check. Omit for all nodes.'),
+      }),
+    },
+  );
+
+  // ============================================================================
+  // Tool 10: Read Block History
+  // ============================================================================
+
+  const readBlockHistoryTool = tool(
+    async ({ blockId }) => {
+      logger.log(`📜 read_block_history tool invoked for block: ${blockId}`);
+      const providerManager = new MatrixProviderManager(matrixClient, config);
+
+      try {
+        const { doc } = await providerManager.init();
+
+        const isInRoom = await checkIfInRoomAndJoinPublicRoom(
+          matrixClient,
+          roomId,
+        );
+        if (!isInRoom) {
+          return JSON.stringify({
+            success: false,
+            error: `Companion is not in the room ${roomId}, please invite companion to the room. companion user id: ${matrixClient.getUserId()}`,
+          });
+        }
+
+        const auditEvents = readAuditTrailForBlock(doc, blockId);
+        const invocations = readInvocations(doc, blockId);
+
+        const successfulInvocations = invocations.filter(
+          (i) => i['result'] === 'success',
+        ).length;
+        const failedInvocations = invocations.filter(
+          (i) => i['result'] === 'failure',
+        ).length;
+
+        // Enrich invocations with human-readable dates
+        const enrichedInvocations = invocations.map((inv) => {
+          const enriched: Record<string, unknown> = { ...inv };
+          const executedAt = inv['executedAt'];
+          if (typeof executedAt === 'number') {
+            enriched['executedDate'] = new Date(executedAt).toISOString();
+          } else if (typeof executedAt === 'string') {
+            enriched['executedDate'] = new Date(executedAt).toISOString();
+          }
+          return enriched;
+        });
+
+        // Find most recent activity
+        const lastAuditEvent =
+          auditEvents.length > 0
+            ? auditEvents[auditEvents.length - 1]
+            : undefined;
+        const lastAuditMeta =
+          lastAuditEvent &&
+          typeof lastAuditEvent['meta'] === 'object' &&
+          lastAuditEvent['meta'] !== null
+            ? (lastAuditEvent['meta'] as Record<string, unknown>)
+            : undefined;
+        const lastAuditTs = lastAuditMeta?.['timestamp'] as string | undefined;
+        const firstInv =
+          enrichedInvocations.length > 0 ? enrichedInvocations[0] : undefined;
+        const lastInvTs = firstInv?.['executedDate'] as string | undefined;
+        const lastActivity =
+          lastAuditTs && lastInvTs
+            ? lastAuditTs > lastInvTs
+              ? lastAuditTs
+              : lastInvTs
+            : lastAuditTs || lastInvTs;
+
+        return JSON.stringify(
+          {
+            success: true,
+            blockId,
+            auditEvents,
+            invocations: enrichedInvocations,
+            summary: {
+              totalAuditEvents: auditEvents.length,
+              totalInvocations: invocations.length,
+              successfulInvocations,
+              failedInvocations,
+              lastActivity,
+            },
+          },
+          null,
+          2,
+        );
+      } catch (error) {
+        return JSON.stringify({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        await providerManager.dispose();
+      }
+    },
+    {
+      name: 'read_block_history',
+      description: `Reads the complete history for a specific block: audit trail events and UCAN invocations.
+
+Use this to answer: "What happened with block X?", "Who executed this?", "When was this last updated?"
+
+Returns audit events (timestamped actions) and invocations (UCAN-authorized executions with results and transaction hashes).`,
+      schema: z.object({
+        blockId: z.string().describe('The block ID to read history for'),
+      }),
+    },
+  );
+
+  // ============================================================================
+  // Tool 11: Read Permissions
+  // ============================================================================
+
+  const readPermissionsTool = tool(
+    async ({ audienceDid = null, capability = null }) => {
+      logger.log('🔐 read_permissions tool invoked');
+      const providerManager = new MatrixProviderManager(matrixClient, config);
+
+      try {
+        const { doc } = await providerManager.init();
+
+        const isInRoom = await checkIfInRoomAndJoinPublicRoom(
+          matrixClient,
+          roomId,
+        );
+        if (!isInRoom) {
+          return JSON.stringify({
+            success: false,
+            error: `Companion is not in the room ${roomId}, please invite companion to the room. companion user id: ${matrixClient.getUserId()}`,
+          });
+        }
+
+        const { rootCid, delegations } = readDelegations(doc);
+
+        // Apply filters using bracket notation on generic records
+        let filtered = delegations;
+        if (audienceDid) {
+          filtered = filtered.filter((d) => d['audienceDid'] === audienceDid);
+        }
+        if (capability) {
+          filtered = filtered.filter((d) => {
+            const caps = d['capabilities'];
+            if (!Array.isArray(caps)) return false;
+            return caps.some(
+              (c: Record<string, unknown>) =>
+                c['can'] === capability ||
+                (typeof c['can'] === 'string' &&
+                  c['can'].endsWith('/*') &&
+                  capability.startsWith(c['can'].slice(0, -2))),
+            );
+          });
+        }
+
+        const now = Date.now();
+        const enriched = filtered.map((d) => {
+          const expiration = d['expiration'];
+          const enrichedDelegation: Record<string, unknown> = { ...d };
+          if (typeof expiration === 'number') {
+            enrichedDelegation['expirationDate'] = new Date(
+              expiration,
+            ).toISOString();
+            enrichedDelegation['isExpired'] = expiration < now;
+          } else {
+            enrichedDelegation['isExpired'] = false;
+          }
+          return enrichedDelegation;
+        });
+
+        const activeDelegations = enriched.filter((d) => !d['isExpired']);
+        const uniqueActors = [
+          ...new Set(
+            filtered
+              .map((d) => d['audienceDid'])
+              .filter((v): v is string => typeof v === 'string'),
+          ),
+        ];
+
+        return JSON.stringify(
+          {
+            success: true,
+            rootDelegationCid: rootCid,
+            delegations: enriched,
+            summary: {
+              totalDelegations: enriched.length,
+              activeDelegations: activeDelegations.length,
+              expiredDelegations: enriched.length - activeDelegations.length,
+              uniqueActors,
+            },
+          },
+          null,
+          2,
+        );
+      } catch (error) {
+        return JSON.stringify({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        await providerManager.dispose();
+      }
+    },
+    {
+      name: 'read_permissions',
+      description: `Reads the UCAN delegation chain — who has permission to do what in this flow.
+
+Use this to answer: "Who can execute block X?", "What permissions does user Y have?", "Show me the delegation chain."
+
+Optionally filter by audienceDid (recipient) or capability action (e.g., "flow/block/execute"). Supports wildcard matching (e.g., "flow/*" covers "flow/block/execute").`,
+      schema: z.object({
+        audienceDid: z
+          .string()
+          .optional()
+          .nullable()
+          .describe('Optional: filter by recipient DID'),
+        capability: z
+          .string()
+          .optional()
+          .nullable()
+          .describe(
+            'Optional: filter by capability action, e.g. "flow/block/execute"',
+          ),
+      }),
+    },
+  );
+
+  // ============================================================================
+  // Tool 12: Delete Block
+  // ============================================================================
+
+  const deleteBlockTool = tool(
+    async ({ blockId, confirm }) => {
+      logger.log(`🗑️ delete_block tool invoked for block: ${blockId}`);
+
+      if (!confirm) {
+        return JSON.stringify({
+          success: false,
+          error:
+            'Deletion requires confirm: true. Set confirm to true to proceed with deletion.',
+        });
+      }
+
+      const isInRoom = await checkIfInRoomAndJoinPublicRoom(
+        matrixClient,
+        roomId,
+      );
+      if (!isInRoom) {
+        return JSON.stringify({
+          success: false,
+          error: `Companion is not in the room ${roomId}, please invite companion to the room. companion user id: ${matrixClient.getUserId()}`,
+        });
+      }
+
+      const providerManager = new MatrixProviderManager(matrixClient, config);
+
+      try {
+        const { doc } = await providerManager.init();
+
+        const deleted = deleteBlock(doc, {
+          blockId,
+          docName: 'document',
+        });
+
+        if (!deleted) {
+          return JSON.stringify({
+            success: false,
+            error: `Block with id ${blockId} not found`,
+          });
+        }
+
+        return JSON.stringify({
+          success: true,
+          message: `Successfully deleted block ${blockId}`,
+          deletedBlockId: blockId,
+        });
+      } catch (error) {
+        Logger.error('Error deleting block:', error);
+        return JSON.stringify({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        await providerManager.dispose();
+      }
+    },
+    {
+      name: 'delete_block',
+      description: `Removes a block from the document. Requires confirm: true as a safety check.
+
+**CRITICAL:** Always call list_blocks first to verify the block ID. This action cannot be undone.`,
+      schema: z.object({
+        blockId: z
+          .string()
+          .describe(
+            'The exact UUID of the block to delete (get from list_blocks)',
+          ),
+        confirm: z
+          .boolean()
+          .describe(
+            'Must be true to confirm deletion. Safety check to prevent accidental deletions.',
+          ),
+      }),
+    },
+  );
+
+  // ============================================================================
+  // Tool 13: Search Blocks
+  // ============================================================================
+
+  const searchBlocksTool = tool(
+    async ({
+      blockType = null,
+      propKey = null,
+      propValue = null,
+      textContains = null,
+    }) => {
+      logger.log('🔍 search_blocks tool invoked');
+      const providerManager = new MatrixProviderManager(matrixClient, config);
+
+      try {
+        const { doc } = await providerManager.init();
+
+        const isInRoom = await checkIfInRoomAndJoinPublicRoom(
+          matrixClient,
+          roomId,
+        );
+        if (!isInRoom) {
+          return JSON.stringify({
+            success: false,
+            error: `Companion is not in the room ${roomId}, please invite companion to the room. companion user id: ${matrixClient.getUserId()}`,
+          });
+        }
+
+        const fragment = doc.getXmlFragment('document');
+        let blocks = collectAllBlocks(fragment);
+
+        // Apply filters (AND logic)
+        if (blockType) {
+          blocks = blocks.filter((b) => {
+            const simplified = simplifyBlockForAgent(b);
+            return simplified.type === blockType;
+          });
+        }
+
+        if (propKey && propValue !== null) {
+          blocks = blocks.filter((b) => {
+            const props = extractBlockProperties(b);
+            return String(props[propKey]) === String(propValue);
+          });
+        }
+
+        if (textContains) {
+          const searchLower = textContains.toLowerCase();
+          blocks = blocks.filter(
+            (b) => b.text && b.text.toLowerCase().includes(searchLower),
+          );
+        }
+
+        const simplified = blocks.map(simplifyBlockForAgent);
+
+        return JSON.stringify(
+          {
+            success: true,
+            count: simplified.length,
+            blocks: simplified,
+          },
+          null,
+          2,
+        );
+      } catch (error) {
+        return JSON.stringify({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        await providerManager.dispose();
+      }
+    },
+    {
+      name: 'search_blocks',
+      description: `Search blocks by type, property value, or text content. Filters combine with AND logic.
+
+Examples:
+- Find all proposals: {"blockType": "proposal"}
+- Find executed blocks: {"propKey": "status", "propValue": "executed"}
+- Find blocks mentioning "KYC": {"textContains": "KYC"}
+- Combine: {"blockType": "checkbox", "propKey": "checked", "propValue": "true"}`,
+      schema: z.object({
+        blockType: z
+          .string()
+          .optional()
+          .nullable()
+          .describe('Filter by block type (proposal, checkbox, form, etc.)'),
+        propKey: z
+          .string()
+          .optional()
+          .nullable()
+          .describe('Property key to search on (e.g., "status", "title")'),
+        propValue: z
+          .string()
+          .optional()
+          .nullable()
+          .describe('Property value to match (exact string match)'),
+        textContains: z
+          .string()
+          .optional()
+          .nullable()
+          .describe(
+            'Search text content of blocks (case-insensitive substring match)',
+          ),
+      }),
+    },
+  );
+
+  // ============================================================================
+  // Tool 14: Execute Action (flow engine integration)
+  // ============================================================================
+
+  /**
+   * Executes an action block through the flow engine pipeline:
+   * activation → authorization → execution → runtime state update.
+   *
+   * Supports: http.request, email.send, notification.push,
+   * human.checkbox.set, form.submit, protocol.select
+   */
+  const executeActionTool = tool(
+    async ({ blockId, inputOverrides = {} }) => {
+      Logger.log(`⚡ execute_action tool invoked for block: ${blockId}`);
+
+      const isInRoom = await checkIfInRoomAndJoinPublicRoom(
+        matrixClient,
+        roomId,
+      );
+
+      if (!isInRoom) {
+        return JSON.stringify({
+          success: false,
+          error: `Companion is not in the room ${roomId}, please invite companion to the room. companion user id: ${matrixClient.getUserId()}`,
+        });
+      }
+
+      const providerManager = new MatrixProviderManager(matrixClient, config);
+
+      try {
+        const { doc } = await providerManager.init();
+
+        // 1. Verify this is a flow document (not a template)
+        const flowMeta = readFlowMetadata(doc);
+        if (flowMeta['_type'] !== 'ixo.flow.crdt') {
+          return JSON.stringify({
+            success: false,
+            error:
+              'execute_action is only supported on flow documents, not templates.',
+          });
+        }
+
+        // 2. Read the block and extract actionType
+        const blockDetail = getBlockDetail(doc, blockId, false);
+        if (!blockDetail) {
+          return JSON.stringify({
+            success: false,
+            error: `Block "${blockId}" not found.`,
+          });
+        }
+
+        const blockProps = extractBlockProperties(blockDetail);
+        const actionType = blockProps.actionType as string | undefined;
+        if (!actionType) {
+          return JSON.stringify({
+            success: false,
+            error: `Block "${blockId}" is not an action block (no actionType property).`,
+          });
+        }
+
+        // 3. Look up registered action
+        const actionDef = getAction(actionType);
+        if (!actionDef) {
+          const available = getAllActions().map((a) => a.type);
+          return JSON.stringify({
+            success: false,
+            error: `Unknown action type "${actionType}". Available: ${available.join(', ')}`,
+          });
+        }
+
+        // 4. Parse inputs from block props and merge with overrides
+        let inputs: Record<string, unknown> = {};
+        if (blockProps.inputs) {
+          try {
+            inputs =
+              typeof blockProps.inputs === 'string'
+                ? JSON.parse(blockProps.inputs)
+                : (blockProps.inputs as Record<string, unknown>);
+          } catch {
+            inputs = {};
+          }
+        }
+        if (inputOverrides && Object.keys(inputOverrides).length > 0) {
+          inputs = { ...inputs, ...inputOverrides };
+        }
+
+        // 5. Resolve {{blockId.prop}} references in input values
+        const allBlocks = collectAllBlocks(doc.getXmlFragment('document'));
+        for (const [key, val] of Object.entries(inputs)) {
+          if (
+            typeof val === 'string' &&
+            val.includes('{{') &&
+            val.includes('}}')
+          ) {
+            inputs[key] = resolveBlockReferences(val, allBlocks);
+          }
+        }
+
+        // 6. Build FlowNode from block
+        const flowNode = buildFlowNodeFromBlock({
+          id: blockId,
+          type: blockDetail.blockType || 'action',
+          props: blockProps,
+        });
+
+        // 7. Build runtime state manager from Y.Doc
+        const runtimeManager = createYDocRuntimeManager(doc);
+
+        // 8. Derive oracle DID from Matrix user ID
+        // Matrix format: @did-ixo-ixo1abc123:mx.server.com → did:ixo:ixo1abc123
+        const oracleUserId =
+          configService.get('MATRIX_ORACLE_ADMIN_USER_ID') ?? '';
+        const actorDid = matrixUserIdToDid(oracleUserId);
+
+        const flowId = (flowMeta.doc_id as string) ?? roomId;
+
+        // 9. Execute through the flow engine (V1 — no UCAN invocation for MVP)
+        // executeNode handles: activation check → authorization check → action() → runtime update
+        const outcome = await executeNode({
+          node: flowNode,
+          actorDid,
+          context: {
+            runtime: runtimeManager,
+          },
+          action: async () => {
+            const result = await actionDef.run(inputs, {
+              actorDid,
+              flowId,
+              nodeId: blockId,
+              services: oracleActionServices,
+            });
+            return { payload: result.output };
+          },
+        });
+
+        // Supplement runtime with V1 lifecycle fields + action output
+        // (executeNode's updateRuntimeAfterSuccess only writes legacy compat fields)
+        if (outcome.success && outcome.result) {
+          runtimeManager.update(blockId, {
+            state: 'completed',
+            output: outcome.result.payload as Record<string, unknown>,
+            executedByDid: actorDid,
+            executedAt: Date.now(),
+          });
+        } else if (!outcome.success) {
+          runtimeManager.update(blockId, {
+            state: 'failed',
+            error: {
+              message: outcome.error ?? 'Unknown error',
+              at: Date.now(),
+            },
+          });
+        }
+
+        return JSON.stringify({
+          success: outcome.success,
+          stage: outcome.stage,
+          ...(outcome.error && { error: outcome.error }),
+          ...(outcome.result && { result: outcome.result }),
+          blockId,
+          actionType,
+        });
+      } catch (error) {
+        Logger.error('Error executing action:', error);
+        return JSON.stringify({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        await providerManager.dispose();
+      }
+    },
+    {
+      name: 'execute_action',
+      description: `Executes an action block through the flow engine pipeline.
+
+**Flow engine gates:** activation → authorization → execution → runtime state update
+
+**Supported actions:** http.request, email.send, notification.push, human.checkbox.set, form.submit, protocol.select
+
+**Usage:**
+- Pass the blockId of an action block (a block with an \`actionType\` property)
+- Optionally provide inputOverrides to override/supplement the block's stored inputs
+- The tool resolves \`{{blockId.prop}}\` references in inputs automatically
+- Returns the execution outcome including success/failure, stage reached, and result data
+
+**Example:**
+\`\`\`json
+{"blockId": "550e8400-e29b-41d4-a716-446655440000"}
+\`\`\`
+
+**With input overrides:**
+\`\`\`json
+{"blockId": "550e8400-e29b-41d4-a716-446655440000", "inputOverrides": {"url": "https://api.example.com/data"}}
+\`\`\`
+
+**Returns:**
+\`\`\`json
+{
+  "success": true,
+  "stage": "execution",
+  "result": {"status": 200, "data": {...}},
+  "blockId": "...",
+  "actionType": "http.request"
+}
+\`\`\``,
+      schema: z.object({
+        blockId: z
+          .string()
+          .describe(
+            'The exact ID of the action block to execute (must have actionType property)',
+          ),
+        inputOverrides: z
+          .record(z.any(), z.any())
+          .optional()
+          .default({})
+          .describe(
+            'Optional: override or supplement the block\'s stored inputs. Example: {"url": "https://..."}',
+          ),
+      }),
+    },
+  );
+
+  // ============================================================================
+  // Return tools based on mode
+  // ============================================================================
+
   if (readOnly) {
     return {
       listBlocksTool,
       readBlockByIdTool,
+      searchBlocksTool,
+      readFlowContextTool,
+      readFlowStatusTool,
+      readBlockHistoryTool,
+      readPermissionsTool,
       readSurveyTool,
       validateSurveyAnswersTool,
     };
@@ -1325,10 +2033,17 @@ The returned block includes the auto-generated UUID that you can use for future 
     listBlocksTool,
     editBlockTool,
     createBlockTool,
+    deleteBlockTool,
     readBlockByIdTool,
+    searchBlocksTool,
+    readFlowContextTool,
+    readFlowStatusTool,
+    readBlockHistoryTool,
+    readPermissionsTool,
     readSurveyTool,
     fillSurveyAnswersTool,
     validateSurveyAnswersTool,
+    executeActionTool,
   };
 };
 

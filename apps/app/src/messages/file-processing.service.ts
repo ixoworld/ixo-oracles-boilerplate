@@ -687,7 +687,7 @@ export class FileProcessingService {
    */
   private async aiProcessFromUrl(
     url: string,
-    mimetype: string,
+    _mimetype: string,
     category: 'image' | 'video',
     _filename: string,
   ): Promise<string> {

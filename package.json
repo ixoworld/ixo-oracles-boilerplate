@@ -43,6 +43,19 @@
     "pnpm": ">=10.0.0"
   },
   "pnpm": {
+    "peerDependencyRules": {
+      "ignoreMissing": [
+        "react",
+        "react-dom",
+        "react-jazzicon",
+        "@mantine/core",
+        "@mantine/hooks",
+        "@blocknote/core",
+        "@blocknote/react",
+        "@blocknote/mantine",
+        "@ixo/surveys"
+      ]
+    },
     "overrides": {
       "ws": "8.18.2",
       "@langchain/core": "^1.0.5",

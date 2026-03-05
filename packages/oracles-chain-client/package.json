@@ -1,6 +1,6 @@
 {
   "name": "@ixo/oracles-chain-client",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": false,
   "publishConfig": {
     "access": "public"
@@ -125,6 +125,7 @@
     "graphql-tag": "^2.12.6",
     "limiter": "2.1.0",
     "store": "2.0.12",
+    "jose": "^6.0.8",
     "zod": "^4.1.12"
   }
 }

@@ -119,7 +119,7 @@ When combining skills:
 - **Read skill content** – Use read_skill(cid, path) where **path** is relative to the skill root (e.g. \`SKILL.md\`, \`scripts/helper.py\`). Do not use full filesystem paths like /workspace/skills/... for read_skill.
 - **Create input files** – Use sandbox_write to create JSON, config, or other inputs in /workspace (never inside /workspace/skills/)
 - **Run the skill** – Use the sandbox exec tool to run bash/scripts as specified in the skill
-- **Get URLs** – Use artifact_get_presigned_url for the final file with full path (e.g. /workspace/output/invoice.pdf) to get previewUrl and downloadUrl. The UI will show the file automatically from this tool result. Reply with a very nice markdown message (friendly, well-formatted). Do not paste long raw URLs in chat.
+- **Get URLs** – Use artifact_get_presigned_url for the final file with full path (e.g. /workspace/output/invoice.pdf) to get previewUrl and downloadUrl. The UI will show the file automatically from this tool result. Reply with a very nice markdown message (friendly, well-formatted). Do not paste presigned artifact URLs in your reply to the user.
 
 ### Pattern 1: Document Creation
 
@@ -252,11 +252,26 @@ Agent: Uses relative path like output/file.pdf
 
 **Pasting Presigned URLs in Chat**:
 <example-incorrect-patterns:paste-presigned-urls>
-Agent: Pastes a very long storage URL with parameters in chat message
-❌ WRONG - Long URLs get truncated and look broken
+Agent: Pastes a very long presigned storage URL with parameters in chat message
+❌ WRONG - Presigned artifact URLs are ugly in chat. Use artifact_get_presigned_url tool instead — the UI shows the file automatically.
 Agent: Calls artifact_get_presigned_url; UI shows the file from the tool result automatically. Reply with a nice markdown message.
-✅ CORRECT - User sees the file via UI; do not paste long URLs in chat.
+✅ CORRECT - User sees the file via UI.
 </example-incorrect-patterns:paste-presigned-urls>
+
+NOTE: This only applies to presigned artifact URLs in chat replies. When passing values (URLs, tokens, credentials) to tool calls like edit_block, ALWAYS pass the complete value — never truncate or abbreviate.
+
+**Transferring Long Output Values to Blocks**:
+<example-correct-patterns:long-output-to-block>
+Skill produces output with JWT token or credential:
+Agent: [Runs skill via sandbox_run, output written to /workspace/output/result.json]
+Agent: [Calls apply_sandbox_output_to_block with file path and block UUID]
+✅ CORRECT - Values transferred server-side, no truncation
+</example-correct-patterns:long-output-to-block>
+
+<example-incorrect-patterns:long-output-to-block>
+Agent: [Reads output with sandbox_run cat, then copies long JWT into edit_block updates]
+❌ WRONG - LLM text generation truncates long opaque strings. Use apply_sandbox_output_to_block instead.
+</example-incorrect-patterns:long-output-to-block>
 
 ---
 
@@ -276,7 +291,7 @@ Agent: Calls artifact_get_presigned_url; UI shows the file from the tool result 
 **Outputs**:
 - /workspace/output/ - Final deliverables only
 - **Must** copy finished work here
-- **Must** use artifact_get_presigned_url to get previewUrl and downloadUrl. The UI shows the file from the tool result automatically. Reply with a very nice markdown message. Do not paste long URLs in chat.
+- **Must** use artifact_get_presigned_url to get previewUrl and downloadUrl. The UI shows the file from the tool result automatically. Reply with a very nice markdown message.
 
 ### Sandbox Paths and Permissions
 
@@ -287,7 +302,7 @@ Agent: Calls artifact_get_presigned_url; UI shows the file from the tool result 
 
 **CRITICAL: Presigned URLs**
 - **artifact_get_presigned_url** returns previewUrl and downloadUrl. Required input: path (file path starting with /workspace/output/). Returns: previewUrl, downloadUrl, path, expiresIn. The UI automatically shows the file when this tool returns; reply with a very nice markdown message.
-- **Do not paste long presigned URLs in chat**. They get truncated and look broken. The user sees the file via the UI from the tool result automatically.
+- Do not paste presigned artifact URLs in your reply to the user. The user sees the file via the UI from the tool result automatically.
 
 ### Workflow Pattern
 
@@ -303,7 +318,7 @@ cd /workspace
 cp final_file.ext /workspace/output/
 
 # 4. Share with user
-use artifact_get_presigned_url tool to get previewUrl and downloadUrl. The UI shows the file automatically. Reply with a very nice markdown message; do not paste long URLs.
+use artifact_get_presigned_url tool to get previewUrl and downloadUrl. The UI shows the file automatically. Reply with a very nice markdown message.
 </example-workflow-pattern:create-document>
 
 ---
@@ -412,7 +427,7 @@ Skip step 3, and quality drops dramatically.
 - **Skills evolve** - Read them fresh each time, don't rely on memory
 - **Quality over speed** - Better to take 30 seconds to read a skill than deliver subpar work
 - **/workspace/output/** - Remember to put finals here
-- **artifact_get_presigned_url** - Always use this tool to get previewUrl and downloadUrl for files in /workspace/output/. The UI shows the file automatically. Reply with a very nice markdown message; do not paste long URLs.
+- **artifact_get_presigned_url** - Always use this tool to get previewUrl and downloadUrl for files in /workspace/output/. The UI shows the file automatically. Reply with a very nice markdown message.
 
 ---
 

@@ -366,6 +366,46 @@ export const appendBlock = (
   return snapshot;
 };
 
+export interface DeleteBlockOptions {
+  blockId: string;
+  docName?: string;
+}
+
+export const deleteBlock = (
+  doc: Y.Doc,
+  options: DeleteBlockOptions,
+): boolean => {
+  const { blockId, docName = DEFAULT_FRAGMENT_NAME } = options;
+  let deleted = false;
+
+  const deleteFromContainer = (
+    container: Y.XmlElement | Y.XmlFragment,
+  ): boolean => {
+    const nodes = container.toArray();
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      if (!(node instanceof Y.XmlElement)) continue;
+
+      const candidateId =
+        getAnyAttribute<string>(node, 'id') ?? node.getAttribute('id');
+      if (candidateId === blockId) {
+        container.delete(i, 1);
+        return true;
+      }
+
+      if (deleteFromContainer(node)) return true;
+    }
+    return false;
+  };
+
+  doc.transact(() => {
+    const fragment = doc.getXmlFragment(docName);
+    deleted = deleteFromContainer(fragment);
+  }, MUTATION_ORIGIN);
+
+  return deleted;
+};
+
 export const editBlock = (
   doc: Y.Doc,
   options: EditBlockOptions,

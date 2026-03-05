@@ -14,8 +14,9 @@ pnpm install          # Install all dependencies
 pnpm build            # Build all packages (dependencies resolved by turbo)
 pnpm dev              # Start NestJS app in watch mode
 pnpm test             # Run all tests
-pnpm lint             # Lint all packages
+pnpm lint             # Lint all packages (must pass before commit)
 pnpm format           # Prettier format
+pnpm format:check     # Check formatting without writing (CI uses this)
 
 # From apps/app - app-specific commands
 pnpm start:dev        # NestJS watch mode
@@ -27,6 +28,17 @@ pnpm test:cov         # Test with coverage
 # Run tests for a single package
 pnpm test --filter @ixo/events
 ```
+
+### Pre-commit Checklist
+
+Always run both before committing changes:
+
+```bash
+pnpm lint             # Fix any lint errors
+pnpm format           # Auto-fix formatting
+```
+
+CI runs `pnpm lint` and `pnpm format:check` — both must pass or the build fails.
 
 ## Architecture
 
