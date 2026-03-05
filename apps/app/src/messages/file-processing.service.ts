@@ -128,63 +128,170 @@ export class FileProcessingService {
     this.processingModel = DEFAULT_FILE_PROCESSING_MODEL;
   }
 
+  /**
+   * Upload a file to the sandbox via its HTTP artifacts endpoint.
+   * Derives the API base URL from SANDBOX_MCP_URL by stripping the /mcp suffix.
+   */
+  /**
+   * Sanitize a filename/path for the sandbox upload endpoint.
+   * Only alphanumeric, dots, dashes, underscores, and slashes are allowed.
+   */
+  private sanitizeSandboxPath(p: string): string {
+    return p.replace(/[^a-zA-Z0-9._\-/]/g, '_');
+  }
+
+  async uploadToSandbox(
+    buffer: Buffer,
+    filename: string,
+    destPath: string,
+    sandboxConfig: SandboxUploadConfig,
+    mimetype?: string,
+  ): Promise<{ path: string; url?: string; previewUrl?: string }> {
+    const baseUrl = sandboxConfig.sandboxMcpUrl.replace(/\/mcp\/?$/, '');
+    const uploadUrl = `${baseUrl}/artifacts/upload`;
+
+    // Resolve MIME type — the upload endpoint rejects application/octet-stream
+    const resolvedMime =
+      mimetype ??
+      this.guessMimeFromFilename(filename) ??
+      'application/octet-stream';
+
+    // Sanitize filename and path — endpoint only allows [a-zA-Z0-9._\-/]
+    const safeFilename = this.sanitizeSandboxPath(filename);
+    const safePath = this.sanitizeSandboxPath(destPath);
+
+    const formData = new FormData();
+    const file = new File([new Uint8Array(buffer)], safeFilename, {
+      type: resolvedMime,
+    });
+    formData.set('file', file);
+    formData.set('path', safePath);
+
+    const response = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${sandboxConfig.userToken}`,
+        'x-matrix-homeserver': sandboxConfig.homeServerName,
+        'X-oracle-openid-token': sandboxConfig.oracleToken,
+        'x-oracle-homeserver': sandboxConfig.oracleHomeServerUrl,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      throw new Error(
+        `Sandbox upload failed (${response.status}): ${errorText.slice(0, MAX_ERROR_BODY_LENGTH)}`,
+      );
+    }
+
+    const result = (await response.json()) as {
+      cid?: string;
+      path: string;
+      url?: string;
+      previewUrl?: string;
+    };
+
+    return {
+      path: result.path,
+      url: result.url,
+      previewUrl: result.previewUrl,
+    };
+  }
+
   async processAttachments(
     attachments: AttachmentDto[],
     roomId: string,
     sandboxConfig?: SandboxUploadConfig,
   ): Promise<{ texts: string[]; metadata: ProcessedAttachment[] }> {
-    const texts: string[] = [];
-    const metadata: ProcessedAttachment[] = [];
-    let totalDownloaded = 0;
-
     this.logger.log(
       `Processing ${attachments.length} attachment(s) in room ${roomId}`,
     );
 
-    for (const attachment of attachments) {
-      this.logger.log(
-        `Attachment: "${attachment.filename}" (${attachment.mimetype}, ${attachment.size ?? 'unknown'} bytes) — source: ${attachment.eventId ? `eventId=${attachment.eventId}` : `mxcUri=${attachment.mxcUri}`}`,
+    // Pre-validate total size budget from client-reported sizes
+    const reportedTotal = attachments.reduce(
+      (sum, a) => sum + (a.size ?? 0),
+      0,
+    );
+    if (reportedTotal > MAX_TOTAL_SIZE) {
+      throw new Error(
+        `Total attachment size (${Math.round(reportedTotal / 1024 / 1024)} MB) exceeds budget (${Math.round(MAX_TOTAL_SIZE / 1024 / 1024)} MB)`,
       );
-      try {
-        const { text, downloadedSize, sandboxPath } =
-          await this.processAttachment(
-            attachment,
-            totalDownloaded,
-            roomId,
-            sandboxConfig,
-          );
-        totalDownloaded += downloadedSize;
+    }
+
+    // Process all attachments in parallel
+    const results = await Promise.all(
+      attachments.map(async (attachment) => {
         this.logger.log(
-          `Attachment "${attachment.filename}" processed — downloaded ${downloadedSize} bytes, text extracted: ${text ? text.length + ' chars' : 'none'}`,
+          `Attachment: "${attachment.filename}" (${attachment.mimetype}, ${attachment.size ?? 'unknown'} bytes) — source: ${attachment.eventId ? `eventId=${attachment.eventId}` : `mxcUri=${attachment.mxcUri}`}`,
         );
-        if (text) {
+        try {
+          const { text, downloadedSize, sandboxPath } =
+            await this.processAttachment(attachment, 0, roomId, sandboxConfig);
+          this.logger.log(
+            `Attachment "${attachment.filename}" processed — downloaded ${downloadedSize} bytes, text extracted: ${text ? text.length + ' chars' : 'none'}`,
+          );
           const category = this.categorizeFile(attachment.mimetype);
-          texts.push(text);
-          metadata.push({
-            filename: attachment.filename,
-            mimetype: attachment.mimetype,
-            size: attachment.size,
-            mxcUri: attachment.mxcUri,
-            eventId: attachment.eventId,
-            category: category === 'unsupported' ? 'document' : category,
-            sandboxPath,
-          });
+          return {
+            text,
+            downloadedSize,
+            metadata: text
+              ? {
+                  filename: attachment.filename,
+                  mimetype: attachment.mimetype,
+                  size: attachment.size,
+                  mxcUri: attachment.mxcUri,
+                  eventId: attachment.eventId,
+                  category:
+                    category === 'unsupported'
+                      ? ('document' as const)
+                      : category,
+                  sandboxPath,
+                }
+              : null,
+          };
+        } catch (error) {
+          this.logger.error(
+            `Failed to process attachment ${attachment.filename}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+          const errorText = `[File "${this.sanitizeFilename(attachment.filename)}" (${attachment.mimetype}) failed to process: ${error instanceof Error ? error.message : 'unknown error'}. Let the user know this file could not be read.]`;
+          const category = this.categorizeFile(attachment.mimetype);
+          return {
+            text: errorText,
+            downloadedSize: 0,
+            metadata: {
+              filename: attachment.filename,
+              mimetype: attachment.mimetype,
+              size: attachment.size,
+              mxcUri: attachment.mxcUri,
+              eventId: attachment.eventId,
+              category:
+                category === 'unsupported' ? ('document' as const) : category,
+            } as ProcessedAttachment,
+          };
         }
-      } catch (error) {
-        this.logger.error(
-          `Failed to process attachment ${attachment.filename}: ${error instanceof Error ? error.message : String(error)}`,
-        );
-        const errorText = `[File "${this.sanitizeFilename(attachment.filename)}" (${attachment.mimetype}) failed to process: ${error instanceof Error ? error.message : 'unknown error'}. Let the user know this file could not be read.]`;
-        const category = this.categorizeFile(attachment.mimetype);
-        texts.push(errorText);
-        metadata.push({
-          filename: attachment.filename,
-          mimetype: attachment.mimetype,
-          size: attachment.size,
-          mxcUri: attachment.mxcUri,
-          eventId: attachment.eventId,
-          category: category === 'unsupported' ? 'document' : category,
-        });
+      }),
+    );
+
+    // Validate total downloaded size after parallel completion
+    const totalDownloaded = results.reduce(
+      (sum, r) => sum + r.downloadedSize,
+      0,
+    );
+    if (totalDownloaded > MAX_TOTAL_SIZE) {
+      throw new Error(
+        `Total downloaded size (${Math.round(totalDownloaded / 1024 / 1024)} MB) exceeds budget (${Math.round(MAX_TOTAL_SIZE / 1024 / 1024)} MB)`,
+      );
+    }
+
+    const texts: string[] = [];
+    const metadata: ProcessedAttachment[] = [];
+    for (const result of results) {
+      if (result.text) {
+        texts.push(result.text);
+      }
+      if (result.metadata) {
+        metadata.push(result.metadata);
       }
     }
 
@@ -228,6 +335,48 @@ export class FileProcessingService {
       throw new Error('Total attachment size budget exceeded');
     }
 
+    const category = this.categorizeFile(attachment.mimetype);
+    if (category === 'unsupported') {
+      this.logger.warn(
+        `Unsupported file type: ${attachment.mimetype} for ${attachment.filename}`,
+      );
+      return {
+        text: `[File "${this.sanitizeFilename(attachment.filename)}" (${attachment.mimetype}) is not a supported file type and could not be processed. Let the user know this file type is not supported.]`,
+        downloadedSize: 0,
+      };
+    }
+
+    // For HTTP image/video URLs, try AI URL passthrough first (no download needed)
+    const isHttpUrl =
+      attachment.mxcUri &&
+      !attachment.eventId &&
+      /^https?:\/\//i.test(attachment.mxcUri);
+    if (isHttpUrl && (category === 'image' || category === 'video')) {
+      try {
+        const description = await this.aiProcessFromUrl(
+          attachment.mxcUri!,
+          attachment.mimetype,
+          category,
+          attachment.filename,
+        );
+        if (description && description.trim().length > 0) {
+          const label = category === 'image' ? 'Description' : 'Description';
+          const text = this.formatContent(
+            label,
+            this.sanitizeFilename(attachment.filename),
+            description,
+          );
+          // No buffer downloaded, so downloadedSize is 0 for budget tracking
+          // Sandbox upload skipped (no buffer), but text is still available
+          return { text, downloadedSize: 0 };
+        }
+      } catch (error) {
+        this.logger.warn(
+          `URL passthrough failed for "${attachment.filename}", falling back to download: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
     // Download from the appropriate source
     let buffer: Buffer;
     if (attachment.eventId) {
@@ -242,22 +391,6 @@ export class FileProcessingService {
     // Check actual downloaded size
     if (buffer.length > MAX_FILE_SIZE) {
       throw new Error('File exceeds maximum size');
-    }
-
-    // Check total budget after download
-    if (currentTotalSize + buffer.length > MAX_TOTAL_SIZE) {
-      throw new Error('Total attachment size budget exceeded');
-    }
-
-    const category = this.categorizeFile(attachment.mimetype);
-    if (category === 'unsupported') {
-      this.logger.warn(
-        `Unsupported file type: ${attachment.mimetype} for ${attachment.filename}`,
-      );
-      return {
-        text: `[File "${this.sanitizeFilename(attachment.filename)}" (${attachment.mimetype}) is not a supported file type and could not be processed. Let the user know this file type is not supported.]`,
-        downloadedSize: buffer.length,
-      };
     }
 
     // Verify magic bytes match claimed mimetype category
@@ -279,18 +412,23 @@ export class FileProcessingService {
         break;
     }
 
-    // Upload to sandbox if config provided
+    // Upload to sandbox if config is provided
     if (sandboxConfig) {
+      const safeName = this.sanitizeFilename(attachment.filename);
+      const destPath = `${SANDBOX_OUTPUT_PREFIX}/${safeName}`;
       try {
-        const destPath = `${SANDBOX_OUTPUT_PREFIX}/${this.sanitizeSandboxPath(attachment.filename)}`;
-        const { path: actualPath } = await this.uploadToSandbox(
+        await this.uploadToSandbox(
           buffer,
-          attachment.filename,
+          safeName,
           destPath,
           sandboxConfig,
           attachment.mimetype,
         );
+        const actualPath = this.sanitizeSandboxPath(destPath);
 
+        this.logger.log(
+          `Attachment "${attachment.filename}" uploaded to sandbox at ${actualPath}`,
+        );
         if (text.length > SANDBOX_TRUNCATE_LIMIT) {
           return {
             text:
@@ -305,14 +443,14 @@ export class FileProcessingService {
           downloadedSize: buffer.length,
           sandboxPath: actualPath,
         };
-      } catch (uploadError) {
+      } catch (error) {
         this.logger.warn(
-          `Sandbox upload failed for ${attachment.filename}: ${uploadError instanceof Error ? uploadError.message : String(uploadError)}`,
+          `Sandbox upload failed for "${attachment.filename}": ${error instanceof Error ? error.message : String(error)}`,
         );
         return {
           text:
             text +
-            '\n\n[Warning: sandbox upload failed — file content is included above]',
+            `\n\n[Warning: sandbox upload failed — file content is included above]`,
           downloadedSize: buffer.length,
         };
       }
@@ -912,152 +1050,18 @@ export class FileProcessingService {
     return 'mp3'; // default
   }
 
-  private sanitizeSandboxPath(p: string): string {
-    return p.replace(/[^a-zA-Z0-9._\-/]/g, '_');
-  }
-
-  async uploadToSandbox(
-    buffer: Buffer,
-    filename: string,
-    destPath: string,
-    sandboxConfig: SandboxUploadConfig,
-    mimetype?: string,
-  ): Promise<{ path: string; url?: string; previewUrl?: string }> {
-    const baseUrl = sandboxConfig.sandboxMcpUrl.replace(/\/mcp\/?$/, '');
-    const resolvedMime =
-      mimetype ??
-      this.guessMimeFromFilename(filename) ??
-      'application/octet-stream';
-    const safeName = this.sanitizeSandboxPath(filename);
-    const safeDest = this.sanitizeSandboxPath(destPath);
-
-    const formData = new FormData();
-    formData.append(
-      'file',
-      new Blob([buffer], { type: resolvedMime }),
-      safeName,
-    );
-    formData.append('destination', safeDest);
-
-    const response = await fetch(`${baseUrl}/artifacts/upload`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${sandboxConfig.userToken}`,
-        'x-matrix-homeserver': sandboxConfig.homeServerName,
-        'X-oracle-openid-token': sandboxConfig.oracleToken,
-        'x-oracle-homeserver': sandboxConfig.oracleHomeServerUrl,
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(
-        `Sandbox upload failed (${response.status}): ${errorText.slice(0, MAX_ERROR_BODY_LENGTH)}`,
-      );
-    }
-
-    return (await response.json()) as {
-      path: string;
-      url?: string;
-      previewUrl?: string;
-    };
-  }
-
-  async downloadAndProcessFile(
-    source: { url: string } | { eventId: string; roomId?: string },
-    hints?: { filename?: string; mimetype?: string },
-  ): Promise<{
-    buffer: Buffer;
-    text: string;
-    resolvedFilename: string;
-    resolvedMimetype: string;
-  }> {
-    let buffer: Buffer;
-    let httpContentType: string | undefined;
-
-    if ('eventId' in source) {
-      const roomId = source.roomId;
-      if (!roomId) throw new Error('roomId required for eventId source');
-      buffer = await this.downloadFromMatrixEvent(roomId, source.eventId);
-    } else {
-      if (source.url.startsWith('mxc://')) {
-        buffer = await this.downloadFromMatrix(source.url);
-      } else {
-        const result = await this.downloadFromUrl(source.url);
-        buffer = result.data;
-        httpContentType = result.contentType;
-      }
-    }
-
-    if (buffer.length > MAX_FILE_SIZE) {
-      throw new Error('File exceeds maximum size (25 MB)');
-    }
-
-    const filename =
-      hints?.filename ??
-      ('url' in source ? this.extractFilenameFromUrl(source.url) : 'file');
-    const extensionMime = this.guessMimeFromFilename(filename);
-    const magicMime = this.detectMimeFromMagicBytes(buffer);
-    const mimetype =
-      hints?.mimetype ??
-      extensionMime ??
-      magicMime ??
-      httpContentType ??
-      'application/octet-stream';
-
-    const category = this.categorizeFile(mimetype);
-
-    if (category === 'unsupported') {
-      const fallbackMime = magicMime ?? httpContentType;
-      const fallbackCategory = fallbackMime
-        ? this.categorizeFile(fallbackMime)
-        : 'unsupported';
-
-      if (fallbackCategory !== 'unsupported' && fallbackMime) {
-        const attachment: AttachmentDto = { filename, mimetype: fallbackMime };
-        this.verifyMagicBytes(buffer, fallbackCategory, attachment);
-        const text = await this.processCategory(
-          buffer,
-          fallbackCategory,
-          attachment,
-        );
-        return {
-          buffer,
-          text,
-          resolvedFilename: filename,
-          resolvedMimetype: fallbackMime,
-        };
-      }
-
-      return {
-        buffer,
-        text: `[File "${this.sanitizeFilename(filename)}" (${mimetype}) is not a supported file type.]`,
-        resolvedFilename: filename,
-        resolvedMimetype: mimetype,
-      };
-    }
-
-    const attachment: AttachmentDto = { filename, mimetype };
-    this.verifyMagicBytes(buffer, category, attachment);
-    const text = await this.processCategory(buffer, category, attachment);
-    return {
-      buffer,
-      text,
-      resolvedFilename: filename,
-      resolvedMimetype: mimetype,
-    };
-  }
-
   /**
    * Strip control characters and bracket sequences from filename
    * to prevent prompt injection when interpolated into LLM context.
    */
   private sanitizeFilename(filename: string): string {
-    return filename // eslint-disable-next-line no-control-regex
-      .replace(/[\x00-\x1f\x7f]/g, '') // strip control chars
-      .replace(/[[\]]/g, '') // strip brackets to prevent [SYSTEM: ...] injection
-      .slice(0, 255);
+    return (
+      filename
+        // eslint-disable-next-line no-control-regex
+        .replace(/[\u0000-\u001f\u007f]/g, '') // strip control chars
+        .replace(/[[\]]/g, '') // strip brackets to prevent [SYSTEM: ...] injection
+        .slice(0, 255)
+    );
   }
 
   private formatContent(
@@ -1071,6 +1075,106 @@ export class FileProcessingService {
   private truncateText(text: string): string {
     if (text.length <= MAX_TEXT_LENGTH) return text;
     return text.slice(0, MAX_TEXT_LENGTH) + '\n\n[...truncated]';
+  }
+
+  /**
+   * Download and process a file in one pass, returning both the raw buffer
+   * and extracted text. Used by the process_file tool when copy_to_sandbox
+   * is enabled so we avoid downloading the file twice.
+   */
+  async downloadAndProcessFile(
+    source: { url: string } | { eventId: string; roomId?: string },
+    hints?: { filename?: string; mimetype?: string },
+  ): Promise<{
+    buffer: Buffer;
+    text: string;
+    resolvedFilename: string;
+    resolvedMimetype: string;
+  }> {
+    let buffer: Buffer;
+    let httpContentType: string | undefined;
+    let finalUrl: string | undefined;
+
+    if ('eventId' in source) {
+      const roomId = source.roomId;
+      if (!roomId) {
+        throw new Error('roomId is required when using eventId');
+      }
+      buffer = await this.downloadFromMatrixEvent(roomId, source.eventId);
+    } else {
+      const url = source.url;
+      if (!ALLOWED_URI_SCHEMES.test(url)) {
+        throw new Error(
+          'Invalid URI scheme — only http, https, and mxc are allowed',
+        );
+      }
+      if (url.startsWith('mxc://')) {
+        buffer = await this.downloadFromMatrix(url);
+      } else {
+        const result = await this.downloadFromUrl(url);
+        buffer = result.data;
+        httpContentType = result.contentType;
+        finalUrl = result.finalUrl;
+      }
+    }
+
+    this.logger.log(
+      `[downloadAndProcessFile] Downloaded ${buffer.length} bytes`,
+    );
+
+    if (buffer.length > MAX_FILE_SIZE) {
+      throw new Error('File exceeds maximum size (25 MB)');
+    }
+
+    const url = 'url' in source ? source.url : undefined;
+    const filename =
+      hints?.filename ??
+      (finalUrl ? this.extractFilenameFromUrl(finalUrl) : null) ??
+      (url ? this.extractFilenameFromUrl(url) : null) ??
+      'file';
+
+    const extensionMime = this.guessMimeFromFilename(filename);
+    const magicMime = this.detectMimeFromMagicBytes(buffer);
+    const mimetype =
+      hints?.mimetype ??
+      extensionMime ??
+      magicMime ??
+      httpContentType ??
+      'application/octet-stream';
+
+    this.logger.log(
+      `[downloadAndProcessFile] Resolved — filename="${filename}", mimetype="${mimetype}" ` +
+        `(extension=${extensionMime}, magic=${magicMime}, http=${httpContentType})`,
+    );
+
+    const category = this.categorizeFile(mimetype);
+
+    let text: string;
+    if (category === 'unsupported') {
+      const fallbackMime = magicMime ?? httpContentType;
+      const fallbackCategory = fallbackMime
+        ? this.categorizeFile(fallbackMime)
+        : 'unsupported';
+
+      if (fallbackCategory !== 'unsupported' && fallbackMime) {
+        const attachment: AttachmentDto = { filename, mimetype: fallbackMime };
+        this.verifyMagicBytes(buffer, fallbackCategory, attachment);
+        text = await this.processCategory(buffer, fallbackCategory, attachment);
+      } else {
+        text = `[File "${this.sanitizeFilename(filename)}" (${mimetype}) is not a supported file type and could not be processed.]`;
+      }
+    } else {
+      const attachment: AttachmentDto = { filename, mimetype };
+      this.verifyMagicBytes(buffer, category, attachment);
+      text = await this.processCategory(buffer, category, attachment);
+    }
+
+    return {
+      buffer,
+      text,
+      resolvedFilename: filename,
+      resolvedMimetype: mimetype,
+    };
   }
 
   /**

@@ -82,16 +82,16 @@ export function createFileProcessingTool(
             sandbox_path ?? `/workspace/output/${resolvedFilename}`;
 
           // Upload to sandbox via HTTP
-          let actualPath: string;
+          // Sanitize destPath the same way uploadToSandbox does internally
+          const actualPath = destPath.replace(/[^a-zA-Z0-9._\-/]/g, '_');
           try {
-            const uploadResult = await fileProcessingService.uploadToSandbox(
+            await fileProcessingService.uploadToSandbox(
               buffer,
               resolvedFilename,
               destPath,
               sandboxConfig,
               resolvedMimetype,
             );
-            actualPath = uploadResult.path;
           } catch (writeError) {
             const msg =
               writeError instanceof Error
@@ -161,7 +161,7 @@ export function createFileProcessingTool(
         'those are already pre-processed and their content (or a summary) is included in the conversation. ' +
         'If the message says "[File also saved to sandbox at ...]" or "[Full file saved to sandbox at ...]", ' +
         'the file is already available in the sandbox and its content is in context. ' +
-        "Only use this tool for: files referenced by URL that you haven't seen yet, " +
+        "Only use this tool for: files referenced by URL that you haven't seen yet for example if user droped just a link in chat and told u to do task on it or read it then u need to use that tool to process the file, " +
         "files from list_room_files that weren't part of the current message, " +
         'or when you need to re-download a file to a different sandbox path.',
       schema: z.object({

@@ -63,7 +63,7 @@ interface InvokeMainAgentParams {
   fileProcessingService?: FileProcessingService;
 }
 
-const appConfig = getConfig();
+const configService = getConfig();
 const llm = getOpenRouterChatModel({
   model: 'openai/gpt-oss-120b:nitro',
   // model: 'deepseek/deepseek-v3.2',
@@ -71,20 +71,29 @@ const llm = getOpenRouterChatModel({
   modelKwargs: {
     require_parameters: true,
     include_reasoning: true,
+    models: [
+      'google/gemini-2.5-flash-lite:nitro',
+      'z-ai/glm-5',
+    ],
+    provider: {
+      sort: 'latency',
+    },
   },
   reasoning: {
-    effort: 'low',
+    effort: 'medium',
   },
 });
 
-const oracleMatrixBaseUrl = appConfig
+const oracleMatrixBaseUrl = configService
   .getOrThrow('MATRIX_BASE_URL')
   .replace(/\/$/, '');
 
 const oracleOpenIdTokenProvider = new OpenIdTokenProvider({
-  matrixAccessToken: appConfig.getOrThrow('MATRIX_ORACLE_ADMIN_ACCESS_TOKEN'),
+  matrixAccessToken: configService.getOrThrow(
+    'MATRIX_ORACLE_ADMIN_ACCESS_TOKEN',
+  ),
   homeServerUrl: oracleMatrixBaseUrl,
-  matrixUserId: appConfig.getOrThrow('MATRIX_ORACLE_ADMIN_USER_ID'),
+  matrixUserId: configService.getOrThrow('MATRIX_ORACLE_ADMIN_USER_ID'),
 });
 
 export const createMainAgent = async ({
@@ -128,7 +137,7 @@ Promise<ReactAgent<any, any, any, any>> => {
           mcpServers: {
             sandbox: {
               type: 'http',
-              url: appConfig.getOrThrow('SANDBOX_MCP_URL'),
+              url: configService.getOrThrow('SANDBOX_MCP_URL'),
               transport: 'http',
               headers: sandboxHeaders,
             },
@@ -141,7 +150,7 @@ Promise<ReactAgent<any, any, any, any>> => {
   const sandboxUploadConfig: SandboxUploadConfig | undefined =
     configurable.configs?.user.matrixOpenIdToken && oracleOpenIdToken
       ? {
-          sandboxMcpUrl: appConfig.getOrThrow('SANDBOX_MCP_URL'),
+          sandboxMcpUrl: configService.getOrThrow('SANDBOX_MCP_URL'),
           userToken: configurable.configs.user.matrixOpenIdToken,
           oracleToken: oracleOpenIdToken,
           homeServerName: configurable.configs.matrix.homeServerName,
@@ -362,7 +371,7 @@ Promise<ReactAgent<any, any, any, any>> => {
   }
 
   // Build middleware list conditionally
-  const disableCredits = appConfig.get('DISABLE_CREDITS');
+  const disableCredits = configService.get('DISABLE_CREDITS');
 
   const middleware = [
     createToolValidationMiddleware(),

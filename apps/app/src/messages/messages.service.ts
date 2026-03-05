@@ -496,8 +496,33 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     this.checkpointStorageSyncService.markUserActive(params.did);
 
     try {
-      const { runnableConfig, sessionId, roomId, userContext, targetSession } =
-        await this.prepareForQuery(params);
+      // Run prepareForQuery and oracle token fetch in parallel
+      const hasAttachments = !!params.attachments?.length;
+      const needsSandbox = hasAttachments && !!params.userMatrixOpenIdToken;
+
+      const [queryResult, oracleToken] = await Promise.all([
+        this.prepareForQuery(params),
+        needsSandbox
+          ? this.oracleOpenIdTokenProvider
+              .getToken()
+              .catch((error: unknown) => {
+                Logger.warn(
+                  `Failed to get oracle token: ${error instanceof Error ? error.message : String(error)}`,
+                  'MessagesService',
+                );
+                return undefined;
+              })
+          : Promise.resolve(undefined),
+      ]);
+
+      const {
+        runnableConfig,
+        sessionId,
+        roomId,
+        homeServerName,
+        userContext,
+        targetSession,
+      } = queryResult;
 
       // Build messages array: user text message + separate file messages
       const msgFromMatrixRoom = params.msgFromMatrixRoom ?? false;
@@ -509,20 +534,16 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         }),
       ];
 
-      if (params.attachments?.length) {
+      if (hasAttachments) {
         Logger.log(
-          `sendMessage: ${params.attachments.length} attachment(s) received for session ${sessionId}, room ${roomId}`,
+          `sendMessage: ${params.attachments!.length} attachment(s) received for session ${sessionId}, room ${roomId}`,
           'MessagesService',
         );
 
-        // Build sandbox config if user has tokens for sandbox access
+        // Build sandbox config using pre-fetched oracle token and cached homeServer
         let sandboxConfig: SandboxUploadConfig | undefined;
-        if (params.userMatrixOpenIdToken) {
+        if (oracleToken && params.userMatrixOpenIdToken) {
           try {
-            const oracleToken = await this.oracleOpenIdTokenProvider.getToken();
-            const homeServerName =
-              params.homeServer ||
-              (await getMatrixHomeServerCroppedForDid(params.did));
             sandboxConfig = {
               sandboxMcpUrl: this.config.getOrThrow<string>('SANDBOX_MCP_URL'),
               userToken: params.userMatrixOpenIdToken,
@@ -543,7 +564,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
 
         const { texts, metadata } =
           await this.fileProcessingService.processAttachments(
-            params.attachments,
+            params.attachments!,
             roomId,
             sandboxConfig,
           );
@@ -1214,6 +1235,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
   ): Promise<{
     sessionId: string;
     roomId: string;
+    homeServerName: string;
     runnableConfig: IRunnableConfigWithRequiredFields & {
       configurable: {
         sessionId: string;
@@ -1229,15 +1251,17 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         ? (payload.requestId as string)
         : crypto.randomUUID();
 
-    await this.checkpointStorageSyncService.syncLocalStorageFromMatrixStorage({
-      userDid: did,
-    });
+    // Resolve homeServer once — used for room lookup and config
+    const homeServerName =
+      payload.homeServer || (await getMatrixHomeServerCroppedForDid(did));
 
-    const targetSession = await this.sessionManagerService.getSession(
-      sessionId,
-      did,
-      false,
-    );
+    // Run sync and session lookup in parallel — they're independent
+    const [, targetSession] = await Promise.all([
+      this.checkpointStorageSyncService.syncLocalStorageFromMatrixStorage({
+        userDid: did,
+      }),
+      this.sessionManagerService.getSession(sessionId, did, false),
+    ]);
 
     if (!targetSession) {
       throw new NotFoundException('Session not found');
@@ -1246,14 +1270,12 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     // Use cached roomId if available, otherwise fetch it
     let roomId = targetSession?.roomId;
     if (!roomId) {
-      const userHomeServer =
-        payload.homeServer || (await getMatrixHomeServerCroppedForDid(did));
       const roomResult =
         await this.sessionManagerService.matrixManger.getOracleRoomIdWithHomeServer(
           {
             userDid: did,
             oracleEntityDid: this.config.getOrThrow('ORACLE_ENTITY_DID'),
-            userHomeServer,
+            userHomeServer: homeServerName,
           },
         );
       roomId = roomResult.roomId;
@@ -1281,9 +1303,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
           matrix: {
             roomId,
             oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
-            homeServerName:
-              payload.homeServer ||
-              (await getMatrixHomeServerCroppedForDid(did)),
+            homeServerName,
           },
           user: {
             did,
@@ -1297,6 +1317,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
 
     return {
       roomId,
+      homeServerName,
       runnableConfig,
       sessionId,
       userContext: targetSession?.userContext,
