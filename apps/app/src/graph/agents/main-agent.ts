@@ -66,7 +66,8 @@ interface InvokeMainAgentParams {
 const configService = getConfig();
 const llm = getOpenRouterChatModel({
   model: 'openai/gpt-oss-120b:nitro',
-  // model: 'deepseek/deepseek-v3.2',
+  // model: 'moonshotai/kimi-k2.5',
+  // model: 'minimax/minimax-m2.5',
   __includeRawResponse: true,
   modelKwargs: {
     require_parameters: true,

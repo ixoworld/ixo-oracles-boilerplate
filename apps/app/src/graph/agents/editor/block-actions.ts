@@ -233,7 +233,45 @@ const applyAttributeUpdates = (
 
   if (isPlainObject(propsUpdates)) {
     const existingProps = isPlainObject(existing.props) ? existing.props : {};
-    next.props = { ...existingProps, ...propsUpdates };
+    const mergedProps: Record<string, unknown> = { ...existingProps };
+
+    for (const [key, value] of Object.entries(propsUpdates)) {
+      // Auto-serialize: if existing value is a JSON string and new value is an object/array,
+      // merge (for objects) or replace (for arrays) and serialize back to JSON string
+      if (
+        typeof existingProps[key] === 'string' &&
+        value !== null &&
+        typeof value === 'object'
+      ) {
+        if (Array.isArray(value)) {
+          // Arrays (e.g. links): replace entirely
+          mergedProps[key] = JSON.stringify(value);
+        } else {
+          // Objects (e.g. inputs): merge into existing JSON
+          let existingObj: Record<string, unknown> = {};
+          try {
+            const parsed = JSON.parse(String(existingProps[key]));
+            if (
+              parsed &&
+              typeof parsed === 'object' &&
+              !Array.isArray(parsed)
+            ) {
+              existingObj = parsed;
+            }
+          } catch {
+            // not valid JSON, treat as empty
+          }
+          mergedProps[key] = JSON.stringify({
+            ...existingObj,
+            ...(value as Record<string, unknown>),
+          });
+        }
+      } else {
+        mergedProps[key] = value;
+      }
+    }
+
+    next.props = mergedProps;
   }
 
   for (const key of removals) {
@@ -263,9 +301,16 @@ const applyAttributeUpdates = (
         node instanceof Y.XmlElement && node.nodeName !== 'blockGroup',
     );
 
-  if (blockContent && isPlainObject(propsUpdates)) {
-    for (const [key, value] of Object.entries(propsUpdates)) {
-      blockContent.setAttribute(key, value as string);
+  if (blockContent && isPlainObject(next.props)) {
+    // Mirror updated props to child element — use next.props (post-merge/serialization)
+    // so JSON-string props like inputs/links get the serialized value
+    const finalProps = next.props;
+    for (const key of Object.keys(propsUpdates as Record<string, unknown>)) {
+      const val = finalProps[key];
+      blockContent.setAttribute(
+        key,
+        typeof val === 'string' ? val : JSON.stringify(val),
+      );
     }
   }
 

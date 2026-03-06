@@ -99,8 +99,11 @@ const applySandboxOutputToBlockSchema = z.object({
     .optional()
     .describe(
       'Optional mapping from source JSON field names to block prop names. ' +
-        'Example: {"jwt_token": "kycCredential", "verification_url": "kycUrl"}. ' +
-        'If omitted, source field names are used as block prop names directly.',
+        'Use "." as source key to map the entire file content as one value. ' +
+        'Use dot-notation in target to nest into JSON-string props (e.g. "inputs.credential"). ' +
+        'Example flat: {"jwt_token": "kycCredential"}. ' +
+        'Example nested: {".": "inputs.credential", "roomId": "inputs.roomId"}. ' +
+        'If omitted, source field names are used as top-level block prop names directly.',
     ),
   jsonPath: z
     .string()
@@ -207,12 +210,40 @@ export function createApplySandboxOutputToBlockTool({
         const warnings: string[] = [];
 
         for (const [sourceKey, targetProp] of Object.entries(fieldMapping)) {
-          if (sourceKey in data) {
-            updates[targetProp] = data[sourceKey];
-          } else {
+          // "." means the entire file data as one value
+          const sourceValue = sourceKey === '.' ? data : data[sourceKey];
+          if (sourceValue === undefined && sourceKey !== '.') {
             warnings.push(
               `Source field "${sourceKey}" not found in sandbox output`,
             );
+            continue;
+          }
+
+          if (targetProp.includes('.')) {
+            // Dot-notation target: e.g. "inputs.credential"
+            // Group nested fields into their parent prop
+            const dotIdx = targetProp.indexOf('.');
+            const parentProp = targetProp.slice(0, dotIdx);
+            const nestedKey = targetProp.slice(dotIdx + 1);
+
+            if (!updates[`__nested__${parentProp}`]) {
+              updates[`__nested__${parentProp}`] = {};
+            }
+            (updates[`__nested__${parentProp}`] as Record<string, unknown>)[
+              nestedKey
+            ] = sourceValue;
+          } else {
+            updates[targetProp] = sourceValue;
+          }
+        }
+
+        // Flatten nested groups into their parent props as objects
+        // (applyAttributeUpdates will handle JSON-string merge)
+        for (const key of Object.keys(updates)) {
+          if (key.startsWith('__nested__')) {
+            const parentProp = key.slice('__nested__'.length);
+            updates[parentProp] = updates[key];
+            delete updates[key];
           }
         }
 
@@ -302,14 +333,23 @@ export function createApplySandboxOutputToBlockTool({
 
 **Examples:**
 
-Direct transfer (all fields):
+Direct transfer (all fields as top-level props):
   {"filePath": "/workspace/output/result.json", "blockId": "uuid-here"}
 
-With field mapping:
+With field mapping (flat):
   {"filePath": "/workspace/output/result.json", "blockId": "uuid-here", "fieldMapping": {"jwt_token": "kycCredential", "url": "kycUrl"}}
 
+Nest into action block inputs (dot-notation target — use this for action blocks):
+  {"filePath": "/workspace/output/credential.json", "blockId": "uuid-here", "fieldMapping": {".": "inputs.credential"}}
+  This puts the entire file content as the "credential" field inside the block's "inputs" JSON-string prop.
+
+Multiple fields into inputs:
+  {"filePath": "/workspace/output/result.json", "blockId": "uuid-here", "fieldMapping": {"credential": "inputs.credential", "roomId": "inputs.roomId"}}
+
 Extract nested object:
-  {"filePath": "/workspace/output/result.json", "blockId": "uuid-here", "jsonPath": "data.credentials"}`,
+  {"filePath": "/workspace/output/result.json", "blockId": "uuid-here", "jsonPath": "data.credentials"}
+
+**IMPORTANT for action blocks:** Action block inputs are stored as a JSON string in the \`inputs\` prop. Use dot-notation targets like \`inputs.credential\` to nest values correctly. Do NOT use direct transfer (no fieldMapping) on action blocks — it will spread fields as top-level props instead of into inputs.`,
       schema: applySandboxOutputToBlockSchema,
     },
   ) as unknown as StructuredTool;

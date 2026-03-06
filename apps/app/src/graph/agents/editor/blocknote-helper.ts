@@ -275,6 +275,30 @@ export function extractBlockProperties(
     }
   }
 
+  // Parse `inputs` JSON string so agents see structured data
+  if (typeof merged.inputs === 'string') {
+    try {
+      const parsed = JSON.parse(merged.inputs);
+      if (parsed && typeof parsed === 'object') {
+        merged.inputs = parsed;
+      }
+    } catch {
+      // keep raw string if not valid JSON
+    }
+  }
+
+  // Parse `links` JSON string so agents see structured data
+  if (typeof merged.links === 'string') {
+    try {
+      const parsed = JSON.parse(merged.links);
+      if (Array.isArray(parsed)) {
+        merged.links = parsed;
+      }
+    } catch {
+      // keep raw string if not valid JSON
+    }
+  }
+
   return merged;
 }
 
