@@ -251,13 +251,20 @@ const applyAttributeUpdates = (
           let existingObj: Record<string, unknown> = {};
           try {
             const parsed = JSON.parse(String(existingProps[key]));
-            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            if (
+              parsed &&
+              typeof parsed === 'object' &&
+              !Array.isArray(parsed)
+            ) {
               existingObj = parsed;
             }
           } catch {
             // not valid JSON, treat as empty
           }
-          mergedProps[key] = JSON.stringify({ ...existingObj, ...(value as Record<string, unknown>) });
+          mergedProps[key] = JSON.stringify({
+            ...existingObj,
+            ...(value as Record<string, unknown>),
+          });
         }
       } else {
         mergedProps[key] = value;
@@ -300,7 +307,10 @@ const applyAttributeUpdates = (
     const finalProps = next.props;
     for (const key of Object.keys(propsUpdates as Record<string, unknown>)) {
       const val = finalProps[key];
-      blockContent.setAttribute(key, typeof val === 'string' ? val : JSON.stringify(val));
+      blockContent.setAttribute(
+        key,
+        typeof val === 'string' ? val : JSON.stringify(val),
+      );
     }
   }
 
