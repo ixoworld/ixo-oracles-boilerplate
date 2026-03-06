@@ -72,7 +72,6 @@ MATRIX_RECOVERY_PHRASE=your_recovery_phrase       # For secret storage & key bac
 All paths are created in the `matrix-local-storage` folder:
 
 ```bash
-MATRIX_CRYPTO_STORE_PATH=./matrix-crypto-store              # Crypto storage
 MATRIX_STORE_PATH=./matrix-store                           # General storage
 MATRIX_SECRET_STORAGE_KEYS_PATH=./matrix-secret-storage    # Secret keys
 ```

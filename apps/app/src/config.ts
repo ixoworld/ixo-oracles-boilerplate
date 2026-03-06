@@ -26,8 +26,7 @@ export const EnvSchema = z.object({
   // Matrix
   MATRIX_BASE_URL: z.string(),
   MATRIX_RECOVERY_PHRASE: z.string(),
-  MATRIX_CRYPTO_STORE_PATH: z.string().default('./matrix-storage'),
-  MATRIX_STORE_PATH: z.string().default('./matrix-store-new'),
+  MATRIX_STORE_PATH: z.string().default('./matrix-storage'),
   MATRIX_ORACLE_ADMIN_ACCESS_TOKEN: z.string(),
   MATRIX_ORACLE_ADMIN_USER_ID: z.string(),
   MATRIX_ORACLE_ADMIN_PASSWORD: z.string(),

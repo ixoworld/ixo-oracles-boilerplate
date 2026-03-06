@@ -22,8 +22,7 @@
 | `MATRIX_ORACLE_ADMIN_USER_ID`         | Yes      | —                                   | Oracle Matrix user ID          |
 | `MATRIX_ORACLE_ADMIN_PASSWORD`        | Yes      | —                                   | Oracle Matrix password         |
 | `MATRIX_RECOVERY_PHRASE`              | Yes      | —                                   | Cross-signing recovery phrase  |
-| `MATRIX_CRYPTO_STORE_PATH`            | No       | `./matrix-storage`                  | Path for crypto store          |
-| `MATRIX_STORE_PATH`                   | No       | `./matrix-store-new`                | Path for Matrix store          |
+| `MATRIX_STORE_PATH`                   | No       | `./matrix-storage`                  | Path for Matrix store          |
 | `MATRIX_SECRET_STORAGE_KEYS_PATH`     | No       | `./matrix-secret-storage-keys-new2` | Secret storage keys path       |
 | `MATRIX_ACCOUNT_ROOM_ID`              | Yes      | —                                   | Oracle's Matrix account room   |
 | `MATRIX_VALUE_PIN`                    | Yes      | —                                   | PIN for encrypted vault access |
