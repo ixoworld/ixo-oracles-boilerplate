@@ -12,7 +12,6 @@ REGION="ams"
 # Locally these are relative (./matrix-storage, ./checkpoints)
 # In production they must point to the persistent volume
 MATRIX_STORE_PATH="/data/matrix-storage"
-MATRIX_CRYPTO_STORE_PATH="/data/matrix-storage"
 MATRIX_SECRET_STORAGE_KEYS_PATH="/data/matrix-secret-storage-keys"
 SQLITE_DATABASE_PATH="/data/checkpoints"
 
@@ -41,7 +40,6 @@ echo ""
 echo "Setting storage paths to /data volume..."
 fly secrets set --stage \
   MATRIX_STORE_PATH="$MATRIX_STORE_PATH" \
-  MATRIX_CRYPTO_STORE_PATH="$MATRIX_CRYPTO_STORE_PATH" \
   MATRIX_SECRET_STORAGE_KEYS_PATH="$MATRIX_SECRET_STORAGE_KEYS_PATH" \
   SQLITE_DATABASE_PATH="$SQLITE_DATABASE_PATH"
 echo "Storage paths set."

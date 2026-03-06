@@ -14,7 +14,6 @@ REGION="ams"
 
 # Storage paths — must match deploy.sh
 MATRIX_STORE_PATH="/data/matrix-storage"
-MATRIX_CRYPTO_STORE_PATH="/data/matrix-storage"
 MATRIX_SECRET_STORAGE_KEYS_PATH="/data/matrix-secret-storage-keys"
 SQLITE_DATABASE_PATH="/data/checkpoints"
 
@@ -110,7 +109,6 @@ echo ""
 echo "[6/6] Setting storage paths and deploying..."
 fly secrets set --stage \
   MATRIX_STORE_PATH="$MATRIX_STORE_PATH" \
-  MATRIX_CRYPTO_STORE_PATH="$MATRIX_CRYPTO_STORE_PATH" \
   MATRIX_SECRET_STORAGE_KEYS_PATH="$MATRIX_SECRET_STORAGE_KEYS_PATH" \
   SQLITE_DATABASE_PATH="$SQLITE_DATABASE_PATH"
 
