@@ -14,16 +14,16 @@ QiForge is a full-stack framework for building **Agentic Oracles** on the [IXO n
 
 Most AI frameworks give you a chatbot. QiForge gives you a **verified, autonomous agent** that can reason, remember, learn new skills, charge for its work, and prove its identity — all out of the box.
 
-| | QiForge | Typical AI Framework |
-|---|---|---|
-| **Verified identity** | Blockchain DID — users can verify who your agent is | None |
-| **Encrypted comms** | Every conversation in a private Matrix room | Plain text / logs |
-| **Skills at runtime** | 40+ community skills, no redeployment needed | Hardcoded tools |
-| **Multi-LLM** | GPT-4, Claude, Gemini, Llama via OpenRouter | Vendor lock-in |
-| **Built-in billing** | Token billing + service claims, automatic | DIY |
-| **Multi-client** | Portal, CLI, Matrix, Slack — one oracle, every interface | Single client |
-| **Persistent memory** | Cross-session memory with knowledge scopes | External DB required |
-| **Sub-agents** | 6 specialist agents pre-wired, add your own | Roll your own |
+|                       | QiForge                                                  | Typical AI Framework |
+| --------------------- | -------------------------------------------------------- | -------------------- |
+| **Verified identity** | Blockchain DID — users can verify who your agent is      | None                 |
+| **Encrypted comms**   | Every conversation in a private Matrix room              | Plain text / logs    |
+| **Skills at runtime** | 40+ community skills, no redeployment needed             | Hardcoded tools      |
+| **Multi-LLM**         | GPT-4, Claude, Gemini, Llama via OpenRouter              | Vendor lock-in       |
+| **Built-in billing**  | Token billing + service claims, automatic                | DIY                  |
+| **Multi-client**      | Portal, CLI, Matrix, Slack — one oracle, every interface | Single client        |
+| **Persistent memory** | Cross-session memory with knowledge scopes               | External DB required |
+| **Sub-agents**        | 6 specialist agents pre-wired, add your own              | Roll your own        |
 
 ---
 
@@ -87,14 +87,14 @@ No code changes. No redeployment. Publish your own skills with a markdown file a
 
 Delegate complex tasks to purpose-built agents that ship out of the box:
 
-| Agent | What It Does |
-|-------|-------------|
-| **Memory Agent** | Retrieves user context, preferences, and history |
-| **Skills Agent** | Searches the skill registry and loads capabilities |
-| **Portal Agent** | Handles browser/UI interactions from the client SDK |
-| **Firecrawl Agent** | Web search and scraping |
-| **Editor Agent** | Real-time document editing with BlockNote |
-| **Domain Indexer** | Searches and analyzes IXO blockchain entities |
+| Agent               | What It Does                                        |
+| ------------------- | --------------------------------------------------- |
+| **Memory Agent**    | Retrieves user context, preferences, and history    |
+| **Skills Agent**    | Searches the skill registry and loads capabilities  |
+| **Portal Agent**    | Handles browser/UI interactions from the client SDK |
+| **Firecrawl Agent** | Web search and scraping                             |
+| **Editor Agent**    | Real-time document editing with BlockNote           |
+| **Domain Indexer**  | Searches and analyzes IXO blockchain entities       |
 
 Need a specialist that doesn't exist? Define a name, description, tools, and prompt — wire it in.
 
@@ -172,17 +172,17 @@ packages/
 
 A step-by-step guide from zero to production oracle — written for humans and AI alike.
 
-| Chapter | What You'll Achieve |
-|---------|-------------------|
-| [00 — Overview](./docs/playbook/00-overview.md) | Understand what an oracle is |
-| [01 — Quickstart](./docs/playbook/01-quickstart.md) | A running oracle in minutes |
-| [02 — Project Structure](./docs/playbook/02-project-structure.md) | Know your codebase |
-| [03 — Customize](./docs/playbook/03-customize-your-oracle.md) | Name, personality, and purpose |
-| [04 — Skills](./docs/playbook/04-working-with-skills.md) | Use and build skills |
-| [05 — Sub-Agents](./docs/playbook/05-sub-agents.md) | Add specialist agents |
-| [06 — Middlewares](./docs/playbook/06-middlewares.md) | Safety, billing, guardrails |
-| [07 — MCP Servers](./docs/playbook/07-mcp-servers.md) | Connect external tools |
-| [08 — Deployment](./docs/playbook/08-deployment.md) | Ship to production |
+| Chapter                                                           | What You'll Achieve            |
+| ----------------------------------------------------------------- | ------------------------------ |
+| [00 — Overview](./docs/playbook/00-overview.md)                   | Understand what an oracle is   |
+| [01 — Quickstart](./docs/playbook/01-quickstart.md)               | A running oracle in minutes    |
+| [02 — Project Structure](./docs/playbook/02-project-structure.md) | Know your codebase             |
+| [03 — Customize](./docs/playbook/03-customize-your-oracle.md)     | Name, personality, and purpose |
+| [04 — Skills](./docs/playbook/04-working-with-skills.md)          | Use and build skills           |
+| [05 — Sub-Agents](./docs/playbook/05-sub-agents.md)               | Add specialist agents          |
+| [06 — Middlewares](./docs/playbook/06-middlewares.md)             | Safety, billing, guardrails    |
+| [07 — MCP Servers](./docs/playbook/07-mcp-servers.md)             | Connect external tools         |
+| [08 — Deployment](./docs/playbook/08-deployment.md)               | Ship to production             |
 
 **Standalone guides:** [Publish Your First Oracle](./docs/playbook/guides/publish-your-first-oracle.md) · [Memory Engine](./docs/playbook/guides/memory-engine.md) · [Payments & Claims](./docs/playbook/guides/payments-and-claims.md) · [Building Skills](./docs/playbook/guides/building-and-publishing-skills.md)
 
