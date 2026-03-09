@@ -12,7 +12,13 @@ A skill is a folder containing a `SKILL.md` instruction file and optional suppor
 
 **You ask** → **Oracle finds the skill** → **Reads instructions** → **Executes in a sandbox** → **Returns the result**
 
-![How skills work](./assets/skills.svg)
+```mermaid
+graph LR
+    A[You ask] --> B[Oracle finds skill]
+    B --> C[Reads SKILL.md]
+    C --> D[Runs in sandbox]
+    D --> E[Returns result]
+```
 
 Skills live in a shared registry at [github.com/ixoworld/ai-skills](https://github.com/ixoworld/ai-skills). Your oracle can browse and search this registry on the fly.
 

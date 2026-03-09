@@ -72,7 +72,6 @@ Write a JSON file to `/workspace/input.json`:
   "due_date": "2026-03-15"
 }
 ```
-````
 
 ### Step 3: Run the script
 
@@ -97,7 +96,6 @@ Copy the output to `/workspace/output/` and use `artifact_get_presigned_url` to 
 **User says:** "Create an invoice for Acme Corp, 10 hours of consulting at $150/hr, due March 15"
 
 **Oracle produces:** `invoice_acme_corp.pdf` in `/workspace/output/`
-
 ````
 
 ### Tips for a Great SKILL.md
@@ -126,7 +124,7 @@ Run the generator script:
 
 Use the template at:
 `/workspace/skills/my-skill/templates/base.html`
-````
+```
 
 ---
 

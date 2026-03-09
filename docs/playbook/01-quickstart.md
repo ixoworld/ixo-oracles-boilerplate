@@ -1,7 +1,7 @@
 # 01 — Quickstart: Zero to Running Oracle
 
 > **Time:** ~15 minutes
-> **What you'll build:** A fully functional AI oracle with blockchain identity, E2E encrypted communication, and LLM reasoning — responding to messages on the Portal.
+> **What you'll build:** A fully functional AI oracle with blockchain identity, E2E _(End-to-End encrypted — only sender and receiver can read messages)_ communication, and LLM reasoning — responding to messages on the Portal.
 
 ---
 
@@ -11,8 +11,8 @@ Before starting, make sure you have:
 
 - **Node.js 22+** — check with `node --version`
 - **pnpm 10+** — install with `npm install -g pnpm`
-- **Docker** — for Redis and Nginx ([install Docker](https://docs.docker.com/get-docker/))
-- **IXO Mobile App** — for SignX authentication ([iOS](https://apps.apple.com/app/ixo/id1560307060) / [Android](https://play.google.com/store/apps/details?id=com.ixo.mobile))
+- **Docker** _(optional)_ — only needed if you enable the credits system ([install Docker](https://docs.docker.com/get-docker/))
+- **IXO Mobile App** — for SignX _(IXO's mobile signing service — your private keys never leave your phone)_ authentication ([iOS](https://apps.apple.com/app/ixo/id1560307060) / [Android](https://play.google.com/store/apps/details?id=com.ixo.mobile))
 - **OpenRouter API key** — for LLM access ([get one here](https://openrouter.ai/keys))
 
 ---
@@ -114,7 +114,7 @@ The CLI generates a complete `.env` at `apps/app/.env` with all credentials and 
 Open the generated environment file:
 
 ```bash
-nano my-oracle/apps/app/.env
+nano my-oracle/apps/app/.env   # nano is a terminal text editor — on Windows, use `notepad` instead
 ```
 
 **Required:** Add your OpenRouter API key:
@@ -142,28 +142,13 @@ pnpm build
 
 ---
 
-## Step 6: Start Infrastructure
+## Step 6: Start Your Oracle
 
 ```bash
-cd apps/app
-pnpm infra:up
 pnpm dev
 ```
 
-This starts the Docker services your oracle needs:
-
-| Service      | Port | Purpose                  |
-| ------------ | ---- | ------------------------ |
-| Redis        | 6379 | Session storage, caching |
-| RedisInsight | 8001 | Redis management UI      |
-
----
-
-## Step 7: Start the Oracle
-
-```bash
-pnpm start:dev
-```
+That's it — this starts the NestJS app in watch mode on port 4000.
 
 You should see output like:
 
@@ -174,28 +159,106 @@ You should see output like:
 What starts up:
 
 - **NestJS server** on port 4000 (or your configured `PORT`)
-- **Matrix connection** — initializes cross-signing and connects to the Matrix homeserver
-- **SQLite checkpoint store** — persistent conversation state
+- **Matrix connection** — initializes cross-signing _(lets your oracle verify its identity across sessions)_ and connects to the Matrix homeserver
+- **SQLite checkpoint store** — persistent conversation state via checkpoints _(saved snapshots of conversation state, so the oracle picks up where it left off)_
 - **Swagger docs** — available at `http://localhost:4000/docs`
 
 > **Tip:** Visit `http://localhost:4000/docs` to explore the API interactively.
 
+> **Optional: Enable the credits system**
+>
+> If you want to use the credits/subscription system, you'll need Redis running:
+>
+> ```bash
+> pnpm infra:up    # starts Redis + RedisInsight in Docker
+> ```
+>
+> Then set `DISABLE_CREDITS=false` in your `.env`. Skip this for now — credits are disabled by default and you can enable them later.
+
 ---
 
-## Step 8: Test on the Portal
+## Step 7: Test Your Oracle
 
-1. Open **[https://ixo-portal.vercel.app](https://ixo-portal.vercel.app)**
-2. Navigate to your oracle (search by name or entity DID)
-3. Connect your wallet (same IXO Mobile App used in Step 2)
-4. Send a message
+There are three ways to test your oracle. Pick whichever is easiest for you.
 
-The first portal interaction is special — it:
+### Option A: `qiforge chat` (recommended)
 
-- Creates a private encrypted Matrix room between you and the oracle
-- Grants AuthZ permissions for the oracle to act on your behalf
-- Establishes your subscription
+The fastest way to test. Run this from your project directory:
 
-After this initial setup, you can also connect via Matrix clients or Slack.
+```bash
+qiforge chat
+```
+
+You'll see an interactive conversation in your terminal:
+
+```
+$ qiforge chat
+
+  Connected to MyOracle by MyOrg — An AI assistant for claims processing
+  Session: abc123-def456
+  Type 'exit' to quit.
+
+MyOracle > Hello, what can you do?
+
+  I can help you with claims processing, verification, and
+  blockchain-based credential management. Just tell me what
+  you need!
+
+MyOracle > exit
+
+  Session ended. Goodbye!
+```
+
+This connects directly to your running oracle — no browser or wallet needed.
+
+### Option B: Portal test
+
+Open your oracle's portal page:
+
+```
+https://dev.portal.qi.space/oracle/{ORACLE_ENTITY_DID}/connect
+```
+
+Replace `{ORACLE_ENTITY_DID}` with the value from your `.env` file — it looks like `did:ixo:entity:001acff5f18db27cdf0a21f39747968a`.
+
+1. Click the **Connect** button
+2. Open your **IXO Mobile App** and sign the transaction
+3. Once connected, you can start chatting right in the portal!
+
+> **Why connect through the portal first?** The portal creates an encrypted chat room between you and your oracle, and grants it permission (via a signed transaction) to act on your behalf. After this one-time setup, you can chat from the portal, CLI, Matrix, or Slack.
+
+### Option C: curl (for developers)
+
+Send a message directly via the API:
+
+```bash
+# First, create a session
+curl -X POST http://localhost:4000/sessions \
+  -H "Content-Type: application/json" \
+  -H "x-did: your-did-here" \
+  -H "x-matrix-access-token: your-token-here"
+```
+
+Expected response:
+
+```json
+{
+  "sessionId": "abc123-def456",
+  "roomId": "!room:matrix.ixo.world"
+}
+```
+
+Then send a message using the session ID:
+
+```bash
+curl -X POST http://localhost:4000/messages/abc123-def456 \
+  -H "Content-Type: application/json" \
+  -H "x-did: your-did-here" \
+  -H "x-matrix-access-token: your-token-here" \
+  -d '{"message": "Hello, what can you do?", "stream": false}'
+```
+
+> **Note:** The `x-did` and `x-matrix-access-token` headers are required for authentication. You can find these values in your `~/.wallet.json` file after running `qiforge` login.
 
 ---
 
@@ -227,7 +290,7 @@ Your message
 
 - **AuthHeaderMiddleware** — validates your DID and Matrix access token from request headers
 - **SubscriptionMiddleware** — checks you have remaining credits (skip with `DISABLE_CREDITS=true`)
-- **MainAgentGraph** — the LangGraph state machine that orchestrates your oracle's AI reasoning
+- **MainAgentGraph** — the LangGraph state machine that orchestrates your oracle's AI reasoning. It can also use external tools via MCP servers _(external tools your oracle can use — you add them by pasting a URL into a config file. See [Chapter 07](./07-mcp-servers.md).)_
 - **Memory Agent** — retrieves your personal context (identity, goals, recent activity) to personalize responses
 - **Safety Guardrail** — evaluates responses to prevent credential leaks, PII exposure, and harmful content
 - **Token Limiter** — tracks and deducts credits per LLM token usage
@@ -281,5 +344,5 @@ The CLI auto-selects URLs based on your authenticated network:
 | ----------------- | ----------------------------------------------- | ------------------------------------------------ | ---------------------------------------- |
 | Matrix Homeserver | `https://devmx.ixo.earth`                       | `https://testmx.ixo.earth`                       | `https://mx.ixo.earth`                   |
 | Chain RPC         | `https://devnet.ixo.earth/rpc/`                 | `https://testnet.ixo.earth/rpc/`                 | `https://impacthub.ixo.world/rpc/`       |
-| Portal            | `https://ixo-portal.vercel.app`                 | `https://ixo-portal.vercel.app`                  | `https://ixo-portal.vercel.app`          |
+| Portal            | `https://dev.portal.qi.space`                   | `https://dev.portal.qi.space`                    | `https://portal.qi.space`                |
 | Domain Indexer    | `https://domain-indexer.devnet.ixo.earth/index` | `https://domain-indexer.testnet.ixo.earth/index` | `https://domain-indexer.ixo.earth/index` |

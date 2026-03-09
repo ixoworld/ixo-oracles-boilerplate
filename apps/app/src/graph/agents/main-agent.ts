@@ -1,15 +1,15 @@
 import {
+  type EntityResult,
+  type EpisodeResult,
+  type FactResult,
   getOpenRouterChatModel,
   jsonToYaml,
   parserActionTool,
   parserBrowserTool,
   type SearchEnhancedResponse,
-  type FactResult,
-  type EntityResult,
-  type EpisodeResult,
 } from '@ixo/common';
-import { OpenIdTokenProvider } from '@ixo/oracles-chain-client';
 import { type IRunnableConfigWithRequiredFields } from '@ixo/matrix';
+import { OpenIdTokenProvider } from '@ixo/oracles-chain-client';
 import { SqliteSaver } from '@ixo/sqlite-saver';
 import { Logger } from '@nestjs/common';
 import { createAgent, type ReactAgent, toolRetryMiddleware } from 'langchain';
@@ -26,34 +26,44 @@ import {
 import { type TMainAgentGraphState } from '../state';
 import { contextSchema } from '../types';
 import { createDomainIndexerAgent } from './domain-indexer-agent';
+import { createApplySandboxOutputToBlockTool } from './editor/apply-sandbox-output-to-block';
 import { createEditorAgent } from './editor/editor-agent';
 import { EDITOR_DOCUMENTATION_CONTENT } from './editor/prompts';
 import { createFirecrawlAgent } from './firecrawl-agent';
 import { createMemoryAgent } from './memory-agent';
 import { createPortalAgent } from './portal-agent';
 import { createSubagentAsTool } from './subagent-as-tool';
-import { createApplySandboxOutputToBlockTool } from './editor/apply-sandbox-output-to-block';
 
 import { DynamicStructuredTool } from 'langchain';
 import fs from 'node:fs';
 import path from 'node:path';
+import {
+  type FileProcessingService,
+  type SandboxUploadConfig,
+} from 'src/messages/file-processing.service';
 import { SecretsService } from 'src/secrets/secrets.service';
 import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
+import oracleConfig from '../../../../../config.json';
 import {
   createMCPClient,
   createMCPClientAndGetTools,
   createMCPClientAndGetToolsWithUCAN,
 } from '../mcp';
+import { createFileProcessingTool } from '../nodes/tools-node/file-processing-tool';
+import { createListRoomFilesTool } from '../nodes/tools-node/list-room-files-tool';
 import {
   listSkillsTool,
   searchSkillsTool,
 } from '../nodes/tools-node/skills-tools';
-import { createFileProcessingTool } from '../nodes/tools-node/file-processing-tool';
-import { createListRoomFilesTool } from '../nodes/tools-node/list-room-files-tool';
-import {
-  type FileProcessingService,
-  type SandboxUploadConfig,
-} from 'src/messages/file-processing.service';
+
+function buildOracleContext(oc: typeof oracleConfig): string {
+  const lines: string[] = [];
+  if (oc.oracleName) lines.push(`**Name:** ${oc.oracleName}`);
+  if (oc.orgName) lines.push(`**Organization:** ${oc.orgName}`);
+  if (oc.description) lines.push(`**Purpose:** ${oc.description}`);
+  if (oc.location) lines.push(`**Location:** ${oc.location}`);
+  return lines.join('\n');
+}
 interface InvokeMainAgentParams {
   state: Partial<TMainAgentGraphState>;
   config: IRunnableConfigWithRequiredFields;
@@ -201,7 +211,9 @@ Promise<ReactAgent<any, any, any, any>> => {
     sandboxTools,
   ] = await Promise.all([
     AI_ASSISTANT_PROMPT.format({
-      APP_NAME: 'IXO | IXO Portal',
+      APP_NAME:
+        oracleConfig.oracleName || configService.get('ORACLE_NAME') || 'Oracle',
+      ORACLE_CONTEXT: buildOracleContext(oracleConfig),
       IDENTITY_CONTEXT: jsonToYaml(state?.userContext?.identity ?? {}),
       WORK_CONTEXT: jsonToYaml(state?.userContext?.work ?? {}),
       GOALS_CONTEXT: jsonToYaml(state?.userContext?.goals ?? {}),

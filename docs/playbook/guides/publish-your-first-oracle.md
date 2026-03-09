@@ -10,7 +10,7 @@
 By the end of this guide, you'll have a working oracle that:
 
 - Has its own identity on the blockchain
-- Responds to users through the [Portal](https://ixo-portal.vercel.app)
+- Responds to users through the [Portal](https://dev.portal.qi.space)
 - Uses skills to search the web, summarize content, and format citations
 - Runs in the cloud, available 24/7
 
@@ -84,27 +84,45 @@ Start your oracle in development mode:
 pnpm dev
 ```
 
-Once it's running, send it a test message:
+### Quick test with `qiforge chat` (recommended)
+
+The fastest way to test is the built-in chat command. Open a second terminal and run:
 
 ```bash
-curl -X POST http://localhost:3000/messages/test-session-1 \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Hi! Can you search for recent papers on climate change adaptation?"}'
+qiforge chat
 ```
 
-You should get a response back from your Research Buddy. Try a few more messages to make sure it behaves the way you want:
+You'll get an interactive conversation right in your terminal:
 
-```bash
-# Test skill discovery
-curl -X POST http://localhost:3000/messages/test-session-1 \
-  -H "Content-Type: application/json" \
-  -d '{"message": "What skills do you have available?"}'
-
-# Test a specific capability
-curl -X POST http://localhost:3000/messages/test-session-1 \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Summarize this article: https://example.com/some-article"}'
 ```
+$ qiforge chat
+
+  Connected to Research Buddy by MyOrg — A meticulous research assistant
+  Session: f7a291c3-8e42
+  Type 'exit' to quit.
+
+Research Buddy > Hi! Can you search for recent papers on climate change adaptation?
+
+  I found several recent papers on climate change adaptation.
+  Here are the top results:
+
+  1. "Urban Adaptation Strategies for Rising Sea Levels" (2025)
+     — Journal of Environmental Planning...
+
+Research Buddy > What skills do you have available?
+
+  I have access to skills for web research, document summarization,
+  citation formatting, and more. Would you like me to search for
+  something specific?
+
+Research Buddy > exit
+
+  Session ended. Goodbye!
+```
+
+### Alternative: curl
+
+You can also test with curl _(a terminal tool for sending web requests)_, but you'll need auth headers. See the [API Endpoints reference](../reference/api-endpoints.md) for details.
 
 **Things to check:**
 
@@ -116,47 +134,83 @@ If something isn't right, tweak the system prompt in `prompt.ts` and restart wit
 
 ---
 
-## Step 5: Deploy
+## Step 5: Deploy to Devnet
 
-Once you're happy with how your oracle works locally, it's time to push it to the cloud so it runs 24/7.
+Once you're happy with how your oracle works locally, deploy it so it runs 24/7.
 
-Follow the deployment steps in [Chapter 08 — Deployment](../08-deployment.md).
+1. **Deploy your project** to a cloud provider (Railway, Fly.io, etc.) — see [Chapter 08 — Deployment](../08-deployment.md) for the full walkthrough.
 
-> **Note:** The recommended cloud platform is [Fly.io](https://fly.io). See [Chapter 08 — Deployment](../08-deployment.md) for the full walkthrough.
+2. **You'll get a public URL** like `https://my-oracle.fly.dev`
 
----
+3. **Update your oracle's API URL on-chain:**
 
-## Step 6: Register On-Chain
+   ```bash
+   qiforge update-oracle-api-url
+   ```
 
-Your oracle was registered on the blockchain during the initial `qiforge --init` step in the quickstart. This gave it a DID (decentralized identity) and an on-chain entity.
+   - It will ask for your Entity DID (from your `.env`: `ORACLE_ENTITY_DID`)
+   - Enter your new public URL
+   - Sign the transaction with your IXO Mobile App
 
-If you need to update your oracle's metadata or switch networks later, use:
-
-```bash
-qiforge update-entity
-```
-
-This lets you change the oracle's name, description, or other on-chain details without starting over.
-
-For the full list of CLI commands, see the [CLI Reference](../reference/cli-reference.md).
+4. Now anyone on devnet can find and use your oracle through the portal!
 
 ---
 
-## Step 7: Share It
+## Step 6: Share It
 
 Your oracle is live. Here's how to get it in front of users:
 
-1. **Get the portal URL** — Your oracle is accessible through the Portal at:
+1. **Share the portal link** — send users directly to your oracle:
 
    ```
-   https://ixo-portal.vercel.app
+   https://dev.portal.qi.space/oracle/{ORACLE_ENTITY_DID}/connect
    ```
 
-   Users connect to your oracle through this portal using the mobile app for authentication.
+   Replace `{ORACLE_ENTITY_DID}` with the value from your `.env` file.
 
-2. **Share the oracle's DID** — Every oracle has a unique DID (created during registration). Share this with anyone who needs to find your oracle on the network.
+2. **First-time users** click **Connect**, sign with the IXO Mobile App, and start chatting. This one-time step creates their encrypted room and grants permissions. After that, they can also interact via Matrix or Slack.
 
-3. **First-time users** must connect through the web portal first — this sets up their encrypted conversation room and grants the necessary permissions. After that, they can also interact via Matrix or Slack clients.
+3. **Share the oracle's DID** — for developers or integrations, the DID is the unique identifier for your oracle on the network.
+
+---
+
+## Step 7: Go to Mainnet (when ready)
+
+When you're ready to go live on the production network:
+
+1. **Log in with your mainnet account:**
+
+   ```bash
+   qiforge    # select Login, choose mainnet
+   ```
+
+2. **Create a new entity on mainnet:**
+
+   ```bash
+   qiforge create-entity
+   ```
+
+3. The CLI will print your new oracle secrets (Matrix credentials, mnemonic, etc.)
+
+4. **Copy the new secrets into your `.env`:**
+   - Back up your devnet `.env` first (e.g., rename it to `.env.devnet`)
+   - The CLI generates the new credentials — copy them into `apps/app/.env`
+
+5. **Redeploy** your project with the new `.env`
+
+6. **Update the API URL on mainnet:**
+
+   ```bash
+   qiforge update-oracle-api-url
+   ```
+
+   Enter the Entity DID from your new mainnet `.env` and your deployment URL.
+
+7. Done! Your oracle is live on mainnet. Users can find it at:
+
+   ```
+   https://portal.qi.space/oracle/{MAINNET_ENTITY_DID}/connect
+   ```
 
 ---
 
@@ -165,8 +219,8 @@ Your oracle is live. Here's how to get it in front of users:
 ### Oracle won't start (`pnpm dev` fails)
 
 - **Missing environment variables** — Check that your `.env` file has all required values. See the [Environment Variables Reference](../reference/environment-variables.md) for the full list.
-- **Docker not running** — The oracle needs Redis and Nginx. Start them with `pnpm db:up` from the `apps/app` directory.
-- **Port already in use** — Another process is using port 3000. Stop it or change the port in your `.env`.
+- **Docker not running** — If you have credits enabled, Redis needs to be running. Start it with `pnpm infra:up` from the root directory.
+- **Port already in use** — Another process is using port 4000. Stop it or change the `PORT` in your `.env`.
 
 ### Oracle responds but ignores skills
 
