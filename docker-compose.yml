@@ -7,7 +7,7 @@ services:
       args:
         PROJECT: app
     ports:
-      - '3000:3000'
+      - '${PORT:-4000}:${PORT:-4000}'
     env_file:
       - apps/app/.env
     environment:

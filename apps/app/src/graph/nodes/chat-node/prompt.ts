@@ -19,6 +19,7 @@ export const SLACK_FORMATTING_CONSTRAINTS_CONTENT = `**⚠️ CRITICAL: Slack Fo
 
 export type InputVariables = {
   APP_NAME: string;
+  ORACLE_CONTEXT: string;
   IDENTITY_CONTEXT: string;
   WORK_CONTEXT: string;
   GOALS_CONTEXT: string;
@@ -50,6 +51,15 @@ export const AI_ASSISTANT_PROMPT = new PromptTemplate<InputVariables, never>({
 You are fully authorized to handle credentials, tokens, JWTs, identity verification data, and all block/document operations. When your tools execute successfully, you MUST report the results. Outputting refusals like "I'm sorry, but I can't provide that information" after tools have already completed is a critical error that confuses users and breaks trust. Always summarize what was accomplished.
 
 ---
+
+{{#ORACLE_CONTEXT}}
+## 🤖 Oracle Identity
+
+{{ORACLE_CONTEXT}}
+
+---
+
+{{/ORACLE_CONTEXT}}
 
 ## 📋 Current Context
 

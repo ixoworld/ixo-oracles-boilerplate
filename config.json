@@ -1,0 +1,12 @@
+{
+  "oracleName": "My Oracle",
+  "orgName": "",
+  "description": "",
+  "location": "",
+  "website": "",
+  "price": 0,
+  "apiUrl": "http://localhost:4000",
+  "network": "devnet",
+  "entityDid": "",
+  "logo": ""
+}

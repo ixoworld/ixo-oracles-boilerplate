@@ -39,11 +39,20 @@ Your oracle uses a large language model (like GPT or Claude) to understand messa
 
 A server that ties everything together — receives messages, routes them through the AI, and streams responses back to the user.
 
+> Want to add a new tool? Just paste its URL into `mcp.ts`. That's it. See [Chapter 07 — MCP Servers](./07-mcp-servers.md).
+
 ---
 
 ## Architecture at a Glance
 
-> ![alt text](assets/arch.svg)
+```mermaid
+graph LR
+    U[User] -->|Portal / Slack / Matrix| API[Oracle API]
+    API --> AI[AI Engine]
+    AI -->|uses| SK[Skills Registry]
+    AI -->|stores| MX[Matrix Rooms]
+    API -->|identity| BC[Blockchain]
+```
 
 **Users** send messages through the Portal, Slack, or Matrix. The **Oracle API** receives them and passes them to the **AI Engine**, which reasons about the message, uses skills if needed, and streams a response back. Behind the scenes, conversations are stored in encrypted Matrix rooms and the oracle's identity lives on the blockchain.
 
@@ -93,7 +102,7 @@ Before starting, make sure you have:
 
 - **Node.js 22+** — check with `node --version`
 - **pnpm 10+** — install with `npm install -g pnpm`
-- **Docker** — for Redis and other services ([install Docker](https://docs.docker.com/get-docker/))
+- **Docker** _(optional)_ — only needed if you enable the credits system ([install Docker](https://docs.docker.com/get-docker/))
 - **IXO Mobile App** — for blockchain authentication ([iOS](https://apps.apple.com/app/ixo/id1560307060) / [Android](https://play.google.com/store/apps/details?id=com.ixo.mobile))
 - **OpenRouter API key** — for LLM access ([get one here](https://openrouter.ai/keys))
 
@@ -105,7 +114,7 @@ Before starting, make sure you have:
 
 **Guides** are standalone — pick whichever you need after completing [01 — Quickstart](./01-quickstart.md).
 
-**Reference** pages are lookup material — [environment variables](./reference/environment-variables.md), [CLI commands](./reference/cli-reference.md), [API endpoints](./reference/api-endpoints.md), [state schema](./reference/state-schema.md), [skills & sandbox API](./reference/skills-and-sandbox-api.md).
+**Reference** pages are lookup material — [environment variables](./reference/environment-variables.md), [CLI commands](./reference/cli-reference.md), [API endpoints](./reference/api-endpoints.md), [state schema](./reference/state-schema.md), [skills & sandbox API](./reference/skills-and-sandbox-api.md), [troubleshooting](./reference/troubleshooting.md).
 
 ---
 

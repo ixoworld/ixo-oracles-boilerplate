@@ -16,7 +16,10 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,md,json}\"",
     "version": "changeset version",
     "release": "changeset tag",
-    "deploy": "./scripts/deploy.sh"
+    "deploy": "./scripts/deploy.sh",
+    "infra:up": "docker compose up -d redis redis-insight",
+    "infra:down": "docker compose down",
+    "infra:clean": "docker compose down -v"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.5.1",

@@ -9,7 +9,7 @@
 
 Here is the full layout of a scaffolded oracle project. The annotations tell you what to touch and what to leave alone.
 
-````
+```
 my-oracle/
 │
 ├── apps/app/                        # YOUR ORACLE — almost all your work happens here
@@ -32,7 +32,7 @@ my-oracle/
 │   │   │
 │   │   ├── messages/                #   REST controllers (rarely edit)
 │   │   ├── sessions/                #   Session management (rarely edit)
-│   │   └── ucan/                    #   UCAN authorization (rarely edit)
+│   │   └── ucan/                    #   UCAN authorization (rarely edit) — UCAN: a permission token that proves your oracle can act on a user's behalf
 │   │
 │   └── .env                         #   ⭐ Your credentials — NEVER commit this
 │
@@ -46,7 +46,8 @@ my-oracle/
 │
 ├── docker-compose.yml               #   Infrastructure services (Redis, etc.)
 ├── turbo.json                       #   Build config — DON'T TOUCH
-├── pnpm-workspace.yaml              #   Workspace definitions — ```
+├── pnpm-workspace.yaml              #   Workspace definitions — DON'T TOUCH
+```
 
 ### What to edit vs. what to leave alone
 
@@ -69,7 +70,7 @@ Set your oracle's name in `apps/app/src/graph/agents/main-agent.ts`:
 
 ```typescript
 APP_NAME: 'My Oracle',
-````
+```
 
 This value is injected into the system prompt as `{{APP_NAME}}`.
 
