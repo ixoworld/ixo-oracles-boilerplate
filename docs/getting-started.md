@@ -39,9 +39,38 @@ qiforge --init
 1. add to the `.env` file your api keys for `OpenRouter` ...etc.
 2. Finally run the app and open web portal(dev-net) to test your app
 
-### Step 3: Deploy with Docker
+### Step 3: Deploy Your Oracle
 
-Your project comes with a ready-to-deploy `Dockerfile`. You can use this file to deploy your oracle to your own infrastructure as you like.
+Your project comes with a ready-to-deploy `Dockerfile`. You can deploy to your own infrastructure or use Fly.io.
+
+#### Deploy to Fly.io (recommended)
+
+```bash
+# 1. Install flyctl and log in
+fly auth login
+
+# 2. IMPORTANT: Edit fly.toml and change `app = 'qiforge'` to your oracle name
+#    e.g., app = 'my-oracle'
+
+# 3. Create app without deploying yet
+fly launch --no-deploy
+
+# 4. (Optional) Only if you want the credits system — otherwise skip
+fly redis create
+# Then set REDIS_URL in .env and DISABLE_CREDITS=false
+
+# 5. Deploy
+pnpm run deploy
+```
+
+#### Deploy with Docker (self-hosted)
+
+```bash
+docker build -t my-oracle:latest --build-arg PROJECT=app -f Dockerfile .
+docker compose up -d
+```
+
+> See the [Deployment guide](./playbook/08-deployment.md) for full details.
 
 ### Step 4: Test Your Oracle
 

@@ -97,8 +97,8 @@ User → Client SDK → Oracle API → LangGraph Engine → Matrix Storage
 
 - Each oracle has a Matrix account registered on blockchain
 - Each user gets a private encrypted Matrix room
-- First interaction must be through web portal (grants AuthZ permissions)
-- Matrix/Slack clients connect after portal setup
+- First interaction must be through the **web portal** or **QiForge CLI** (`qiforge chat`) — this creates the encrypted room and grants AuthZ permissions
+- After the one-time setup, users can continue via Portal, CLI, Matrix, or Slack
 
 ### Data Persistence
 
@@ -164,6 +164,14 @@ When pushing a release or significant milestone, post a project status update:
 - Use `save_status_update` with `type: "project"` and `project: "Oracles App (Base)"`
 - Set `health` to `onTrack`, `atRisk`, or `offTrack`
 - Write the body in markdown — readable by both tech and non-tech audiences
+
+## Answering User Questions About Oracles / This Repo
+
+When a user asks "how do I …?" or any question related to building, deploying, configuring, or using oracles:
+
+1. **Check the playbook first** — read the relevant `docs/playbook/*.md` file(s). The playbook is the single source of truth for user-facing guidance.
+2. **Then check repo code** — if the playbook doesn't fully answer the question, look at the actual source code for specifics.
+3. **Be autonomous** — don't just tell the user what to do — actually do it for them when possible (edit files, run commands, deploy). The agent should proactively complete tasks like editing `fly.toml`, setting secrets, running deploys, etc.
 
 ## Playbook Documentation Work
 
