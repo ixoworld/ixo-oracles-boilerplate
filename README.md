@@ -2,314 +2,260 @@
 
 ![QiForge](./cover.jpg)
 
-A powerful framework for building and deploying **Agentic Oracles** on the IXO network. Built on **LangGraph**, **Matrix**, and **NestJS**, QiForge enables developers to create intelligent oracles with secure communication, complex conversation flows, and automatic marketplace integration.
+**Build verified AI agents with blockchain identity, encrypted communication, and a growing library of skills — deploy once, live instantly.**
 
-## What Makes This Special?
+QiForge is a full-stack framework for building **Agentic Oracles** on the [IXO network](https://www.ixo.world/). Each oracle is an autonomous AI agent with a verified on-chain identity, private encrypted channels for every user, and the ability to discover and execute new skills at runtime — without redeployment.
 
-- **🔐 Secure by Design**: Every user-oracle interaction happens in private, end-to-end encrypted Matrix rooms
-- **🧠 LangGraph Native**: Pure LangGraph implementation for building complex AI conversation flows
-- **⚡ Zero-Config Deployment**: Deploy once, instantly available in the marketplace with full SDK support
-- **🔗 Blockchain Native**: Each oracle is a registered entity on the IXO blockchain with configurable parameters
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE.txt)
 
-## Prerequisites
+---
 
-- **IXO Account**: You must have an IXO account on the IXO mobile app
-- **Node.js**: Version 22+ (see `.nvmrc` for exact version)
-- **Package Manager**: pnpm 10+ (required for workspace management)
+## Why QiForge?
 
-## 🚀 Quick Start
+Most AI frameworks give you a chatbot. QiForge gives you a **verified, autonomous agent** that can reason, remember, learn new skills, charge for its work, and prove its identity — all out of the box.
 
-**🚨 IMPORTANT**: You **MUST** use the [QiForge CLI](https://github.com/ixoworld/qiforge-cli) to create oracles. The CLI handles all the complex setup including environment variables, and publishing to the IXO marketplace.
+| | QiForge | Typical AI Framework |
+|---|---|---|
+| **Verified identity** | Blockchain DID — users can verify who your agent is | None |
+| **Encrypted comms** | Every conversation in a private Matrix room | Plain text / logs |
+| **Skills at runtime** | 40+ community skills, no redeployment needed | Hardcoded tools |
+| **Multi-LLM** | GPT-4, Claude, Gemini, Llama via OpenRouter | Vendor lock-in |
+| **Built-in billing** | Token billing + service claims, automatic | DIY |
+| **Multi-client** | Portal, CLI, Matrix, Slack — one oracle, every interface | Single client |
+| **Persistent memory** | Cross-session memory with knowledge scopes | External DB required |
+| **Sub-agents** | 6 specialist agents pre-wired, add your own | Roll your own |
 
-You can start with the QiForge CLI:
+---
+
+## Get Started in Minutes
 
 ```bash
+# Install the CLI
 npm install -g qiforge-cli
+
+# Scaffold a new oracle project
+qiforge --init
+
+# Install, build, run
+pnpm install && pnpm build && pnpm dev
+
+# Chat with your oracle instantly
+qiforge chat
 ```
 
-Then create a new project:
+Your first oracle is live. Customize the name, personality, and skills — then deploy.
 
-```bash
-oracles-cli --init
-```
+> **Full walkthrough:** [Quickstart Guide →](./docs/playbook/01-quickstart.md)
 
-**⚠️ Note**: Manual setup is only for advanced users who want to understand the framework internals. For production oracles, always use the CLI.
+---
 
-```bash
-# Clone the repository
-git clone https://github.com/ixoworld/qiforge
-cd qiforge
-
-# Install dependencies
-pnpm install
-
-# Build the project
-pnpm build
-
-# Start development
-cd apps/app
-pnpm start:dev
-```
-
-## 🏗️ Architecture Overview
-
-QiForge creates a seamless bridge between **React applications**, **AI conversation flows**, and the **IXO blockchain**. Each oracle becomes a verified, living entity with its own **Matrix account** and **IXO account** that are registered on the blockchain entity. This allows users to verify oracle authenticity while maintaining complete **data ownership** - all conversation data belongs to the user, stored in their private, encrypted Matrix rooms.
-
-**Optional Memory Engine Integration**: Agentic oracles can optionally integrate with the **Memory Engine** (Neo4j-based) to provide personalized AI experiences by analyzing user patterns, storing key moments, and adapting response styles based on user preferences and conversation history.
-
-**Knowledge Management**: QiForge includes a comprehensive knowledge management system that provides AI oracles with access to structured and unstructured data sources. This enables context-aware conversations through semantic search, document storage, and dynamic knowledge retrieval. See [Knowledge Management Architecture](./docs/architecture/knowledge.md) for detailed information.
-
-### 1. Runtime Message Processing Flow
-
-> **⚠️ Important**: First interaction must be through the **web portal** where users grant required **AuthZ permissions** to the oracle and ensure they have an active **subscription**.
-
-> **📱 Matrix/Slack Access**: Matrix clients (Element, etc.) and Slack bots can only connect **after** the user has completed their first interaction through the web portal.
+## How It Works
 
 ```mermaid
-flowchart LR
-    subgraph UserInput [" 👤 USER INPUT "]
-        WebPortal[Web Portal<br/>First Interaction]:::portal
-        MatrixUser[Matrix Client<br/>After Portal Setup]:::user
-        SlackUser[Slack Bot<br/>After Portal Setup]:::user
-    end
-
-    subgraph Processing [" ⚙️ MESSAGE PROCESSING "]
-        SDK[Client SDK]:::sdk
-        Configure[Configure Oracle<br/>If Not Configured]:::config
-        API[Oracle API]:::api
-        LG[LangGraph<br/>Engine]:::processor
-    end
-
-    subgraph Storage [" 💾 DATA PERSISTENCE "]
-        Matrix[Matrix Room<br/>Encrypted Storage]:::storage
-    end
-
-    subgraph Response [" 📤 RESPONSE DELIVERY "]
-        WebResp[Web Response]:::response
-        MatrixResp[Matrix Response]:::response
-        SlackResp[Slack Response]:::response
-    end
-
-    WebPortal -->| AuthZ + Subscribe| SDK
-    MatrixUser -->| Direct to API | API
-    SlackUser -->| Direct to API | API
-
-    SDK -->| Check Configuration | Configure
-    Configure -->| If Configured | API
-    API -->| Process with AI | LG
-
-    LG -->| Save to Matrix | Matrix
-    LG -->| Response via SDK | SDK
-    LG -->| Direct Response | MatrixResp
-    LG -->| Direct Response | SlackResp
-
-    SDK -->| Deliver Response | WebResp
-
-    classDef portal fill:#fff3e0,stroke:#e65100,stroke-width:3px
-    classDef user fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    classDef sdk fill:#e8f5e8,stroke:#2e7d32,stroke-width:3px
-    classDef config fill:#e8eaf6,stroke:#3f51b5,stroke-width:2px
-    classDef api fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
-    classDef processor fill:#f1f8e9,stroke:#558b2f,stroke-width:2px
-    classDef storage fill:#fce4ec,stroke:#ad1457,stroke-width:2px
-    classDef response fill:#e8f5e8,stroke:#4caf50,stroke-width:2px
+graph LR
+    U[User] -->|Portal / CLI / Matrix / Slack| API[Oracle API]
+    API --> AI[AI Engine + Sub-Agents]
+    AI -->|discovers| SK[Skills Registry]
+    AI -->|remembers| ME[Memory Engine]
+    AI -->|executes| MCP[MCP Servers]
+    AI -->|stores| MX[Encrypted Matrix Rooms]
+    API -->|identity & billing| BC[IXO Blockchain]
 ```
 
-### 2. Oracle Setup & Configuration Flow
+**Users** send messages through any client. The **AI Engine** reasons, delegates to sub-agents, discovers skills, and streams responses back. Conversations persist in encrypted Matrix rooms. Identity and billing live on the blockchain.
 
-```mermaid
-sequenceDiagram
-    participant Dev as Developer
-    participant CLI as QiForge CLI
-    participant BC as IXO Blockchain
-    participant Portal as Web Portal
-    participant SDK as Client SDK
-    participant AS as App Service
-    participant MX as Matrix Server
+---
 
-    Note over Dev,MX: 🚀 Oracle Deployment Phase
-    Dev->>CLI: Deploy oracle with config
-    CLI->>BC: Register oracle entity + accounts
-    BC->>BC: Store Matrix & IXO accounts
+## Core Capabilities
 
-    Note over Dev,MX: 👤 User Authorization Phase
-    Portal->>SDK: User grants AuthZ permissions
-    Portal->>SDK: Verify user subscription
-    SDK->>BC: Validate oracle permissions
+### Skills — Apps for Your Oracle
 
-    Note over Dev,MX: 🔗 Room Creation Phase
-    SDK->>AS: Request Matrix room creation
-    AS->>MX: Create E2E encrypted room
-    MX->>AS: Return room credentials
-    AS->>SDK: Provide room access
-    SDK->>Portal: Ready for communication
+Skills are like apps on a phone. Your oracle discovers and loads them from a [shared registry](https://github.com/ixoworld/ai-skills) at runtime — presentations, PDFs, data analysis, web search, invoices, and more.
 
-    Note over Dev,MX: ✅ System Ready
+```
+User: "Create a slide deck about renewable energy"
+→ Oracle finds presentation skill in registry
+→ Reads instructions, executes in sandbox
+→ Returns finished slides
 ```
 
-### The Magic: Zero-Config Integration
+No code changes. No redeployment. Publish your own skills with a markdown file and a PR.
 
-When you deploy an oracle built with QiForge:
+> [Working with Skills →](./docs/playbook/04-working-with-skills.md) · [Build & Publish Skills →](./docs/playbook/guides/building-and-publishing-skills.md)
 
-1. **Blockchain Registration**: Oracle entity registered on IXO with configs (via CLI)
-2. **Oracle Identity**: Each oracle gets **Matrix account** + **IXO account** linked to blockchain entity
-3. **Verifiable Agentic Oracles**: Users can verify oracle authenticity through blockchain records
-4. **Instant SDK Access**: Any React app can connect using `@ixo/oracles-client-sdk`
-5. **User Data Ownership**: Private Matrix rooms belong to users - **you own your data**
-6. **LangGraph Ready**: Your conversation flows run immediately
-7. **Complete Privacy**: All interactions stored in user's encrypted Matrix rooms
+### Sub-Agents — Specialist Teammates
 
-### Core Technologies Stack
+Delegate complex tasks to purpose-built agents that ship out of the box:
 
-#### **Matrix: Your Data Foundation**
+| Agent | What It Does |
+|-------|-------------|
+| **Memory Agent** | Retrieves user context, preferences, and history |
+| **Skills Agent** | Searches the skill registry and loads capabilities |
+| **Portal Agent** | Handles browser/UI interactions from the client SDK |
+| **Firecrawl Agent** | Web search and scraping |
+| **Editor Agent** | Real-time document editing with BlockNote |
+| **Domain Indexer** | Searches and analyzes IXO blockchain entities |
 
-- **Private room per user-oracle pair** - complete isolation
-- **End-to-end encrypted** - messages, history, everything
-- **Complete conversation persistence** - nothing is lost
-- **Session management** - handle complex multi-turn conversations
-- **Real-time sync** - works across all devices
+Need a specialist that doesn't exist? Define a name, description, tools, and prompt — wire it in.
 
-#### **LangGraph: Your AI Brain**
+> [Sub-Agents →](./docs/playbook/05-sub-agents.md)
 
-- **Pure LangGraph** - use any nodes, edges, patterns from LangGraph docs
-- **Custom conversation flows** - build complex AI interactions
-- **Tool integration** - connect to external APIs, databases, services
-- **State management** - context preserved across conversations
-- **Extensible** - add new nodes and behaviors easily
+### Middlewares — Safety, Billing, and Guardrails
 
-#### **NestJS: Your API Layer**
+Every tool call passes through middleware checkpoints:
 
-- **REST & WebSocket APIs** - flexible integration options
-- **Built-in authentication** - secure by default
-- **Type-safe** - full TypeScript support
-- **Modular** - easy to extend and customize
+- **Token Limiter** — checks credits before each call, deducts after
+- **Safety Guardrail** — blocks leaked secrets, PII, and harmful content
+- **Tool Validation** — catches bad inputs with helpful error messages
+- **Tool Retry** — handles network blips automatically
 
-#### **IXO SDK: The Bridge**
+Write custom middlewares with `beforeModel`, `afterModel`, `afterAgent`, and `wrapToolCall` hooks.
 
-- **One-line React integration** - `useChat()` hook and done
-- **Zero configuration** - connects automatically to deployed oracles
-- **Type-safe API** - generated from your oracle's schema
-- **Real-time updates** - live conversation sync
+> [Middlewares →](./docs/playbook/06-middlewares.md)
 
-#### **IXO Chain Client: Blockchain Operations**
+### MCP Servers — Plug In Anything
 
-- **Complete Oracle Toolkit** - Authorization, claims, payments, and entities
-- **Smart Fee Management** - Automatic gas estimation with intelligent fallbacks
-- **Payment Workflows** - Escrow-based payment system for oracle services
-- **Secure Encryption** - ECIES-based encryption utilities for sensitive data handling
-- **React Ready** - Built-in hooks and components for frontend integration
-- **Production Tested** - Battle-tested blockchain client for oracle operations
+Connect external services via the [Model Context Protocol](https://modelcontextprotocol.io/):
 
-#### **Memory Engine: Personalized Intelligence**
+```typescript
+// mcp.ts — add a new server in one line
+{ name: 'github', url: 'https://mcp.github.com/sse' }
+```
 
-- **Neo4j Graph Database** - Built on top of Neo4j for complex relationship mapping
-- **Key Moments Storage** - Captures and stores important conversation highlights
-- **Deep Analysis** - Runs comprehensive analysis on user chat patterns
-- **User Preferences** - Learns and remembers user preferences over time
-- **Response Styling** - Adapts AI response style based on user interaction patterns
-- **Recent Context** - Maintains awareness of recent memories and events
-- **Optional Integration** - Can be enabled/disabled from the portal
-- **Enhanced LLM Context** - Provides rich user insights to improve AI responses
+Built-in servers: Memory Engine, Firecrawl, Sandbox, Subscription. Tools are auto-discovered — no hardcoding.
 
-#### **LiveAgent: Ultra-Secure Voice & Video Calls** ( [Read more](./docs/architecture/calls.md))
+> [MCP Servers →](./docs/playbook/07-mcp-servers.md)
 
-- **Double Encryption** - Asymmetric key encryption + Matrix E2EE for maximum security
-- **Real-time Communication** - Voice and video calls with AI oracles via LiveKit
-- **Frontend-Controlled Keys** - Users generate and control encryption keys (true E2EE)
-- **Zero-Trust Architecture** - Backend services cannot decrypt call content
-- **Per-Call Key Rotation** - Unique encryption key for each call session
-- **Matrix Event Coordination** - Call state managed through encrypted Matrix events
-- **LiveKit Integration** - Professional-grade WebRTC infrastructure
-- **Agent Authentication** - Secure API key-based access for oracle agents
+### Memory Engine — Your Oracle Remembers
 
-## 📦 Packages
+Persistent memory across conversations with three knowledge scopes:
 
-### Core Packages
+- **User memories** — private preferences and context per user
+- **Org public** — customer-facing FAQs and docs
+- **Org private** — internal processes and policies
 
-| Package           | Purpose                                                |
-| ----------------- | ------------------------------------------------------ |
-| `@ixo/common`     | Core package including AI services and session service |
-| `@ixo/data-store` | Data store for the knowledge base used by the AI       |
-| `@ixo/matrix`     | Matrix client for QiForge                              |
-| `@ixo/events`     | Events package for client-server communication         |
+Your oracle starts every conversation with relevant context already loaded.
 
-### Supporting Packages
+> [Memory Engine Guide →](./docs/playbook/guides/memory-engine.md)
 
-| Package                     | Purpose                                                                       |
-| --------------------------- | ----------------------------------------------------------------------------- |
-| `@ixo/slack`                | Slack client integration                                                      |
-| `@ixo/oracles-chain-client` | **IXO blockchain client** - Complete toolkit for oracle blockchain operations |
-| `@ixo/api-keys-manager`     | API keys manager                                                              |
-| `@ixo/logger`               | Logging utility                                                               |
+### Payments & Claims — Built-In Monetization
 
-### External Components
+Two revenue streams, zero custom code:
 
-| Component         | Purpose                                                                          |
-| ----------------- | -------------------------------------------------------------------------------- |
-| **Memory Engine** | Neo4j-based graph knowledge system for user personalization and context analysis |
+1. **Token billing** — automatic per-token charges with escrow
+2. **Service claims** — explicit charges for deliverables (PDFs, images, reports)
 
-## Running Tests
+Users approve claims through the Portal. Funds release from escrow. Disable during development with `DISABLE_CREDITS=true`.
 
-> **⚠️ Warning:** Not all tests are currently working. We are actively fixing existing tests and adding more as we continue developing the framework.
+> [Payments & Claims →](./docs/playbook/guides/payments-and-claims.md)
+
+---
+
+## Architecture
+
+```
+apps/app/               → Main NestJS oracle application
+packages/
+  @ixo/common           → AI services, session management, checkpointer
+  @ixo/matrix           → Matrix client, encrypted room management
+  @ixo/events           → SSE/WebSocket event streaming
+  @ixo/oracles-chain-client → Blockchain ops, claims, payments, ECIES
+  @ixo/oracles-client-sdk  → React SDK (useChat() hook)
+  @ixo/slack            → Slack bot integration
+```
+
+> [Full project structure →](./docs/playbook/02-project-structure.md) · [State schema reference →](./docs/playbook/reference/state-schema.md)
+
+---
+
+## The Playbook
+
+A step-by-step guide from zero to production oracle — written for humans and AI alike.
+
+| Chapter | What You'll Achieve |
+|---------|-------------------|
+| [00 — Overview](./docs/playbook/00-overview.md) | Understand what an oracle is |
+| [01 — Quickstart](./docs/playbook/01-quickstart.md) | A running oracle in minutes |
+| [02 — Project Structure](./docs/playbook/02-project-structure.md) | Know your codebase |
+| [03 — Customize](./docs/playbook/03-customize-your-oracle.md) | Name, personality, and purpose |
+| [04 — Skills](./docs/playbook/04-working-with-skills.md) | Use and build skills |
+| [05 — Sub-Agents](./docs/playbook/05-sub-agents.md) | Add specialist agents |
+| [06 — Middlewares](./docs/playbook/06-middlewares.md) | Safety, billing, guardrails |
+| [07 — MCP Servers](./docs/playbook/07-mcp-servers.md) | Connect external tools |
+| [08 — Deployment](./docs/playbook/08-deployment.md) | Ship to production |
+
+**Standalone guides:** [Publish Your First Oracle](./docs/playbook/guides/publish-your-first-oracle.md) · [Memory Engine](./docs/playbook/guides/memory-engine.md) · [Payments & Claims](./docs/playbook/guides/payments-and-claims.md) · [Building Skills](./docs/playbook/guides/building-and-publishing-skills.md)
+
+**Reference:** [CLI Commands](./docs/playbook/reference/cli-reference.md) · [Environment Variables](./docs/playbook/reference/environment-variables.md) · [API Endpoints](./docs/playbook/reference/api-endpoints.md) · [State Schema](./docs/playbook/reference/state-schema.md) · [Troubleshooting](./docs/playbook/reference/troubleshooting.md)
+
+---
+
+## Deployment
+
+Deploy with Docker or Fly.io. The included Dockerfile and `fly.toml` handle everything.
 
 ```bash
-# All tests
-pnpm test
+# Fly.io (recommended)
+flyctl launch
+flyctl secrets set $(cat .env | xargs)
+flyctl deploy
 
-# Single package
-pnpm test --filter @ixo/events
-
-# With coverage
-pnpm test:coverage
+# Docker
+docker build -t my-oracle .
+docker compose up -d
 ```
 
-### Development Commands
+Graceful shutdown saves all state to Matrix before restart — zero data loss.
 
-Make sure you are in `apps/app` directory
+> [Deployment Guide →](./docs/playbook/08-deployment.md)
+
+---
+
+## Development
 
 ```bash
-# Build all packages
-pnpm build
-
-# Watch mode
-pnpm dev
-
-# Lint code
-pnpm lint
-
-# Format code
-pnpm format
+pnpm install          # Install all dependencies
+pnpm build            # Build all packages
+pnpm dev              # Start in watch mode
+pnpm test             # Run tests
+pnpm lint             # Lint (must pass before commit)
+pnpm format           # Format code
 ```
 
-## 🔧 Environment Setup
+**Prerequisites:** Node.js 22+, pnpm 10+, [IXO Mobile App](https://apps.apple.com/app/ixo/id1560307060), [OpenRouter API key](https://openrouter.ai/keys)
 
-When using the QiForge CLI, all required environment variables and database configurations are automatically generated. The CLI creates:
+---
 
-- **Environment Files**: `.env` with all necessary configuration
-- **Matrix Server**: Connection details for secure communication
-- **IXO Integration**: Blockchain connection and authentication setup
+## What's Next
 
-For manual setup (advanced users only), refer to the [Knowledge Management Architecture](./docs/architecture/knowledge.md) for database requirements and configuration details.
+QiForge is under active development. New skills, agents, and capabilities ship regularly. Here's what's coming:
 
-## 📚 Documentation
+- **More skills in the registry** — the community grows every week
+- **Voice & video calls** — LiveAgent integration with double encryption
+- **Enhanced sandbox** — richer execution environment for skills
+- **More deployment targets** — one-click deploy to Railway, Render, and more
 
-- [Getting Started Guide](./docs/getting-started.md)
-- [SDK Integration Guide](./docs/sdk-integration.md) - React client integration
-- [Architecture Deep Dive](./docs/architecture/README.md)
-- [Examples](./apps/app)
+Star this repo to stay updated.
+
+---
+
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+3. Run `pnpm lint && pnpm format` before committing
+4. Push and open a Pull Request
 
-## 🆘 Support
+**Publish a skill:** Fork [ai-skills](https://github.com/ixoworld/ai-skills), add your skill folder, open a PR. Every oracle benefits immediately.
 
-- **Issues**: [GitHub Issues](https://github.com/ixoworld/qiforge/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/ixoworld/qiforge/discussions)
-- **Documentation**: [Full docs](./docs/)
+---
+
+## Support
+
+- [GitHub Issues](https://github.com/ixoworld/qiforge/issues)
+- [GitHub Discussions](https://github.com/ixoworld/qiforge/discussions)
+- [Full Documentation](./docs/)
 
 ## License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](./LICENSE.txt) file for details.
+Apache License 2.0 — see [LICENSE](./LICENSE.txt)
