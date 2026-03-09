@@ -85,10 +85,6 @@ export class MainAgentGraph {
           ...runnableConfig.configurable,
           thread_id: runnableConfig.configurable.sessionId,
         },
-        metadata: {
-          langfuseSessionId: runnableConfig.configurable.sessionId,
-          langfuseUserId: runnableConfig.configurable.configs?.user.did,
-        },
       },
       ucanService: ucanOptions?.ucanService,
       fileProcessingService,
@@ -183,10 +179,6 @@ export class MainAgentGraph {
         recursionLimit: 150,
         configurable: {
           ...runnableConfig.configurable,
-        },
-        metadata: {
-          langfuseSessionId: runnableConfig.configurable.sessionId,
-          langfuseUserId: runnableConfig.configurable.configs?.user.did,
         },
       },
       ucanService: ucanOptions?.ucanService,

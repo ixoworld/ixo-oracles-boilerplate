@@ -2,9 +2,6 @@ import { createSemanticRouter } from './create-semantic-router.js';
 
 const parse = vi.fn();
 const create = vi.fn();
-vi.mock('langfuse', () => ({
-  observeOpenAI: vi.fn((client: unknown) => client),
-}));
 vi.mock('openai', () => ({
   OpenAI: vi.fn().mockImplementation(() => {
     function fn(): unknown {

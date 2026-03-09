@@ -1,6 +1,5 @@
 import { Logger } from '@ixo/logger';
 import { PromptTemplate } from '@langchain/core/prompts';
-import { type LangfuseConfig, observeOpenAI } from 'langfuse';
 import { OpenAI } from 'openai';
 import { zodResponseFormat } from 'openai/helpers/zod';
 import z from 'zod';
@@ -39,10 +38,7 @@ export const createSemanticRouter = <
     | 'gpt-4.1-nano'
     | 'gpt-4.1-mini' = 'gpt-4.1-mini',
   isComplex = false,
-): ((
-  state: EnsureKeys<Record<string, unknown>, K>,
-  traceConfig?: LangfuseConfig,
-) => Promise<keyof R>) => {
+): ((state: EnsureKeys<Record<string, unknown>, K>) => Promise<keyof R>) => {
   const keys = validateRoutes(routes, basedOn);
   const schema = z.object({
     nextRoute: z.enum(
@@ -52,7 +48,6 @@ export const createSemanticRouter = <
   });
   return async <T extends Record<string, unknown>>(
     state: EnsureKeys<T, K>,
-    traceConfig?: LangfuseConfig,
   ): Promise<keyof R> => {
     const selectedValues = {} as Record<string, string | object>;
     for (const key of basedOn) {
@@ -72,10 +67,7 @@ export const createSemanticRouter = <
     // find the route that matches the state
     const prompt = PromptTemplate.fromTemplate(semanticRouterPrompt);
 
-    const client = observeOpenAI(
-      new OpenAI(),
-      traceConfig,
-    ) as unknown as OpenAI;
+    const client = new OpenAI();
     const promptWithState = await prompt.format({
       routes: jsonToYaml(routes),
       state: jsonToYaml(selectedValues),

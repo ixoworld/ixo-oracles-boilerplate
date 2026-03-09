@@ -64,7 +64,6 @@
     "duck-duck-scrape": "^2.2.5",
     "html-to-text": "9.0.5",
     "langchain": "^1.2.30",
-    "langfuse": "^3.38.5",
     "langsmith": "^0.5.8",
     "mammoth": "1.8.0",
     "openai": "^6.9.1",
