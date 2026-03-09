@@ -24,7 +24,7 @@ export const createToolValidationMiddleware = (): AgentMiddleware => {
           (error instanceof Error && error.name === 'ZodError');
 
         if (isSchemaError) {
-          const toolName = toolCall.name ?? toolCallRequest.tool.name ?? '';
+          const toolName = toolCall.name ?? toolCallRequest.tool?.name ?? '';
           Logger.warn(
             `Tool validation error for ${toolName}: ${errorMessage}`,
             {
