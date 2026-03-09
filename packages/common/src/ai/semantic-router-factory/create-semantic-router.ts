@@ -72,7 +72,10 @@ export const createSemanticRouter = <
     // find the route that matches the state
     const prompt = PromptTemplate.fromTemplate(semanticRouterPrompt);
 
-    const client = observeOpenAI(new OpenAI(), traceConfig);
+    const client = observeOpenAI(
+      new OpenAI(),
+      traceConfig,
+    ) as unknown as OpenAI;
     const promptWithState = await prompt.format({
       routes: jsonToYaml(routes),
       state: jsonToYaml(selectedValues),

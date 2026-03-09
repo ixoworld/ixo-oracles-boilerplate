@@ -11,7 +11,7 @@ export class EnvService<T extends z.ZodType> {
   private constructor(schema: T, onError?: (error: z.ZodError) => void) {
     try {
       // Parse and validate environment variables
-      this.validatedEnv = schema.parse(process.env) as z.infer<T>;
+      this.validatedEnv = schema.parse(process.env) as unknown as z.infer<T>;
     } catch (error) {
       if (error instanceof z.ZodError) {
         if (onError) {

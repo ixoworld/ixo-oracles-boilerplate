@@ -110,7 +110,7 @@ export const createMainAgent = async ({
   ucanService,
   fileProcessingService,
 }: InvokeMainAgentParams): // eslint-disable-next-line @typescript-eslint/no-explicit-any
-Promise<ReactAgent<any, any, any, any>> => {
+Promise<ReactAgent<any>> => {
   const msgFromMatrixRoom = Boolean(
     state.messages?.at(-1)?.additional_kwargs.msgFromMatrixRoom,
   );
