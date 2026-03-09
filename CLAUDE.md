@@ -130,6 +130,40 @@ Environment variables are validated via Zod schema in `apps/app/src/config.ts`. 
 - **Annotation-based state** - LangGraph best practice with reducers
 - **Multi-client support** - Portal, Matrix, Slack with unified message processing
 
+## Linear Project Tracking
+
+This repo is tracked under the **Oracles App (Base)** project in Linear.
+
+| Field | Value |
+|-------|-------|
+| Project name | Oracles App (Base) |
+| Project ID | `ba41a5cd-1a73-4790-ac80-bab98efaa362` |
+| Project URL | https://linear.app/ixo-world/project/oracles-app-base-0ffadb464768 |
+| Team | Oracles (`ORA`) + IXO World (`IXO`) |
+| Team ID (Oracles) | `a0dbdaaf-2c77-4f93-b933-39766e75c8f1` |
+| Team ID (IXO World) | `195237bd-9887-4f87-a276-26735e2b2dad` |
+| Lead | youssef.hany@ixo.earth (`f2904c18-18a2-4424-b7c0-19f845379ca7`) |
+| Status | In Progress |
+
+### Related Linear Projects
+
+| Project | ID | Purpose |
+|---------|----|---------|
+| AI Sandbox & Agent Skills | `2005a412-635e-467f-b38a-063ce7dd5669` | AI Sandbox + skills registry |
+| @ixo/oracles-client-sdk | `1b88ce1a-f1f6-418a-9c1d-5699d7275c5c` | React client SDK |
+| Oracles CLI | `4b40d76e-e7cc-4573-bfc1-45687e6bcd1a` | CLI tool (qiforge-cli) |
+| Memory Engine | `20813dd4-ffe5-47fc-be1f-b98e1d68848d` | Graph-based memory system |
+| Subscriptions API | `12bb4b13-ac18-47bd-af1e-766e1a517951` | Subscription/billing service |
+| Companion Oracle as CoPilot | `f50ca2b5-a3b9-4b42-b0a3-e040b67766d2` | Agent for AG-UI in Portal |
+| Domain Indexer | `059688b7-d156-4a47-9363-db51445c60ca` | Domain indexing with MCP |
+
+### Posting Updates
+
+When pushing a release or significant milestone, post a project status update:
+- Use `save_status_update` with `type: "project"` and `project: "Oracles App (Base)"`
+- Set `health` to `onTrack`, `atRisk`, or `offTrack`
+- Write the body in markdown — readable by both tech and non-tech audiences
+
 ## Playbook Documentation Work
 
 **START HERE for any playbook session:** Read `specs/playbook-progress.md` first. It has the full task list, approach notes for each task, and writing rules. Then read `specs/playbook-spec-v2.md` for the master spec.
