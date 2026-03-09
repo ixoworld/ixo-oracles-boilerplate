@@ -204,29 +204,18 @@ Promise<ReactAgent<any>> => {
   // Track MCP/agent failures so the agent knows which capabilities are degraded
   const unavailableServices: string[] = [];
 
-  // Helper: wrap a promise so failures return a safe default instead of throwing
-  const safeResolve = <T>(
-    promise: Promise<T>,
-    fallback: T,
-    serviceName: string,
-  ): Promise<T> =>
-    promise.catch((error) => {
-      Logger.error(
-        `[createMainAgent] ${serviceName} failed to initialize: ${error?.message ?? error}`,
-      );
-      unavailableServices.push(serviceName);
-      return fallback;
-    });
+  // Service names for logging — must match the order of promises below
+  const serviceNames = [
+    'System Prompt', // index 0 — should never fail, but handled for safety
+    'Portal Agent',
+    'Memory Agent (memory-engine MCP)',
+    'Firecrawl Agent (firecrawl MCP)',
+    'Domain Indexer Agent',
+    'MCP tools',
+    'Sandbox MCP',
+  ] as const;
 
-  const [
-    systemPrompt,
-    portalAgent,
-    memoryAgent,
-    firecrawlAgent,
-    domainIndexerAgent,
-    mcpTools,
-    sandboxTools,
-  ] = await Promise.all([
+  const results = await Promise.allSettled([
     AI_ASSISTANT_PROMPT.format({
       APP_NAME:
         oracleConfig.oracleName || configService.get('ORACLE_NAME') || 'Oracle',
@@ -253,45 +242,51 @@ Promise<ReactAgent<any>> => {
           ? secretIndex.map((s) => `- _USER_SECRET_${s.name}`).join('\n')
           : '',
     }),
-    safeResolve(
-      createPortalAgent({
-        tools:
-          state.browserTools?.map((tool) =>
-            parserBrowserTool({
-              description: tool.description,
-              schema: tool.schema,
-              toolName: tool.name,
-            }),
-          ) ?? [],
-      }),
-      null,
-      'Portal Agent',
-    ),
-    safeResolve(
-      createMemoryAgent({
-        oracleToken: oracleOpenIdToken ?? '',
-        userToken: configurable.configs?.user.matrixOpenIdToken ?? '',
-        oracleHomeServer: oracleMatrixBaseUrl.replace(/^https?:\/\//, ''),
-        userHomeServer: configurable.configs?.matrix.homeServerName ?? '',
-        roomId: matrix?.roomId ?? '',
-        mode: 'user',
-      }),
-      null,
-      'Memory Agent (memory-engine MCP)',
-    ),
-    safeResolve(
-      createFirecrawlAgent(),
-      null,
-      'Firecrawl Agent (firecrawl MCP)',
-    ),
-    safeResolve(createDomainIndexerAgent(), null, 'Domain Indexer Agent'),
-    safeResolve(getMcpTools(), [], 'MCP tools'),
-    safeResolve(
-      sandboxMCP?.getTools() ?? Promise.resolve([]),
-      [],
-      'Sandbox MCP',
-    ),
+    createPortalAgent({
+      tools:
+        state.browserTools?.map((tool) =>
+          parserBrowserTool({
+            description: tool.description,
+            schema: tool.schema,
+            toolName: tool.name,
+          }),
+        ) ?? [],
+    }),
+    createMemoryAgent({
+      oracleToken: oracleOpenIdToken ?? '',
+      userToken: configurable.configs?.user.matrixOpenIdToken ?? '',
+      oracleHomeServer: oracleMatrixBaseUrl.replace(/^https?:\/\//, ''),
+      userHomeServer: configurable.configs?.matrix.homeServerName ?? '',
+      roomId: matrix?.roomId ?? '',
+      mode: 'user',
+    }),
+    createFirecrawlAgent(),
+    createDomainIndexerAgent(),
+    getMcpTools(),
+    sandboxMCP?.getTools() ?? Promise.resolve([]),
   ]);
+
+  // Extract values from settled results, using fallbacks for rejected promises
+  const settled = <T>(
+    result: PromiseSettledResult<T>,
+    fallback: T,
+    index: number,
+  ): T => {
+    if (result.status === 'fulfilled') return result.value;
+    Logger.error(
+      `[createMainAgent] ${serviceNames[index]} failed to initialize: ${result.reason?.message ?? result.reason}`,
+    );
+    unavailableServices.push(serviceNames[index]);
+    return fallback;
+  };
+
+  const systemPrompt = settled(results[0], '', 0);
+  const portalAgent = settled(results[1], null, 1);
+  const memoryAgent = settled(results[2], null, 2);
+  const firecrawlAgent = settled(results[3], null, 3);
+  const domainIndexerAgent = settled(results[4], null, 4);
+  const mcpTools = settled(results[5], [], 5);
+  const sandboxTools = settled(results[6], [], 6);
 
   // Wrap sandbox_run for lazy secret injection (both oracle and user secrets).
   // MCP adapters snapshot headers at construction time, so we create a new
