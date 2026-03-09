@@ -124,8 +124,8 @@ interface CacheMetrics {
 }
 
 export class MatrixCheckpointSaver<
-  _GraphState extends
-    IGraphStateWithRequiredFields = IGraphStateWithRequiredFields,
+  _GraphState extends IGraphStateWithRequiredFields =
+    IGraphStateWithRequiredFields,
 > extends BaseCheckpointSaver {
   private stateManager = matrixStateManager;
 
