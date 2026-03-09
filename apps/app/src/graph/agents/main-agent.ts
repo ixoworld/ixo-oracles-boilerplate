@@ -139,20 +139,26 @@ Promise<ReactAgent<any, any, any, any>> => {
   };
 
   // Create sandbox MCP with auth headers (for tool schema discovery)
-  const sandboxMCP =
-    configurable.configs?.user.matrixOpenIdToken && oracleOpenIdToken
-      ? createMCPClient({
-          mcpServers: {
-            sandbox: {
-              type: 'http',
-              url: configService.getOrThrow('SANDBOX_MCP_URL'),
-              transport: 'http',
-              headers: sandboxHeaders,
+  let sandboxMCP: ReturnType<typeof createMCPClient> | undefined;
+  try {
+    sandboxMCP =
+      configurable.configs?.user.matrixOpenIdToken && oracleOpenIdToken
+        ? createMCPClient({
+            mcpServers: {
+              sandbox: {
+                type: 'http',
+                url: configService.getOrThrow('SANDBOX_MCP_URL'),
+                transport: 'http',
+                headers: sandboxHeaders,
+              },
             },
-          },
-          defaultToolTimeout: 180_000,
-        })
-      : undefined;
+            defaultToolTimeout: 180_000,
+          })
+        : undefined;
+  } catch (error) {
+    Logger.warn(`⚠️ Sandbox MCP failed to initialize: ${error}`);
+    sandboxMCP = undefined;
+  }
 
   // Build sandbox upload config for file processing (HTTP upload, no MCP needed)
   const sandboxUploadConfig: SandboxUploadConfig | undefined =
@@ -201,6 +207,24 @@ Promise<ReactAgent<any, any, any, any>> => {
     return createMCPClientAndGetTools();
   };
 
+  // Track which MCP servers failed to load
+  const failedMcpServers: string[] = [];
+
+  // Helper to safely resolve a promise, returning a fallback on failure
+  const safeResolve = async <T>(
+    name: string,
+    promise: Promise<T>,
+    fallback: T,
+  ): Promise<T> => {
+    try {
+      return await promise;
+    } catch (error) {
+      Logger.warn(`⚠️ ${name} failed to load, continuing without it: ${error}`);
+      failedMcpServers.push(name);
+      return fallback;
+    }
+  };
+
   const [
     systemPrompt,
     portalAgent,
@@ -246,19 +270,50 @@ Promise<ReactAgent<any, any, any, any>> => {
           }),
         ) ?? [],
     }),
-    createMemoryAgent({
-      oracleToken: oracleOpenIdToken ?? '',
-      userToken: configurable.configs?.user.matrixOpenIdToken ?? '',
-      oracleHomeServer: oracleMatrixBaseUrl.replace(/^https?:\/\//, ''),
-      userHomeServer: configurable.configs?.matrix.homeServerName ?? '',
-      roomId: matrix?.roomId ?? '',
-      mode: 'user',
+    safeResolve(
+      'Memory Agent (memory-engine MCP)',
+      createMemoryAgent({
+        oracleToken: oracleOpenIdToken ?? '',
+        userToken: configurable.configs?.user.matrixOpenIdToken ?? '',
+        oracleHomeServer: oracleMatrixBaseUrl.replace(/^https?:\/\//, ''),
+        userHomeServer: configurable.configs?.matrix.homeServerName ?? '',
+        roomId: matrix?.roomId ?? '',
+        mode: 'user',
+      }),
+      {
+        name: 'Memory Agent',
+        tools: [],
+        systemPrompt: '',
+        model: llm,
+        description:
+          'Memory Agent is currently unavailable — memory-engine MCP failed to connect.',
+        middleware: [],
+      },
+    ),
+    safeResolve('Firecrawl Agent (firecrawl MCP)', createFirecrawlAgent(), {
+      name: 'Firecrawl Agent',
+      tools: [],
+      systemPrompt: '',
+      model: llm,
+      description:
+        'Firecrawl Agent is currently unavailable — firecrawl MCP failed to connect.',
+      middleware: [],
     }),
-    createFirecrawlAgent(),
     createDomainIndexerAgent(),
-    getMcpTools(),
-    sandboxMCP?.getTools() ?? Promise.resolve([]),
+    safeResolve('MCP tools', getMcpTools(), []),
+    safeResolve(
+      'Sandbox MCP',
+      sandboxMCP?.getTools() ?? Promise.resolve([]),
+      [],
+    ),
   ]);
+
+  // Log summary of failed MCP servers
+  if (failedMcpServers.length > 0) {
+    Logger.warn(
+      `⚠️ Agent created with ${failedMcpServers.length} unavailable MCP service(s): ${failedMcpServers.join(', ')}`,
+    );
+  }
 
   // Wrap sandbox_run for lazy secret injection (both oracle and user secrets).
   // MCP adapters snapshot headers at construction time, so we create a new
@@ -277,48 +332,55 @@ Promise<ReactAgent<any, any, any, any>> => {
         // Lazily create enriched MCP client on first sandbox_run call (promise-safe)
         if (!enrichedRunPromise) {
           enrichedRunPromise = (async () => {
-            const enrichedHeaders = { ...sandboxHeaders };
+            try {
+              const enrichedHeaders = { ...sandboxHeaders };
 
-            // Add oracle secrets as x-os-* headers
-            const oracleSecretsStr = configService.get('ORACLE_SECRETS', '');
-            if (oracleSecretsStr) {
-              for (const pair of oracleSecretsStr.split(',')) {
-                const eqIdx = pair.indexOf('=');
-                if (eqIdx > 0) {
-                  const key = pair.slice(0, eqIdx).trim();
-                  const val = pair.slice(eqIdx + 1).trim();
-                  if (key && val)
-                    enrichedHeaders[`x-os-${key.toLowerCase()}`] = val;
+              // Add oracle secrets as x-os-* headers
+              const oracleSecretsStr = configService.get('ORACLE_SECRETS', '');
+              if (oracleSecretsStr) {
+                for (const pair of oracleSecretsStr.split(',')) {
+                  const eqIdx = pair.indexOf('=');
+                  if (eqIdx > 0) {
+                    const key = pair.slice(0, eqIdx).trim();
+                    const val = pair.slice(eqIdx + 1).trim();
+                    if (key && val)
+                      enrichedHeaders[`x-os-${key.toLowerCase()}`] = val;
+                  }
                 }
               }
-            }
 
-            // Add user secrets as x-us-* headers
-            if (secretIndex.length > 0 && roomId) {
-              const values =
-                await SecretsService.getInstance().loadSecretValues(
-                  roomId,
-                  secretIndex,
-                );
-              for (const [name, value] of Object.entries(values)) {
-                enrichedHeaders[`x-us-${name.toLowerCase()}`] = value;
+              // Add user secrets as x-us-* headers
+              if (secretIndex.length > 0 && roomId) {
+                const values =
+                  await SecretsService.getInstance().loadSecretValues(
+                    roomId,
+                    secretIndex,
+                  );
+                for (const [name, value] of Object.entries(values)) {
+                  enrichedHeaders[`x-us-${name.toLowerCase()}`] = value;
+                }
               }
-            }
 
-            const enrichedMCP = createMCPClient({
-              mcpServers: {
-                sandbox: {
-                  type: 'http',
-                  url: configService.getOrThrow('SANDBOX_MCP_URL'),
-                  transport: 'http',
-                  headers: enrichedHeaders,
+              const enrichedMCP = createMCPClient({
+                mcpServers: {
+                  sandbox: {
+                    type: 'http',
+                    url: configService.getOrThrow('SANDBOX_MCP_URL'),
+                    transport: 'http',
+                    headers: enrichedHeaders,
+                  },
                 },
-              },
-              defaultToolTimeout: 180_000,
-            });
-            const enrichedTools = (await enrichedMCP?.getTools()) ?? [];
-            enrichedRunTool =
-              enrichedTools.find((et) => et.name === 'sandbox_run') ?? null;
+                defaultToolTimeout: 180_000,
+              });
+              const enrichedTools = (await enrichedMCP?.getTools()) ?? [];
+              enrichedRunTool =
+                enrichedTools.find((et) => et.name === 'sandbox_run') ?? null;
+            } catch (error) {
+              Logger.warn(
+                `⚠️ Enriched Sandbox MCP failed to initialize: ${error}`,
+              );
+              enrichedRunTool = null;
+            }
           })();
         }
 

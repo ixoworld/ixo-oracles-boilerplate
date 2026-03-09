@@ -179,7 +179,7 @@ What starts up:
 
 ## Step 7: Test Your Oracle
 
-There are three ways to test your oracle. Pick whichever is easiest for you.
+There are two ways to start your first conversation. Either one works — pick whichever is easiest for you.
 
 ### Option A: `qiforge chat` (recommended)
 
@@ -209,9 +209,9 @@ MyOracle > exit
   Session ended. Goodbye!
 ```
 
-This connects directly to your running oracle — no browser or wallet needed.
+This connects directly to your running oracle — sets up the encrypted chat room and grants permissions automatically.
 
-### Option B: Portal test
+### Option B: Portal
 
 Open your oracle's portal page:
 
@@ -225,7 +225,15 @@ Replace `{ORACLE_ENTITY_DID}` with the value from your `.env` file — it looks 
 2. Open your **IXO Mobile App** and sign the transaction
 3. Once connected, you can start chatting right in the portal!
 
-> **Why connect through the portal first?** The portal creates an encrypted chat room between you and your oracle, and grants it permission (via a signed transaction) to act on your behalf. After this one-time setup, you can chat from the portal, CLI, Matrix, or Slack.
+### After the first connection
+
+The first interaction (via CLI or Portal) creates an encrypted chat room between you and your oracle, and grants it permission (via a signed transaction) to act on your behalf. After this one-time setup, you can chat from **any** client:
+
+- **CLI** — `qiforge chat` (easiest for development)
+- **Portal** — go to your oracle's contract page and chat in the browser
+- **Matrix** — connect with any Matrix client (Element, etc.)
+
+> **Subscription required:** To use the AI Sandbox, skills, and other paid features, you must have an active subscription. See [Payments & Claims](./guides/payments-and-claims.md) for details.
 
 ### Option C: curl (for developers)
 
