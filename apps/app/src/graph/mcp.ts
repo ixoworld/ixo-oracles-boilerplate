@@ -178,7 +178,7 @@ export const createMCPClient = (
     return client;
   } catch (error) {
     Logger.error('Failed to create MCP client:', error);
-    throw error;
+    return undefined;
   }
 };
 

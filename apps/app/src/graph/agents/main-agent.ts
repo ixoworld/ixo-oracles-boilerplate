@@ -201,6 +201,23 @@ Promise<ReactAgent<any>> => {
     return createMCPClientAndGetTools();
   };
 
+  // Track MCP/agent failures so the agent knows which capabilities are degraded
+  const unavailableServices: string[] = [];
+
+  // Helper: wrap a promise so failures return a safe default instead of throwing
+  const safeResolve = <T>(
+    promise: Promise<T>,
+    fallback: T,
+    serviceName: string,
+  ): Promise<T> =>
+    promise.catch((error) => {
+      Logger.error(
+        `[createMainAgent] ${serviceName} failed to initialize: ${error?.message ?? error}`,
+      );
+      unavailableServices.push(serviceName);
+      return fallback;
+    });
+
   const [
     systemPrompt,
     portalAgent,
@@ -236,28 +253,44 @@ Promise<ReactAgent<any>> => {
           ? secretIndex.map((s) => `- _USER_SECRET_${s.name}`).join('\n')
           : '',
     }),
-    createPortalAgent({
-      tools:
-        state.browserTools?.map((tool) =>
-          parserBrowserTool({
-            description: tool.description,
-            schema: tool.schema,
-            toolName: tool.name,
-          }),
-        ) ?? [],
-    }),
-    createMemoryAgent({
-      oracleToken: oracleOpenIdToken ?? '',
-      userToken: configurable.configs?.user.matrixOpenIdToken ?? '',
-      oracleHomeServer: oracleMatrixBaseUrl.replace(/^https?:\/\//, ''),
-      userHomeServer: configurable.configs?.matrix.homeServerName ?? '',
-      roomId: matrix?.roomId ?? '',
-      mode: 'user',
-    }),
-    createFirecrawlAgent(),
-    createDomainIndexerAgent(),
-    getMcpTools(),
-    sandboxMCP?.getTools() ?? Promise.resolve([]),
+    safeResolve(
+      createPortalAgent({
+        tools:
+          state.browserTools?.map((tool) =>
+            parserBrowserTool({
+              description: tool.description,
+              schema: tool.schema,
+              toolName: tool.name,
+            }),
+          ) ?? [],
+      }),
+      null,
+      'Portal Agent',
+    ),
+    safeResolve(
+      createMemoryAgent({
+        oracleToken: oracleOpenIdToken ?? '',
+        userToken: configurable.configs?.user.matrixOpenIdToken ?? '',
+        oracleHomeServer: oracleMatrixBaseUrl.replace(/^https?:\/\//, ''),
+        userHomeServer: configurable.configs?.matrix.homeServerName ?? '',
+        roomId: matrix?.roomId ?? '',
+        mode: 'user',
+      }),
+      null,
+      'Memory Agent (memory-engine MCP)',
+    ),
+    safeResolve(
+      createFirecrawlAgent(),
+      null,
+      'Firecrawl Agent (firecrawl MCP)',
+    ),
+    safeResolve(createDomainIndexerAgent(), null, 'Domain Indexer Agent'),
+    safeResolve(getMcpTools(), [], 'MCP tools'),
+    safeResolve(
+      sandboxMCP?.getTools() ?? Promise.resolve([]),
+      [],
+      'Sandbox MCP',
+    ),
   ]);
 
   // Wrap sandbox_run for lazy secret injection (both oracle and user secrets).
@@ -363,13 +396,31 @@ Promise<ReactAgent<any>> => {
     }
   }
 
-  const callPortalAgentTool = createSubagentAsTool(portalAgent);
-  const callMemoryAgentTool = createSubagentAsTool(memoryAgent);
-  const callFirecrawlAgentTool = createSubagentAsTool(firecrawlAgent);
-  const callDomainIndexerAgentTool = createSubagentAsTool(domainIndexerAgent);
+  const callPortalAgentTool = portalAgent
+    ? createSubagentAsTool(portalAgent)
+    : null;
+  const callMemoryAgentTool = memoryAgent
+    ? createSubagentAsTool(memoryAgent)
+    : null;
+  const callFirecrawlAgentTool = firecrawlAgent
+    ? createSubagentAsTool(firecrawlAgent)
+    : null;
+  const callDomainIndexerAgentTool = domainIndexerAgent
+    ? createSubagentAsTool(domainIndexerAgent)
+    : null;
   const callEditorAgentTool = blockNoteAgentSpec
     ? createSubagentAsTool(blockNoteAgentSpec)
     : null;
+
+  // Build degraded-services notice for the system prompt
+  let finalSystemPrompt = systemPrompt;
+  if (unavailableServices.length > 0) {
+    const serviceList = unavailableServices.map((s) => `- ${s}`).join('\n');
+    finalSystemPrompt += `\n\n---\n\n## ⚠️ Degraded Services\n\nThe following services failed to initialize and are temporarily unavailable. Do NOT attempt to use their tools — they will not work. Inform the user if they request functionality that depends on these services and suggest they try again later.\n\n${serviceList}\n`;
+    Logger.warn(
+      `[createMainAgent] ${unavailableServices.length} service(s) unavailable: ${unavailableServices.join(', ')}`,
+    );
+  }
 
   // check db folder if not exists, create it
   const dbFolder = path.join(
@@ -403,10 +454,10 @@ Promise<ReactAgent<any>> => {
       ...agActionTools,
       listSkillsTool,
       searchSkillsTool,
-      callPortalAgentTool,
-      callMemoryAgentTool,
-      callFirecrawlAgentTool,
-      callDomainIndexerAgentTool,
+      ...(callPortalAgentTool ? [callPortalAgentTool] : []),
+      ...(callMemoryAgentTool ? [callMemoryAgentTool] : []),
+      ...(callFirecrawlAgentTool ? [callFirecrawlAgentTool] : []),
+      ...(callDomainIndexerAgentTool ? [callDomainIndexerAgentTool] : []),
       ...(callEditorAgentTool ? [callEditorAgentTool] : []),
       ...(fileProcessingService
         ? [
@@ -421,7 +472,7 @@ Promise<ReactAgent<any>> => {
       ...(applySandboxOutputToBlockTool ? [applySandboxOutputToBlockTool] : []),
     ],
     middleware,
-    systemPrompt,
+    systemPrompt: finalSystemPrompt,
     checkpointer: SqliteSaver.fromDatabase(
       await UserMatrixSqliteSyncService.getInstance().getUserDatabase(
         configurable?.configs?.user?.did,
