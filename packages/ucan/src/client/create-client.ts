@@ -14,6 +14,7 @@ import type {
   Delegation,
   Capability,
   Principal,
+  Fact,
 } from '@ucanto/interface';
 import type { SupportedDID } from '../types.js';
 
@@ -199,6 +200,8 @@ export async function createDelegation(options: {
   notBefore?: number;
   /** Parent delegations (proof chain) */
   proofs?: Delegation[];
+  /** Verifiable facts and proofs of knowledge (UCAN spec §3.2.4) */
+  facts?: Fact[];
 }): Promise<Delegation> {
   // Create principal from any DID (did:key, did:ixo, did:web, etc.)
   const audiencePrincipal = createPrincipal(options.audience);
@@ -211,6 +214,7 @@ export async function createDelegation(options: {
     expiration: options.expiration ?? Infinity,
     proofs: options.proofs,
     notBefore: options.notBefore,
+    facts: options.facts,
   });
 }
 
@@ -252,6 +256,8 @@ export async function createInvocation(options: {
   proofs?: Delegation[];
   /** Expiration timestamp (Unix seconds). Defaults to Infinity (never expires). */
   expiration?: number;
+  /** Verifiable facts and proofs of knowledge (UCAN spec §3.2.4) */
+  facts?: Fact[];
 }) {
   // Create principal from any DID (did:key, did:ixo, did:web, etc.)
   const audiencePrincipal = createPrincipal(options.audience);
@@ -262,6 +268,7 @@ export async function createInvocation(options: {
     capability: options.capability,
     proofs: options.proofs ?? [],
     expiration: options.expiration ?? Infinity,
+    facts: options.facts,
   });
 }
 
@@ -344,4 +351,4 @@ export async function parseDelegation(serialized: string): Promise<Delegation> {
 }
 
 // Re-export useful types
-export type { Signer, Delegation, Capability };
+export type { Signer, Delegation, Capability, Fact };

@@ -11,6 +11,7 @@ UCAN is a decentralized authorization system using cryptographically signed toke
 - **Capabilities**: What actions can be performed on which resources
 - **Delegations**: Granting capabilities to others (can be chained)
 - **Invocations**: Requests to use a capability
+- **Facts**: Verifiable claims attached to a delegation or invocation (scoped per-UCAN, not inherited)
 - **Attenuation**: Permissions can only be narrowed, never expanded
 
 📖 **[See the visual flow diagram →](./docs/FLOW.md)**
@@ -91,6 +92,7 @@ app.post('/employees', async (req, res) => {
   // result.capability — validated capability with caveats (nb)
   // result.expiration — earliest expiration across the delegation chain (undefined = never)
   // result.proofChain — delegation path from root to invoker, e.g. ["did:key:root", "did:key:user"]
+  // result.facts — facts attached to the invocation (undefined if none)
 
   const limit = result.capability?.nb?.limit ?? 10;
   res.json({ employees: getEmployees(limit) });
@@ -192,6 +194,7 @@ The `validator.validate()` method returns a `ValidateResult`:
 | `capability` | `object`                | Validated capability with `can`, `with`, and optional `nb` caveats (on success)                      |
 | `expiration` | `number \| undefined`   | Effective expiration (Unix seconds) — the earliest across the delegation chain. Undefined = never.   |
 | `proofChain` | `string[] \| undefined` | Delegation path from root issuer to invoker, e.g. `["did:key:root", "did:key:alice", "did:key:bob"]` |
+| `facts`      | `Record<string, unknown>[] \| undefined` | Facts attached to the invocation. Undefined if none.                                      |
 | `error`      | `object`                | Error with `code` and `message` (on failure)                                                         |
 
 Error codes: `INVALID_FORMAT`, `INVALID_SIGNATURE`, `UNAUTHORIZED`, `REPLAY`, `EXPIRED`, `CAVEAT_VIOLATION`.
@@ -210,6 +213,22 @@ Error codes: `INVALID_FORMAT`, `INVALID_SIGNATURE`, `UNAUTHORIZED`, `REPLAY`, `E
 | `parseDelegation(serialized)`        | Parse from base64 CAR             |
 
 > **Note:** Both `createDelegation` and `createInvocation` default to `expiration: Infinity` (never expires) when no expiration is specified. Pass an explicit Unix timestamp (seconds) to set an expiration.
+
+#### Facts
+
+Both `createDelegation` and `createInvocation` accept an optional `facts` parameter — an array of `Record<string, unknown>` objects representing verifiable claims or proofs of knowledge ([UCAN spec §3.2.4](https://github.com/ucan-wg/spec/#324-facts)).
+
+```typescript
+const invocation = await createInvocation({
+  issuer: signer,
+  audience: serverDid,
+  capability: { can: 'oracle/call', with: 'ixo:oracle:123' },
+  proofs: [delegation],
+  facts: [{ requestId: 'abc-123', origin: 'portal' }],
+});
+```
+
+> **Important:** Facts are scoped per-UCAN. Each delegation and invocation carries its own independent `fct` field. Facts on a delegation do **not** propagate to invocations that use it as a proof. The `facts` field in `ValidateResult` contains only the facts from the invocation itself.
 
 ### DID Resolution
 
@@ -274,7 +293,7 @@ pnpm test          # Run unit tests (vitest)
 pnpm test:ucan     # Run interactive test script with full UCAN flow
 ```
 
-The unit tests cover proof chain construction, expiration computation, validation failures, caveat enforcement, and replay protection.
+The unit tests cover proof chain construction, expiration computation, facts pass-through, validation failures, caveat enforcement, and replay protection.
 
 ## License
 

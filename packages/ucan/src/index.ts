@@ -107,6 +107,7 @@ export {
   type Signer,
   type Delegation,
   type Capability,
+  type Fact,
 } from './client/create-client.js';
 
 // =============================================================================

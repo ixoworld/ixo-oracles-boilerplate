@@ -568,6 +568,172 @@ describe('UCAN Validator', () => {
     });
   });
 
+  describe('facts', () => {
+    it('should return facts attached to the invocation', async () => {
+      const server = await keygen();
+      const root = await keygen();
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [root.did],
+      });
+
+      const facts = [
+        { verified: true, timestamp: 1234567890 },
+        { service: 'oracle', version: '1.0' },
+      ];
+
+      const invocation = Client.invoke({
+        issuer: root.signer,
+        audience: ed25519.Verifier.parse(server.did),
+        capability: {
+          can: 'test/read' as const,
+          with: 'ixo:resource:123' as const,
+        },
+        facts,
+        proofs: [],
+      });
+
+      const serialized = await serializeInvocation(invocation);
+      const result = await validator.validate(
+        serialized,
+        TestRead,
+        'ixo:resource:123',
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.facts).toBeDefined();
+      expect(result.facts).toHaveLength(2);
+      expect(result.facts).toEqual(facts);
+    });
+
+    it('should return undefined facts when none are attached', async () => {
+      const server = await keygen();
+      const root = await keygen();
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [root.did],
+      });
+
+      const invocation = Client.invoke({
+        issuer: root.signer,
+        audience: ed25519.Verifier.parse(server.did),
+        capability: {
+          can: 'test/read' as const,
+          with: 'ixo:resource:123' as const,
+        },
+        proofs: [],
+      });
+
+      const serialized = await serializeInvocation(invocation);
+      const result = await validator.validate(
+        serialized,
+        TestRead,
+        'ixo:resource:123',
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.facts).toBeUndefined();
+    });
+
+    it('should pass facts through createInvocation helper', async () => {
+      const server = await keygen();
+      const root = await keygen();
+      const user = await keygen();
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [root.did],
+      });
+
+      const facts = [{ requestId: 'abc-123', origin: 'portal' }];
+
+      const delegation = await createDelegation({
+        issuer: root.signer,
+        audience: user.did,
+        capabilities: [
+          {
+            can: 'test/read' as Capability['can'],
+            with: 'ixo:resource:123' as Capability['with'],
+          },
+        ],
+      });
+
+      const invocation = await createInvocation({
+        issuer: user.signer,
+        audience: server.did,
+        capability: {
+          can: 'test/read' as Capability['can'],
+          with: 'ixo:resource:123' as Capability['with'],
+        },
+        proofs: [delegation],
+        facts,
+      });
+
+      const serialized = await serializeInvocation(invocation);
+      const result = await validator.validate(
+        serialized,
+        TestRead,
+        'ixo:resource:123',
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.facts).toEqual(facts);
+    });
+
+    it('should pass facts through createDelegation helper', async () => {
+      const server = await keygen();
+      const root = await keygen();
+      const user = await keygen();
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [root.did],
+      });
+
+      const delegationFacts = [{ purpose: 'oracle-access', level: 'standard' }];
+
+      const delegation = await createDelegation({
+        issuer: root.signer,
+        audience: user.did,
+        capabilities: [
+          {
+            can: 'test/read' as Capability['can'],
+            with: 'ixo:resource:123' as Capability['with'],
+          },
+        ],
+        facts: delegationFacts,
+      });
+
+      // Verify facts are on the delegation itself
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect((delegation as any).facts).toEqual(delegationFacts);
+
+      // Invocation without facts — facts on delegation don't propagate to result
+      const invocation = await createInvocation({
+        issuer: user.signer,
+        audience: server.did,
+        capability: {
+          can: 'test/read' as Capability['can'],
+          with: 'ixo:resource:123' as Capability['with'],
+        },
+        proofs: [delegation],
+      });
+
+      const serialized = await serializeInvocation(invocation);
+      const result = await validator.validate(
+        serialized,
+        TestRead,
+        'ixo:resource:123',
+      );
+
+      expect(result.ok).toBe(true);
+      // Result facts come from the invocation, not the delegation
+      expect(result.facts).toBeUndefined();
+    });
+  });
+
   describe('replay protection', () => {
     it('should reject replayed invocations', async () => {
       const server = await keygen();
