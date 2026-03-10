@@ -87,6 +87,11 @@ app.post('/employees', async (req, res) => {
     return res.status(403).json({ error: result.error });
   }
 
+  // result.invoker — DID of who made the request
+  // result.capability — validated capability with caveats (nb)
+  // result.expiration — earliest expiration across the delegation chain (undefined = never)
+  // result.proofChain — delegation path from root to invoker, e.g. ["did:key:root", "did:key:user"]
+
   const limit = result.capability?.nb?.limit ?? 10;
   res.json({ employees: getEmployees(limit) });
 });
@@ -176,6 +181,21 @@ Create a framework-agnostic validator.
 | `didResolver`     | `DIDKeyResolver`  | Resolver for non-`did:key` DIDs       |
 | `invocationStore` | `InvocationStore` | Custom store for replay protection    |
 
+#### `ValidateResult`
+
+The `validator.validate()` method returns a `ValidateResult`:
+
+| Field        | Type                    | Description                                                                                          |
+| ------------ | ----------------------- | ---------------------------------------------------------------------------------------------------- |
+| `ok`         | `boolean`               | Whether validation succeeded                                                                         |
+| `invoker`    | `string`                | DID of the invoker (on success)                                                                      |
+| `capability` | `object`                | Validated capability with `can`, `with`, and optional `nb` caveats (on success)                      |
+| `expiration` | `number \| undefined`   | Effective expiration (Unix seconds) — the earliest across the delegation chain. Undefined = never.   |
+| `proofChain` | `string[] \| undefined` | Delegation path from root issuer to invoker, e.g. `["did:key:root", "did:key:alice", "did:key:bob"]` |
+| `error`      | `object`                | Error with `code` and `message` (on failure)                                                         |
+
+Error codes: `INVALID_FORMAT`, `INVALID_SIGNATURE`, `UNAUTHORIZED`, `REPLAY`, `EXPIRED`, `CAVEAT_VIOLATION`.
+
 ### Client Helpers
 
 | Function                             | Description                       |
@@ -188,6 +208,8 @@ Create a framework-agnostic validator.
 | `serializeDelegation(delegation)`    | Serialize to base64 CAR           |
 | `serializeInvocation(invocation)`    | Serialize to base64 CAR           |
 | `parseDelegation(serialized)`        | Parse from base64 CAR             |
+
+> **Note:** Both `createDelegation` and `createInvocation` default to `expiration: Infinity` (never expires) when no expiration is specified. Pass an explicit Unix timestamp (seconds) to set an expiration.
 
 ### DID Resolution
 
@@ -245,13 +267,14 @@ interface InvocationStore {
 }
 ```
 
-## Contributing
-
-See the [test script](./scripts/test-ucan.ts) for a complete example of the UCAN flow:
+## Testing
 
 ```bash
-pnpm test:ucan
+pnpm test          # Run unit tests (vitest)
+pnpm test:ucan     # Run interactive test script with full UCAN flow
 ```
+
+The unit tests cover proof chain construction, expiration computation, validation failures, caveat enforcement, and replay protection.
 
 ## License
 
