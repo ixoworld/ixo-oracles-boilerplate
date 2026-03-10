@@ -66,17 +66,60 @@ export class TokenLimiter {
     );
   }
 
+  /**
+   * Convert raw USD cost (e.g. from OpenRouter response_metadata.usage.cost)
+   * to credits. 1 USD = 1000 base credits on mainnet.
+   * On devnet, 1000x multiplier so small costs are visible for testing claims.
+   */
+  static usdCostToCredits(usdCost: number): number {
+    const isMainnet = config.getOrThrow('NETWORK') === 'mainnet';
+    const creditsPerUsd = isMainnet ? 1000 : 1_000_000;
+    const markup = isMainnet ? 1.6 : 5;
+    return Math.round(usdCost * creditsPerUsd * markup);
+  }
+
   static llmTokenToCredits(tokenCount: number): number {
-    // Cost is $0.75 per 1M tokens
-    // GROQ - OSS 120b model
+    // Flat-rate fallback: $0.75 per 1M tokens
     // Returns credits as float (1 credit = 1 uixo)
 
-    const markup = config.getOrThrow('NETWORK') === 'mainnet' ? 1.6 : 10;
-    const costPerMillionTokens = 0.75 * markup; // 30% markup for profit
+    const markup = config.getOrThrow('NETWORK') === 'mainnet' ? 1.6 : 5;
+    const costPerMillionTokens = 0.75 * markup;
     const tokensPerMillion =
-      config.getOrThrow('NETWORK') === 'mainnet' ? 1_000_000 : 1;
+      config.getOrThrow('NETWORK') === 'mainnet' ? 1_000_000 : 1000;
 
     return Math.round((tokenCount / tokensPerMillion) * costPerMillionTokens);
+  }
+
+  /**
+   * Calculate credits using per-model pricing (separate input/output rates).
+   * Falls back to flat rate if pricing is null.
+   */
+  static llmTokenToCreditsWithPricing(
+    inputTokens: number,
+    outputTokens: number,
+    pricing: {
+      inputPricePerMillionTokens: number;
+      outputPricePerMillionTokens: number;
+    } | null,
+  ): number {
+    if (!pricing) {
+      Logger.log(
+        `No pricing found fallback into LLMTokenToCredits`,
+        '[llmTokenToCreditsWithPricing]',
+      );
+      return TokenLimiter.llmTokenToCredits(inputTokens + outputTokens);
+    }
+
+    const markup = config.getOrThrow('NETWORK') === 'mainnet' ? 1.6 : 5;
+    const divisor =
+      config.getOrThrow('NETWORK') === 'mainnet' ? 1_000_000 : 1000;
+
+    const inputCost =
+      (inputTokens / divisor) * pricing.inputPricePerMillionTokens;
+    const outputCost =
+      (outputTokens / divisor) * pricing.outputPricePerMillionTokens;
+
+    return Math.round((inputCost + outputCost) * markup);
   }
 
   static async getSubscriptionPayload(

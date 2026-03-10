@@ -1,19 +1,20 @@
 import { getSubscriptionUrlByNetwork } from '@ixo/common';
 import { MatrixManager } from '@ixo/matrix';
 import {
-  setupClaimSigningMnemonics,
   loadEncryptionKey,
+  setupClaimSigningMnemonics,
 } from '@ixo/oracles-chain-client';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { type INestApplication, Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import type { Cache } from 'cache-manager';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
-import type { Cache } from 'cache-manager';
 import { type ENV } from './config';
 import { EditorMatrixClient } from './graph/agents/editor/editor-mx';
+import { initModelPricingCache } from './graph/llm-provider';
 import { SecretsService } from './secrets/secrets.service';
 import { UserMatrixSqliteSyncService } from './user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 
@@ -102,6 +103,11 @@ async function bootstrap(): Promise<void> {
   // SecretsService is a manual singleton (not @Injectable) because it's accessed from
   // LangGraph agent code outside NestJS DI. Pass the cache manager here at bootstrap.
   SecretsService.getInstance().setCacheManager(app.get<Cache>(CACHE_MANAGER));
+
+  // Load per-model pricing from provider APIs (non-blocking)
+  initModelPricingCache().catch((err) =>
+    Logger.warn('Failed to init model pricing cache', err),
+  );
 
   // Fire Matrix init in background (don't await — let server start for health checks).
   // MessagesService.onModuleInit defers its listener until this completes.

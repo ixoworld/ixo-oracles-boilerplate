@@ -9,6 +9,7 @@ import {
 import { type UcanService } from 'src/ucan/ucan.service';
 import { type FileProcessingService } from 'src/messages/file-processing.service';
 import { createMainAgent } from './agents/main-agent';
+import { getLLMProvider, getModelForRole } from './llm-provider';
 import { type MCPUCANContext } from './mcp';
 import { type TMainAgentGraphState } from './state';
 
@@ -98,6 +99,10 @@ export class MainAgentGraph {
         configurable: {
           ...runnableConfig.configurable,
           thread_id: runnableConfig.configurable.sessionId,
+        },
+        metadata: {
+          llmProvider: getLLMProvider(),
+          llmModel: getModelForRole('main'),
         },
         context: {
           userDid: runnableConfig.configurable.configs?.user.did ?? '',
@@ -190,10 +195,12 @@ export class MainAgentGraph {
       {
         version: 'v2',
         ...runnableConfig,
-        streamMode: 'messages',
+        streamMode: ['updates', 'messages'] as const,
         recursionLimit: 150,
         configurable: {
           ...runnableConfig.configurable,
+          llmProvider: getLLMProvider(),
+          llmModel: getModelForRole('main'),
         },
         context: {
           userDid: runnableConfig.configurable.configs?.user.did ?? '',

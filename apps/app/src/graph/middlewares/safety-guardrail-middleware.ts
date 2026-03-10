@@ -1,15 +1,10 @@
-import { getOpenRouterChatModel } from '@ixo/common';
 import { RemoveMessage } from '@langchain/core/messages';
 import { Logger } from '@nestjs/common';
 import { type AgentMiddleware, AIMessage, createMiddleware } from 'langchain';
+import { getProviderChatModel } from '../llm-provider';
 
-const safetyModel = getOpenRouterChatModel({
-  // model: 'openai/gpt-oss-safeguard-20b:nitro',
-  model: 'meta-llama/llama-3.1-8b-instruct:nitro',
-  __includeRawResponse: true,
-  modelKwargs: {
-    require_parameters: true,
-  },
+const safetyModel = getProviderChatModel('guard', {
+  __includeRawResponse: false,
 });
 
 export const createSafetyGuardrailMiddleware = (): AgentMiddleware => {

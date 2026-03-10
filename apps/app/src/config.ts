@@ -35,11 +35,17 @@ export const EnvSchema = z.object({
     .default('./matrix-secret-storage-keys-new2'),
   SKIP_LOGGING_CHAT_HISTORY_TO_MATRIX: z.string().optional(),
 
+  // LLM Provider selection: 'openrouter' (default) or 'nebius'
+  LLM_PROVIDER: z.enum(['openrouter', 'nebius']).default('openrouter'),
+
   // OpenAI - used by @ixo/common package
   OPENAI_API_KEY: z.string().optional(),
 
   // OpenRouter
-  OPEN_ROUTER_API_KEY: z.string(),
+  OPEN_ROUTER_API_KEY: z.string().optional(),
+
+  // Nebius Token Factory
+  NEBIUS_API_KEY: z.string().optional(),
 
   SUBSCRIPTION_ORACLE_MCP_URL: z.url().optional(),
   NETWORK: z.enum(['mainnet', 'testnet', 'devnet']),

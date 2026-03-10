@@ -8,6 +8,37 @@ import {
 } from '@langchain/openai';
 import OpenAI, { type ClientOptions } from 'openai';
 
+export type LLMProvider = 'openrouter' | 'nebius';
+
+export function getLLMProvider(): LLMProvider {
+  const raw = (process.env.LLM_PROVIDER ?? 'openrouter').toLowerCase();
+  if (raw === 'nebius') return 'nebius';
+  return 'openrouter';
+}
+
+/** Provider-aware base URL and API key. */
+export function getProviderConfig() {
+  const provider = getLLMProvider();
+
+  if (provider === 'nebius') {
+    return {
+      provider,
+      baseURL: 'https://api.tokenfactory.nebius.com/v1/',
+      apiKey: process.env.NEBIUS_API_KEY ?? '',
+      headers: {} as Record<string, string>,
+    };
+  }
+
+  return {
+    provider,
+    baseURL: 'https://openrouter.ai/api/v1',
+    apiKey: process.env.OPEN_ROUTER_API_KEY ?? '',
+    headers: {
+      'HTTP-Referer': 'oracle-app.com',
+      'X-Title': process.env.ORACLE_NAME ?? 'Oracle App',
+    },
+  };
+}
 const getChatOpenAiModel = (params?: ChatOpenAIFields): ChatOpenAI =>
   new ChatOpenAI({
     temperature: 0.2,

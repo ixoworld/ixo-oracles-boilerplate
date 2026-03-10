@@ -1,14 +1,12 @@
-import { getOpenRouterChatModel } from '@ixo/common';
+import { getProviderChatModel } from '../../llm-provider';
 import { createMCPClient } from 'src/graph/mcp';
 import { listSkillsTool, searchSkillsTool } from 'src/graph/nodes/tools-node';
 import type { AgentSpec } from '../subagent-as-tool';
 import { SKILLS_PROMPT } from './skills.prompt';
 
-const llm = getOpenRouterChatModel({
-  model: 'qwen/qwen3-235b-a22b-thinking-2507:nitro',
+const llm = getProviderChatModel('skills', {
   __includeRawResponse: true,
   modelKwargs: {
-    require_parameters: true,
     include_reasoning: true,
   },
   reasoning: {
