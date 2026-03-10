@@ -1,12 +1,8 @@
 import {
-  type EntityResult,
-  type EpisodeResult,
-  type FactResult,
   getOpenRouterChatModel,
   jsonToYaml,
   parserActionTool,
   parserBrowserTool,
-  type SearchEnhancedResponse,
 } from '@ixo/common';
 import { type IRunnableConfigWithRequiredFields } from '@ixo/matrix';
 import { OpenIdTokenProvider } from '@ixo/oracles-chain-client';
@@ -201,47 +197,57 @@ Promise<ReactAgent<any, any, any, any>> => {
     return createMCPClientAndGetTools();
   };
 
+  // System prompt is critical — failure here is a code bug, not a transient issue
+  const systemPrompt = await AI_ASSISTANT_PROMPT.format({
+    APP_NAME:
+      oracleConfig.oracleName || configService.get('ORACLE_NAME') || 'Oracle',
+    ORACLE_CONTEXT: buildOracleContext(oracleConfig),
+    IDENTITY_CONTEXT: jsonToYaml(state?.userContext?.identity ?? {}),
+    WORK_CONTEXT: jsonToYaml(state?.userContext?.work ?? {}),
+    GOALS_CONTEXT: jsonToYaml(state?.userContext?.goals ?? {}),
+    INTERESTS_CONTEXT: jsonToYaml(state?.userContext?.interests ?? {}),
+    RELATIONSHIPS_CONTEXT: jsonToYaml(state?.userContext?.relationships ?? {}),
+    RECENT_CONTEXT: jsonToYaml(state?.userContext?.recent ?? {}),
+    TIME_CONTEXT: timeContext,
+    EDITOR_DOCUMENTATION: state.editorRoomId
+      ? EDITOR_DOCUMENTATION_CONTENT
+      : '',
+    CURRENT_ENTITY_DID: state.currentEntityDid ?? '',
+    SLACK_FORMATTING_CONSTRAINTS:
+      state.client === 'slack' ? SLACK_FORMATTING_CONSTRAINTS_CONTENT : '',
+    AG_UI_TOOLS_DOCUMENTATION:
+      agActionTools.length > 0 ? AG_UI_TOOLS_DOCUMENTATION : '',
+    USER_SECRETS_CONTEXT:
+      secretIndex.length > 0
+        ? secretIndex.map((s) => `- _USER_SECRET_${s.name}`).join('\n')
+        : '',
+  });
+
   // Track MCP/agent failures so the agent knows which capabilities are degraded
   const unavailableServices: string[] = [];
 
-  // Service names for logging — must match the order of promises below
-  const serviceNames = [
-    'System Prompt', // index 0 — should never fail, but handled for safety
-    'Portal Agent',
-    'Memory Agent (memory-engine MCP)',
-    'Firecrawl Agent (firecrawl MCP)',
-    'Domain Indexer Agent',
-    'MCP tools',
-    'Sandbox MCP',
-  ] as const;
+  /** Extract a value from a settled result, logging and tracking failures. */
+  const settled = <T>(
+    result: PromiseSettledResult<T>,
+    fallback: T,
+    name: string,
+  ): T => {
+    if (result.status === 'fulfilled') return result.value;
+    Logger.error(
+      `[createMainAgent] ${name} failed to initialize: ${String(result.reason)}`,
+    );
+    unavailableServices.push(name);
+    return fallback;
+  };
 
-  const results = await Promise.allSettled([
-    AI_ASSISTANT_PROMPT.format({
-      APP_NAME:
-        oracleConfig.oracleName || configService.get('ORACLE_NAME') || 'Oracle',
-      ORACLE_CONTEXT: buildOracleContext(oracleConfig),
-      IDENTITY_CONTEXT: jsonToYaml(state?.userContext?.identity ?? {}),
-      WORK_CONTEXT: jsonToYaml(state?.userContext?.work ?? {}),
-      GOALS_CONTEXT: jsonToYaml(state?.userContext?.goals ?? {}),
-      INTERESTS_CONTEXT: jsonToYaml(state?.userContext?.interests ?? {}),
-      RELATIONSHIPS_CONTEXT: jsonToYaml(
-        state?.userContext?.relationships ?? {},
-      ),
-      RECENT_CONTEXT: jsonToYaml(state?.userContext?.recent ?? {}),
-      TIME_CONTEXT: timeContext,
-      EDITOR_DOCUMENTATION: state.editorRoomId
-        ? EDITOR_DOCUMENTATION_CONTENT
-        : '',
-      CURRENT_ENTITY_DID: state.currentEntityDid ?? '',
-      SLACK_FORMATTING_CONSTRAINTS:
-        state.client === 'slack' ? SLACK_FORMATTING_CONSTRAINTS_CONTENT : '',
-      AG_UI_TOOLS_DOCUMENTATION:
-        agActionTools.length > 0 ? AG_UI_TOOLS_DOCUMENTATION : '',
-      USER_SECRETS_CONTEXT:
-        secretIndex.length > 0
-          ? secretIndex.map((s) => `- _USER_SECRET_${s.name}`).join('\n')
-          : '',
-    }),
+  const [
+    portalResult,
+    memoryResult,
+    firecrawlResult,
+    domainIndexerResult,
+    mcpToolsResult,
+    sandboxResult,
+  ] = await Promise.allSettled([
     createPortalAgent({
       tools:
         state.browserTools?.map((tool) =>
@@ -266,27 +272,24 @@ Promise<ReactAgent<any, any, any, any>> => {
     sandboxMCP?.getTools() ?? Promise.resolve([]),
   ]);
 
-  // Extract values from settled results, using fallbacks for rejected promises
-  const settled = <T>(
-    result: PromiseSettledResult<T>,
-    fallback: T,
-    index: number,
-  ): T => {
-    if (result.status === 'fulfilled') return result.value;
-    Logger.error(
-      `[createMainAgent] ${serviceNames[index]} failed to initialize: ${result.reason?.message ?? result.reason}`,
-    );
-    unavailableServices.push(serviceNames[index]);
-    return fallback;
-  };
-
-  const systemPrompt = settled(results[0], '', 0);
-  const portalAgent = settled(results[1], null, 1);
-  const memoryAgent = settled(results[2], null, 2);
-  const firecrawlAgent = settled(results[3], null, 3);
-  const domainIndexerAgent = settled(results[4], null, 4);
-  const mcpTools = settled(results[5], [], 5);
-  const sandboxTools = settled(results[6], [], 6);
+  const portalAgent = settled(portalResult, null, 'Portal Agent');
+  const memoryAgent = settled(
+    memoryResult,
+    null,
+    'Memory Agent (memory-engine MCP)',
+  );
+  const firecrawlAgent = settled(
+    firecrawlResult,
+    null,
+    'Firecrawl Agent (firecrawl MCP)',
+  );
+  const domainIndexerAgent = settled(
+    domainIndexerResult,
+    null,
+    'Domain Indexer Agent',
+  );
+  const mcpTools = settled(mcpToolsResult, [], 'MCP tools');
+  const sandboxTools = settled(sandboxResult, [], 'Sandbox MCP');
 
   // Wrap sandbox_run for lazy secret injection (both oracle and user secrets).
   // MCP adapters snapshot headers at construction time, so we create a new
@@ -366,12 +369,19 @@ Promise<ReactAgent<any, any, any, any>> => {
     | Awaited<ReturnType<typeof createEditorAgent>>
     | undefined;
   if (state.editorRoomId) {
-    Logger.log(`📝 Editor room ID provided: ${state.editorRoomId}`);
-    Logger.log('🔧 Initializing BlockNote tools...');
-    blockNoteAgentSpec = await createEditorAgent({
-      room: state.editorRoomId,
-      mode: 'edit',
-    });
+    Logger.log(`Editor room ID provided: ${state.editorRoomId}`);
+    Logger.log('Initializing BlockNote tools...');
+    try {
+      blockNoteAgentSpec = await createEditorAgent({
+        room: state.editorRoomId,
+        mode: 'edit',
+      });
+    } catch (error) {
+      Logger.error(
+        `[createMainAgent] Editor Agent failed to initialize: ${String(error)}`,
+      );
+      unavailableServices.push('Editor Agent');
+    }
   }
 
   // Create apply_sandbox_output_to_block tool when both sandbox and editor are available
@@ -411,7 +421,7 @@ Promise<ReactAgent<any, any, any, any>> => {
   let finalSystemPrompt = systemPrompt;
   if (unavailableServices.length > 0) {
     const serviceList = unavailableServices.map((s) => `- ${s}`).join('\n');
-    finalSystemPrompt += `\n\n---\n\n## ⚠️ Degraded Services\n\nThe following services failed to initialize and are temporarily unavailable. Do NOT attempt to use their tools — they will not work. Inform the user if they request functionality that depends on these services and suggest they try again later.\n\n${serviceList}\n`;
+    finalSystemPrompt += `\n\n---\n\n## DEGRADED SERVICES\n\nThe following services failed to initialize and are temporarily unavailable. Do NOT attempt to use their tools — they will not work. Inform the user if they request functionality that depends on these services and suggest they try again later.\n\n${serviceList}\n`;
     Logger.warn(
       `[createMainAgent] ${unavailableServices.length} service(s) unavailable: ${unavailableServices.join(', ')}`,
     );
@@ -503,34 +513,4 @@ const formatTimeContext = (
   }
 
   return context || 'Not available.';
-};
-
-// Helper function to format SearchEnhancedResponse into readable context
-const _formatContextData = (data: SearchEnhancedResponse | undefined) => {
-  if (!data) return 'No specific information available.';
-
-  let context = '';
-
-  if (data.facts && data.facts.length > 0) {
-    context += '**Key Facts:**\n';
-    data.facts.slice(0, 3).forEach((fact: FactResult) => {
-      context += `- ${fact.fact}\n`;
-    });
-  }
-
-  if (data.entities && data.entities.length > 0) {
-    context += '\n**Relevant Entities:**\n';
-    data.entities.slice(0, 3).forEach((entity: EntityResult) => {
-      context += `- ${entity.name}: ${entity.summary}\n`;
-    });
-  }
-
-  if (data.episodes && data.episodes.length > 0) {
-    context += '\n**Recent Episodes:**\n';
-    data.episodes.slice(0, 2).forEach((episode: EpisodeResult) => {
-      context += `- ${episode.name}: ${episode.content.substring(0, 100)}...\n`;
-    });
-  }
-
-  return context || 'No specific information available.';
 };

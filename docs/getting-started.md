@@ -55,9 +55,10 @@ fly auth login
 # 3. Create app without deploying yet
 fly launch --no-deploy
 
-# 4. (Optional) Only if you want the credits system — otherwise skip
+# 4. (Optional) Set up Redis if you want the credits system
 fly redis create
-# Then set REDIS_URL in .env and DISABLE_CREDITS=false
+# Then set REDIS_URL in .env
+# Credits are enabled by default — to disable, set DISABLE_CREDITS=true
 
 # 5. Deploy
 pnpm run deploy
