@@ -92,6 +92,13 @@ export interface ValidateResult {
    */
   proofChain?: string[];
 
+  /**
+   * Facts attached to the invocation (UCAN spec §3.2.4).
+   * Verifiable claims and proofs of knowledge supporting the invocation.
+   * Empty array if no facts were attached.
+   */
+  facts?: Record<string, unknown>[];
+
   /** Error details (if invalid) */
   error?: {
     code:
@@ -437,6 +444,12 @@ export async function createUCANValidator(
         const proofChain = buildProofChain(invocation);
         const expiration = computeEffectiveExpiration(invocation);
 
+        // 10. Extract facts from the invocation
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- invocation type from Delegation.extract() is complex
+        const facts = (invocation as any).facts as
+          | Record<string, unknown>[]
+          | undefined;
+
         return {
           ok: true,
           invoker: invocation.issuer.did(),
@@ -449,6 +462,7 @@ export async function createUCANValidator(
             : undefined,
           expiration,
           proofChain,
+          facts: facts && facts.length > 0 ? facts : undefined,
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
