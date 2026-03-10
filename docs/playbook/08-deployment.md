@@ -110,15 +110,15 @@ When `fly launch` detects the existing `fly.toml`, it will ask if you want to us
 
 ### Step 2 — Set up Redis (only if you want credits)
 
-Redis is **only required if you want to use the credits/subscription system**. If you're just testing or don't need credits, skip this step entirely — credits are disabled by default (`DISABLE_CREDITS=true`).
+Redis is **only required if you want to use the credits/subscription system**. Credits are enabled by default — to disable them (and skip Redis), set `DISABLE_CREDITS=true` in your `.env`.
 
-If you do want credits enabled:
+If you want to keep credits enabled:
 
 ```bash
 fly redis create
 ```
 
-Choose the same region as your app and pick a plan. After creation, copy the **Private URL** from `fly redis status <database-name>` and add it as `REDIS_URL` in your `apps/app/.env` file. Then set `DISABLE_CREDITS=false`.
+Choose the same region as your app and pick a plan. After creation, copy the **Private URL** from `fly redis status <database-name>` and add it as `REDIS_URL` in your `apps/app/.env` file.
 
 > **Alternative:** Use any external Redis provider — you just need the connection URL.
 
