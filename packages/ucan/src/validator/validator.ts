@@ -77,6 +77,21 @@ export interface ValidateResult {
     nb?: Record<string, unknown>;
   };
 
+  /**
+   * Effective expiration as Unix timestamp (seconds).
+   * This is the earliest expiration across the entire delegation chain,
+   * i.e. when the authorization effectively expires.
+   * Undefined if no expiration is set (never expires).
+   */
+  expiration?: number;
+
+  /**
+   * The delegation chain from root issuer to invoker.
+   * e.g. ["did:key:root", "did:key:alice", "did:key:bob"]
+   * For a direct root invocation (no delegation), this is just ["did:key:root"].
+   */
+  proofChain?: string[];
+
   /** Error details (if invalid) */
   error?: {
     code:
@@ -253,6 +268,43 @@ export async function createUCANValidator(
     };
   };
 
+  /**
+   * Build the delegation chain as an array of DIDs from root to invoker.
+   * Recursively traverses the first proof of each delegation.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- delegation type from Delegation.extract() is complex
+  function buildProofChain(delegation: any): string[] {
+    if (!delegation?.proofs || delegation.proofs.length === 0) {
+      return [delegation.issuer.did()];
+    }
+    const parentChain = buildProofChain(delegation.proofs[0]);
+    return [...parentChain, delegation.issuer.did()];
+  }
+
+  /**
+   * Compute the effective (earliest) expiration across the entire delegation chain.
+   * Returns undefined if no expiration is set anywhere in the chain.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function computeEffectiveExpiration(delegation: any): number | undefined {
+    const exp =
+      typeof delegation?.expiration === 'number' &&
+      isFinite(delegation.expiration)
+        ? delegation.expiration
+        : undefined;
+
+    if (!delegation?.proofs || delegation.proofs.length === 0) {
+      return exp;
+    }
+
+    const parentExp = computeEffectiveExpiration(delegation.proofs[0]);
+
+    if (exp !== undefined && parentExp !== undefined) {
+      return Math.min(exp, parentExp);
+    }
+    return exp ?? parentExp;
+  }
+
   return {
     serverDid: options.serverDid,
 
@@ -381,6 +433,10 @@ export async function createUCANValidator(
           await invocationStore.add(invocationCid);
         }
 
+        // 9. Build proof chain and compute effective expiration
+        const proofChain = buildProofChain(invocation);
+        const expiration = computeEffectiveExpiration(invocation);
+
         return {
           ok: true,
           invoker: invocation.issuer.did(),
@@ -391,6 +447,8 @@ export async function createUCANValidator(
                 nb: validatedCap.nb as Record<string, unknown> | undefined,
               }
             : undefined,
+          expiration,
+          proofChain,
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';

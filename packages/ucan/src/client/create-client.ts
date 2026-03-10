@@ -193,7 +193,7 @@ export async function createDelegation(options: {
   audience: string;
   /** The capabilities being delegated */
   capabilities: Capability[];
-  /** Expiration timestamp (Unix seconds) */
+  /** Expiration timestamp (Unix seconds). Defaults to Infinity (never expires). */
   expiration?: number;
   /** Not before timestamp (Unix seconds) */
   notBefore?: number;
@@ -208,7 +208,7 @@ export async function createDelegation(options: {
     audience: audiencePrincipal,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ucanto delegate() expects a specific branded tuple type incompatible with Capability[]
     capabilities: options.capabilities as any,
-    expiration: options.expiration,
+    expiration: options.expiration ?? Infinity,
     proofs: options.proofs,
     notBefore: options.notBefore,
   });
@@ -250,6 +250,8 @@ export async function createInvocation(options: {
   capability: Capability;
   /** Delegation proofs */
   proofs?: Delegation[];
+  /** Expiration timestamp (Unix seconds). Defaults to Infinity (never expires). */
+  expiration?: number;
 }) {
   // Create principal from any DID (did:key, did:ixo, did:web, etc.)
   const audiencePrincipal = createPrincipal(options.audience);
@@ -259,6 +261,7 @@ export async function createInvocation(options: {
     audience: audiencePrincipal,
     capability: options.capability,
     proofs: options.proofs ?? [],
+    expiration: options.expiration ?? Infinity,
   });
 }
 

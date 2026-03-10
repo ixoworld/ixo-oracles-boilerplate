@@ -1,0 +1,611 @@
+import { describe, expect, it } from 'vitest';
+import * as Client from '@ucanto/client';
+import { ed25519 } from '@ucanto/principal';
+import { createUCANValidator } from './validator.js';
+import { defineCapability, Schema } from '../capabilities/capability.js';
+import {
+  createDelegation,
+  createInvocation,
+  serializeInvocation,
+  type Capability,
+} from '../client/create-client.js';
+
+/**
+ * Helper: generate an ed25519 keypair
+ */
+async function keygen() {
+  const signer = await ed25519.Signer.generate();
+  return { signer, did: signer.did() };
+}
+
+/**
+ * Simple capability without caveats
+ */
+const TestRead = defineCapability({
+  can: 'test/read',
+  protocol: 'ixo:',
+});
+
+/**
+ * Capability with limit caveat
+ */
+const EmployeesRead = defineCapability({
+  can: 'employees/read',
+  protocol: 'myapp:',
+  nb: { limit: Schema.integer().optional() },
+  derives: (claimed, delegated) => {
+    const claimedLimit = claimed.nb?.limit ?? Infinity;
+    const delegatedLimit = delegated.nb?.limit ?? Infinity;
+    if (claimedLimit > delegatedLimit) {
+      return {
+        error: new Error(
+          `Cannot request limit=${claimedLimit}, delegation only allows limit=${delegatedLimit}`,
+        ),
+      };
+    }
+    return { ok: {} };
+  },
+});
+
+describe('UCAN Validator', () => {
+  describe('proofChain', () => {
+    it('should return single-element chain for direct root invocation', async () => {
+      const server = await keygen();
+      const root = await keygen();
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [root.did],
+      });
+
+      const invocation = Client.invoke({
+        issuer: root.signer,
+        audience: ed25519.Verifier.parse(server.did),
+        capability: {
+          can: 'test/read' as const,
+          with: `ixo:resource:123` as const,
+        },
+        proofs: [],
+      });
+
+      const serialized = await serializeInvocation(invocation);
+      const result = await validator.validate(
+        serialized,
+        TestRead,
+        'ixo:resource:123',
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.proofChain).toEqual([root.did]);
+    });
+
+    it('should return two-element chain for root -> user delegation', async () => {
+      const server = await keygen();
+      const root = await keygen();
+      const user = await keygen();
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [root.did],
+      });
+
+      const delegation = await Client.delegate({
+        issuer: root.signer,
+        audience: user.signer,
+        capabilities: [
+          {
+            can: 'test/read' as const,
+            with: 'ixo:resource:123' as const,
+          },
+        ],
+      });
+
+      const invocation = Client.invoke({
+        issuer: user.signer,
+        audience: ed25519.Verifier.parse(server.did),
+        capability: {
+          can: 'test/read' as const,
+          with: 'ixo:resource:123' as const,
+        },
+        proofs: [delegation],
+      });
+
+      const serialized = await serializeInvocation(invocation);
+      const result = await validator.validate(
+        serialized,
+        TestRead,
+        'ixo:resource:123',
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.proofChain).toEqual([root.did, user.did]);
+    });
+
+    it('should return three-element chain for root -> alice -> bob', async () => {
+      const server = await keygen();
+      const root = await keygen();
+      const alice = await keygen();
+      const bob = await keygen();
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [root.did],
+      });
+
+      const rootToAlice = await Client.delegate({
+        issuer: root.signer,
+        audience: alice.signer,
+        capabilities: [
+          {
+            can: 'test/read' as const,
+            with: 'ixo:resource:123' as const,
+          },
+        ],
+      });
+
+      const aliceToBob = await Client.delegate({
+        issuer: alice.signer,
+        audience: bob.signer,
+        capabilities: [
+          {
+            can: 'test/read' as const,
+            with: 'ixo:resource:123' as const,
+          },
+        ],
+        proofs: [rootToAlice],
+      });
+
+      const invocation = Client.invoke({
+        issuer: bob.signer,
+        audience: ed25519.Verifier.parse(server.did),
+        capability: {
+          can: 'test/read' as const,
+          with: 'ixo:resource:123' as const,
+        },
+        proofs: [aliceToBob],
+      });
+
+      const serialized = await serializeInvocation(invocation);
+      const result = await validator.validate(
+        serialized,
+        TestRead,
+        'ixo:resource:123',
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.proofChain).toEqual([root.did, alice.did, bob.did]);
+    });
+  });
+
+  describe('expiration', () => {
+    it('should return undefined expiration when no expiration is set (Infinity)', async () => {
+      const server = await keygen();
+      const root = await keygen();
+      const user = await keygen();
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [root.did],
+      });
+
+      // Using createDelegation/createInvocation which default to Infinity
+      const delegation = await createDelegation({
+        issuer: root.signer,
+        audience: user.did,
+        capabilities: [
+          {
+            can: 'test/read' as Capability['can'],
+            with: 'ixo:resource:123' as Capability['with'],
+          },
+        ],
+      });
+
+      const invocation = await createInvocation({
+        issuer: user.signer,
+        audience: server.did,
+        capability: {
+          can: 'test/read' as Capability['can'],
+          with: 'ixo:resource:123' as Capability['with'],
+        },
+        proofs: [delegation],
+      });
+
+      const serialized = await serializeInvocation(invocation);
+      const result = await validator.validate(
+        serialized,
+        TestRead,
+        'ixo:resource:123',
+      );
+
+      expect(result.ok).toBe(true);
+      // No expiration set → defaults to Infinity → filtered out
+      expect(result.expiration).toBeUndefined();
+    });
+
+    it('should return delegation expiration when set', async () => {
+      const server = await keygen();
+      const root = await keygen();
+      const user = await keygen();
+
+      const futureExp = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [root.did],
+      });
+
+      const delegation = await Client.delegate({
+        issuer: root.signer,
+        audience: user.signer,
+        capabilities: [
+          {
+            can: 'test/read' as const,
+            with: 'ixo:resource:123' as const,
+          },
+        ],
+        expiration: futureExp,
+      });
+
+      const invocation = Client.invoke({
+        issuer: user.signer,
+        audience: ed25519.Verifier.parse(server.did),
+        capability: {
+          can: 'test/read' as const,
+          with: 'ixo:resource:123' as const,
+        },
+        proofs: [delegation],
+      });
+
+      const serialized = await serializeInvocation(invocation);
+      const result = await validator.validate(
+        serialized,
+        TestRead,
+        'ixo:resource:123',
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.expiration).toBeDefined();
+      expect(result.expiration).toBeLessThanOrEqual(futureExp);
+    });
+
+    it('should return earliest expiration across the chain', async () => {
+      const server = await keygen();
+      const root = await keygen();
+      const alice = await keygen();
+      const bob = await keygen();
+
+      const laterExp = Math.floor(Date.now() / 1000) + 7200; // 2 hours
+      const earlierExp = Math.floor(Date.now() / 1000) + 3600; // 1 hour
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [root.did],
+      });
+
+      // Root -> Alice with later expiration
+      const rootToAlice = await Client.delegate({
+        issuer: root.signer,
+        audience: alice.signer,
+        capabilities: [
+          {
+            can: 'test/read' as const,
+            with: 'ixo:resource:123' as const,
+          },
+        ],
+        expiration: laterExp,
+      });
+
+      // Alice -> Bob with earlier expiration
+      const aliceToBob = await Client.delegate({
+        issuer: alice.signer,
+        audience: bob.signer,
+        capabilities: [
+          {
+            can: 'test/read' as const,
+            with: 'ixo:resource:123' as const,
+          },
+        ],
+        expiration: earlierExp,
+        proofs: [rootToAlice],
+      });
+
+      const invocation = Client.invoke({
+        issuer: bob.signer,
+        audience: ed25519.Verifier.parse(server.did),
+        capability: {
+          can: 'test/read' as const,
+          with: 'ixo:resource:123' as const,
+        },
+        proofs: [aliceToBob],
+      });
+
+      const serialized = await serializeInvocation(invocation);
+      const result = await validator.validate(
+        serialized,
+        TestRead,
+        'ixo:resource:123',
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.expiration).toBeDefined();
+      // Should be the earlier expiration (alice->bob's 1 hour, not root->alice's 2 hours)
+      expect(result.expiration).toBeLessThanOrEqual(earlierExp);
+    });
+  });
+
+  describe('validation failures', () => {
+    it('should reject malformed base64 input', async () => {
+      const server = await keygen();
+      const root = await keygen();
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [root.did],
+      });
+
+      const result = await validator.validate(
+        'not-valid-base64!!!',
+        TestRead,
+        'ixo:resource:123',
+      );
+
+      expect(result.ok).toBe(false);
+      expect(result.error?.code).toBe('INVALID_FORMAT');
+    });
+
+    it('should reject invocation with wrong audience', async () => {
+      const server = await keygen();
+      const wrongServer = await keygen();
+      const root = await keygen();
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [root.did],
+      });
+
+      // Invocation addressed to wrong server
+      const invocation = Client.invoke({
+        issuer: root.signer,
+        audience: ed25519.Verifier.parse(wrongServer.did),
+        capability: {
+          can: 'test/read' as const,
+          with: 'ixo:resource:123' as const,
+        },
+        proofs: [],
+      });
+
+      const serialized = await serializeInvocation(invocation);
+      const result = await validator.validate(
+        serialized,
+        TestRead,
+        'ixo:resource:123',
+      );
+
+      expect(result.ok).toBe(false);
+      expect(result.error?.code).toBe('UNAUTHORIZED');
+    });
+
+    it('should reject invocation with untrusted root', async () => {
+      const server = await keygen();
+      const trustedRoot = await keygen();
+      const untrustedRoot = await keygen();
+      const user = await keygen();
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [trustedRoot.did], // Only trustedRoot is trusted
+      });
+
+      // Delegation from untrusted root
+      const delegation = await Client.delegate({
+        issuer: untrustedRoot.signer,
+        audience: user.signer,
+        capabilities: [
+          {
+            can: 'test/read' as const,
+            with: 'ixo:resource:123' as const,
+          },
+        ],
+      });
+
+      const invocation = Client.invoke({
+        issuer: user.signer,
+        audience: ed25519.Verifier.parse(server.did),
+        capability: {
+          can: 'test/read' as const,
+          with: 'ixo:resource:123' as const,
+        },
+        proofs: [delegation],
+      });
+
+      const serialized = await serializeInvocation(invocation);
+      const result = await validator.validate(
+        serialized,
+        TestRead,
+        'ixo:resource:123',
+      );
+
+      expect(result.ok).toBe(false);
+      expect(result.error?.code).toBe('UNAUTHORIZED');
+    });
+
+    it('should reject invocation with mismatched resource', async () => {
+      const server = await keygen();
+      const root = await keygen();
+      const user = await keygen();
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [root.did],
+      });
+
+      const delegation = await Client.delegate({
+        issuer: root.signer,
+        audience: user.signer,
+        capabilities: [
+          {
+            can: 'test/read' as const,
+            with: 'ixo:resource:123' as const,
+          },
+        ],
+      });
+
+      const invocation = Client.invoke({
+        issuer: user.signer,
+        audience: ed25519.Verifier.parse(server.did),
+        capability: {
+          can: 'test/read' as const,
+          with: 'ixo:resource:123' as const,
+        },
+        proofs: [delegation],
+      });
+
+      const serialized = await serializeInvocation(invocation);
+      // Validate against a different resource than what was delegated
+      const result = await validator.validate(
+        serialized,
+        TestRead,
+        'ixo:resource:999',
+      );
+
+      expect(result.ok).toBe(false);
+      expect(result.error?.code).toBe('UNAUTHORIZED');
+    });
+  });
+
+  describe('caveat validation', () => {
+    it('should pass when caveats are within bounds', async () => {
+      const server = await keygen();
+      const root = await keygen();
+      const user = await keygen();
+
+      const resource = `myapp:${server.did}` as const;
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [root.did],
+      });
+
+      const delegation = await Client.delegate({
+        issuer: root.signer,
+        audience: user.signer,
+        capabilities: [
+          {
+            can: 'employees/read' as const,
+            with: resource,
+            nb: { limit: 50 },
+          },
+        ],
+      });
+
+      const invocation = Client.invoke({
+        issuer: user.signer,
+        audience: ed25519.Verifier.parse(server.did),
+        capability: {
+          can: 'employees/read' as const,
+          with: resource,
+          nb: { limit: 25 },
+        },
+        proofs: [delegation],
+      });
+
+      const serialized = await serializeInvocation(invocation);
+      const result = await validator.validate(
+        serialized,
+        EmployeesRead,
+        resource,
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.capability?.nb?.limit).toBe(25);
+    });
+
+    it('should reject when caveats exceed delegated bounds', async () => {
+      const server = await keygen();
+      const root = await keygen();
+      const user = await keygen();
+
+      const resource = `myapp:${server.did}` as const;
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [root.did],
+      });
+
+      const delegation = await Client.delegate({
+        issuer: root.signer,
+        audience: user.signer,
+        capabilities: [
+          {
+            can: 'employees/read' as const,
+            with: resource,
+            nb: { limit: 25 },
+          },
+        ],
+      });
+
+      // User tries to exceed their limit
+      const invocation = Client.invoke({
+        issuer: user.signer,
+        audience: ed25519.Verifier.parse(server.did),
+        capability: {
+          can: 'employees/read' as const,
+          with: resource,
+          nb: { limit: 100 },
+        },
+        proofs: [delegation],
+      });
+
+      const serialized = await serializeInvocation(invocation);
+      const result = await validator.validate(
+        serialized,
+        EmployeesRead,
+        resource,
+      );
+
+      expect(result.ok).toBe(false);
+      expect(result.error?.code).toBe('CAVEAT_VIOLATION');
+    });
+  });
+
+  describe('replay protection', () => {
+    it('should reject replayed invocations', async () => {
+      const server = await keygen();
+      const root = await keygen();
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [root.did],
+      });
+
+      const invocation = Client.invoke({
+        issuer: root.signer,
+        audience: ed25519.Verifier.parse(server.did),
+        capability: {
+          can: 'test/read' as const,
+          with: 'ixo:resource:123' as const,
+        },
+        proofs: [],
+      });
+
+      const serialized = await serializeInvocation(invocation);
+
+      // First validation should pass
+      const result1 = await validator.validate(
+        serialized,
+        TestRead,
+        'ixo:resource:123',
+      );
+      expect(result1.ok).toBe(true);
+
+      // Second validation (replay) should fail
+      const result2 = await validator.validate(
+        serialized,
+        TestRead,
+        'ixo:resource:123',
+      );
+      expect(result2.ok).toBe(false);
+      expect(result2.error?.code).toBe('REPLAY');
+    });
+  });
+});

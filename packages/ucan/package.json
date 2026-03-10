@@ -1,7 +1,7 @@
 {
   "name": "@ixo/ucan",
   "description": "UCAN authorization for any service - built on ucanto",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "private": false,
   "publishConfig": {
     "access": "public"
@@ -48,7 +48,8 @@
     "@ixo/vitest-config": "workspace:*",
     "@types/node": "^22.10.5",
     "tsx": "^4.7.0",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "vitest": "^3.2.4"
   },
   "dependencies": {
     "@ucanto/client": "9.0.2",
