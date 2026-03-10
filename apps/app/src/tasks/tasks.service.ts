@@ -364,7 +364,7 @@ export class TasksService {
 
         // Get max allowed claim amount from oracle pricing list
         const oraclePricingList = await Payments.getOraclePricingList(
-          this.configService.getOrThrow('ORACLE_DID'),
+          this.configService.getOrThrow('ORACLE_ENTITY_DID'),
         );
         const maxAllowedClaimAmount = oraclePricingList.find(
           (item) => item.denom === this.denom,

@@ -1,9 +1,4 @@
-import {
-  getOpenRouterChatModel,
-  jsonToYaml,
-  parserActionTool,
-  parserBrowserTool,
-} from '@ixo/common';
+import { jsonToYaml, parserActionTool, parserBrowserTool } from '@ixo/common';
 import { type IRunnableConfigWithRequiredFields } from '@ixo/matrix';
 import { OpenIdTokenProvider } from '@ixo/oracles-chain-client';
 import { SqliteSaver } from '@ixo/sqlite-saver';
@@ -11,7 +6,7 @@ import { Logger } from '@nestjs/common';
 import { createAgent, type ReactAgent, toolRetryMiddleware } from 'langchain';
 import { getConfig } from 'src/config';
 import { type UcanService } from 'src/ucan/ucan.service';
-import { createSafetyGuardrailMiddleware } from '../middlewares/safety-guardrail-middleware';
+
 import { createTokenLimiterMiddleware } from '../middlewares/token-limiter-middelware';
 import { createToolValidationMiddleware } from '../middlewares/tool-validation-middleware';
 import {
@@ -40,6 +35,7 @@ import {
 import { SecretsService } from 'src/secrets/secrets.service';
 import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 import oracleConfig from '../../../../../config.json';
+import { getProviderChatModel } from '../llm-provider';
 import {
   createMCPClient,
   createMCPClientAndGetTools,
@@ -70,23 +66,7 @@ interface InvokeMainAgentParams {
 }
 
 const configService = getConfig();
-const llm = getOpenRouterChatModel({
-  model: 'openai/gpt-oss-120b:nitro',
-  // model: 'moonshotai/kimi-k2.5',
-  // model: 'minimax/minimax-m2.5',
-  __includeRawResponse: true,
-  modelKwargs: {
-    require_parameters: true,
-    include_reasoning: true,
-    models: ['google/gemini-2.5-flash-lite:nitro', 'z-ai/glm-5'],
-    provider: {
-      sort: 'latency',
-    },
-  },
-  reasoning: {
-    effort: 'medium',
-  },
-});
+const llm = getProviderChatModel('main', {});
 
 const oracleMatrixBaseUrl = configService
   .getOrThrow('MATRIX_BASE_URL')
@@ -439,11 +419,7 @@ Promise<ReactAgent<any>> => {
   // Build middleware list conditionally
   const disableCredits = configService.get('DISABLE_CREDITS');
 
-  const middleware = [
-    createToolValidationMiddleware(),
-    toolRetryMiddleware(),
-    createSafetyGuardrailMiddleware(),
-  ];
+  const middleware = [createToolValidationMiddleware(), toolRetryMiddleware()];
 
   if (!disableCredits) {
     middleware.push(createTokenLimiterMiddleware());

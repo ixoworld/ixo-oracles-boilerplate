@@ -7,6 +7,7 @@ import {
 } from 'langchain';
 import { getConfig } from 'src/config';
 import { TokenLimiter, TokenLimiterError } from 'src/utils/token-limit-handler';
+import { getModelPricing } from '../llm-provider';
 import { contextSchema, type TChatNodeContext } from '../types';
 
 const config = getConfig();
@@ -71,12 +72,48 @@ const createTokenLimiterMiddleware = (): AgentMiddleware => {
         const { input_tokens, output_tokens, total_tokens } =
           lastMessage.usage_metadata;
 
-        Logger.debug('Token usage', {
-          input_tokens,
-          output_tokens,
-          total_tokens,
-        });
-        const credits = TokenLimiter.llmTokenToCredits(total_tokens);
+        // Priority 1: Use exact USD cost from provider (OpenRouter includes this)
+        const responseMeta = lastMessage.response_metadata as
+          | { usage?: { cost?: number }; model?: string }
+          | undefined;
+        const providerCost =
+          typeof responseMeta?.usage?.cost === 'number'
+            ? responseMeta.usage.cost
+            : undefined;
+
+        let credits: number;
+        if (providerCost != null && providerCost > 0) {
+          credits = TokenLimiter.usdCostToCredits(providerCost);
+          Logger.log(
+            `[TokenLimiter] Using provider cost: $${providerCost} → ${credits} credits`,
+          );
+        } else {
+          // Priority 2: Per-model pricing from cache
+          const model = responseMeta?.model;
+          const pricing = model ? getModelPricing(model) : null;
+
+          if (pricing) {
+            credits = TokenLimiter.llmTokenToCreditsWithPricing(
+              input_tokens,
+              output_tokens,
+              pricing,
+            );
+            Logger.log(
+              `[TokenLimiter] Using cached pricing for model=${model} → ${credits} credits`,
+            );
+          } else {
+            // Priority 3: Flat-rate fallback
+            credits = TokenLimiter.llmTokenToCredits(total_tokens);
+            Logger.log(
+              `[TokenLimiter] Using flat-rate fallback (model=${model ?? 'unknown'}) → ${credits} credits`,
+            );
+          }
+        }
+
+        Logger.log(
+          `[TokenLimiter] input=${input_tokens} output=${output_tokens} total=${total_tokens} | credits=${credits}`,
+        );
+
         const result = await TokenLimiter.limit(userDid, credits);
 
         Logger.debug('Token limit result', { result });

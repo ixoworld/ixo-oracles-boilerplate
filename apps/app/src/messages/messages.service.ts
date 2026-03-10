@@ -40,6 +40,7 @@ import { type ENV } from 'src/types';
 import { UcanService } from 'src/ucan/ucan.service';
 import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 import { normalizeDid } from 'src/utils/header.utils';
+import { TokenLimiter } from 'src/utils/token-limit-handler';
 import { runWithSSEContext } from 'src/utils/sse-context';
 import {
   formatSSE,
@@ -562,12 +563,38 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
           }
         }
 
-        const { texts, metadata } =
+        const { texts, metadata, totalUsage } =
           await this.fileProcessingService.processAttachments(
             params.attachments!,
             roomId,
             sandboxConfig,
           );
+
+        // Deduct credits for file processing API calls
+        if (totalUsage && !this.config.get('DISABLE_CREDITS')) {
+          try {
+            const credits =
+              totalUsage.cost > 0
+                ? TokenLimiter.usdCostToCredits(totalUsage.cost)
+                : TokenLimiter.llmTokenToCredits(
+                    totalUsage.promptTokens + totalUsage.completionTokens,
+                  );
+            if (credits > 0 && params.did) {
+              await TokenLimiter.limit(params.did, credits);
+              Logger.log(
+                `[FileProcessing] Deducted ${credits} credits (did=${params.did})`,
+                'MessagesService',
+              );
+            }
+          } catch (error) {
+            // Non-blocking: file was already processed, log and continue
+            Logger.warn(
+              `[FileProcessing] Failed to deduct credits: ${error instanceof Error ? error.message : String(error)}`,
+              'MessagesService',
+            );
+          }
+        }
+
         Logger.log(
           `sendMessage: attachments processed — ${texts.length} text result(s), creating separate messages`,
           'MessagesService',
@@ -794,13 +821,16 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
                             choices?: Array<{
                               delta?: {
                                 reasoning?: string;
+                                reasoning_content?: string;
                                 reasoning_details?: unknown;
                               };
                             }>;
                           }
                         | undefined;
+
+                      const delta = rawResponse?.choices?.[0]?.delta;
                       const reasoning =
-                        rawResponse?.choices?.[0]?.delta?.reasoning;
+                        delta?.reasoning ?? delta?.reasoning_content;
                       if (reasoning && isChatNode) {
                         if (reasoning && reasoning.trim()) {
                           // Use cleanAdditionalKwargs to extract and clean reasoning details

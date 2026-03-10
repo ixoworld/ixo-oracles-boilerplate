@@ -2,7 +2,12 @@ import { Logger } from '@ixo/logger';
 import { MatrixManager } from '@ixo/matrix';
 import { getMatrixHomeServerCroppedForDid } from '@ixo/oracles-chain-client';
 import { type Database } from 'better-sqlite3';
-import { getChatOpenAiModel } from '../../ai/index.js';
+import {
+  getChatOpenAiModel,
+  getLLMProvider,
+  getOpenRouterChatModel,
+  getProviderConfig,
+} from '../../ai/index.js';
 import { type MemoryEngineService } from '../memory-engine/memory-engine.service.js';
 import { type UserContextData } from '../memory-engine/types.js';
 import {
@@ -41,15 +46,25 @@ export class SessionManagerService {
     if (messages.length === 0) {
       return 'Untitled';
     }
-    const llm = getChatOpenAiModel({
-      model: 'meta-llama/llama-3.1-8b-instruct',
-      temperature: 0.3,
-      apiKey: process.env.OPEN_ROUTER_API_KEY,
-      timeout: 20 * 1000 * 60, // 20 minutes
-      configuration: {
-        baseURL: 'https://openrouter.ai/api/v1',
-      },
-    });
+    const provider = getLLMProvider();
+    const config = getProviderConfig();
+
+    const llm =
+      provider === 'openrouter'
+        ? getOpenRouterChatModel({
+            model: 'meta-llama/llama-3.1-8b-instruct',
+            temperature: 0.3,
+            timeout: 60_000,
+          })
+        : getChatOpenAiModel({
+            model: 'meta-llama/Meta-Llama-3.1-8B-Instruct',
+            temperature: 0.3,
+            apiKey: config.apiKey,
+            timeout: 60_000,
+            configuration: {
+              baseURL: config.baseURL,
+            },
+          });
     const response = await llm.invoke(
       `Based on this messages messages, Add a title for this convo and only based on the messages? MAKE SURE TO ONLY RESPOND WITH THE TITLE.
 

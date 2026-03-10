@@ -15,7 +15,11 @@ export function cleanAdditionalKwargs(
   const rawResponse = additionalKwargs.__raw_response as
     | {
         choices?: Array<{
-          delta?: { reasoning?: string; reasoning_details?: unknown };
+          delta?: {
+            reasoning?: string;
+            reasoning_content?: string | null;
+            reasoning_details?: unknown;
+          };
         }>;
       }
     | undefined;
@@ -23,7 +27,7 @@ export function cleanAdditionalKwargs(
   // Check if reasoning exists in the response
   // Reasoning will not be present in all AI responses, only when the model supports it
   const delta = rawResponse?.choices?.[0]?.delta;
-  const reasoning = delta?.reasoning;
+  const reasoning = delta?.reasoning ?? delta?.reasoning_content;
   const reasoningDetails = reasoning ? delta?.reasoning_details : undefined;
 
   // Return cleaned additional_kwargs with only essential fields

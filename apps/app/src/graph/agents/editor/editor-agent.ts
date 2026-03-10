@@ -1,4 +1,4 @@
-import { getOpenRouterChatModel } from '@ixo/common';
+import { getProviderChatModel } from '../../llm-provider';
 import { type StructuredTool } from 'langchain';
 
 import type { AgentSpec } from '../subagent-as-tool';
@@ -11,11 +11,9 @@ import { EditorMatrixClient } from './editor-mx';
 import { editorAgentPrompt, editorAgentReadOnlyPrompt } from './prompts';
 import { Logger } from '@nestjs/common';
 
-const llm = getOpenRouterChatModel({
-  model: 'openai/gpt-oss-120b:nitro',
+const llm = getProviderChatModel('main', {
   __includeRawResponse: true,
   modelKwargs: {
-    require_parameters: true,
     include_reasoning: true,
   },
   reasoning: {

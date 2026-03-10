@@ -1,13 +1,11 @@
-import { getOpenRouterChatModel } from '@ixo/common';
+import { getProviderChatModel } from '../llm-provider';
 import { type DynamicStructuredTool, type StructuredTool } from 'langchain';
 
 import type { AgentSpec } from './subagent-as-tool';
 
-const llm = getOpenRouterChatModel({
-  model: 'openai/gpt-oss-120b:nitro',
+const llm = getProviderChatModel('subagent', {
   __includeRawResponse: true,
   modelKwargs: {
-    require_parameters: true,
     include_reasoning: true,
   },
   reasoning: {

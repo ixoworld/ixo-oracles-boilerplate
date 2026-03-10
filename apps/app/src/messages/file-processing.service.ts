@@ -1,14 +1,25 @@
 import { loadFileFromBuffer } from '@ixo/common';
+import { getModelForRole, getProviderConfig } from 'src/graph/llm-provider';
 import { MatrixManager } from '@ixo/matrix';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { type ENV } from 'src/types';
 import { type AttachmentDto } from './dto/send-message.dto';
 
+interface AiProcessUsage {
+  cost?: number;
+  promptTokens?: number;
+  completionTokens?: number;
+}
+
+interface AiProcessResult {
+  content: string;
+  usage?: AiProcessUsage;
+}
+
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB per file
 const MAX_TOTAL_SIZE = 50 * 1024 * 1024; // 50MB total across all attachments
 const MAX_TEXT_LENGTH = 50_000;
-const DEFAULT_FILE_PROCESSING_MODEL = 'google/gemini-2.5-flash-lite';
 const MATRIX_DOWNLOAD_TIMEOUT_MS = 60_000; // 60s
 const AI_PROCESS_TIMEOUT_MS = 120_000; // 120s
 const MAX_ERROR_BODY_LENGTH = 1024; // Cap error response bodies
@@ -49,6 +60,9 @@ const MAGIC_BYTES: Array<{
   { bytes: [0xff, 0xd8, 0xff], mime: 'image/jpeg' },
   { bytes: [0x47, 0x49, 0x46, 0x38], mime: 'image/gif' },
   { bytes: [0x52, 0x49, 0x46, 0x46], mime: 'image/webp' }, // RIFF (WebP container)
+  { bytes: [0x42, 0x4d], mime: 'image/bmp' }, // BMP
+  { bytes: [0x49, 0x49, 0x2a, 0x00], mime: 'image/tiff' }, // TIFF little-endian
+  { bytes: [0x4d, 0x4d, 0x00, 0x2a], mime: 'image/tiff' }, // TIFF big-endian
   // Documents
   { bytes: [0x25, 0x50, 0x44, 0x46], mime: 'application/pdf' },
   { bytes: [0x50, 0x4b, 0x03, 0x04], mime: 'application/zip' }, // ZIP (docx, xlsx, etc.)
@@ -73,6 +87,8 @@ const MAGIC_MIME_CATEGORIES: Record<string, FileCategory[]> = {
   'image/jpeg': ['image'],
   'image/gif': ['image'],
   'image/webp': ['image'],
+  'image/bmp': ['image'],
+  'image/tiff': ['image'],
   'application/pdf': ['document'],
   'application/zip': ['document'], // docx/xlsx are ZIP archives
   'application/msword': ['document'],
@@ -120,12 +136,17 @@ const PROMPTS: Record<Exclude<FileCategory, 'unsupported'>, string> = {
 @Injectable()
 export class FileProcessingService {
   private readonly logger = new Logger(FileProcessingService.name);
-  private readonly openRouterApiKey: string;
+  private readonly providerApiKey: string;
+  private readonly providerBaseURL: string;
+  private readonly providerHeaders: Record<string, string>;
   private readonly processingModel: string;
 
   constructor(private readonly config: ConfigService<ENV>) {
-    this.openRouterApiKey = this.config.getOrThrow('OPEN_ROUTER_API_KEY');
-    this.processingModel = DEFAULT_FILE_PROCESSING_MODEL;
+    const providerCfg = getProviderConfig();
+    this.providerApiKey = providerCfg.apiKey;
+    this.providerBaseURL = providerCfg.baseURL.replace(/\/+$/, '');
+    this.providerHeaders = providerCfg.headers;
+    this.processingModel = getModelForRole('vision');
   }
 
   /**
@@ -203,7 +224,15 @@ export class FileProcessingService {
     attachments: AttachmentDto[],
     roomId: string,
     sandboxConfig?: SandboxUploadConfig,
-  ): Promise<{ texts: string[]; metadata: ProcessedAttachment[] }> {
+  ): Promise<{
+    texts: string[];
+    metadata: ProcessedAttachment[];
+    totalUsage: {
+      cost: number;
+      promptTokens: number;
+      completionTokens: number;
+    };
+  }> {
     this.logger.log(
       `Processing ${attachments.length} attachment(s) in room ${roomId}`,
     );
@@ -226,7 +255,7 @@ export class FileProcessingService {
           `Attachment: "${attachment.filename}" (${attachment.mimetype}, ${attachment.size ?? 'unknown'} bytes) — source: ${attachment.eventId ? `eventId=${attachment.eventId}` : `mxcUri=${attachment.mxcUri}`}`,
         );
         try {
-          const { text, downloadedSize, sandboxPath } =
+          const { text, downloadedSize, sandboxPath, usage } =
             await this.processAttachment(attachment, 0, roomId, sandboxConfig);
           this.logger.log(
             `Attachment "${attachment.filename}" processed — downloaded ${downloadedSize} bytes, text extracted: ${text ? text.length + ' chars' : 'none'}`,
@@ -235,6 +264,7 @@ export class FileProcessingService {
           return {
             text,
             downloadedSize,
+            usage,
             metadata: text
               ? {
                   filename: attachment.filename,
@@ -286,6 +316,7 @@ export class FileProcessingService {
 
     const texts: string[] = [];
     const metadata: ProcessedAttachment[] = [];
+    const totalUsage = { cost: 0, promptTokens: 0, completionTokens: 0 };
     for (const result of results) {
       if (result.text) {
         texts.push(result.text);
@@ -293,13 +324,19 @@ export class FileProcessingService {
       if (result.metadata) {
         metadata.push(result.metadata);
       }
+      if (result.usage) {
+        totalUsage.cost += result.usage.cost ?? 0;
+        totalUsage.promptTokens += result.usage.promptTokens ?? 0;
+        totalUsage.completionTokens += result.usage.completionTokens ?? 0;
+      }
     }
 
+    const aiCallsMade = results.filter((r) => r.usage).length;
     this.logger.log(
-      `Attachments done — ${texts.length} text result(s), total downloaded: ${totalDownloaded} bytes`,
+      `Attachments done — ${texts.length} text result(s), ${aiCallsMade} AI call(s), total downloaded: ${totalDownloaded} bytes, usage: cost=$${totalUsage.cost} tokens=${totalUsage.promptTokens + totalUsage.completionTokens}`,
     );
 
-    return { texts, metadata };
+    return { texts, metadata, totalUsage };
   }
 
   private async processAttachment(
@@ -311,6 +348,7 @@ export class FileProcessingService {
     text: string | null;
     downloadedSize: number;
     sandboxPath?: string;
+    usage?: AiProcessUsage;
   }> {
     // Validate that at least one source is provided
     if (!attachment.eventId && !attachment.mxcUri) {
@@ -353,22 +391,22 @@ export class FileProcessingService {
       /^https?:\/\//i.test(attachment.mxcUri);
     if (isHttpUrl && (category === 'image' || category === 'video')) {
       try {
-        const description = await this.aiProcessFromUrl(
+        const { content, usage } = await this.aiProcessFromUrl(
           attachment.mxcUri!,
           attachment.mimetype,
           category,
           attachment.filename,
         );
-        if (description && description.trim().length > 0) {
+        if (content && content.trim().length > 0) {
           const label = category === 'image' ? 'Description' : 'Description';
           const text = this.formatContent(
             label,
             this.sanitizeFilename(attachment.filename),
-            description,
+            content,
           );
           // No buffer downloaded, so downloadedSize is 0 for budget tracking
           // Sandbox upload skipped (no buffer), but text is still available
-          return { text, downloadedSize: 0 };
+          return { text, downloadedSize: 0, usage };
         }
       } catch (error) {
         this.logger.warn(
@@ -397,18 +435,19 @@ export class FileProcessingService {
     this.verifyMagicBytes(buffer, category, attachment);
 
     let text: string;
+    let usage: AiProcessUsage | undefined;
     switch (category) {
       case 'document':
-        text = await this.processDocument(buffer, attachment);
+        ({ text, usage } = await this.processDocument(buffer, attachment));
         break;
       case 'image':
-        text = await this.processImage(buffer, attachment);
+        ({ text, usage } = await this.processImage(buffer, attachment));
         break;
       case 'audio':
-        text = await this.processAudio(buffer, attachment);
+        ({ text, usage } = await this.processAudio(buffer, attachment));
         break;
       case 'video':
-        text = await this.processVideo(buffer, attachment);
+        ({ text, usage } = await this.processVideo(buffer, attachment));
         break;
     }
 
@@ -429,19 +468,62 @@ export class FileProcessingService {
         this.logger.log(
           `Attachment "${attachment.filename}" uploaded to sandbox at ${actualPath}`,
         );
+
+        // For AI-processed files (image/video/audio), save analysis as .md
+        let analysisPath: string | undefined;
+        if (
+          category === 'image' ||
+          category === 'video' ||
+          category === 'audio'
+        ) {
+          const analysisContent = this.buildAnalysisMarkdown(
+            safeName,
+            attachment.mimetype,
+            buffer.length,
+            category,
+            text,
+          );
+          const analysisBuf = Buffer.from(analysisContent, 'utf-8');
+          const analysisFilename = `${safeName.replace(/\.[^.]+$/, '')}-analysis.md`;
+          const analysisDestPath = `${SANDBOX_OUTPUT_PREFIX}/${analysisFilename}`;
+          try {
+            await this.uploadToSandbox(
+              analysisBuf,
+              analysisFilename,
+              analysisDestPath,
+              sandboxConfig,
+              'text/markdown',
+            );
+            analysisPath = this.sanitizeSandboxPath(analysisDestPath);
+            this.logger.log(
+              `Analysis for "${attachment.filename}" saved to sandbox at ${analysisPath}`,
+            );
+          } catch (error) {
+            this.logger.warn(
+              `Analysis .md upload failed for "${attachment.filename}": ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
+        }
+
         if (text.length > SANDBOX_TRUNCATE_LIMIT) {
+          const paths = analysisPath
+            ? `\n\n[Full analysis saved to sandbox at ${analysisPath}]\n[Original file saved to sandbox at ${actualPath}]`
+            : `\n\n[Full file saved to sandbox at ${actualPath}]`;
           return {
-            text:
-              text.slice(0, SANDBOX_TRUNCATE_LIMIT) +
-              `\n\n[Full file saved to sandbox at ${actualPath}]`,
+            text: text.slice(0, SANDBOX_TRUNCATE_LIMIT) + paths,
             downloadedSize: buffer.length,
             sandboxPath: actualPath,
+            usage,
           };
         }
+        const suffix = analysisPath
+          ? `\n\n[Analysis saved to sandbox at ${analysisPath}]\n[File also saved to sandbox at ${actualPath}]`
+          : `\n\n[File also saved to sandbox at ${actualPath}]`;
         return {
-          text: text + `\n\n[File also saved to sandbox at ${actualPath}]`,
+          text: text + suffix,
           downloadedSize: buffer.length,
           sandboxPath: actualPath,
+          usage,
         };
       } catch (error) {
         this.logger.warn(
@@ -452,11 +534,12 @@ export class FileProcessingService {
             text +
             `\n\n[Warning: sandbox upload failed — file content is included above]`,
           downloadedSize: buffer.length,
+          usage,
         };
       }
     }
 
-    return { text, downloadedSize: buffer.length };
+    return { text, downloadedSize: buffer.length, usage };
   }
 
   private async downloadFromMatrix(mxcUri: string): Promise<Buffer> {
@@ -734,8 +817,7 @@ export class FileProcessingService {
     attachment: AttachmentDto,
   ): void {
     // Text-based document types don't have magic bytes — skip check
-    const textMimes = ['text/plain', 'text/markdown', 'text/html', 'text/csv'];
-    if (textMimes.includes(attachment.mimetype)) {
+    if (this.isPlainTextType(attachment.mimetype)) {
       return;
     }
 
@@ -768,32 +850,34 @@ export class FileProcessingService {
 
   private isDocumentType(mimetype: string): boolean {
     return (
+      mimetype.startsWith('text/') ||
       mimetype === 'application/pdf' ||
       mimetype === 'application/msword' ||
-      mimetype.startsWith(
-        'application/vnd.openxmlformats-officedocument.wordprocessingml',
-      ) ||
-      mimetype === 'text/plain' ||
-      mimetype === 'text/markdown' ||
-      mimetype === 'text/html' ||
-      mimetype === 'text/csv'
+      mimetype === 'application/json' ||
+      mimetype === 'application/xml' ||
+      mimetype === 'application/rtf' ||
+      mimetype.startsWith('application/vnd.openxmlformats-officedocument.') ||
+      mimetype === 'application/vnd.ms-excel' ||
+      mimetype === 'application/vnd.ms-powerpoint'
     );
   }
 
   private async processDocument(
     buffer: Buffer,
     attachment: AttachmentDto,
-  ): Promise<string> {
+  ): Promise<{ text: string; usage?: AiProcessUsage }> {
     const safeFilename = this.sanitizeFilename(attachment.filename);
 
-    // CSV is plain text — parse directly, no AI needed
-    if (attachment.mimetype === 'text/csv') {
+    // Plain-text types — parse directly, no AI needed
+    if (this.isPlainTextType(attachment.mimetype)) {
       const text = buffer.toString('utf-8');
-      return this.formatContent(
-        'Content',
-        safeFilename,
-        this.truncateText(text),
-      );
+      return {
+        text: this.formatContent(
+          'Content',
+          safeFilename,
+          this.truncateText(text),
+        ),
+      };
     }
 
     // Try local parsing first (free)
@@ -805,11 +889,13 @@ export class FileProcessingService {
       );
       const text = docs.map((doc) => doc.pageContent).join('\n\n');
       if (text.trim().length > 0) {
-        return this.formatContent(
-          'Content',
-          safeFilename,
-          this.truncateText(text),
-        );
+        return {
+          text: this.formatContent(
+            'Content',
+            safeFilename,
+            this.truncateText(text),
+          ),
+        };
       }
     } catch (error) {
       this.logger.warn(
@@ -818,64 +904,76 @@ export class FileProcessingService {
     }
 
     // Fallback: send to AI model for extraction
-    const description = await this.aiProcess(
+    const { content, usage } = await this.aiProcess(
       buffer,
       attachment.mimetype,
       'document',
       attachment.filename,
     );
-    return this.formatContent('Content', safeFilename, description);
+    return {
+      text: this.formatContent('Content', safeFilename, content),
+      usage,
+    };
   }
 
   private async processImage(
     buffer: Buffer,
     attachment: AttachmentDto,
-  ): Promise<string> {
-    const description = await this.aiProcess(
+  ): Promise<{ text: string; usage?: AiProcessUsage }> {
+    const { content, usage } = await this.aiProcess(
       buffer,
       attachment.mimetype,
       'image',
       attachment.filename,
     );
-    return this.formatContent(
-      'Description',
-      this.sanitizeFilename(attachment.filename),
-      description,
-    );
+    return {
+      text: this.formatContent(
+        'Description',
+        this.sanitizeFilename(attachment.filename),
+        content,
+      ),
+      usage,
+    };
   }
 
   private async processAudio(
     buffer: Buffer,
     attachment: AttachmentDto,
-  ): Promise<string> {
-    const transcription = await this.aiProcess(
+  ): Promise<{ text: string; usage?: AiProcessUsage }> {
+    const { content, usage } = await this.aiProcess(
       buffer,
       attachment.mimetype,
       'audio',
       attachment.filename,
     );
-    return this.formatContent(
-      'Transcription',
-      this.sanitizeFilename(attachment.filename),
-      transcription,
-    );
+    return {
+      text: this.formatContent(
+        'Transcription',
+        this.sanitizeFilename(attachment.filename),
+        content,
+      ),
+      usage,
+    };
   }
 
   private async processVideo(
     buffer: Buffer,
     attachment: AttachmentDto,
-  ): Promise<string> {
-    const description = await this.aiProcess(
+  ): Promise<{ text: string; usage?: AiProcessUsage }> {
+    const { content, usage } = await this.aiProcess(
       buffer,
       attachment.mimetype,
       'video',
       attachment.filename,
     );
-    return this.formatContent(
-      'Description',
-      this.sanitizeFilename(attachment.filename),
-      description,
-    );
+    return {
+      text: this.formatContent(
+        'Description',
+        this.sanitizeFilename(attachment.filename),
+        content,
+      ),
+      usage,
+    };
   }
 
   /**
@@ -887,7 +985,7 @@ export class FileProcessingService {
     _mimetype: string,
     category: 'image' | 'video',
     _filename: string,
-  ): Promise<string> {
+  ): Promise<AiProcessResult> {
     const prompt = PROMPTS[category];
 
     const contentParts: Record<string, unknown>[] = [
@@ -913,28 +1011,24 @@ export class FileProcessingService {
     );
 
     try {
-      const response = await fetch(
-        'https://openrouter.ai/api/v1/chat/completions',
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${this.openRouterApiKey}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer': 'oracle-app.com',
-            'X-Title': this.config.get('ORACLE_NAME') ?? 'Oracle App',
-          },
-          body: JSON.stringify({
-            model: this.processingModel,
-            messages: [
-              {
-                role: 'user',
-                content: contentParts,
-              },
-            ],
-          }),
-          signal: abortController.signal,
+      const response = await fetch(`${this.providerBaseURL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.providerApiKey}`,
+          'Content-Type': 'application/json',
+          ...this.providerHeaders,
         },
-      );
+        body: JSON.stringify({
+          model: this.processingModel,
+          messages: [
+            {
+              role: 'user',
+              content: contentParts,
+            },
+          ],
+        }),
+        signal: abortController.signal,
+      });
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -946,9 +1040,29 @@ export class FileProcessingService {
 
       const result = (await response.json()) as {
         choices: Array<{ message: { content: string } }>;
+        usage?: {
+          prompt_tokens?: number;
+          completion_tokens?: number;
+          total_tokens?: number;
+          cost?: number;
+        };
+        model?: string;
       };
 
-      return result.choices[0]?.message?.content ?? '';
+      this.logger.log(
+        `[aiProcessFromUrl] model=${result.model ?? 'unknown'} usage=${JSON.stringify(result.usage ?? null)}`,
+      );
+
+      return {
+        content: result.choices[0]?.message?.content ?? '',
+        usage: result.usage
+          ? {
+              cost: result.usage.cost,
+              promptTokens: result.usage.prompt_tokens,
+              completionTokens: result.usage.completion_tokens,
+            }
+          : undefined,
+      };
     } finally {
       clearTimeout(timeout);
     }
@@ -959,7 +1073,7 @@ export class FileProcessingService {
     mimetype: string,
     category: Exclude<FileCategory, 'unsupported'>,
     filename: string,
-  ): Promise<string> {
+  ): Promise<AiProcessResult> {
     const base64 = buffer.toString('base64');
     const dataUri = `data:${mimetype};base64,${base64}`;
     const prompt = PROMPTS[category];
@@ -997,28 +1111,24 @@ export class FileProcessingService {
     );
 
     try {
-      const response = await fetch(
-        'https://openrouter.ai/api/v1/chat/completions',
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${this.openRouterApiKey}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer': 'oracle-app.com',
-            'X-Title': this.config.get('ORACLE_NAME') ?? 'Oracle App',
-          },
-          body: JSON.stringify({
-            model: this.processingModel,
-            messages: [
-              {
-                role: 'user',
-                content: contentParts,
-              },
-            ],
-          }),
-          signal: abortController.signal,
+      const response = await fetch(`${this.providerBaseURL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.providerApiKey}`,
+          'Content-Type': 'application/json',
+          ...this.providerHeaders,
         },
-      );
+        body: JSON.stringify({
+          model: this.processingModel,
+          messages: [
+            {
+              role: 'user',
+              content: contentParts,
+            },
+          ],
+        }),
+        signal: abortController.signal,
+      });
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -1031,9 +1141,29 @@ export class FileProcessingService {
 
       const result = (await response.json()) as {
         choices: Array<{ message: { content: string } }>;
+        usage?: {
+          prompt_tokens?: number;
+          completion_tokens?: number;
+          total_tokens?: number;
+          cost?: number;
+        };
+        model?: string;
       };
 
-      return result.choices[0]?.message?.content ?? '';
+      this.logger.log(
+        `[aiProcess] model=${result.model ?? 'unknown'} usage=${JSON.stringify(result.usage ?? null)}`,
+      );
+
+      return {
+        content: result.choices[0]?.message?.content ?? '',
+        usage: result.usage
+          ? {
+              cost: result.usage.cost,
+              promptTokens: result.usage.prompt_tokens,
+              completionTokens: result.usage.completion_tokens,
+            }
+          : undefined,
+      };
     } finally {
       clearTimeout(timeout);
     }
@@ -1041,12 +1171,14 @@ export class FileProcessingService {
 
   private getAudioFormat(
     mimetype: string,
-  ): 'mp3' | 'wav' | 'ogg' | 'flac' | 'webm' {
+  ): 'mp3' | 'wav' | 'ogg' | 'flac' | 'webm' | 'mp4' | 'aac' {
     if (mimetype.includes('mp3') || mimetype.includes('mpeg')) return 'mp3';
     if (mimetype.includes('wav')) return 'wav';
     if (mimetype.includes('ogg')) return 'ogg';
     if (mimetype.includes('flac')) return 'flac';
     if (mimetype.includes('webm')) return 'webm';
+    if (mimetype.includes('mp4') || mimetype.includes('m4a')) return 'mp4';
+    if (mimetype.includes('aac')) return 'aac';
     return 'mp3'; // default
   }
 
@@ -1062,6 +1194,47 @@ export class FileProcessingService {
         .replace(/[[\]]/g, '') // strip brackets to prevent [SYSTEM: ...] injection
         .slice(0, 255)
     );
+  }
+
+  /**
+   * Check if a mimetype represents a plain-text format that can be read
+   * directly as UTF-8 without AI processing or local parsers.
+   */
+  private isPlainTextType(mimetype: string): boolean {
+    return (
+      mimetype.startsWith('text/') ||
+      mimetype === 'application/json' ||
+      mimetype === 'application/xml' ||
+      mimetype === 'application/rtf'
+    );
+  }
+
+  private buildAnalysisMarkdown(
+    filename: string,
+    mimetype: string,
+    sizeBytes: number,
+    category: 'image' | 'video' | 'audio',
+    content: string,
+  ): string {
+    const labels: Record<string, string> = {
+      image: 'Image Description',
+      video: 'Video Description',
+      audio: 'Audio Transcription',
+    };
+    const label = labels[category] ?? 'Analysis';
+    return [
+      `# ${label}: ${filename}`,
+      '',
+      `- **File:** ${filename}`,
+      `- **Type:** ${mimetype}`,
+      `- **Size:** ${(sizeBytes / 1024).toFixed(1)} KB`,
+      `- **Processed:** ${new Date().toISOString()}`,
+      '',
+      '---',
+      '',
+      content,
+      '',
+    ].join('\n');
   }
 
   private formatContent(
@@ -1334,21 +1507,21 @@ export class FileProcessingService {
       `[processFileFromUrl] Type still unknown (HEAD Content-Type: ${headContentType ?? 'none'}) — trying AI video passthrough as fallback`,
     );
     try {
-      const description = await this.aiProcessFromUrl(
+      const { content } = await this.aiProcessFromUrl(
         resolvedUrl,
         'video/mp4',
         'video',
         filename,
       );
       // If the AI returned a meaningful response, use it
-      if (description && description.trim().length > 0) {
+      if (content && content.trim().length > 0) {
         this.logger.log(
           `[processFileFromUrl] AI video passthrough succeeded for "${filename}"`,
         );
         return this.formatContent(
           'Description',
           this.sanitizeFilename(filename),
-          description,
+          content,
         );
       }
     } catch (error) {
@@ -1375,17 +1548,17 @@ export class FileProcessingService {
     filename: string,
   ): Promise<string> {
     try {
-      const description = await this.aiProcessFromUrl(
+      const { content } = await this.aiProcessFromUrl(
         url,
         mimetype,
         category,
         filename,
       );
-      if (description && description.trim().length > 0) {
+      if (content && content.trim().length > 0) {
         return this.formatContent(
           'Description',
           this.sanitizeFilename(filename),
-          description,
+          content,
         );
       }
       this.logger.warn(
@@ -1488,16 +1661,22 @@ export class FileProcessingService {
       `[processCategory] Processing "${attachment.filename}" as ${category} (${attachment.mimetype}, ${buffer.length} bytes)`,
     );
 
+    let result: { text: string; usage?: AiProcessUsage };
     switch (category) {
       case 'document':
-        return this.processDocument(buffer, attachment);
+        result = await this.processDocument(buffer, attachment);
+        break;
       case 'image':
-        return this.processImage(buffer, attachment);
+        result = await this.processImage(buffer, attachment);
+        break;
       case 'audio':
-        return this.processAudio(buffer, attachment);
+        result = await this.processAudio(buffer, attachment);
+        break;
       case 'video':
-        return this.processVideo(buffer, attachment);
+        result = await this.processVideo(buffer, attachment);
+        break;
     }
+    return result.text;
   }
 
   /**
@@ -1526,26 +1705,53 @@ export class FileProcessingService {
     if (!ext) return null;
 
     const map: Record<string, string> = {
+      // Documents
       pdf: 'application/pdf',
       doc: 'application/msword',
       docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      xls: 'application/vnd.ms-excel',
+      ppt: 'application/vnd.ms-powerpoint',
+      rtf: 'application/rtf',
+      // Text / code
       txt: 'text/plain',
       md: 'text/markdown',
       html: 'text/html',
       htm: 'text/html',
       csv: 'text/csv',
+      json: 'application/json',
+      xml: 'application/xml',
+      css: 'text/css',
+      js: 'text/javascript',
+      ts: 'text/plain',
+      py: 'text/x-python',
+      yaml: 'text/yaml',
+      yml: 'text/yaml',
+      // Images
       png: 'image/png',
       jpg: 'image/jpeg',
       jpeg: 'image/jpeg',
       gif: 'image/gif',
       webp: 'image/webp',
+      svg: 'image/svg+xml',
+      bmp: 'image/bmp',
+      tiff: 'image/tiff',
+      tif: 'image/tiff',
+      // Audio
       mp3: 'audio/mpeg',
       ogg: 'audio/ogg',
       flac: 'audio/flac',
       wav: 'audio/wav',
+      m4a: 'audio/mp4',
+      aac: 'audio/aac',
+      // Video
       webm: 'video/webm',
       mp4: 'video/mp4',
       mov: 'video/quicktime',
+      avi: 'video/x-msvideo',
+      mkv: 'video/x-matroska',
+      '3gp': 'video/3gpp',
     };
 
     return map[ext] ?? null;
