@@ -34,9 +34,8 @@ interface IRunnableConfigWithRequiredFields extends RunnableConfig {
   };
 }
 
-interface ICheckpoint<
-  GraphState extends IGraphStateWithRequiredFields,
-> extends Checkpoint {
+interface ICheckpoint<GraphState extends IGraphStateWithRequiredFields>
+  extends Checkpoint {
   channel_values: GraphState;
 }
 
