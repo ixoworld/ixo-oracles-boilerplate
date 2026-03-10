@@ -187,15 +187,15 @@ Create a framework-agnostic validator.
 
 The `validator.validate()` method returns a `ValidateResult`:
 
-| Field        | Type                    | Description                                                                                          |
-| ------------ | ----------------------- | ---------------------------------------------------------------------------------------------------- |
-| `ok`         | `boolean`               | Whether validation succeeded                                                                         |
-| `invoker`    | `string`                | DID of the invoker (on success)                                                                      |
-| `capability` | `object`                | Validated capability with `can`, `with`, and optional `nb` caveats (on success)                      |
-| `expiration` | `number \| undefined`   | Effective expiration (Unix seconds) — the earliest across the delegation chain. Undefined = never.   |
-| `proofChain` | `string[] \| undefined` | Delegation path from root issuer to invoker, e.g. `["did:key:root", "did:key:alice", "did:key:bob"]` |
-| `facts`      | `Record<string, unknown>[] \| undefined` | Facts attached to the invocation. Undefined if none.                                      |
-| `error`      | `object`                | Error with `code` and `message` (on failure)                                                         |
+| Field        | Type                                     | Description                                                                                          |
+| ------------ | ---------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `ok`         | `boolean`                                | Whether validation succeeded                                                                         |
+| `invoker`    | `string`                                 | DID of the invoker (on success)                                                                      |
+| `capability` | `object`                                 | Validated capability with `can`, `with`, and optional `nb` caveats (on success)                      |
+| `expiration` | `number \| undefined`                    | Effective expiration (Unix seconds) — the earliest across the delegation chain. Undefined = never.   |
+| `proofChain` | `string[] \| undefined`                  | Delegation path from root issuer to invoker, e.g. `["did:key:root", "did:key:alice", "did:key:bob"]` |
+| `facts`      | `Record<string, unknown>[] \| undefined` | Facts attached to the invocation. Undefined if none.                                                 |
+| `error`      | `object`                                 | Error with `code` and `message` (on failure)                                                         |
 
 Error codes: `INVALID_FORMAT`, `INVALID_SIGNATURE`, `UNAUTHORIZED`, `REPLAY`, `EXPIRED`, `CAVEAT_VIOLATION`.
 
