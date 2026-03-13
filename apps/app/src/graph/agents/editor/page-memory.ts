@@ -148,7 +148,7 @@ export function logEditorSessionToMemory(
   auth: PageMemoryAuth,
   messages: BaseMessage[],
   editorRoomId: string,
-  userQuery: string,
+  userTask: string,
 ): void {
   Logger.log(
     `[PageMemory] Editor session completed for room ${editorRoomId}, scanning ${messages.length} messages for mutations`,
@@ -226,7 +226,7 @@ export function logEditorSessionToMemory(
       const titleStr = pageTitle ? `"${pageTitle}"` : '(unknown title)';
       const lines: string[] = [
         `[Editor Session] Page ${titleStr} (room: ${editorRoomId})`,
-        `User request: "${userQuery}"`,
+        `User request: "${userTask}"`,
         '',
         `Operations performed (${mutations.length} total):`,
       ];

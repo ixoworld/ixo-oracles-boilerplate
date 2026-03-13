@@ -32,9 +32,12 @@ export type ModelRole =
 
 const MODEL_MAP: Record<LLMProvider, Record<ModelRole, string>> = {
   openrouter: {
-    main: 'moonshotai/kimi-k2-thinking',
-    skills: 'moonshotai/kimi-k2-thinking',
-    subagent: 'moonshotai/kimi-k2-thinking',
+    main: 'moonshotai/kimi-k2.5',
+    // main: 'moonshotai/kimi-k2-thinking',
+    skills: 'moonshotai/kimi-k2.5',
+    // skills: 'moonshotai/kimi-k2-thinking',
+    subagent: 'moonshotai/kimi-k2.5',
+    // subagent: 'moonshotai/kimi-k2-thinking',
     vision: 'google/gemini-2.5-flash-lite',
     guard: 'meta-llama/llama-3.1-8b-instruct',
     routing: 'openai/gpt-oss-20b',
