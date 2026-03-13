@@ -64,6 +64,14 @@ export interface ReadPageResult {
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
+function validateMatrixRoomId(roomId: string): void {
+  if (!/^!.+:.+$/.test(roomId)) {
+    throw new Error(
+      `Invalid Matrix room ID '${roomId}'. Room IDs must start with '!' followed by the room identifier and homeserver (e.g., '!abc123:matrix.org').`,
+    );
+  }
+}
+
 function createPageAlias(): string {
   return `page-${Date.now()}`;
 }
@@ -289,6 +297,8 @@ export async function updatePage(
     appendContent,
   } = params;
 
+  validateMatrixRoomId(roomId);
+
   const updatedFields: string[] = [];
   const diff: PageDiff = {};
 
@@ -429,6 +439,8 @@ export async function readPage(
   params: ReadPageParams,
 ): Promise<ReadPageResult> {
   const { matrixClient, matrixConfig, providerConfig, roomId } = params;
+
+  validateMatrixRoomId(roomId);
 
   // Ensure the client is in the room
   const isInRoom =

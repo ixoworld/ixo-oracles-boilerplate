@@ -3,7 +3,12 @@ import { type IRunnableConfigWithRequiredFields } from '@ixo/matrix';
 import { OpenIdTokenProvider } from '@ixo/oracles-chain-client';
 import { SqliteSaver } from '@ixo/sqlite-saver';
 import { Logger } from '@nestjs/common';
-import { createAgent, type ReactAgent, toolRetryMiddleware } from 'langchain';
+import {
+  createAgent,
+  type ReactAgent,
+  type StructuredTool,
+  toolRetryMiddleware,
+} from 'langchain';
 import { getConfig } from 'src/config';
 import { type UcanService } from 'src/ucan/ucan.service';
 
@@ -19,13 +24,15 @@ import { contextSchema } from '../types';
 import { createDomainIndexerAgent } from './domain-indexer-agent';
 import { createApplySandboxOutputToBlockTool } from './editor/apply-sandbox-output-to-block';
 import { createEditorAgent } from './editor/editor-agent';
-import { EditorMatrixClient } from './editor/editor-mx';
 import {
   logEditorSessionToMemory,
   type PageMemoryAuth,
 } from './editor/page-memory';
-import { createPageTools } from './editor/page-tools';
-import { EDITOR_DOCUMENTATION_CONTENT } from './editor/prompts';
+import {
+  EDITOR_MODE_PROMPTS,
+  STANDALONE_EDITOR_PROMPTS,
+} from './editor/prompts';
+import { createStandaloneEditorTool } from './editor/standalone-editor-tool';
 import { createFirecrawlAgent } from './firecrawl-agent';
 import { createMemoryAgent } from './memory-agent';
 import { createPortalAgent } from './portal-agent';
@@ -201,6 +208,21 @@ Promise<ReactAgent<any>> => {
     return createMCPClientAndGetTools();
   };
 
+  // Build operational mode + editor section via JS — cleaner than nested mustache conditionals
+  const editorPrompts = state.editorRoomId
+    ? EDITOR_MODE_PROMPTS
+    : state.spaceId
+      ? STANDALONE_EDITOR_PROMPTS
+      : null;
+
+  const operationalMode = editorPrompts
+    ? editorPrompts.operationalMode
+    : state.currentEntityDid
+      ? `**Entity Context Active**\n\nYou are currently viewing an entity (DID: ${state.currentEntityDid}). The entity is the default context for this conversation. Use the Domain Indexer Agent tool for entity discovery/overviews/FAQs, the Portal Agent tool for navigation or UI actions (e.g., \`showEntity\`), and the Memory Agent tool for historical knowledge. For entities like ecs, supamoto, ixo, QI, use both Domain Indexer and Memory Agent tools together for best results.\n\n**Important:** Pages (BlockNote documents) are NOT entities. If the user asks about pages, use \`list_workspace_pages\` and \`call_editor_agent\` — never the Domain Indexer.`
+      : `**General Conversation Mode**\n\nDefault to conversation mode, using the Memory Agent tool for recall and the Firecrawl Agent tool for any external research or fresh data.`;
+
+  const editorSection = editorPrompts?.editorSection ?? '';
+
   // System prompt is critical — failure here is a code bug, not a transient issue
   const systemPrompt = await AI_ASSISTANT_PROMPT.format({
     APP_NAME:
@@ -213,10 +235,9 @@ Promise<ReactAgent<any>> => {
     RELATIONSHIPS_CONTEXT: jsonToYaml(state?.userContext?.relationships ?? {}),
     RECENT_CONTEXT: jsonToYaml(state?.userContext?.recent ?? {}),
     TIME_CONTEXT: timeContext,
-    EDITOR_DOCUMENTATION: state.editorRoomId
-      ? EDITOR_DOCUMENTATION_CONTENT
-      : '',
     CURRENT_ENTITY_DID: state.currentEntityDid ?? '',
+    OPERATIONAL_MODE: operationalMode,
+    EDITOR_SECTION: editorSection,
     SLACK_FORMATTING_CONSTRAINTS:
       state.client === 'slack' ? SLACK_FORMATTING_CONSTRAINTS_CONTENT : '',
     AG_UI_TOOLS_DOCUMENTATION:
@@ -398,34 +419,32 @@ Promise<ReactAgent<any>> => {
     }
   }
 
-  // Create standalone page tools when spaceId is present but no editor session
-  let standalonePageTools: ReturnType<typeof createPageTools> | null = null;
+  // Helper to inject time context into sub-agent system prompts
+  const withTimeContext = (spec: AgentSpec): AgentSpec => ({
+    ...spec,
+    systemPrompt: `${spec.systemPrompt}\n\n## Current Time\n${timeContext}`,
+  });
+
+  // Create standalone editor tool when spaceId is present but no editor session.
+  // Accepts a room_id per call, spinning up an ephemeral editor agent with full
+  // BlockNote capabilities for that page.
+  let standaloneEditorTool: StructuredTool | null = null;
   if (!state.editorRoomId && state.spaceId) {
-    try {
-      const editorMatrixClient = EditorMatrixClient.getInstance();
-      await editorMatrixClient.waitUntilReady();
-      const matrixClient = editorMatrixClient.getClient();
-      const userDid = configurable?.configs?.user?.did;
-      const homeServer = configurable?.configs?.matrix?.homeServerName;
-      const userMatrixId =
-        userDid && homeServer
-          ? `@${userDid.replace(/:/g, '-')}:${homeServer}`
-          : undefined;
-      standalonePageTools = createPageTools(
-        matrixClient,
-        userMatrixId,
-        state.spaceId,
-        pageMemoryAuth,
-      );
-      Logger.log(
-        `Created standalone page tools with spaceId: ${state.spaceId}`,
-      );
-    } catch (error) {
-      Logger.error(
-        `[createMainAgent] Standalone page tools failed to initialize: ${String(error)}`,
-      );
-      unavailableServices.push('Page Tools');
-    }
+    const userDid = configurable?.configs?.user?.did;
+    const homeServer = configurable?.configs?.matrix?.homeServerName;
+    const standaloneUserMatrixId =
+      userDid && homeServer
+        ? `@${userDid.replace(/:/g, '-')}:${homeServer}`
+        : undefined;
+
+    standaloneEditorTool = createStandaloneEditorTool({
+      userMatrixId: standaloneUserMatrixId,
+      spaceId: state.spaceId,
+      memoryAuth: pageMemoryAuth,
+      transformSpec: withTimeContext,
+    });
+
+    Logger.log(`Created standalone editor tool with spaceId: ${state.spaceId}`);
   }
 
   // Create apply_sandbox_output_to_block tool when both sandbox and editor are available
@@ -444,12 +463,6 @@ Promise<ReactAgent<any>> => {
       Logger.log('📦 Created apply_sandbox_output_to_block tool');
     }
   }
-
-  // Helper to inject time context into sub-agent system prompts
-  const withTimeContext = (spec: AgentSpec): AgentSpec => ({
-    ...spec,
-    systemPrompt: `${spec.systemPrompt}\n\n## Current Time\n${timeContext}`,
-  });
 
   const callPortalAgentTool = portalAgent
     ? createSubagentAsTool(withTimeContext(portalAgent))
@@ -532,9 +545,7 @@ Promise<ReactAgent<any>> => {
         : []),
       ...(matrix?.roomId ? [createListRoomFilesTool(matrix.roomId)] : []),
       ...(applySandboxOutputToBlockTool ? [applySandboxOutputToBlockTool] : []),
-      ...(standalonePageTools
-        ? [standalonePageTools.createPageTool, standalonePageTools.readPageTool]
-        : []),
+      ...(standaloneEditorTool ? [standaloneEditorTool] : []),
     ],
     middleware,
     systemPrompt: finalSystemPrompt,

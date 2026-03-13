@@ -158,9 +158,17 @@ export function createPageTools(
         {
           name: 'read_page',
           description:
-            'Read an existing page by its room ID. Returns the page metadata (title, owner, creation date) and all blocks.',
+            'Read an existing page by its Matrix room ID (format: !id:homeserver). Returns the page metadata and all blocks.',
           schema: z.object({
-            room_id: z.string().describe('The room ID of the page to read'),
+            room_id: z
+              .string()
+              .regex(
+                /^!.+:.+$/,
+                'Room ID must start with "!" (e.g., "!abc123:matrix.org")',
+              )
+              .describe(
+                'The Matrix room ID of the page (e.g., "!oeGkcJIKNpeSiaGHVE:devmx.ixo.earth"). Must start with "!".',
+              ),
           }),
         },
       );
@@ -309,9 +317,17 @@ export function createPageTools(
         {
           name: 'update_page',
           description:
-            'Update an existing page. Can update title, topic, replace all content with markdown, or append markdown content. All fields are optional — only provided fields are updated.',
+            'Update an existing page by its Matrix room ID (format: !id:homeserver). Can update title, topic, replace or append content.',
           schema: z.object({
-            room_id: z.string().describe('The room ID of the page to update'),
+            room_id: z
+              .string()
+              .regex(
+                /^!.+:.+$/,
+                'Room ID must start with "!" (e.g., "!abc123:matrix.org")',
+              )
+              .describe(
+                'The Matrix room ID of the page (e.g., "!oeGkcJIKNpeSiaGHVE:devmx.ixo.earth"). Must start with "!".',
+              ),
             title: z.string().optional().describe('New title for the page'),
             topic: z
               .string()

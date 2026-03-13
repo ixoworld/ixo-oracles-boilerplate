@@ -1,6 +1,7 @@
-import { getProviderChatModel } from '../../llm-provider';
 import { type StructuredTool } from 'langchain';
+import { getProviderChatModel } from '../../llm-provider';
 
+import { Logger } from '@nestjs/common';
 import type { AgentSpec } from '../subagent-as-tool';
 import {
   BLOCKNOTE_TOOLS_CONFIG,
@@ -10,7 +11,6 @@ import type { AppConfig, MatrixRoomConfig } from './config';
 import { EditorMatrixClient } from './editor-mx';
 import { createPageTools } from './page-tools';
 import { editorAgentPrompt, editorAgentReadOnlyPrompt } from './prompts';
-import { Logger } from '@nestjs/common';
 
 const llm = getProviderChatModel('main', {
   __includeRawResponse: true,
