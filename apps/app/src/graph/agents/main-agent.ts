@@ -493,7 +493,12 @@ Promise<ReactAgent<any>> => {
     : null;
   const callEditorAgentTool = blockNoteAgentSpec
     ? createSubagentAsTool(withTimeContext(blockNoteAgentSpec), {
-        forwardTools: ['create_page', 'update_page'],
+        forwardTools: [
+          'create_page',
+          'update_page',
+          'edit_block',
+          'create_block',
+        ],
         onComplete: pageMemoryAuth
           ? (messages, task) =>
               logEditorSessionToMemory(

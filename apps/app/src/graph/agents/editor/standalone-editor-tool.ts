@@ -78,7 +78,12 @@ export function createStandaloneEditorTool({
         const spec = transformSpec(editorSpec);
 
         const subagentTool = createSubagentAsTool(spec, {
-          forwardTools: ['create_page', 'update_page'],
+          forwardTools: [
+            'create_page',
+            'update_page',
+            'edit_block',
+            'create_block',
+          ],
           onComplete: memoryAuth
             ? (messages) =>
                 logEditorSessionToMemory(memoryAuth, messages, room_id, task)
