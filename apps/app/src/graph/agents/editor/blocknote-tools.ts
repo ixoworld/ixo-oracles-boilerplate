@@ -529,14 +529,30 @@ List blocks without text content (faster):
           ? simplifyBlockForAgent(updatedBlock)
           : null;
 
+        // Build diff from before/after state
+        const diff: Record<string, { old: unknown; new: unknown }> = {};
+        for (const field of updatedFields) {
+          if (field.startsWith('-') || field.startsWith('runtime.')) continue;
+          if (field === 'text') {
+            diff.text = {
+              old: beforeText ?? '',
+              new: updatedBlock?.text ?? '',
+            };
+          } else {
+            diff[field] = { old: beforeProps[field], new: afterProps[field] };
+          }
+        }
+
         // Changes are automatically synced by your Matrix provider
         return JSON.stringify({
           success: true,
+          roomId,
           blockId,
           blockType: simplified?.type,
           message: `Updated ${updatedFields.length} field(s): ${updatedFields.join(', ') || 'no changes detected'}`,
           updatedFields,
           block: simplified,
+          diff,
           ...(updatedRuntimeState && { runtimeState: updatedRuntimeState }),
         });
       } catch (error) {
@@ -711,8 +727,21 @@ List blocks without text content (faster):
         const allBlocks = collectAllBlocks(fragment);
         const position = allBlocks.findIndex((b) => b.id === snapshot.id);
 
+        const diff = {
+          block: {
+            old: null,
+            new: simplified ?? {
+              id: snapshot.id,
+              type: blockType,
+              properties: attributes,
+              text,
+            },
+          },
+        };
+
         return JSON.stringify({
           success: true,
+          roomId,
           blockId: snapshot.id,
           blockType,
           position: position >= 0 ? position : allBlocks.length - 1,
@@ -720,6 +749,7 @@ List blocks without text content (faster):
             ? `Created ${blockType} block ${placement} block ${referenceBlockId}`
             : `Created ${blockType} block at end of document`,
           block: simplified || snapshot,
+          diff,
         });
       } catch (error) {
         Logger.error('Error creating block:', error);
