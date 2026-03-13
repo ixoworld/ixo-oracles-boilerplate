@@ -1,7 +1,10 @@
-import { type IRunnableConfigWithRequiredFields } from '@ixo/matrix';
+import {
+  type IRunnableConfigWithRequiredFields,
+  MatrixManager,
+} from '@ixo/matrix';
 import { Logger } from '@nestjs/common';
 import 'dotenv/config';
-import { type BaseMessage, HumanMessage } from 'langchain';
+import { type BaseMessage, HumanMessage, type ReactAgent } from 'langchain';
 import {
   type AgActionDto,
   type BrowserToolCallDto,
@@ -12,6 +15,79 @@ import { createMainAgent } from './agents/main-agent';
 import { getLLMProvider, getModelForRole } from './llm-provider';
 import { type MCPUCANContext } from './mcp';
 import { type TMainAgentGraphState } from './state';
+
+/**
+ * Resolve a page title from the Matrix room name state event.
+ * Returns undefined if the room is unknown or the lookup fails.
+ */
+async function resolvePageTitle(roomId: string): Promise<string | undefined> {
+  try {
+    const client = MatrixManager.getInstance().getClient();
+    if (!client) return undefined;
+    const ev = await client.mxClient.getRoomStateEvent(
+      roomId,
+      'm.room.name',
+      '',
+    );
+    return (ev as { name?: string })?.name ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Checks the checkpoint for the previous editorRoomId. If the user switched
+ * pages, prepends a system marker message with both page titles so the agent
+ * can confirm the switch with the user.
+ */
+async function injectPageSwitchMarker(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  agent: ReactAgent<any>,
+  currentEditorRoomId: string | undefined,
+  messages: BaseMessage[],
+  config: Record<string, unknown>,
+): Promise<BaseMessage[]> {
+  if (!currentEditorRoomId) return messages;
+
+  try {
+    const snapshot = await agent.graph.getState(config);
+    const previousState = snapshot?.values as TMainAgentGraphState | undefined;
+    const previousEditorRoomId = previousState?.editorRoomId;
+
+    if (!previousEditorRoomId) return messages;
+    if (previousEditorRoomId === currentEditorRoomId) return messages;
+
+    // Resolve titles in parallel — best-effort, titles may be undefined
+    const [currentTitle, previousTitle] = await Promise.all([
+      resolvePageTitle(currentEditorRoomId),
+      resolvePageTitle(previousEditorRoomId),
+    ]);
+
+    const currentLabel = currentTitle
+      ? `"${currentTitle}" (${currentEditorRoomId})`
+      : currentEditorRoomId;
+    const previousLabel = previousTitle
+      ? `"${previousTitle}" (${previousEditorRoomId})`
+      : previousEditorRoomId;
+
+    const marker = new HumanMessage({
+      content:
+        `[System: The user has switched pages. ` +
+        `Current page: ${currentLabel}. ` +
+        `Previous page: ${previousLabel}. ` +
+        `Previous page context in conversation history may be stale. ` +
+        `Always favour the current active page. ` +
+        `Before making any edits, use read_page to confirm the current page content ` +
+        `and verify it matches what the user is asking you to work on. ` +
+        `If the content differs from what was discussed, confirm with the user before editing.]`,
+      additional_kwargs: { lc_source: 'page_switch_marker' },
+    });
+
+    return [marker, ...messages];
+  } catch {
+    return messages;
+  }
+}
 
 /**
  * Options for agent methods that support UCAN
@@ -93,15 +169,26 @@ export class MainAgentGraph {
       fileProcessingService,
     });
 
+    const invokeConfig = {
+      ...runnableConfig,
+      recursionLimit: 150,
+      configurable: {
+        ...runnableConfig.configurable,
+        thread_id: runnableConfig.configurable.sessionId,
+      },
+    };
+
+    const finalMessages = await injectPageSwitchMarker(
+      agent,
+      editorRoomId,
+      messages,
+      invokeConfig,
+    );
+
     const result = await agent.invoke(
-      { messages },
+      { messages: finalMessages, editorRoomId },
       {
-        ...runnableConfig,
-        recursionLimit: 150,
-        configurable: {
-          ...runnableConfig.configurable,
-          thread_id: runnableConfig.configurable.sessionId,
-        },
+        ...invokeConfig,
         metadata: {
           llmProvider: getLLMProvider(),
           llmModel: getModelForRole('main'),
@@ -194,8 +281,23 @@ export class MainAgentGraph {
       fileProcessingService,
     });
 
+    const streamConfig = {
+      ...runnableConfig,
+      recursionLimit: 150,
+      configurable: {
+        ...runnableConfig.configurable,
+      },
+    };
+
+    const finalMessages = await injectPageSwitchMarker(
+      agent,
+      editorRoomId,
+      messages,
+      streamConfig,
+    );
+
     const stream = agent.streamEvents(
-      { messages },
+      { messages: finalMessages, editorRoomId },
       {
         version: 'v2',
         ...runnableConfig,

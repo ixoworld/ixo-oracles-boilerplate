@@ -1,4 +1,5 @@
 import { type StructuredTool } from 'langchain';
+import { createHash } from 'node:crypto';
 import { getProviderChatModel } from '../../llm-provider';
 
 import { Logger } from '@nestjs/common';
@@ -198,7 +199,12 @@ export const createEditorAgent = async ({
   userMatrixId,
   spaceId,
   memoryAuth,
-}: CreateEditorAgentParams): Promise<EditorAgentInstance> => {
+  userDid,
+  sessionId,
+}: CreateEditorAgentParams & {
+  userDid: string;
+  sessionId: string;
+}): Promise<EditorAgentInstance> => {
   const roomConfig = normalizeRoom(room);
   const editorMatrixClient = EditorMatrixClient.getInstance();
   await editorMatrixClient.waitUntilReady();
@@ -240,5 +246,10 @@ export const createEditorAgent = async ({
       mode === 'readOnly' ? editorAgentReadOnlyPrompt : editorAgentPrompt,
     model: llm,
     middleware: [],
+    userDid,
+    sessionId,
+    threadSuffix: editorRoomId
+      ? createHash('sha256').update(editorRoomId).digest('hex').slice(0, 5)
+      : undefined,
   };
 };

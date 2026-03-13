@@ -1,3 +1,4 @@
+import { SqliteSaver } from '@ixo/sqlite-saver';
 import {
   AIMessage,
   HumanMessage,
@@ -6,14 +7,16 @@ import {
 } from '@langchain/core/messages';
 import { tool } from '@langchain/core/tools';
 import { Command } from '@langchain/langgraph';
+import { Logger } from '@nestjs/common';
 import {
   createAgent,
   type AgentMiddleware,
   type StructuredTool,
 } from 'langchain';
-import { Logger } from '@nestjs/common';
 import { emojify } from 'node-emoji';
+import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 import { z } from 'zod';
+import { createSummarizationMiddleware } from '../middlewares/summarization-middleware';
 
 /**
  * Spec for an agent that can be run as a one-shot subagent (no checkpointer).
@@ -27,6 +30,10 @@ export interface AgentSpec {
   systemPrompt: string;
   model?: Parameters<typeof createAgent>[0]['model'];
   middleware?: AgentMiddleware[];
+  userDid: string;
+  sessionId: string;
+  /** Appended to thread_id to scope the agent's conversation (e.g. a room ID). */
+  threadSuffix?: string;
 }
 
 /**
@@ -143,9 +150,18 @@ export function createSubagentAsTool(
     agent: ReturnType<typeof createAgent>,
     query: string,
   ) => {
-    const result = await agent.invoke({
-      messages: [new HumanMessage(query)],
-    });
+    const result = await agent.invoke(
+      {
+        messages: [new HumanMessage(query)],
+      },
+      {
+        configurable: {
+          thread_id:
+            spec.sessionId + spec.name + (spec.threadSuffix ?? ''),
+        },
+        runName: spec.name,
+      },
+    );
     return result.messages as BaseMessage[];
   };
 
@@ -182,11 +198,21 @@ export function createSubagentAsTool(
           return `Error: ${spec.name} has no model configured.`;
         }
 
+        const checkpointer = SqliteSaver.fromDatabase(
+          await UserMatrixSqliteSyncService.getInstance().getUserDatabase(
+            spec.userDid,
+          ),
+        );
+
+        const middleware: AgentMiddleware[] = [...(spec.middleware ?? [])];
+        middleware.push(createSummarizationMiddleware());
+
         const agent = createAgent({
           model: spec.model,
           tools: spec.tools ?? [],
           systemPrompt: spec.systemPrompt,
-          middleware: spec.middleware ?? [],
+          middleware,
+          checkpointer,
         });
 
         let messages = await invoke(agent, query);
