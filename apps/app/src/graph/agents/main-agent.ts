@@ -19,11 +19,17 @@ import { contextSchema } from '../types';
 import { createDomainIndexerAgent } from './domain-indexer-agent';
 import { createApplySandboxOutputToBlockTool } from './editor/apply-sandbox-output-to-block';
 import { createEditorAgent } from './editor/editor-agent';
+import { EditorMatrixClient } from './editor/editor-mx';
+import {
+  logEditorSessionToMemory,
+  type PageMemoryAuth,
+} from './editor/page-memory';
+import { createPageTools } from './editor/page-tools';
 import { EDITOR_DOCUMENTATION_CONTENT } from './editor/prompts';
 import { createFirecrawlAgent } from './firecrawl-agent';
 import { createMemoryAgent } from './memory-agent';
 import { createPortalAgent } from './portal-agent';
-import { createSubagentAsTool } from './subagent-as-tool';
+import { createSubagentAsTool, type AgentSpec } from './subagent-as-tool';
 
 import { DynamicStructuredTool } from 'langchain';
 import fs from 'node:fs';
@@ -34,7 +40,7 @@ import {
 } from 'src/messages/file-processing.service';
 import { SecretsService } from 'src/secrets/secrets.service';
 import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
-import oracleConfig from '../../../../../config.json';
+import oracleConfig from '../../../oracle.config.json';
 import { getProviderChatModel } from '../llm-provider';
 import {
   createMCPClient,
@@ -99,6 +105,24 @@ Promise<ReactAgent<any>> => {
   const oracleOpenIdToken = configurable.configs?.user.matrixOpenIdToken
     ? await oracleOpenIdTokenProvider.getToken()
     : undefined;
+
+  // Build memory auth for page/block operation tracking
+  const pageMemoryAuth: PageMemoryAuth | undefined =
+    oracleOpenIdToken &&
+    configurable.configs?.user.matrixOpenIdToken &&
+    matrix?.roomId
+      ? {
+          oracleToken: oracleOpenIdToken,
+          userToken: configurable.configs.user.matrixOpenIdToken,
+          oracleHomeServer: oracleMatrixBaseUrl.replace(/^https?:\/\//, ''),
+          userHomeServer: configurable.configs.matrix.homeServerName ?? '',
+          chatRoomId: matrix.roomId,
+        }
+      : undefined;
+
+  Logger.log(
+    `[createMainAgent] PageMemory auth ${pageMemoryAuth ? 'available' : 'unavailable (missing tokens or roomId)'}`,
+  );
 
   // Load secret index (cheap — one state query per message)
   const roomId = configurable.configs?.matrix.roomId;
@@ -351,16 +375,56 @@ Promise<ReactAgent<any>> => {
   if (state.editorRoomId) {
     Logger.log(`Editor room ID provided: ${state.editorRoomId}`);
     Logger.log('Initializing BlockNote tools...');
+    // Derive user's Matrix ID from DID + homeserver for page invitations
+    const userDid = configurable?.configs?.user?.did;
+    const homeServer = configurable?.configs?.matrix?.homeServerName;
+    const userMatrixId =
+      userDid && homeServer
+        ? `@${userDid.replace(/:/g, '-')}:${homeServer}`
+        : undefined;
     try {
       blockNoteAgentSpec = await createEditorAgent({
         room: state.editorRoomId,
         mode: 'edit',
+        userMatrixId,
+        spaceId: state.spaceId,
+        memoryAuth: pageMemoryAuth,
       });
     } catch (error) {
       Logger.error(
         `[createMainAgent] Editor Agent failed to initialize: ${String(error)}`,
       );
       unavailableServices.push('Editor Agent');
+    }
+  }
+
+  // Create standalone page tools when spaceId is present but no editor session
+  let standalonePageTools: ReturnType<typeof createPageTools> | null = null;
+  if (!state.editorRoomId && state.spaceId) {
+    try {
+      const editorMatrixClient = EditorMatrixClient.getInstance();
+      await editorMatrixClient.waitUntilReady();
+      const matrixClient = editorMatrixClient.getClient();
+      const userDid = configurable?.configs?.user?.did;
+      const homeServer = configurable?.configs?.matrix?.homeServerName;
+      const userMatrixId =
+        userDid && homeServer
+          ? `@${userDid.replace(/:/g, '-')}:${homeServer}`
+          : undefined;
+      standalonePageTools = createPageTools(
+        matrixClient,
+        userMatrixId,
+        state.spaceId,
+        pageMemoryAuth,
+      );
+      Logger.log(
+        `Created standalone page tools with spaceId: ${state.spaceId}`,
+      );
+    } catch (error) {
+      Logger.error(
+        `[createMainAgent] Standalone page tools failed to initialize: ${String(error)}`,
+      );
+      unavailableServices.push('Page Tools');
     }
   }
 
@@ -381,20 +445,37 @@ Promise<ReactAgent<any>> => {
     }
   }
 
+  // Helper to inject time context into sub-agent system prompts
+  const withTimeContext = (spec: AgentSpec): AgentSpec => ({
+    ...spec,
+    systemPrompt: `${spec.systemPrompt}\n\n## Current Time\n${timeContext}`,
+  });
+
   const callPortalAgentTool = portalAgent
-    ? createSubagentAsTool(portalAgent)
+    ? createSubagentAsTool(withTimeContext(portalAgent))
     : null;
   const callMemoryAgentTool = memoryAgent
-    ? createSubagentAsTool(memoryAgent)
+    ? createSubagentAsTool(withTimeContext(memoryAgent))
     : null;
   const callFirecrawlAgentTool = firecrawlAgent
-    ? createSubagentAsTool(firecrawlAgent)
+    ? createSubagentAsTool(withTimeContext(firecrawlAgent))
     : null;
   const callDomainIndexerAgentTool = domainIndexerAgent
-    ? createSubagentAsTool(domainIndexerAgent)
+    ? createSubagentAsTool(withTimeContext(domainIndexerAgent))
     : null;
   const callEditorAgentTool = blockNoteAgentSpec
-    ? createSubagentAsTool(blockNoteAgentSpec)
+    ? createSubagentAsTool(withTimeContext(blockNoteAgentSpec), {
+        forwardTools: ['create_page', 'update_page'],
+        onComplete: pageMemoryAuth
+          ? (messages, query) =>
+              logEditorSessionToMemory(
+                pageMemoryAuth,
+                messages,
+                state.editorRoomId!,
+                query,
+              )
+          : undefined,
+      })
     : null;
 
   // Build degraded-services notice for the system prompt
@@ -451,6 +532,9 @@ Promise<ReactAgent<any>> => {
         : []),
       ...(matrix?.roomId ? [createListRoomFilesTool(matrix.roomId)] : []),
       ...(applySandboxOutputToBlockTool ? [applySandboxOutputToBlockTool] : []),
+      ...(standalonePageTools
+        ? [standalonePageTools.createPageTool, standalonePageTools.readPageTool]
+        : []),
     ],
     middleware,
     systemPrompt: finalSystemPrompt,

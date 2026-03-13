@@ -56,6 +56,20 @@ Your oracle automatically searches its memory at the start of each conversation 
 
 ---
 
+## Automatic Page Memory
+
+When your oracle creates or updates a [page](../05-sub-agents.md#editor-agent--page-tools), the operation is automatically logged to the Memory Engine. This means:
+
+- **Page creation** — the oracle remembers it created a page, what it's called, who owns it, and how many blocks it has.
+- **Page updates** — the oracle remembers what was changed (title, content, etc.) and tracks the diff (old vs new).
+- **Editor sessions** — after the oracle finishes editing a page, a summary of all operations is logged (e.g., "3 blocks edited, 2 blocks created").
+
+This happens automatically — no configuration needed. The oracle uses this memory to recall what documents exist and what it has written, so it can reference or update them in future conversations.
+
+> Memory logging is fire-and-forget: if the Memory Engine is unavailable, page operations still succeed. Nothing is blocked.
+
+---
+
 ## Available Tools
 
 These are the tools the Memory Engine provides. Your oracle uses them automatically — you just talk naturally.

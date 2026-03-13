@@ -32,6 +32,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { AIMessageChunk, HumanMessage, ToolMessage } from 'langchain';
+import { emojify } from 'node-emoji';
 import * as crypto from 'node:crypto';
 import { MainAgentGraph } from 'src/graph';
 import { cleanAdditionalKwargs } from 'src/graph/nodes/chat-node/utils';
@@ -40,8 +41,7 @@ import { type ENV } from 'src/types';
 import { UcanService } from 'src/ucan/ucan.service';
 import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 import { normalizeDid } from 'src/utils/header.utils';
-import { TokenLimiter } from 'src/utils/token-limit-handler';
-import { runWithSSEContext } from 'src/utils/sse-context';
+import { emitSSEEvent, runWithSSEContext } from 'src/utils/sse-context';
 import {
   formatSSE,
   sendSSEDone,
@@ -49,6 +49,7 @@ import {
   setSSEHeaders,
   startSSEHeartbeat,
 } from 'src/utils/sse.utils';
+import { TokenLimiter } from 'src/utils/token-limit-handler';
 import { type ListMessagesDto } from './dto/list-messages.dto';
 import { type SendMessagePayload } from './dto/send-message.dto';
 import {
@@ -675,13 +676,39 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
             params.res,
             async () => {
               // send thinking event to give the user faster feedback
-              const _thinkingEvent = ReasoningEvent.createChunk(
+              const thinkingText =
+                [
+                  'Thinking...',
+                  'Working...',
+                  'Analyzing...',
+                  'Processing...',
+                  'Computing...',
+                  'Crunching...',
+                  'Deliberating...',
+                  'Reasoning...',
+                  'Calculating...',
+                  'Evaluating...',
+                  'Pondering...',
+                  'Reading...',
+                  'Synthesizing...',
+                  'Formulating...',
+                  'Considering...',
+                  'Exploring ideas...',
+                  'Investigating...',
+                  'Brainstorming...',
+                  'Solving...',
+                  'Reviewing...',
+                  'Reflecting...',
+                ].at((Math.random() * 100) % 10) ?? 'thinking...';
+              const thinkingEvent = ReasoningEvent.createChunk(
                 sessionId,
                 runnableConfig.configurable.requestId ?? '',
-                'Thinking...',
-                undefined,
+                thinkingText,
+                [{ type: 'thinking', text: thinkingText }],
                 false,
               );
+              emitSSEEvent(thinkingEvent);
+              thinkingEvent.emit();
 
               const stream = await this.mainAgent.streamMessage(
                 inputMessages,
@@ -699,6 +726,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
                   mcpInvocations: params.mcpInvocations,
                 },
                 this.fileProcessingService,
+                params.metadata?.spaceId,
               );
 
               let fullContent = '';
@@ -728,8 +756,9 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
                       );
 
                       if (actionCallEvent) {
-                        actionCallEvent.payload.output =
-                          toolMessage.content as string;
+                        actionCallEvent.payload.output = emojify(
+                          toolMessage.content as string,
+                        );
                         actionCallEvent.payload.toolCallId =
                           toolMessage.tool_call_id;
 
@@ -781,8 +810,9 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
                         if (!toolCallEvent) {
                           continue;
                         }
-                        toolCallEvent.payload.output =
-                          toolMessage.content as string;
+                        toolCallEvent.payload.output = emojify(
+                          toolMessage.content as string,
+                        );
                         toolCallEvent.payload.status = 'done';
                         (
                           toolCallEvent.payload.args as Record<string, unknown>
@@ -946,7 +976,8 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
                         continue;
                       }
                       if (isChatNode) {
-                        fullContent += String(content);
+                        const parsed = emojify(String(content));
+                        fullContent += parsed;
                         // Send message chunk as SSE
                         if (!params.res) {
                           throw new Error('Response not found');
@@ -957,7 +988,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
                         ) {
                           params.res.write(
                             formatSSE('message', {
-                              content: String(content),
+                              content: parsed,
                               timestamp: new Date().toISOString(),
                             }),
                           );
@@ -1094,6 +1125,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
           mcpInvocations: params.mcpInvocations,
         },
         this.fileProcessingService,
+        params.metadata?.spaceId,
       );
       const lastMessage = result.messages.at(-1);
       if (!lastMessage) {
