@@ -373,6 +373,280 @@ const applyTextUpdate = (
     textNode.insert(0, text);
   }
 };
+// ── findParentOf ───────────────────────────────────────────────────────
+
+export interface ParentResult {
+  parent: Y.XmlElement | Y.XmlFragment;
+  index: number;
+}
+
+/**
+ * Walks the Y.js tree to find a block's parent container and its index within it.
+ */
+export const findParentOf = (
+  container: Y.XmlElement | Y.XmlFragment,
+  blockId: string,
+): ParentResult | null => {
+  const nodes = container.toArray();
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i];
+    if (!(node instanceof Y.XmlElement)) continue;
+
+    const candidateId =
+      getAnyAttribute<string>(node, 'id') ?? node.getAttribute('id');
+    if (candidateId === blockId) {
+      return { parent: container, index: i };
+    }
+
+    const nested = findParentOf(node, blockId);
+    if (nested) return nested;
+  }
+  return null;
+};
+
+// ── insertBlock ────────────────────────────────────────────────────────
+
+export interface InsertBlockOptions extends AppendBlockOptions {
+  referenceBlockId: string;
+  placement: 'before' | 'after';
+}
+
+/**
+ * Inserts a new block before or after a reference block.
+ */
+export const insertBlock = (
+  doc: Y.Doc,
+  options: InsertBlockOptions,
+): BlockSnapshot => {
+  const {
+    referenceBlockId,
+    placement,
+    blockId,
+    blockType = DEFAULT_BLOCK_TYPE,
+    text,
+    attributes = {},
+    docName = DEFAULT_FRAGMENT_NAME,
+    namespace,
+  } = options;
+
+  const resolvedBlockId =
+    blockId ?? (namespace ? `${namespace}-${randomId()}` : randomId());
+
+  let snapshot: BlockSnapshot | undefined;
+
+  doc.transact(() => {
+    const fragment = doc.getXmlFragment(docName);
+    const result = findParentOf(fragment, referenceBlockId);
+
+    if (!result) {
+      throw new Error(`Reference block with id ${referenceBlockId} not found`);
+    }
+
+    const { parent, index } = result;
+    const block = createBlockStructure(
+      resolvedBlockId,
+      blockType,
+      text,
+      attributes,
+    );
+
+    const insertIndex = placement === 'before' ? index : index + 1;
+
+    (parent as Y.XmlElement).insert(insertIndex, [block]);
+
+    snapshot = snapshotBlock(block);
+  }, MUTATION_ORIGIN);
+
+  if (!snapshot) {
+    throw new Error('Failed to create block snapshot');
+  }
+
+  return snapshot;
+};
+
+// ── moveBlock ──────────────────────────────────────────────────────────
+
+export interface MoveBlockOptions {
+  blockId: string;
+  referenceBlockId: string;
+  placement: 'before' | 'after';
+  docName?: string;
+}
+
+/**
+ * Moves a block to a new position relative to a reference block.
+ * Preserves block ID, content, runtime state, and audit trail.
+ */
+export const moveBlock = (
+  doc: Y.Doc,
+  options: MoveBlockOptions,
+): BlockSnapshot => {
+  const {
+    blockId,
+    referenceBlockId,
+    placement,
+    docName = DEFAULT_FRAGMENT_NAME,
+  } = options;
+
+  if (blockId === referenceBlockId) {
+    throw new Error('Cannot move a block relative to itself');
+  }
+
+  let snapshot: BlockSnapshot | undefined;
+
+  doc.transact(() => {
+    const fragment = doc.getXmlFragment(docName);
+
+    const sourceResult = findParentOf(fragment, blockId);
+    if (!sourceResult) {
+      throw new Error(`Source block with id ${blockId} not found`);
+    }
+
+    // Clone the block element before removing (Y.js elements can't be reinserted after deletion)
+    const sourceBlock = sourceResult.parent.toArray()[
+      sourceResult.index
+    ] as Y.XmlElement;
+
+    // Remove from source
+    sourceResult.parent.delete(sourceResult.index, 1);
+
+    // Re-find reference block (index may have shifted after removal)
+    const targetResult = findParentOf(fragment, referenceBlockId);
+    if (!targetResult) {
+      throw new Error(`Reference block with id ${referenceBlockId} not found`);
+    }
+
+    const insertIndex =
+      placement === 'before' ? targetResult.index : targetResult.index + 1;
+
+    targetResult.parent.insert(insertIndex, [sourceBlock]);
+
+    snapshot = snapshotBlock(sourceBlock);
+  }, MUTATION_ORIGIN);
+
+  if (!snapshot) {
+    throw new Error('Failed to move block');
+  }
+
+  return snapshot;
+};
+
+// ── findAndReplaceInDoc ────────────────────────────────────────────────
+
+export interface FindAndReplaceOptions {
+  searchText: string;
+  replaceText: string;
+  caseSensitive?: boolean;
+  replaceAll?: boolean;
+  docName?: string;
+}
+
+export interface FindAndReplaceResult {
+  success: boolean;
+  replacementCount: number;
+  affectedBlockIds: string[];
+}
+
+/**
+ * Finds and replaces text across all blocks in the document.
+ * Walks all blocks, finds Y.XmlText nodes, performs replacements.
+ * Uses a single doc.transact() for atomicity.
+ */
+export const findAndReplaceInDoc = (
+  doc: Y.Doc,
+  options: FindAndReplaceOptions,
+): FindAndReplaceResult => {
+  const {
+    searchText,
+    replaceText,
+    caseSensitive = true,
+    replaceAll = true,
+    docName = DEFAULT_FRAGMENT_NAME,
+  } = options;
+
+  let replacementCount = 0;
+  const affectedBlockIds: string[] = [];
+
+  doc.transact(() => {
+    const fragment = doc.getXmlFragment(docName);
+    const rootGroup = fragment
+      .toArray()
+      .find(
+        (node): node is Y.XmlElement =>
+          node instanceof Y.XmlElement && node.nodeName === 'blockGroup',
+      );
+
+    if (!rootGroup) return;
+
+    const processContainer = (container: Y.XmlElement | Y.XmlFragment) => {
+      const nodes = container.toArray();
+      for (const node of nodes) {
+        if (!(node instanceof Y.XmlElement)) continue;
+
+        // If this is a blockContainer, get the block ID and process content
+        const candidateId =
+          getAnyAttribute<string>(node, 'id') ?? node.getAttribute('id');
+
+        // Recursively process children (content elements, nested blockGroups)
+        processElement(node, candidateId);
+      }
+    };
+
+    const processElement = (
+      element: Y.XmlElement,
+      blockId: string | undefined,
+    ) => {
+      const children = element.toArray();
+      for (const child of children) {
+        if (child instanceof Y.XmlText) {
+          const replaced = replaceInTextNode(child);
+          if (replaced && blockId && !affectedBlockIds.includes(blockId)) {
+            affectedBlockIds.push(blockId);
+          }
+        } else if (child instanceof Y.XmlElement) {
+          processElement(child, blockId);
+        }
+      }
+    };
+
+    const replaceInTextNode = (textNode: Y.XmlText): boolean => {
+      const content = textNode.toString();
+      const flags = caseSensitive ? 'g' : 'gi';
+      const escapedSearch = searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+      let hadMatch = false;
+
+      // Find all matches and process from end to start to avoid index shifting
+      const matches: Array<{ index: number; length: number }> = [];
+      let match: RegExpExecArray | null;
+      const searchRegex = new RegExp(escapedSearch, flags);
+      while ((match = searchRegex.exec(content)) !== null) {
+        matches.push({ index: match.index, length: match[0].length });
+        if (!replaceAll) break;
+      }
+
+      // Process from end to start
+      for (let i = matches.length - 1; i >= 0; i--) {
+        const m = matches[i];
+        textNode.delete(m.index, m.length);
+        textNode.insert(m.index, replaceText);
+        replacementCount++;
+        hadMatch = true;
+      }
+
+      return hadMatch;
+    };
+
+    processContainer(rootGroup);
+  }, MUTATION_ORIGIN);
+
+  return {
+    success: replacementCount > 0,
+    replacementCount,
+    affectedBlockIds,
+  };
+};
+
 export const appendBlock = (
   doc: Y.Doc,
   options: AppendBlockOptions,

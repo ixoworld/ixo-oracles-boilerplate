@@ -154,17 +154,26 @@ export class MatrixProviderManager {
     const room = this.matrixClient.getRoom(roomId);
 
     if (!room) {
-      Logger.warn(`Room ${roomId} not in client store, attempting to peek...`);
+      Logger.warn(
+        `Room ${roomId} not in client store, attempting to join/peek...`,
+      );
 
       try {
-        // Try to peek into the room to populate the client's store
-        await this.matrixClient.peekInRoom(roomId);
-        Logger.log(`Successfully peeked into room ${roomId}`);
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        throw new Error(
-          `Room ${roomId} not accessible. Ensure the client has joined the room and is synced. Error: ${errorMsg}`,
-        );
+        // Try joining first — peek fails when room previews are disabled
+        await this.matrixClient.joinRoom(roomId);
+        Logger.log(`Successfully joined room ${roomId}`);
+      } catch (joinError) {
+        // Fall back to peek if join fails (e.g. already joined but not synced)
+        try {
+          await this.matrixClient.peekInRoom(roomId);
+          Logger.log(`Successfully peeked into room ${roomId}`);
+        } catch (peekError) {
+          const errorMsg =
+            peekError instanceof Error ? peekError.message : String(peekError);
+          throw new Error(
+            `Room ${roomId} not accessible. Ensure the client has been invited to the room. Error: ${errorMsg}`,
+          );
+        }
       }
     } else {
       Logger.debug(`Room ${roomId} found in client store`);

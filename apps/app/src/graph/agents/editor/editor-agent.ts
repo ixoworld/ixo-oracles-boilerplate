@@ -1,6 +1,8 @@
-import { getProviderChatModel } from '../../llm-provider';
 import { type StructuredTool } from 'langchain';
+import { createHash } from 'node:crypto';
+import { getProviderChatModel } from '../../llm-provider';
 
+import { Logger } from '@nestjs/common';
 import type { AgentSpec } from '../subagent-as-tool';
 import {
   BLOCKNOTE_TOOLS_CONFIG,
@@ -8,8 +10,8 @@ import {
 } from './blocknote-tools';
 import type { AppConfig, MatrixRoomConfig } from './config';
 import { EditorMatrixClient } from './editor-mx';
+import { createPageTools } from './page-tools';
 import { editorAgentPrompt, editorAgentReadOnlyPrompt } from './prompts';
-import { Logger } from '@nestjs/common';
 
 const llm = getProviderChatModel('main', {
   __includeRawResponse: true,
@@ -99,6 +101,9 @@ type BlocknoteToolset =
       fillSurveyAnswersTool: StructuredTool;
       validateSurveyAnswersTool: StructuredTool;
       executeActionTool: StructuredTool;
+      findAndReplaceTool: StructuredTool;
+      moveBlockTool: StructuredTool;
+      bulkEditBlocksTool: StructuredTool;
     };
 
 export type EditorAgentMode = 'edit' | 'readOnly';
@@ -111,6 +116,12 @@ export interface CreateEditorAgentParams {
   configOverrides?: AppConfigOverrides;
   name?: string;
   description?: string;
+  /** Matrix user ID of the page owner — invited and given power level 50 on page creation */
+  userMatrixId?: string;
+  /** Matrix space ID to nest new pages under */
+  spaceId?: string;
+  /** Auth context for logging page/block operations to the Memory Engine */
+  memoryAuth?: import('./page-memory').PageMemoryAuth;
 }
 
 const resolveTools = (
@@ -148,6 +159,9 @@ const resolveTools = (
       fillSurveyAnswersTool: StructuredTool;
       validateSurveyAnswersTool: StructuredTool;
       executeActionTool: StructuredTool;
+      findAndReplaceTool: StructuredTool;
+      moveBlockTool: StructuredTool;
+      bulkEditBlocksTool: StructuredTool;
     }
   >;
 
@@ -170,6 +184,9 @@ const resolveTools = (
     writableToolset.fillSurveyAnswersTool,
     writableToolset.validateSurveyAnswersTool,
     writableToolset.executeActionTool,
+    writableToolset.findAndReplaceTool,
+    writableToolset.moveBlockTool,
+    writableToolset.bulkEditBlocksTool,
   ];
 };
 
@@ -179,7 +196,15 @@ export const createEditorAgent = async ({
   configOverrides,
   name = 'Editor Agent',
   description = 'AI Agent that read and write to pages and editor.',
-}: CreateEditorAgentParams): Promise<EditorAgentInstance> => {
+  userMatrixId,
+  spaceId,
+  memoryAuth,
+  userDid,
+  sessionId,
+}: CreateEditorAgentParams & {
+  userDid: string;
+  sessionId: string;
+}): Promise<EditorAgentInstance> => {
   const roomConfig = normalizeRoom(room);
   const editorMatrixClient = EditorMatrixClient.getInstance();
   await editorMatrixClient.waitUntilReady();
@@ -195,6 +220,22 @@ export const createEditorAgent = async ({
 
   const agentTools = resolveTools(mode, blocknoteTools);
 
+  // Add page management tools — pass the editor room ID so update_page/read_page
+  // default to it instead of requiring the LLM to provide it
+  const editorRoomId = roomConfig.type === 'id' ? roomConfig.value : undefined;
+  const pageTools = createPageTools(
+    matrixClient,
+    userMatrixId,
+    spaceId,
+    memoryAuth,
+    editorRoomId,
+  );
+  agentTools.push(pageTools.readPageTool);
+  if (mode === 'edit') {
+    agentTools.push(pageTools.createPageTool);
+    agentTools.push(pageTools.updatePageTool);
+  }
+
   Logger.log(`Created editor agent with Mode: ${mode}`);
   Logger.log(`Tools: ${agentTools.map((t) => t.name).join(', ')}`);
   return {
@@ -205,5 +246,10 @@ export const createEditorAgent = async ({
       mode === 'readOnly' ? editorAgentReadOnlyPrompt : editorAgentPrompt,
     model: llm,
     middleware: [],
+    userDid,
+    sessionId,
+    threadSuffix: editorRoomId
+      ? createHash('sha256').update(editorRoomId).digest('hex').slice(0, 5)
+      : undefined,
   };
 };

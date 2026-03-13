@@ -6,17 +6,18 @@
 
 ## State Fields
 
-| Field              | Type                                | Default                                                       | Reducer                | Description                                         |
-| ------------------ | ----------------------------------- | ------------------------------------------------------------- | ---------------------- | --------------------------------------------------- |
-| `config`           | `{ wsId?: string; did: string }`    | `{ did: '', wsId: '' }`                                       | merge                  | User identification — DID and optional WebSocket ID |
-| `client`           | `'portal' \| 'matrix' \| 'slack'`   | `'portal'`                                                    | replace                | Source client type                                  |
-| `messages`         | `BaseMessage[]`                     | `[]`                                                          | `messagesStateReducer` | Conversation history (LangGraph message reducer)    |
-| `editorRoomId`     | `string \| undefined`               | `undefined`                                                   | replace                | Active BlockNote editor room (enables editor agent) |
-| `currentEntityDid` | `string \| undefined`               | `undefined`                                                   | replace                | Context entity DID for domain-specific operations   |
-| `browserTools`     | `BrowserToolCallDto[] \| undefined` | `[]`                                                          | replace                | Client-provided browser tools (reverse calls)       |
-| `agActions`        | `AgActionDto[] \| undefined`        | `[]`                                                          | replace                | AG-UI custom actions from client                    |
-| `userContext`      | `UserContextData`                   | `{ identity, work, goals, interests, relationships, recent }` | merge                  | Per-user personalization data from Memory Agent     |
-| `mcpUcanContext`   | `MCPUCANContext \| undefined`       | `undefined`                                                   | replace                | UCAN invocations for authorized MCP tool calls      |
+| Field              | Type                                | Default                                                       | Reducer                | Description                                                                        |
+| ------------------ | ----------------------------------- | ------------------------------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------- |
+| `config`           | `{ wsId?: string; did: string }`    | `{ did: '', wsId: '' }`                                       | merge                  | User identification — DID and optional WebSocket ID                                |
+| `client`           | `'portal' \| 'matrix' \| 'slack'`   | `'portal'`                                                    | replace                | Source client type                                                                 |
+| `messages`         | `BaseMessage[]`                     | `[]`                                                          | `messagesStateReducer` | Conversation history (LangGraph message reducer)                                   |
+| `editorRoomId`     | `string \| undefined`               | `undefined`                                                   | replace                | Active BlockNote editor room (enables editor agent)                                |
+| `currentEntityDid` | `string \| undefined`               | `undefined`                                                   | replace                | Context entity DID for domain-specific operations                                  |
+| `browserTools`     | `BrowserToolCallDto[] \| undefined` | `[]`                                                          | replace                | Client-provided browser tools (reverse calls)                                      |
+| `agActions`        | `AgActionDto[] \| undefined`        | `[]`                                                          | replace                | AG-UI custom actions from client                                                   |
+| `userContext`      | `UserContextData`                   | `{ identity, work, goals, interests, relationships, recent }` | merge                  | Per-user personalization data from Memory Agent                                    |
+| `spaceId`          | `string \| undefined`               | `undefined`                                                   | replace                | Matrix space ID for organizing pages — passed from the client via message metadata |
+| `mcpUcanContext`   | `MCPUCANContext \| undefined`       | `undefined`                                                   | replace                | UCAN invocations for authorized MCP tool calls                                     |
 
 ---
 

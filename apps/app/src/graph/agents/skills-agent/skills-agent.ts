@@ -26,7 +26,13 @@ const sandboxMCP = createMCPClient({
     },
   },
 });
-export const createSkillsAgent = async (): Promise<AgentSpec> => ({
+export const createSkillsAgent = async ({
+  userDid,
+  sessionId,
+}: {
+  userDid: string;
+  sessionId: string;
+}): Promise<AgentSpec> => ({
   name: 'Skills Agent',
   description: 'A agent that uses skills to help the user',
   tools: [
@@ -37,4 +43,6 @@ export const createSkillsAgent = async (): Promise<AgentSpec> => ({
   model: llm,
   middleware: [],
   systemPrompt: SKILLS_PROMPT,
+  userDid,
+  sessionId,
 });

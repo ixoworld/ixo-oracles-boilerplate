@@ -192,7 +192,10 @@ export class SendMessageDto {
   })
   @IsOptional()
   @IsObject()
-  metadata?: Record<string, unknown> & { editorRoomId?: string };
+  metadata?: Record<string, unknown> & {
+    editorRoomId?: string;
+    spaceId?: string;
+  };
 
   @ApiProperty({
     description: 'User timezone (e.g., "America/New_York" or "UTC-5")',
@@ -254,6 +257,7 @@ export class SendMessagePayload {
   metadata?: {
     editorRoomId?: string;
     currentEntityDid?: string;
+    spaceId?: string;
   };
 
   /**

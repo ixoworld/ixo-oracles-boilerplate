@@ -32,6 +32,8 @@ import {
   type BlockSnapshot,
   type ConditionConfig,
 } from './blocknote-helper';
+import { emojify, unemojify } from 'node-emoji';
+import { findAndReplaceInDoc, insertBlock, moveBlock } from './block-actions';
 import { type AppConfig, MatrixProviderManager } from './provider';
 import {
   extractSurveyQuestions,
@@ -79,6 +81,42 @@ export const BLOCKNOTE_TOOLS_CONFIG = {
  */
 
 const logger = new Logger('BlocknoteTools');
+
+// ── Emoji Helpers ─────────────────────────────────────────────────────
+
+/**
+ * Checks whether a string contains emoji shortcodes (e.g. `:tada:`) or
+ * actual emoji characters. Returns true if either form is present.
+ */
+function textContainsEmoji(text: string): boolean {
+  return /:[a-z0-9_+-]+:/i.test(text) || text !== unemojify(text);
+}
+
+/**
+ * Performs a case-insensitive substring match that handles emoji/shortcode
+ * equivalence.  The search term and the target text are compared in BOTH
+ * their emojified (🎉) and unemojified (:tada:) forms so that the agent
+ * can search using either representation.
+ */
+function emojiAwareIncludes(text: string, search: string): boolean {
+  const textLower = text.toLowerCase();
+  const searchLower = search.toLowerCase();
+
+  // Fast path — direct match
+  if (textLower.includes(searchLower)) return true;
+
+  // Normalise both sides to emoji characters and compare
+  const textEmoji = emojify(textLower);
+  const searchEmoji = emojify(searchLower);
+  if (textEmoji.includes(searchEmoji)) return true;
+
+  // Normalise both sides to shortcodes and compare
+  const textCodes = unemojify(textLower);
+  const searchCodes = unemojify(searchLower);
+  if (textCodes.includes(searchCodes)) return true;
+
+  return false;
+}
 
 // ── DID Helpers ───────────────────────────────────────────────────────
 
@@ -205,7 +243,7 @@ export const createBlocknoteTools = async (
    * - Nested structure
    */
   const listBlocksTool = tool(
-    async ({ includeText = true, blockType = null }) => {
+    async ({ includeText = true, blockType = null, start = 0, end = 10 }) => {
       logger.log('📋 list_blocks tool invoked');
 
       // Use the shared Matrix client (already synced)
@@ -236,11 +274,24 @@ export const createBlocknoteTools = async (
           ? blocks.filter((b) => b.blockType === blockType)
           : blocks;
 
+        // Add position index for agent awareness of document order
+        const indexedBlocks = filteredBlocks.map((b, i) => ({
+          position: i,
+          ...b,
+        }));
+
+        // Apply pagination slice
+        const paginatedBlocks = indexedBlocks.slice(start, end);
+
         return JSON.stringify(
           {
             success: true,
-            count: filteredBlocks.length,
-            blocks: filteredBlocks,
+            roomId,
+            total: indexedBlocks.length,
+            count: paginatedBlocks.length,
+            start,
+            end,
+            blocks: paginatedBlocks,
           },
           null,
           2,
@@ -285,10 +336,23 @@ List blocks without text content (faster):
 {"includeText": false}
 \`\`\`
 
+List all blocks (override default pagination):
+\`\`\`json
+{"includeText": true, "start": 0, "end": 9999}
+\`\`\`
+
+List blocks 10-20:
+\`\`\`json
+{"start": 10, "end": 20}
+\`\`\`
+
+**Note:** By default, only the first 10 blocks are returned. Use start/end to paginate through larger documents. Check "total" in the response to see how many blocks exist.
+
 **Returns clean JSON like:**
 \`\`\`json
 {
   "success": true,
+  "total": 25,
   "count": 3,
   "blocks": [
     {
@@ -333,6 +397,22 @@ List blocks without text content (faster):
           .nullable()
           .describe(
             'Optional: filter by block type (paragraph, proposal, checkbox, apiRequest, list, etc.)',
+          ),
+        start: z
+          .number()
+          .int()
+          .optional()
+          .default(0)
+          .describe(
+            'Starting index (0-based) for pagination. Defaults to 0.',
+          ),
+        end: z
+          .number()
+          .int()
+          .optional()
+          .default(10)
+          .describe(
+            'Ending index (exclusive) for pagination. Defaults to 10.',
           ),
       }),
     },
@@ -405,6 +485,7 @@ List blocks without text content (faster):
             if (isFlow) {
               return JSON.stringify({
                 success: false,
+                blockId,
                 error:
                   `Cannot apply runtimeUpdates directly to action block "${blockId}" in a flow document. ` +
                   `Use the execute_action tool instead — it runs the action through the flow engine ` +
@@ -413,6 +494,13 @@ List blocks without text content (faster):
             }
           }
         }
+
+        // Snapshot before changes for diff
+        const beforeBlock = getBlockDetail(doc, blockId, true);
+        const beforeProps = beforeBlock
+          ? extractBlockProperties(beforeBlock)
+          : {};
+        const beforeText = beforeBlock?.text;
 
         // Wrap updates in 'props' for consistency with CLI pattern
         const attributes =
@@ -443,13 +531,63 @@ List blocks without text content (faster):
           }, 'blocknote-crdt-playground');
         }
 
-        // Create simplified response for agents
+        // Create simplified response for agents with change tracking
         const updatedBlock = getBlockDetail(doc, blockId, true);
+        const afterProps = updatedBlock
+          ? extractBlockProperties(updatedBlock)
+          : {};
+
+        // Build list of what actually changed
+        const updatedFields: string[] = [];
+        for (const key of Object.keys(updates)) {
+          if (
+            JSON.stringify(beforeProps[key]) !== JSON.stringify(afterProps[key])
+          ) {
+            updatedFields.push(key);
+          }
+        }
+        if (text !== null && text !== beforeText) {
+          updatedFields.push('text');
+        }
+        if (removeAttributes.length > 0) {
+          updatedFields.push(...removeAttributes.map((k) => `-${k}`));
+        }
+        if (updatedRuntimeState) {
+          updatedFields.push(
+            ...Object.keys(runtimeUpdates as Record<string, unknown>).map(
+              (k) => `runtime.${k}`,
+            ),
+          );
+        }
+
+        const simplified = updatedBlock
+          ? simplifyBlockForAgent(updatedBlock)
+          : null;
+
+        // Build diff from before/after state
+        const diff: Record<string, { old: unknown; new: unknown }> = {};
+        for (const field of updatedFields) {
+          if (field.startsWith('-') || field.startsWith('runtime.')) continue;
+          if (field === 'text') {
+            diff.text = {
+              old: beforeText ?? '',
+              new: updatedBlock?.text ?? '',
+            };
+          } else {
+            diff[field] = { old: beforeProps[field], new: afterProps[field] };
+          }
+        }
+
         // Changes are automatically synced by your Matrix provider
         return JSON.stringify({
           success: true,
-          message: `Successfully updated block ${blockId}`,
-          block: updatedBlock,
+          roomId,
+          blockId,
+          blockType: simplified?.type,
+          message: `Updated ${updatedFields.length} field(s): ${updatedFields.join(', ') || 'no changes detected'}`,
+          updatedFields,
+          block: simplified,
+          diff,
           ...(updatedRuntimeState && { runtimeState: updatedRuntimeState }),
         });
       } catch (error) {
@@ -556,7 +694,14 @@ List blocks without text content (faster):
    * Supports all block types — new blocks are appended to the end of the document.
    */
   const createBlockTool = tool(
-    async ({ blockType, text = '', attributes = {}, blockId = null }) => {
+    async ({
+      blockType,
+      text = '',
+      attributes = {},
+      blockId = null,
+      referenceBlockId = null,
+      placement = null,
+    }) => {
       Logger.log(`➕ create_block tool invoked for type: ${blockType}`);
       // Use the shared Matrix client (already synced)
       const providerManager = new MatrixProviderManager(matrixClient, config);
@@ -580,15 +725,30 @@ List blocks without text content (faster):
         const wrappedAttributes =
           Object.keys(attributes).length > 0 ? { props: attributes } : {};
 
-        // REUSE the same doc that was initialized at tool creation
-        const snapshot = appendBlock(doc, {
-          blockId: blockId ?? randomUUID(),
-          blockType,
-          text,
-          attributes: wrappedAttributes,
-          docName: 'document',
-          namespace: undefined,
-        });
+        const resolvedBlockId = blockId ?? randomUUID();
+        let snapshot: BlockSnapshot;
+
+        // Use positional insertion if reference block is provided
+        if (referenceBlockId && placement) {
+          snapshot = insertBlock(doc, {
+            referenceBlockId,
+            placement,
+            blockId: resolvedBlockId,
+            blockType,
+            text,
+            attributes: wrappedAttributes,
+            docName: 'document',
+          });
+        } else {
+          snapshot = appendBlock(doc, {
+            blockId: resolvedBlockId,
+            blockType,
+            text,
+            attributes: wrappedAttributes,
+            docName: 'document',
+            namespace: undefined,
+          });
+        }
 
         // Get simplified view for agents
 
@@ -597,10 +757,34 @@ List blocks without text content (faster):
           ? simplifyBlockForAgent(createdBlock)
           : null;
 
+        // Count blocks to determine position
+        const fragment = doc.getXmlFragment('document');
+        const allBlocks = collectAllBlocks(fragment);
+        const position = allBlocks.findIndex((b) => b.id === snapshot.id);
+
+        const diff = {
+          block: {
+            old: null,
+            new: simplified ?? {
+              id: snapshot.id,
+              type: blockType,
+              properties: attributes,
+              text,
+            },
+          },
+        };
+
         return JSON.stringify({
           success: true,
-          message: `Successfully created ${blockType} block`,
+          roomId,
+          blockId: snapshot.id,
+          blockType,
+          position: position >= 0 ? position : allBlocks.length - 1,
+          message: referenceBlockId
+            ? `Created ${blockType} block ${placement} block ${referenceBlockId}`
+            : `Created ${blockType} block at end of document`,
           block: simplified || snapshot,
+          diff,
         });
       } catch (error) {
         Logger.error('Error creating block:', error);
@@ -619,17 +803,18 @@ List blocks without text content (faster):
       description: `Creates a new block in the BlockNote document.
 
 **Usage:**
-- Add new blocks to the document (appended at the end)
+- By default, appends new blocks to the end of the document
+- Use \`referenceBlockId\` + \`placement\` to insert before/after a specific block
 - Initialize blocks with specific properties as key-value pairs
 - Block ID (UUID) is auto-generated unless you provide one
 - Use \`read_block_by_id\` on existing blocks to discover available properties for any block type
 
 **Examples:**
-- Paragraph: \`{"blockType": "paragraph", "text": "Hello world"}\`
-- Proposal: \`{"blockType": "proposal", "attributes": {"status": "draft", "title": "My Proposal"}}\`
-- Checkbox: \`{"blockType": "checkbox", "attributes": {"checked": false, "title": "Task"}}\`
+- Append paragraph: \`{"blockType": "paragraph", "text": "Hello world"}\`
+- Insert before a block: \`{"blockType": "paragraph", "text": "Inserted text", "referenceBlockId": "uuid-here", "placement": "before"}\`
+- Insert after a block: \`{"blockType": "proposal", "attributes": {"status": "draft"}, "referenceBlockId": "uuid-here", "placement": "after"}\`
 
-**Note:** Block attributes vary by type and may evolve. Use \`read_block_by_id\` on existing blocks to discover available properties. For survey-capable blocks (domainCreator, form, etc.), use the dedicated survey tools (read_survey, fill_survey_answers, validate_survey_answers).
+**Note:** Block attributes vary by type and may evolve. Use \`read_block_by_id\` on existing blocks to discover available properties.
 
 **Returns:**
 \`\`\`json
@@ -639,12 +824,7 @@ List blocks without text content (faster):
   "block": {
     "id": "550e8400-e29b-41d4-a716-446655440000",
     "type": "proposal",
-    "properties": {
-      "status": "draft",
-      "title": "New Proposal",
-      "description": "Proposal description",
-      "icon": "square-check"
-    },
+    "properties": {...},
     "text": ""
   }
 }
@@ -676,6 +856,20 @@ The returned block includes the auto-generated UUID that you can use for future 
           .describe(
             'Optional: custom block ID. If not provided, one will be generated automatically',
           ),
+        referenceBlockId: z
+          .string()
+          .optional()
+          .nullable()
+          .describe(
+            'Optional: ID of an existing block to insert relative to. Must be used with placement.',
+          ),
+        placement: z
+          .enum(['before', 'after'])
+          .optional()
+          .nullable()
+          .describe(
+            'Optional: insert "before" or "after" the referenceBlockId. Required when referenceBlockId is provided.',
+          ),
       }),
     },
   );
@@ -693,12 +887,18 @@ The returned block includes the auto-generated UUID that you can use for future 
         const block = getBlockDetail(doc, blockId, true);
 
         if (!block) {
-          return JSON.stringify({ success: true, block: null });
+          return JSON.stringify({
+            success: false,
+            blockId,
+            error: `Block with id ${blockId} not found`,
+          });
         }
 
         const simplified = simplifyBlockForAgent(block);
         const result: Record<string, unknown> = {
           success: true,
+          blockId,
+          blockType: simplified.type,
           block: simplified,
         };
 
@@ -1261,6 +1461,7 @@ Optional flags:
         return JSON.stringify(
           {
             success: true,
+            roomId,
             flowMetadata,
             summary: {
               blockCount: blocks.length,
@@ -1641,6 +1842,12 @@ Optionally filter by audienceDid (recipient) or capability action (e.g., "flow/b
       try {
         const { doc } = await providerManager.init();
 
+        // Snapshot before deletion so we can report what was removed
+        const beforeBlock = getBlockDetail(doc, blockId, true);
+        const beforeSimplified = beforeBlock
+          ? simplifyBlockForAgent(beforeBlock)
+          : null;
+
         const deleted = deleteBlock(doc, {
           blockId,
           docName: 'document',
@@ -1649,19 +1856,28 @@ Optionally filter by audienceDid (recipient) or capability action (e.g., "flow/b
         if (!deleted) {
           return JSON.stringify({
             success: false,
+            blockId,
             error: `Block with id ${blockId} not found`,
           });
         }
 
+        // Count remaining blocks
+        const fragment = doc.getXmlFragment('document');
+        const remaining = collectAllBlocks(fragment);
+
         return JSON.stringify({
           success: true,
-          message: `Successfully deleted block ${blockId}`,
-          deletedBlockId: blockId,
+          blockId,
+          blockType: beforeSimplified?.type,
+          message: `Deleted ${beforeSimplified?.type || 'unknown'} block "${beforeSimplified?.text?.slice(0, 60) || '(no text)'}"`,
+          deletedBlock: beforeSimplified,
+          remainingBlockCount: remaining.length,
         });
       } catch (error) {
         Logger.error('Error deleting block:', error);
         return JSON.stringify({
           success: false,
+          blockId,
           error: error instanceof Error ? error.message : String(error),
         });
       } finally {
@@ -1730,22 +1946,36 @@ Optionally filter by audienceDid (recipient) or capability action (e.g., "flow/b
         if (propKey && propValue !== null) {
           blocks = blocks.filter((b) => {
             const props = extractBlockProperties(b);
-            return String(props[propKey]) === String(propValue);
+            const actual = String(props[propKey]);
+            const expected = String(propValue);
+            // Exact match or emoji-equivalent match
+            return (
+              actual === expected ||
+              emojify(actual) === emojify(expected) ||
+              unemojify(actual) === unemojify(expected)
+            );
           });
         }
 
         if (textContains) {
-          const searchLower = textContains.toLowerCase();
           blocks = blocks.filter(
-            (b) => b.text && b.text.toLowerCase().includes(searchLower),
+            (b) => b.text && emojiAwareIncludes(b.text, textContains),
           );
         }
 
         const simplified = blocks.map(simplifyBlockForAgent);
 
+        // Build query echo so the agent knows what filters were applied
+        const appliedFilters: string[] = [];
+        if (blockType) appliedFilters.push(`type=${blockType}`);
+        if (propKey) appliedFilters.push(`${propKey}=${propValue}`);
+        if (textContains) appliedFilters.push(`text~"${textContains}"`);
+
         return JSON.stringify(
           {
             success: true,
+            roomId,
+            query: appliedFilters.join(' AND ') || '(all blocks)',
             count: simplified.length,
             blocks: simplified,
           },
@@ -1951,18 +2181,26 @@ Examples:
           });
         }
 
+        // Include the final runtime state so the agent doesn't need a separate read
+        const finalRuntime = runtimeManager.get(blockId);
+
         return JSON.stringify({
           success: outcome.success,
-          stage: outcome.stage,
-          ...(outcome.error && { error: outcome.error }),
-          ...(outcome.result && { result: outcome.result }),
           blockId,
           actionType,
+          stage: outcome.stage,
+          message: outcome.success
+            ? `Action ${actionType} completed successfully`
+            : `Action ${actionType} failed at stage: ${outcome.stage}`,
+          ...(outcome.error && { error: outcome.error }),
+          ...(outcome.result && { result: outcome.result }),
+          runtimeState: finalRuntime,
         });
       } catch (error) {
         Logger.error('Error executing action:', error);
         return JSON.stringify({
           success: false,
+          blockId,
           error: error instanceof Error ? error.message : String(error),
         });
       } finally {
@@ -2021,6 +2259,365 @@ Examples:
   );
 
   // ============================================================================
+  // Tool 15: Find and Replace
+  // ============================================================================
+
+  const findAndReplaceTool = tool(
+    async ({
+      searchText,
+      replaceText,
+      caseSensitive = true,
+      replaceAll = true,
+    }) => {
+      Logger.log(
+        `🔄 find_and_replace tool invoked: "${searchText}" → "${replaceText}"`,
+      );
+
+      const isInRoom = await checkIfInRoomAndJoinPublicRoom(
+        matrixClient,
+        roomId,
+      );
+      if (!isInRoom) {
+        return JSON.stringify({
+          success: false,
+          error: `Companion is not in the room ${roomId}, please invite companion to the room. companion user id: ${matrixClient.getUserId()}`,
+        });
+      }
+
+      const providerManager = new MatrixProviderManager(matrixClient, config);
+
+      try {
+        const { doc } = await providerManager.init();
+
+        // Try the original search text first
+        let result = findAndReplaceInDoc(doc, {
+          searchText,
+          replaceText,
+          caseSensitive,
+          replaceAll,
+          docName: 'document',
+        });
+
+        // If no matches, try the emoji-normalised form (shortcode → emoji or emoji → shortcode)
+        if (!result.success && textContainsEmoji(searchText)) {
+          const emojified = emojify(searchText);
+          const unemojified = unemojify(searchText);
+          const altSearch = emojified !== searchText ? emojified : unemojified;
+
+          if (altSearch !== searchText) {
+            result = findAndReplaceInDoc(doc, {
+              searchText: altSearch,
+              replaceText,
+              caseSensitive,
+              replaceAll,
+              docName: 'document',
+            });
+          }
+        }
+
+        return JSON.stringify({
+          success: result.success,
+          message: result.success
+            ? `Replaced ${result.replacementCount} occurrence(s) across ${result.affectedBlockIds.length} block(s)`
+            : `No occurrences of "${searchText}" found`,
+          replacementCount: result.replacementCount,
+          affectedBlockIds: result.affectedBlockIds,
+        });
+      } catch (error) {
+        Logger.error('Error in find and replace:', error);
+        return JSON.stringify({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        await providerManager.dispose();
+      }
+    },
+    {
+      name: 'find_and_replace',
+      description: `Finds and replaces text across all blocks in the document. All replacements happen atomically in a single transaction.
+
+**Examples:**
+- Replace all: \`{"searchText": "old text", "replaceText": "new text"}\`
+- Case-insensitive: \`{"searchText": "OLD", "replaceText": "new", "caseSensitive": false}\`
+- Replace first only: \`{"searchText": "duplicate", "replaceText": "unique", "replaceAll": false}\`
+
+**Returns:** Count of replacements and IDs of affected blocks.`,
+      schema: z.object({
+        searchText: z.string().describe('The text to search for'),
+        replaceText: z.string().describe('The text to replace matches with'),
+        caseSensitive: z
+          .boolean()
+          .optional()
+          .default(true)
+          .describe('Whether the search is case-sensitive (default: true)'),
+        replaceAll: z
+          .boolean()
+          .optional()
+          .default(true)
+          .describe(
+            'Whether to replace all occurrences or just the first (default: true)',
+          ),
+      }),
+    },
+  );
+
+  // ============================================================================
+  // Tool 16: Move Block
+  // ============================================================================
+
+  const moveBlockTool = tool(
+    async ({ blockId, referenceBlockId, placement }) => {
+      Logger.log(
+        `↕️ move_block tool invoked: move ${blockId} ${placement} ${referenceBlockId}`,
+      );
+
+      const isInRoom = await checkIfInRoomAndJoinPublicRoom(
+        matrixClient,
+        roomId,
+      );
+      if (!isInRoom) {
+        return JSON.stringify({
+          success: false,
+          error: `Companion is not in the room ${roomId}, please invite companion to the room. companion user id: ${matrixClient.getUserId()}`,
+        });
+      }
+
+      const providerManager = new MatrixProviderManager(matrixClient, config);
+
+      try {
+        const { doc } = await providerManager.init();
+
+        const snapshot = moveBlock(doc, {
+          blockId,
+          referenceBlockId,
+          placement,
+          docName: 'document',
+        });
+
+        const movedBlock = getBlockDetail(doc, snapshot.id, true);
+        const simplified = movedBlock
+          ? simplifyBlockForAgent(movedBlock)
+          : null;
+
+        // Get new position
+        const fragment = doc.getXmlFragment('document');
+        const allBlocks = collectAllBlocks(fragment);
+        const newPosition = allBlocks.findIndex((b) => b.id === blockId);
+
+        return JSON.stringify({
+          success: true,
+          blockId,
+          blockType: simplified?.type,
+          newPosition: newPosition >= 0 ? newPosition : undefined,
+          message: `Moved ${simplified?.type || 'block'} ${placement} block ${referenceBlockId}`,
+          block: simplified || snapshot,
+        });
+      } catch (error) {
+        Logger.error('Error moving block:', error);
+        return JSON.stringify({
+          success: false,
+          blockId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        await providerManager.dispose();
+      }
+    },
+    {
+      name: 'move_block',
+      description: `Moves a block to a new position relative to another block. Preserves block ID, content, and runtime state.
+
+**Usage:**
+1. Call \`list_blocks\` to get block IDs
+2. Specify the block to move and the reference block
+
+**Example:**
+\`{"blockId": "uuid-to-move", "referenceBlockId": "uuid-target", "placement": "before"}\``,
+      schema: z.object({
+        blockId: z.string().describe('The ID of the block to move'),
+        referenceBlockId: z
+          .string()
+          .describe('The ID of the block to position relative to'),
+        placement: z
+          .enum(['before', 'after'])
+          .describe(
+            'Place the moved block "before" or "after" the reference block',
+          ),
+      }),
+    },
+  );
+
+  // ============================================================================
+  // Tool 17: Bulk Edit Blocks
+  // ============================================================================
+
+  const bulkEditBlocksTool = tool(
+    async ({ edits }) => {
+      Logger.log(
+        `📦 bulk_edit_blocks tool invoked for ${edits.length} edit(s)`,
+      );
+
+      const isInRoom = await checkIfInRoomAndJoinPublicRoom(
+        matrixClient,
+        roomId,
+      );
+      if (!isInRoom) {
+        return JSON.stringify({
+          success: false,
+          error: `Companion is not in the room ${roomId}, please invite companion to the room. companion user id: ${matrixClient.getUserId()}`,
+        });
+      }
+
+      const providerManager = new MatrixProviderManager(matrixClient, config);
+
+      try {
+        const { doc } = await providerManager.init();
+
+        const results: Array<{
+          blockId: string;
+          success: boolean;
+          updatedFields: string[];
+          error?: string;
+        }> = [];
+
+        doc.transact(() => {
+          for (const edit of edits) {
+            try {
+              // Apply property updates
+              if (
+                edit.updates &&
+                Object.keys(edit.updates as Record<string, unknown>).length > 0
+              ) {
+                const attributes = {
+                  props: edit.updates as Record<string, unknown>,
+                };
+                editBlock(doc, {
+                  blockId: edit.blockId,
+                  attributes,
+                  docName: 'document',
+                });
+              }
+
+              // Apply text update
+              if (typeof edit.text === 'string') {
+                editBlock(doc, {
+                  blockId: edit.blockId,
+                  text: edit.text,
+                  docName: 'document',
+                });
+              }
+
+              // Apply runtime updates
+              if (
+                edit.runtimeUpdates &&
+                Object.keys(edit.runtimeUpdates as Record<string, unknown>)
+                  .length > 0
+              ) {
+                updateRuntimeState(
+                  doc,
+                  edit.blockId,
+                  edit.runtimeUpdates as Record<string, unknown>,
+                );
+              }
+
+              // Track what was updated per edit
+              const updatedFields: string[] = [];
+              if (edit.updates)
+                updatedFields.push(
+                  ...Object.keys(edit.updates as Record<string, unknown>),
+                );
+              if (typeof edit.text === 'string') updatedFields.push('text');
+              if (edit.runtimeUpdates)
+                updatedFields.push(
+                  ...Object.keys(
+                    edit.runtimeUpdates as Record<string, unknown>,
+                  ).map((k) => `runtime.${k}`),
+                );
+
+              results.push({
+                blockId: edit.blockId,
+                success: true,
+                updatedFields,
+              });
+            } catch (error) {
+              results.push({
+                blockId: edit.blockId,
+                success: false,
+                updatedFields: [],
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
+          }
+        }, 'blocknote-crdt-playground');
+
+        const successCount = results.filter((r) => r.success).length;
+        const failCount = results.filter((r) => !r.success).length;
+
+        return JSON.stringify({
+          success: failCount === 0,
+          message: `${successCount}/${edits.length} edit(s) succeeded${failCount > 0 ? `, ${failCount} failed` : ''}`,
+          totalEdits: edits.length,
+          successCount,
+          failCount,
+          results,
+        });
+      } catch (error) {
+        Logger.error('Error in bulk edit:', error);
+        return JSON.stringify({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        await providerManager.dispose();
+      }
+    },
+    {
+      name: 'bulk_edit_blocks',
+      description: `Edits multiple blocks in a single atomic transaction. Much more efficient than calling edit_block multiple times — uses one provider init/dispose cycle and one Y.js transaction.
+
+**Usage:**
+\`\`\`json
+{
+  "edits": [
+    {"blockId": "uuid-1", "updates": {"status": "open"}},
+    {"blockId": "uuid-2", "text": "Updated text"},
+    {"blockId": "uuid-3", "updates": {"title": "New"}, "runtimeUpdates": {"state": "completed"}}
+  ]
+}
+\`\`\`
+
+**Features:**
+- Single transaction for all edits (atomic)
+- Partial success allowed — individual failures don't block other edits
+- Each edit can include: \`updates\` (properties), \`text\`, \`runtimeUpdates\`
+
+**Returns:** Per-edit results with success/failure status.`,
+      schema: z.object({
+        edits: z
+          .array(
+            z.object({
+              blockId: z.string().describe('The ID of the block to edit'),
+              updates: z
+                .record(z.any(), z.any())
+                .optional()
+                .describe('Property updates as key-value pairs'),
+              text: z
+                .string()
+                .optional()
+                .describe('New text content for the block'),
+              runtimeUpdates: z
+                .record(z.any(), z.any())
+                .optional()
+                .describe('Runtime state updates to merge'),
+            }),
+          )
+          .describe('Array of block edits to apply'),
+      }),
+    },
+  );
+
+  // ============================================================================
   // Return tools based on mode
   // ============================================================================
 
@@ -2053,6 +2650,9 @@ Examples:
     fillSurveyAnswersTool,
     validateSurveyAnswersTool,
     executeActionTool,
+    findAndReplaceTool,
+    moveBlockTool,
+    bulkEditBlocksTool,
   };
 };
 
