@@ -5,9 +5,9 @@ import { SqliteSaver } from '@ixo/sqlite-saver';
 import { Logger } from '@nestjs/common';
 import {
   createAgent,
+  toolRetryMiddleware,
   type ReactAgent,
   type StructuredTool,
-  toolRetryMiddleware,
 } from 'langchain';
 import { getConfig } from 'src/config';
 import { type UcanService } from 'src/ucan/ucan.service';
@@ -47,6 +47,7 @@ import {
 } from 'src/messages/file-processing.service';
 import { SecretsService } from 'src/secrets/secrets.service';
 import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
+import z from 'zod';
 import oracleConfig from '../../../oracle.config.json';
 import { getProviderChatModel } from '../llm-provider';
 import {
@@ -494,12 +495,12 @@ Promise<ReactAgent<any>> => {
     ? createSubagentAsTool(withTimeContext(blockNoteAgentSpec), {
         forwardTools: ['create_page', 'update_page'],
         onComplete: pageMemoryAuth
-          ? (messages, query) =>
+          ? (messages, task) =>
               logEditorSessionToMemory(
                 pageMemoryAuth,
                 messages,
                 state.editorRoomId!,
-                query,
+                task,
               )
           : undefined,
       })
@@ -562,6 +563,9 @@ Promise<ReactAgent<any>> => {
       ...(standaloneEditorTool ? [standaloneEditorTool] : []),
     ],
     middleware,
+    stateSchema: z.object({
+      editorRoomId: z.string(),
+    }),
     systemPrompt: finalSystemPrompt,
     checkpointer: SqliteSaver.fromDatabase(
       await UserMatrixSqliteSyncService.getInstance().getUserDatabase(

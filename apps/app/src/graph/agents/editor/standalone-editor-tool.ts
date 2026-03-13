@@ -26,9 +26,9 @@ export interface CreateStandaloneEditorToolParams {
 }
 
 /**
- * Creates a `call_editor_agent` tool that accepts `room_id` + `query`.
+ * Creates a `call_editor_agent` tool that accepts `room_id` + `task`.
  * Each invocation spins up an ephemeral editor agent with full BlockNote +
- * page tools for the given room, runs the query, and returns the result.
+ * page tools for the given room, runs the task, and returns the result.
  */
 export function createStandaloneEditorTool({
   userMatrixId,
@@ -51,14 +51,16 @@ export function createStandaloneEditorTool({
         .describe(
           'The Matrix room ID of the page (e.g., "!oeGkcJIKNpeSiaGHVE:devmx.ixo.earth"). Must start with "!".',
         ),
-      query: z
+      task: z
         .string()
         .describe(
-          'The editing task in natural language, e.g. "Read this page and summarize it" or "Shorten the content by 50%". Do NOT include the room ID here — it goes in room_id.',
+          'A detailed, self-contained editing instruction. The editor agent has NO conversation context — ' +
+            'this string is ALL it receives. Include: explicit objective, block IDs, property names, exact values, ' +
+            'and expected outcome. Do NOT include the room ID here — it goes in room_id.',
         ),
     }),
     func: async (
-      { room_id, query }: { room_id: string; query: string },
+      { room_id, task }: { room_id: string; task: string },
       _,
       config,
     ) => {
@@ -79,11 +81,11 @@ export function createStandaloneEditorTool({
           forwardTools: ['create_page', 'update_page'],
           onComplete: memoryAuth
             ? (messages) =>
-                logEditorSessionToMemory(memoryAuth, messages, room_id, query)
+                logEditorSessionToMemory(memoryAuth, messages, room_id, task)
             : undefined,
         });
 
-        return subagentTool.invoke({ query }, config);
+        return subagentTool.invoke({ task }, config);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         Logger.error(
