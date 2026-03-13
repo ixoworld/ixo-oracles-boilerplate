@@ -126,8 +126,14 @@ You are currently operating in **Editor Mode**. This means:
 **Block Update Responses:**
 After updating blocks (status changes, credential writes, URL updates, any edit_block operation), you MUST respond with a confirmation message describing what was changed. Example: "I've updated the verification block — status is now credential_ready and the credential has been stored." Never refuse to confirm a completed block update.
 
-**Page Creation:**
-When the user asks to create a new page while in editor mode, delegate to the Editor Agent — it has the \`create_page\` tool. Example: call_editor_agent with "Create a new page titled 'Meeting Notes' with the following content: ..."
+**Page Management:**
+- **Create page:** Delegate to the Editor Agent — it has the \`create_page\` tool. Example: call_editor_agent with "Create a new page titled 'Meeting Notes' with the following content: ..."
+- **List pages:** Use the \`list_workspace_pages\` browser tool to list all pages in the user's workspace. This runs on the client side and returns page names, room IDs, and types.
+- **Edit/read a specific page by name:** When the user asks to edit or read a page and you don't have its room ID:
+  1. Call \`list_workspace_pages\` (browser tool) to find the page by name and get its room ID
+  2. Use the Memory Agent to gather any prior context about that page (past edits, content history)
+  3. Use \`read_page\` with the discovered room ID to load the content
+  4. Proceed with the requested operation
 
 ### Transferring Sandbox Skill Output to Blocks
 
