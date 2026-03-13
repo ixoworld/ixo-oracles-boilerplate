@@ -243,7 +243,7 @@ export const createBlocknoteTools = async (
    * - Nested structure
    */
   const listBlocksTool = tool(
-    async ({ includeText = true, blockType = null }) => {
+    async ({ includeText = true, blockType = null, start = 0, end = 10 }) => {
       logger.log('📋 list_blocks tool invoked');
 
       // Use the shared Matrix client (already synced)
@@ -280,12 +280,18 @@ export const createBlocknoteTools = async (
           ...b,
         }));
 
+        // Apply pagination slice
+        const paginatedBlocks = indexedBlocks.slice(start, end);
+
         return JSON.stringify(
           {
             success: true,
             roomId,
-            count: indexedBlocks.length,
-            blocks: indexedBlocks,
+            total: indexedBlocks.length,
+            count: paginatedBlocks.length,
+            start,
+            end,
+            blocks: paginatedBlocks,
           },
           null,
           2,
@@ -330,10 +336,23 @@ List blocks without text content (faster):
 {"includeText": false}
 \`\`\`
 
+List all blocks (override default pagination):
+\`\`\`json
+{"includeText": true, "start": 0, "end": 9999}
+\`\`\`
+
+List blocks 10-20:
+\`\`\`json
+{"start": 10, "end": 20}
+\`\`\`
+
+**Note:** By default, only the first 10 blocks are returned. Use start/end to paginate through larger documents. Check "total" in the response to see how many blocks exist.
+
 **Returns clean JSON like:**
 \`\`\`json
 {
   "success": true,
+  "total": 25,
   "count": 3,
   "blocks": [
     {
@@ -378,6 +397,22 @@ List blocks without text content (faster):
           .nullable()
           .describe(
             'Optional: filter by block type (paragraph, proposal, checkbox, apiRequest, list, etc.)',
+          ),
+        start: z
+          .number()
+          .int()
+          .optional()
+          .default(0)
+          .describe(
+            'Starting index (0-based) for pagination. Defaults to 0.',
+          ),
+        end: z
+          .number()
+          .int()
+          .optional()
+          .default(10)
+          .describe(
+            'Ending index (exclusive) for pagination. Defaults to 10.',
           ),
       }),
     },
