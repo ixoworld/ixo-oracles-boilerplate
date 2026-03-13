@@ -9,12 +9,14 @@
 Oracles are stateless by default — they can have conversations, but they can't **create**, **store**, or **recall** documents.
 
 **What users need:**
+
 - Ask the oracle to "save this research as a page"
 - Oracle creates a persistent, editable document
 - The document lives in the user's workspace — not lost in chat history
 - Oracle remembers what it wrote and can update it later
 
 **What we didn't have:**
+
 - No file system for oracles
 - No way to create pages from chat
 - No memory of document operations
@@ -28,14 +30,14 @@ Instead of building a traditional file system, we use what we already have: **Ma
 
 Every "file" is a **CRDT document (Y.Doc) synced to a Matrix room**.
 
-| Concept | How it works |
-|---------|-------------|
-| A "file" | A Matrix room containing a Y.Doc |
-| File ID | The Matrix `room_id` |
-| File name | Room alias: `page-{timestamp}` |
-| File content | BlockNote blocks inside Y.js XmlFragment |
-| File metadata | Y.js Map: title, owner DID, creation date |
-| Storage | Matrix homeserver (E2E encrypted) |
+| Concept       | How it works                                                |
+| ------------- | ----------------------------------------------------------- |
+| A "file"      | A Matrix room containing a Y.Doc                            |
+| File ID       | The Matrix `room_id`                                        |
+| File name     | Room alias: `page-{timestamp}`                              |
+| File content  | BlockNote blocks inside Y.js XmlFragment                    |
+| File metadata | Y.js Map: title, owner DID, creation date                   |
+| Storage       | Matrix homeserver (E2E encrypted)                           |
 | Collaboration | Real-time via CRDT — multiple users can edit simultaneously |
 
 **Why this is powerful:** We get encryption, persistence, real-time collaboration, and access control for free — no new infrastructure needed.
@@ -102,6 +104,7 @@ User: "Create a page about our Q1 results"
 ```
 
 **Input:**
+
 ```typescript
 {
   title: "Q1 Results",           // required
@@ -111,6 +114,7 @@ User: "Create a page about our Q1 results"
 ```
 
 **Output:**
+
 ```typescript
 {
   success: true,
@@ -178,11 +182,12 @@ After mutation:
 ```
 
 **The PageDiff interface:**
+
 ```typescript
 interface PageDiff {
-  title?:   { old: string; new: string };
-  topic?:   { old: string; new: string };
-  content?: { old: string; new: string };  // full markdown before/after
+  title?: { old: string; new: string };
+  topic?: { old: string; new: string };
+  content?: { old: string; new: string }; // full markdown before/after
 }
 ```
 
@@ -196,14 +201,15 @@ Simple but context-aware.
 
 **Two modes — same tool, different schema:**
 
-| Mode | When | Schema |
-|------|------|--------|
-| **Editor context** | User has a page open in the editor | No params needed — room ID baked in |
-| **Standalone** | Called from main chat (no editor open) | Requires `room_id` param |
+| Mode               | When                                   | Schema                              |
+| ------------------ | -------------------------------------- | ----------------------------------- |
+| **Editor context** | User has a page open in the editor     | No params needed — room ID baked in |
+| **Standalone**     | Called from main chat (no editor open) | Requires `room_id` param            |
 
 **Why?** Reduces cognitive load on the LLM. When the user is already editing a page, the oracle shouldn't have to figure out which room to read — it just knows.
 
 **Output:**
+
 ```typescript
 {
   success: true,
@@ -288,12 +294,13 @@ SSE Stream --> Frontend renders CreatePageToolCall / UpdatePageToolCall cards
 ```
 
 **Configuration:**
+
 ```typescript
 createSubagentAsTool(editorAgentSpec, {
   forwardTools: ['create_page', 'update_page'],
   onComplete: (messages, query) =>
-    logEditorSessionToMemory(memoryAuth, messages, editorRoomId, query)
-})
+    logEditorSessionToMemory(memoryAuth, messages, editorRoomId, query),
+});
 ```
 
 ---
@@ -347,6 +354,7 @@ logEditorSessionToMemory():
 [INSERT SCREENSHOT: CreatePageToolCall card]
 
 **CreatePageToolCall** renders when the oracle creates a page:
+
 - Shows page title (with emoji support)
 - Displays topic/description
 - Block count indicator
@@ -356,6 +364,7 @@ logEditorSessionToMemory():
 [INSERT SCREENSHOT: UpdatePageToolCall card]
 
 **UpdatePageToolCall** renders when the oracle updates a page:
+
 - **Update type badge:** "Replace content" / "Append content" / "Metadata only"
 - Content preview (first 150 characters)
 - List of updated fields (title, topic, content)
@@ -460,15 +469,18 @@ Layer 3: TRANSFORM (common utils)
 New positional operations for the editor agent — beyond basic create/edit/delete.
 
 **`findParentOf(container, blockId)`**
+
 - Recursively walks the Y.js document tree
 - Finds any block's parent container and index position
 - Foundation for positional operations
 
 **`insertBlock(doc, { placement, referenceBlockId })`**
+
 - Insert a block **before** or **after** any reference block
 - Maintains document structure and block attributes
 
 **`moveBlock(doc, { blockId, referenceBlockId, placement })`**
+
 - Relocate a block to a new position
 - Handles index shifts (when removing a block changes target position)
 - Preserves block ID, content, and audit trail
@@ -514,13 +526,13 @@ Before moveBlock:               After moveBlock:
 
 ## Slide 16: What's Next
 
-| Item | Ticket | Status |
-|------|--------|--------|
-| `list_pages` tool — browse and search pages | Future | Planned |
-| `delete_page` tool — archive with memory tracking | Future | Planned |
-| Background watcher — detect FE edits, trigger memory updates | Future | Planned |
+| Item                                                                    | Ticket | Status  |
+| ----------------------------------------------------------------------- | ------ | ------- |
+| `list_pages` tool — browse and search pages                             | Future | Planned |
+| `delete_page` tool — archive with memory tracking                       | Future | Planned |
+| Background watcher — detect FE edits, trigger memory updates            | Future | Planned |
 | AI-generated summaries — replace operation counts with natural language | Future | Planned |
-| Diff visualization — render PageDiff as GitHub-style change view in UI | Future | Idea |
+| Diff visualization — render PageDiff as GitHub-style change view in UI  | Future | Idea    |
 
 ---
 
@@ -538,6 +550,7 @@ Before moveBlock:               After moveBlock:
 - **Block action enhancements** — positional insert and move operations for the editor agent
 
 **Key design principles:**
+
 - No new infrastructure — built on Matrix (encryption, persistence, collaboration for free)
 - Graceful degradation — memory engine failures never block operations
 - LLM-friendly — context-aware schemas reduce errors
