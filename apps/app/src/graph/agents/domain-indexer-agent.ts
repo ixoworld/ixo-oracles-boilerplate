@@ -53,16 +53,23 @@ const buildDescription = (tools: StructuredTool[]) => {
 
 export type DomainIndexerAgentInstance = AgentSpec;
 
-export const createDomainIndexerAgent =
-  async (): Promise<DomainIndexerAgentInstance> => {
-    const tools = [domainIndexerSearchTool, getDomainCardTool];
+export const createDomainIndexerAgent = async ({
+  userDid,
+  sessionId,
+}: {
+  userDid: string;
+  sessionId: string;
+}): Promise<DomainIndexerAgentInstance> => {
+  const tools = [domainIndexerSearchTool, getDomainCardTool];
 
-    return {
-      name: 'Domain Indexer Agent',
-      description: buildDescription(tools),
-      tools,
-      systemPrompt: buildSystemPrompt(tools),
-      model: llm,
-      middleware: [],
-    };
+  return {
+    name: 'Domain Indexer Agent',
+    description: buildDescription(tools),
+    tools,
+    systemPrompt: buildSystemPrompt(tools),
+    model: llm,
+    middleware: [],
+    userDid,
+    sessionId,
   };
+};

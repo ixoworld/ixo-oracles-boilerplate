@@ -282,6 +282,8 @@ Promise<ReactAgent<any>> => {
             toolName: tool.name,
           }),
         ) ?? [],
+      userDid: configurable.configs.user.did,
+      sessionId: configurable.thread_id,
     }),
     createMemoryAgent({
       oracleToken: oracleOpenIdToken ?? '',
@@ -290,9 +292,17 @@ Promise<ReactAgent<any>> => {
       userHomeServer: configurable.configs?.matrix.homeServerName ?? '',
       roomId: matrix?.roomId ?? '',
       mode: 'user',
+      userDid: configurable.configs.user.did,
+      sessionId: configurable.thread_id,
     }),
-    createFirecrawlAgent(),
-    createDomainIndexerAgent(),
+    createFirecrawlAgent({
+      userDid: configurable.configs.user.did,
+      sessionId: configurable.thread_id,
+    }),
+    createDomainIndexerAgent({
+      userDid: configurable.configs.user.did,
+      sessionId: configurable.thread_id,
+    }),
     getMcpTools(),
     sandboxMCP?.getTools() ?? Promise.resolve([]),
   ]);
@@ -410,6 +420,8 @@ Promise<ReactAgent<any>> => {
         userMatrixId,
         spaceId: state.spaceId,
         memoryAuth: pageMemoryAuth,
+        userDid: configurable.configs.user.did,
+        sessionId: configurable.thread_id,
       });
     } catch (error) {
       Logger.error(
@@ -442,6 +454,8 @@ Promise<ReactAgent<any>> => {
       spaceId: state.spaceId,
       memoryAuth: pageMemoryAuth,
       transformSpec: withTimeContext,
+      userDid: configurable.configs.user.did,
+      sessionId: configurable.thread_id,
     });
 
     Logger.log(`Created standalone editor tool with spaceId: ${state.spaceId}`);

@@ -37,7 +37,7 @@ const MODEL_MAP: Record<LLMProvider, Record<ModelRole, string>> = {
     subagent: 'moonshotai/kimi-k2-thinking',
     vision: 'google/gemini-2.5-flash-lite',
     guard: 'meta-llama/llama-3.1-8b-instruct',
-    routing: 'qwen/qwen3-14b',
+    routing: 'openai/gpt-oss-20b',
     'session-title': 'meta-llama/llama-3.1-8b-instruct',
     embedding: 'text-embedding-3-small',
   },

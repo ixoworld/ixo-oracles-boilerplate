@@ -92,6 +92,8 @@ export const createMemoryAgent = async ({
   userHomeServer,
   roomId,
   mode,
+  userDid,
+  sessionId,
 }: {
   oracleToken: string;
   userToken: string;
@@ -99,6 +101,8 @@ export const createMemoryAgent = async ({
   userHomeServer: string;
   roomId: string;
   mode: 'user' | 'orgOwner';
+  userDid: string;
+  sessionId: string;
 }): Promise<AgentSpec> => {
   const memoryEngineTools = await getMemoryEngineMcpTools({
     oracleToken,
@@ -131,5 +135,7 @@ export const createMemoryAgent = async ({
         ? 'AI Agent that manages knowledge across three scopes: (1) User memories (private, personal to each user), (2) Organization public knowledge (accessible to customers/public users), and (3) Organization private knowledge (internal company only). Can search and add memories to all scopes. For org owners: when adding organization knowledge, must confirm scope (public/private) with owner before adding.'
         : 'AI Agent that manages knowledge across three scopes: (1) User memories (private, personal to each user), (2) Organization public knowledge (read-only, accessible to customers/public), and (3) Organization private knowledge (read-only, internal company only). Can search all scopes and add personal user memories only.',
     middleware: [],
+    userDid,
+    sessionId,
   };
 };

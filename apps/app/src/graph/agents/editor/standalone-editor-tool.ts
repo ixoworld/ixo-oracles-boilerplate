@@ -21,6 +21,8 @@ export interface CreateStandaloneEditorToolParams {
   memoryAuth?: PageMemoryAuth;
   /** Optional transform to inject extra context (e.g. time) into the agent spec */
   transformSpec?: (spec: AgentSpec) => AgentSpec;
+  userDid: string;
+  sessionId: string;
 }
 
 /**
@@ -33,6 +35,8 @@ export function createStandaloneEditorTool({
   spaceId,
   memoryAuth,
   transformSpec = (s) => s,
+  userDid,
+  sessionId,
 }: CreateStandaloneEditorToolParams): StructuredTool {
   return new DynamicStructuredTool({
     name: 'call_editor_agent',
@@ -65,6 +69,8 @@ export function createStandaloneEditorTool({
           userMatrixId,
           spaceId,
           memoryAuth,
+          userDid,
+          sessionId,
         });
 
         const spec = transformSpec(editorSpec);

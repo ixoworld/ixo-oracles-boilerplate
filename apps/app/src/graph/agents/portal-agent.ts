@@ -85,7 +85,12 @@ export interface CreatePortalAgentParams {
 
 export const createPortalAgent = async ({
   tools,
-}: CreatePortalAgentParams): Promise<PortalAgentInstance> => {
+  userDid,
+  sessionId,
+}: CreatePortalAgentParams & {
+  userDid: string;
+  sessionId: string;
+}): Promise<PortalAgentInstance> => {
   const toolsDoc = formatToolDocs(tools);
 
   const systemPrompt = buildPortalPrompt({
@@ -99,5 +104,7 @@ export const createPortalAgent = async ({
     systemPrompt,
     model: llm,
     middleware: [],
+    userDid,
+    sessionId,
   };
 };

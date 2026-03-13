@@ -86,7 +86,12 @@ export interface CreateFirecrawlAgentParams {
 
 export const createFirecrawlAgent = async ({
   extraInstructions,
-}: CreateFirecrawlAgentParams = {}): Promise<FirecrawlAgentInstance> => {
+  userDid,
+  sessionId,
+}: CreateFirecrawlAgentParams & {
+  userDid: string;
+  sessionId: string;
+}): Promise<FirecrawlAgentInstance> => {
   const firecrawlTools = await getFirecrawlMcpTools();
 
   const toolsDoc = formatToolDocs(firecrawlTools);
@@ -99,5 +104,7 @@ export const createFirecrawlAgent = async ({
     systemPrompt,
     model: llm,
     middleware: [],
+    userDid,
+    sessionId,
   };
 };

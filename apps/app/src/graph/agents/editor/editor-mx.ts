@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 import type { MatrixClient, SyncStateData } from 'matrix-js-sdk';
-import { ClientEvent, createClient, SyncState } from 'matrix-js-sdk';
+import { ClientEvent, createClient, Filter, SyncState } from 'matrix-js-sdk';
 import { BLOCKNOTE_TOOLS_CONFIG } from './blocknote-tools';
 
 /**
@@ -186,6 +186,52 @@ export class EditorMatrixClient {
   }
 
   /**
+   * Build an event-type allowlist filter.
+   * Only syncs the event types the CRDT provider needs — everything else
+   * (memory events, action logs, media, oracles calls) is excluded by default.
+   * Set once at startup, never rebuilt or restarted.
+   */
+  private buildSyncFilter(): Filter {
+    const userId = BLOCKNOTE_TOOLS_CONFIG.matrix.userId;
+    const filter = new Filter(userId);
+    filter.setDefinition({
+      room: {
+        // No 'rooms' field — sync all joined rooms
+        timeline: {
+          types: [
+            'matrix-crdt.doc_update',
+            'matrix-crdt.doc_snapshot',
+            'm.room.message',
+            'm.room.redaction',
+          ],
+          limit: this.INITIAL_SYNC_LIMIT,
+        },
+        state: {
+          types: [
+            'm.room.name',
+            'm.room.topic',
+            'm.room.power_levels',
+            'm.room.join_rules',
+            'm.room.history_visibility',
+            'm.room.guest_access',
+            'm.room.member',
+            'm.room.create',
+            'm.space.child',
+            'm.space.parent',
+            'ixo.page.cover_image',
+            'ixo.page.cover_icon',
+          ],
+          lazy_load_members: true,
+        },
+        ephemeral: { not_types: ['*'] },
+        account_data: { not_types: ['*'] },
+      },
+      presence: { not_types: ['*'] },
+    });
+    return filter;
+  }
+
+  /**
    * Wait for the initial sync to complete
    * Uses a one-time listener that resolves when sync is ready
    */
@@ -195,6 +241,7 @@ export class EditorMatrixClient {
     }
 
     const client = this.matrixClient; // Store reference for closure
+    const filter = this.buildSyncFilter();
 
     return new Promise<void>((resolve, reject) => {
       let resolved = false;
@@ -247,11 +294,14 @@ export class EditorMatrixClient {
       // Register one-time initial sync listener
       client.on(ClientEvent.Sync, initialSyncListener);
 
-      // Start the client
-      this.logger.log('Starting Matrix client...');
+      // Start the client with event-type filter (set once, no restarts)
+      this.logger.log(
+        'Starting Matrix client with event-type allowlist filter...',
+      );
       void client.startClient({
         initialSyncLimit: this.INITIAL_SYNC_LIMIT,
         pollTimeout: this.SYNC_POLL_TIMEOUT,
+        filter,
       });
     });
   }
