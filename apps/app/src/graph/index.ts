@@ -39,6 +39,7 @@ export class MainAgentGraph {
     clientType?: 'matrix' | 'slack',
     ucanOptions?: UCANOptions,
     fileProcessingService?: FileProcessingService,
+    spaceId?: string,
   ): Promise<Pick<TMainAgentGraphState, 'messages'>> {
     if (!runnableConfig.configurable.sessionId) {
       throw new Error('sessionId is required');
@@ -72,6 +73,7 @@ export class MainAgentGraph {
       browserTools,
       editorRoomId,
       currentEntityDid,
+      spaceId,
       client: clientType ?? 'portal',
       mcpUcanContext,
       ...(initialUserContext ? { userContext: initialUserContext } : {}),
@@ -132,6 +134,7 @@ export class MainAgentGraph {
     agActions?: AgActionDto[],
     ucanOptions?: UCANOptions,
     fileProcessingService?: FileProcessingService,
+    spaceId?: string,
   ) {
     if (!runnableConfig.configurable.sessionId) {
       throw new Error('sessionId is required');
@@ -171,6 +174,7 @@ export class MainAgentGraph {
       browserTools,
       editorRoomId,
       currentEntityDid,
+      spaceId,
       client: 'portal',
       mcpUcanContext,
       ...(initialUserContext ? { userContext: initialUserContext } : {}),
@@ -224,6 +228,7 @@ export class MainAgentGraph {
         browserTools: [],
         editorRoomId: undefined,
         currentEntityDid: undefined,
+        spaceId: undefined,
         client: 'portal',
         userContext: undefined,
       } satisfies Partial<TMainAgentGraphState>,

@@ -19,7 +19,8 @@ my-oracle/
 │   │   ├── config.ts                #   Env vars schema (auto-generated, rarely edit)
 │   │   │
 │   │   ├── graph/                   #   ⭐ The brain of your oracle
-│   │   │   ├── agents/              #     Sub-agents (memory, portal, skills, etc.)
+│   │   │   ├── agents/              #     Sub-agents (memory, portal, skills, editor, etc.)
+│   │   │   │   └── editor/          #       Editor agent + page tools (create, read, update)
 │   │   │   ├── nodes/
 │   │   │   │   ├── chat-node/
 │   │   │   │   │   └── prompt.ts    #     ⭐ System prompt — your oracle's personality
@@ -110,6 +111,8 @@ This is the table you will come back to. Find what you want to do, then edit the
 | Register a custom tool with the graph          | `apps/app/src/graph/agents/main-agent.ts` — add it to the tools array                                                      |
 | Connect an external MCP server                 | `apps/app/src/graph/mcp.ts` — add the server URL and config                                                                |
 | Add a new sub-agent                            | Create a file in `apps/app/src/graph/agents/`, then register it in `main-agent.ts`                                         |
+| Customize page creation behavior               | `apps/app/src/graph/agents/editor/page-functions.ts` — page lifecycle functions                                            |
+| Customize page memory logging                  | `apps/app/src/graph/agents/editor/page-memory.ts` — what gets sent to the Memory Engine                                    |
 
 ### Adjusting behavior
 

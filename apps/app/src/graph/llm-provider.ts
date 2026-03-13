@@ -4,6 +4,7 @@ import {
   getOpenRouterChatModel,
   type LLMProvider,
 } from '@ixo/common';
+import { Logger } from '@nestjs/common';
 
 // Re-use ChatOpenAIFields type via the return type of getChatOpenAiModel
 type ChatOpenAIFields = Parameters<typeof getChatOpenAiModel>[0];
@@ -13,6 +14,8 @@ const NEBIUS_CONFIG = {
   baseURL: 'https://api.tokenfactory.nebius.com/v1/',
   apiKeyEnv: 'NEBIUS_API_KEY' as const,
 };
+
+const logger = new Logger('LLMProvider');
 
 // ---------------------------------------------------------------------------
 // Model role → provider model mapping
@@ -30,8 +33,8 @@ export type ModelRole =
 const MODEL_MAP: Record<LLMProvider, Record<ModelRole, string>> = {
   openrouter: {
     main: 'moonshotai/kimi-k2-thinking',
-    skills: 'qwen/qwen3-235b-a22b-thinking-2507',
-    subagent: 'openai/gpt-oss-120b',
+    skills: 'moonshotai/kimi-k2-thinking',
+    subagent: 'moonshotai/kimi-k2-thinking',
     vision: 'google/gemini-2.5-flash-lite',
     guard: 'meta-llama/llama-3.1-8b-instruct',
     routing: 'qwen/qwen3-14b',
@@ -79,9 +82,9 @@ export const getProviderChatModel = (
   const provider = getLLMProvider();
   const model = params?.model ?? getModelForRole(role);
 
-  // Use console.log since models are created at module load before NestJS Logger init
-  console.log(
-    `[LLMProvider] Creating model — provider=${provider}, role=${role}, model=${model}`,
+  // Use NestJS Logger instead of console.log
+  logger.log(
+    `Creating model — provider=${provider}, role=${role}, model=${model}`,
   );
 
   if (provider === 'openrouter') {
@@ -112,8 +115,8 @@ export const getProviderChatModel = (
   }
 
   const apiKey = process.env[NEBIUS_CONFIG.apiKeyEnv];
-  console.log(
-    `[LLMProvider] Nebius config — baseURL=${NEBIUS_CONFIG.baseURL}, apiKey=${apiKey ? 'set' : 'MISSING'}`,
+  logger.log(
+    `Nebius config — baseURL=${NEBIUS_CONFIG.baseURL}, apiKey=${apiKey ? 'set' : 'MISSING'}`,
   );
 
   // Use low temperature for classification models (guard), higher for generative
@@ -180,8 +183,8 @@ async function fetchNebiusPricing(usedModels: Set<string>): Promise<void> {
       { headers: { Authorization: `Bearer ${apiKey}` } },
     );
     if (!res.ok) {
-      console.warn(
-        `[LLMProvider] Nebius pricing fetch failed: ${res.status} ${res.statusText}`,
+      logger.warn(
+        `Nebius pricing fetch failed: ${res.status} ${res.statusText}`,
       );
       return;
     }
@@ -207,11 +210,11 @@ async function fetchNebiusPricing(usedModels: Set<string>): Promise<void> {
         matched++;
       }
     }
-    console.log(
-      `[LLMProvider] Nebius pricing: ${matched} matched out of ${(data.flavors ?? []).length} flavors`,
+    logger.log(
+      `Nebius pricing: ${matched} matched out of ${(data.flavors ?? []).length} flavors`,
     );
   } catch (err) {
-    console.warn(`[LLMProvider] Failed to fetch Nebius pricing:`, err);
+    logger.warn(`Failed to fetch Nebius pricing:`, err);
   }
 }
 
@@ -219,8 +222,8 @@ async function fetchOpenRouterPricing(usedModels: Set<string>): Promise<void> {
   try {
     const res = await fetch('https://openrouter.ai/api/v1/models');
     if (!res.ok) {
-      console.warn(
-        `[LLMProvider] OpenRouter pricing fetch failed: ${res.status} ${res.statusText}`,
+      logger.warn(
+        `OpenRouter pricing fetch failed: ${res.status} ${res.statusText}`,
       );
       return;
     }
@@ -244,11 +247,11 @@ async function fetchOpenRouterPricing(usedModels: Set<string>): Promise<void> {
         matched++;
       }
     }
-    console.log(
-      `[LLMProvider] OpenRouter pricing: ${matched} matched out of ${(data.data ?? []).length} models`,
+    logger.log(
+      `OpenRouter pricing: ${matched} matched out of ${(data.data ?? []).length} models`,
     );
   } catch (err) {
-    console.warn(`[LLMProvider] Failed to fetch OpenRouter pricing:`, err);
+    logger.warn(`Failed to fetch OpenRouter pricing:`, err);
   }
 }
 
@@ -258,9 +261,7 @@ async function fetchOpenRouterPricing(usedModels: Set<string>): Promise<void> {
  */
 export async function initModelPricingCache(): Promise<void> {
   const usedModels = getUsedModelIds();
-  console.log(
-    `[LLMProvider] Fetching pricing for models: ${[...usedModels].join(', ')}`,
-  );
+  logger.log(`Fetching pricing for models: ${[...usedModels].join(', ')}`);
   await Promise.all([
     fetchNebiusPricing(usedModels),
     fetchOpenRouterPricing(usedModels),
@@ -274,8 +275,8 @@ export async function initModelPricingCache(): Promise<void> {
     });
   }
 
-  console.log(
-    `[LLMProvider] Loaded pricing for ${pricingCache.size} models: ${[...pricingCache.keys()].join(', ')}`,
+  logger.log(
+    `Loaded pricing for ${pricingCache.size} models: ${[...pricingCache.keys()].join(', ')}`,
   );
 }
 

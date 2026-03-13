@@ -14,18 +14,53 @@ Your oracle can delegate tasks to specialist agents. Think of them as team membe
 
 Your oracle ships with these sub-agents out of the box:
 
-| Sub-Agent                | What it does                                                                                             |
-| ------------------------ | -------------------------------------------------------------------------------------------------------- |
-| **Memory Agent**         | Retrieves user context (identity, goals, recent activity) to personalize responses                       |
-| **Portal Agent**         | Handles browser and UI interactions from the client SDK                                                  |
-| **Firecrawl Agent**      | Web scraping and search via Firecrawl                                                                    |
-| **Domain Indexer Agent** | Searches IXO entities and analyzes domains                                                               |
-| **Editor Agent**         | Edits BlockNote documents (only active when an editor room is open)                                      |
-| **Skills Agent**         | Lists and searches available skills from the [ai-skills registry](https://github.com/ixoworld/ai-skills) |
+| Sub-Agent                | What it does                                                                                                                                                                                                      |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Memory Agent**         | Retrieves user context (identity, goals, recent activity) to personalize responses                                                                                                                                |
+| **Portal Agent**         | Handles browser and UI interactions from the client SDK                                                                                                                                                           |
+| **Firecrawl Agent**      | Web scraping and search via Firecrawl                                                                                                                                                                             |
+| **Domain Indexer Agent** | Searches IXO entities and analyzes domains                                                                                                                                                                        |
+| **Editor Agent**         | Edits BlockNote documents, creates/reads/updates pages, and logs operations to the Memory Engine. Only active when an editor room is open. Can also create pages from the main chat when a space ID is available. |
+| **Skills Agent**         | Lists and searches available skills from the [ai-skills registry](https://github.com/ixoworld/ai-skills)                                                                                                          |
 
 You don't need to configure these — they're already wired into your oracle. The main agent calls them automatically when it decides a task fits their specialty.
 
 > For more on skills, see [04 — Working with Skills](./04-working-with-skills.md).
+
+---
+
+## Editor Agent & Page Tools
+
+The Editor Agent comes with built-in **page management tools** that let your oracle create, read, and update pages as persistent documents.
+
+### What are Pages?
+
+Pages are persistent, editable documents stored as Matrix rooms. When your oracle creates a page, it becomes a real document the user can open and edit in the block editor — not just a chat message that scrolls away.
+
+### Available Page Tools
+
+| Tool          | What it does                                                                                                                            |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `create_page` | Creates a new page with a title, optional description, and optional markdown content. Returns the page ID and a link the user can open. |
+| `read_page`   | Reads a page's content and metadata (title, owner, creation date, blocks).                                                              |
+| `update_page` | Updates a page's title, description, or content. Tracks what changed with a diff (old vs new).                                          |
+
+### How It Works
+
+When a user says something like _"Save this as a page"_ or _"Create a page about X"_, the oracle calls `create_page`. The page is created in the user's personal space and they get a clickable card to open it.
+
+Pages created or updated by the oracle are automatically logged to the [Memory Engine](./guides/memory-engine.md) — so the oracle remembers what it wrote and can reference it in future conversations.
+
+### Context-Aware Behavior
+
+The page tools adapt based on context:
+
+- **Editor open** — the oracle already knows which page you're editing. No need to specify a room ID.
+- **No editor open** — the oracle can still create pages from the main chat. Reading or updating requires a page ID.
+
+### Tool Forwarding
+
+When the Editor Agent (a sub-agent) creates or updates a page, those tool calls are **forwarded to the main conversation** so the frontend can render interactive cards (with "Open page" and "Copy link" buttons). Other editor operations (like editing individual blocks) stay internal.
 
 ---
 

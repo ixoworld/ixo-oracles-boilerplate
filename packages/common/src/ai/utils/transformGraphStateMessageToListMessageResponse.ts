@@ -5,6 +5,7 @@ import {
 } from '@langchain/core/messages';
 import { isUUID } from 'class-validator';
 import crypto from 'node:crypto';
+import { emojify } from 'node-emoji';
 
 interface ToolCall {
   name: string;
@@ -72,7 +73,7 @@ export function transformGraphStateMessageToListMessageResponse(
 
         acc.push({
           type: message.type === 'ai' ? 'ai' : 'human',
-          content: String(message.content),
+          content: emojify(String(message.content)),
           id: uuidFromString(message.id ?? String(message.content)),
           toolCalls: (message as AIMessage).tool_calls?.map((toolCall) => ({
             name: toolCall.name,
