@@ -7,9 +7,8 @@
  * (root, title, document, etc.) — we only write our `taskMeta` map
  * into the existing doc via `writeTaskMetaToDoc()`.
  *
- * For tasks WITHOUT a page (reminders, quick lookups), we create
- * a standalone Y.Doc with only the `taskMeta` map via
- * `createStandaloneTaskDoc()`.
+ * For tasks WITHOUT a page (reminders, quick lookups), metadata is
+ * stored as a Matrix state event on the main room — no Y.Doc needed.
  *
  * The `taskMeta` key doesn't overlap with editor keys:
  * root, title, document, flow, runtime, delegations, invocations, auditTrail
@@ -170,16 +169,6 @@ export function buildTaskMeta(params: CreateTaskMetaParams): TaskMeta {
  */
 export function writeTaskMetaToDoc(doc: Y.Doc, meta: TaskMeta): void {
   updateTaskMeta(doc, meta);
-}
-
-/**
- * Create a standalone Y.Doc with only the `taskMeta` map.
- * Use this for tasks WITHOUT pages (reminders, quick lookups).
- */
-export function createStandaloneTaskDoc(meta: TaskMeta): Y.Doc {
-  const doc = new Y.Doc();
-  updateTaskMeta(doc, meta);
-  return doc;
 }
 
 // ── Output Row Helper ────────────────────────────────────────────────

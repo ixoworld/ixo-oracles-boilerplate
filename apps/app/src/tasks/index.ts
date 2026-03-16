@@ -35,10 +35,27 @@ export {
   updateTaskMeta,
   buildTaskMeta,
   writeTaskMetaToDoc,
-  createStandaloneTaskDoc,
   appendOutputRow,
   generateTaskId,
 } from './task-doc';
+
+// TasksService (CRUD layer)
+export { TasksService } from './task.service';
+
+// TasksService types and constants
+export type {
+  CreateTaskParams,
+  GetTaskParams,
+  UpdateTaskParams,
+  DeleteTaskParams,
+  CreateTaskResult,
+  TaskIndexEntry,
+  TasksIndexContent,
+} from './task-service.types';
+export {
+  TASK_STATE_EVENT_TYPE,
+  TASKS_INDEX_EVENT_TYPE,
+} from './task-service.types';
 
 // Scheduler (queues, types, service)
 export type {

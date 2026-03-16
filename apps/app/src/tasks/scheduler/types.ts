@@ -18,7 +18,6 @@ export interface SimpleJobData {
   userId: string;
   roomId: string;
   message: string;
-  messageType: 'reminder' | 'notification';
 }
 
 /** Data payload for Pattern B — Work child */
