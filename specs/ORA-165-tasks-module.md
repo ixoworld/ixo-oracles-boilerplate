@@ -537,20 +537,20 @@ Since the main Oracle delegates to sub-agents for specialized work, task managem
 
 **Tools:**
 
-| Tool                    | Description                                                                                      |
-| ----------------------- | ------------------------------------------------------------------------------------------------ |
+| Tool                    | Description                                                                                            |
+| ----------------------- | ------------------------------------------------------------------------------------------------------ |
 | `createTask`            | Creates task (Y.Doc + page, or state event for simple tasks), schedules BullMQ job, updates task index |
-| `updateTaskPrompt`      | Edits the Markdown content of a task page                                                        |
-| `updateTaskSchedule`    | Parses new schedule, updates Y.Map + reschedules BullMQ                                          |
-| `pauseTask`             | Status → paused, removes pending BullMQ jobs                                                     |
-| `resumeTask`            | Status → active, re-schedules BullMQ jobs                                                        |
-| `cancelTask`            | Status → cancelled, removes jobs, archives room                                                  |
-| `listTasks`             | Reads task list state event from main channel                                                    |
-| `getTaskStatus`         | Returns current status, next run, cost for one task                                              |
-| `createTaskRoom`        | Creates `[Task]`-prefixed Matrix room, invites user                                              |
-| `setNotificationPolicy` | Updates policy in Y.Map                                                                          |
-| `setApprovalGate`       | Enables/disables approval requirement                                                            |
-| `checkBudget`           | Returns token usage vs budget                                                                    |
+| `updateTaskPrompt`      | Edits the Markdown content of a task page                                                              |
+| `updateTaskSchedule`    | Parses new schedule, updates Y.Map + reschedules BullMQ                                                |
+| `pauseTask`             | Status → paused, removes pending BullMQ jobs                                                           |
+| `resumeTask`            | Status → active, re-schedules BullMQ jobs                                                              |
+| `cancelTask`            | Status → cancelled, removes jobs, archives room                                                        |
+| `listTasks`             | Reads task list state event from main channel                                                          |
+| `getTaskStatus`         | Returns current status, next run, cost for one task                                                    |
+| `createTaskRoom`        | Creates `[Task]`-prefixed Matrix room, invites user                                                    |
+| `setNotificationPolicy` | Updates policy in Y.Map                                                                                |
+| `setApprovalGate`       | Enables/disables approval requirement                                                                  |
+| `checkBudget`           | Returns token usage vs budget                                                                          |
 
 ### 9.2 Delegation Flow
 
