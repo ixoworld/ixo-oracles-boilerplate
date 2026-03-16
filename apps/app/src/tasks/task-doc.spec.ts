@@ -3,7 +3,6 @@ import * as Y from 'yjs';
 import {
   appendOutputRow,
   buildTaskMeta,
-  createStandaloneTaskDoc,
   readTaskMeta,
   updateTaskMeta,
   writeTaskMetaToDoc,
@@ -97,9 +96,10 @@ describe('Y.Doc round-trip', () => {
     expect(read.taskId).toBe('task_test123456');
   });
 
-  it('createStandaloneTaskDoc returns a Y.Doc with taskMeta', () => {
+  it('writeTaskMetaToDoc + readTaskMeta works for tasks without pages', () => {
+    const doc = new Y.Doc();
     const meta = buildMeta({ hasPage: false, taskType: 'reminder' });
-    const doc = createStandaloneTaskDoc(meta);
+    writeTaskMetaToDoc(doc, meta);
     const read = readTaskMeta(doc);
     expect(read.taskType).toBe('reminder');
     expect(read.hasPage).toBe(false);
