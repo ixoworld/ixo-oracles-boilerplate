@@ -15,7 +15,6 @@ import { type UcanService } from 'src/ucan/ucan.service';
 import { createTokenLimiterMiddleware } from '../middlewares/token-limiter-middelware';
 import { createToolValidationMiddleware } from '../middlewares/tool-validation-middleware';
 import {
-  AG_UI_TOOLS_DOCUMENTATION,
   AI_ASSISTANT_PROMPT,
   SLACK_FORMATTING_CONSTRAINTS_CONTENT,
 } from '../nodes/chat-node/prompt';
@@ -35,6 +34,7 @@ import {
 import { createStandaloneEditorTool } from './editor/standalone-editor-tool';
 import { createFirecrawlAgent } from './firecrawl-agent';
 import { createMemoryAgent } from './memory-agent';
+import { createAguiAgent } from './agui-agent';
 import { createPortalAgent } from './portal-agent';
 import { createSubagentAsTool, type AgentSpec } from './subagent-as-tool';
 
@@ -196,6 +196,16 @@ Promise<ReactAgent<any>> => {
       ? state.agActions.map((action) => parserActionTool(action))
       : [];
 
+  // Build AG-UI sub-agent when actions are available
+  const aguiAgentSpec =
+    agActionTools.length > 0
+      ? createAguiAgent({
+          tools: agActionTools,
+          userDid: configurable.configs.user.did,
+          sessionId: configurable.thread_id,
+        })
+      : null;
+
   // Create MCP tools - use UCAN-wrapped version if service is available
   const getMcpTools = async () => {
     if (ucanService) {
@@ -241,8 +251,6 @@ Promise<ReactAgent<any>> => {
     EDITOR_SECTION: editorSection,
     SLACK_FORMATTING_CONSTRAINTS:
       state.client === 'slack' ? SLACK_FORMATTING_CONSTRAINTS_CONTENT : '',
-    AG_UI_TOOLS_DOCUMENTATION:
-      agActionTools.length > 0 ? AG_UI_TOOLS_DOCUMENTATION : '',
     USER_SECRETS_CONTEXT:
       secretIndex.length > 0
         ? secretIndex.map((s) => `- _USER_SECRET_${s.name}`).join('\n')
@@ -491,6 +499,11 @@ Promise<ReactAgent<any>> => {
   const callDomainIndexerAgentTool = domainIndexerAgent
     ? createSubagentAsTool(withTimeContext(domainIndexerAgent))
     : null;
+  const callAguiAgentTool = aguiAgentSpec
+    ? createSubagentAsTool(withTimeContext(aguiAgentSpec), {
+        forwardTools: agActionTools.map((t) => t.name),
+      })
+    : null;
   const callEditorAgentTool = blockNoteAgentSpec
     ? createSubagentAsTool(withTimeContext(blockNoteAgentSpec), {
         forwardTools: [
@@ -546,7 +559,7 @@ Promise<ReactAgent<any>> => {
     tools: [
       ...mcpTools,
       ...wrappedSandboxTools,
-      ...agActionTools,
+      ...(callAguiAgentTool ? [callAguiAgentTool] : []),
       listSkillsTool,
       searchSkillsTool,
       ...(callPortalAgentTool ? [callPortalAgentTool] : []),
