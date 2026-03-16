@@ -82,12 +82,8 @@ describe('formatOutputTable', () => {
     ]);
 
     const table = formatOutputTable(meta);
-    expect(table).toContain(
-      '| Mar 16, 2:30 PM | Brent $86 | [View](#evt1) |',
-    );
-    expect(table).toContain(
-      '| Mar 16, 2:00 PM | Brent $82 | [View](#evt2) |',
-    );
+    expect(table).toContain('| Mar 16, 2:30 PM | Brent $86 | [View](#evt1) |');
+    expect(table).toContain('| Mar 16, 2:00 PM | Brent $82 | [View](#evt2) |');
   });
 
   it('respects maxRows limit', () => {

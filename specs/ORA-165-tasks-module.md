@@ -306,6 +306,7 @@ Y.Doc (task without page — standalone)
 ```
 
 **Two initialization paths:**
+
 - **Tasks WITH pages:** Editor creates the Y.Doc via `createPage({ content: markdown })`. We then call `writeTaskMetaToDoc(doc, meta)` to write our `taskMeta` Y.Map into the editor's existing doc.
 - **Tasks WITHOUT pages** (reminders, quick lookups): We call `createStandaloneTaskDoc(meta)` to create a fresh Y.Doc with only the `taskMeta` map.
 
