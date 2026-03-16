@@ -18,8 +18,10 @@
  */
 
 import { ServerBlockNoteEditor } from '@blocknote/server-util';
-import { Injectable, Logger } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Preset, Visibility } from 'matrix-js-sdk';
+import type { Cache } from 'cache-manager';
 import { normalizeDid } from 'src/utils/header.utils';
 
 import { EditorMatrixClient } from 'src/graph/agents/editor/editor-mx';
@@ -78,11 +80,38 @@ const serverEditor = ServerBlockNoteEditor.create();
 
 // ── Service ─────────────────────────────────────────────────────────
 
+/** Cache TTL for task index (ms) */
+const INDEX_CACHE_TTL = 30_000;
+
+/** Cache TTL for individual task meta (ms) */
+const TASK_META_CACHE_TTL = 30_000;
+
 @Injectable()
 export class TasksService {
   private readonly logger = new Logger(TasksService.name);
 
-  constructor(private readonly scheduler: TasksScheduler) {}
+  constructor(
+    private readonly scheduler: TasksScheduler,
+    @Inject(CACHE_MANAGER) private readonly cache: Cache,
+  ) {}
+
+  private indexCacheKey(mainRoomId: string): string {
+    return `tasks:index:${mainRoomId}`;
+  }
+
+  private taskMetaCacheKey(mainRoomId: string, taskId: string): string {
+    return `tasks:meta:${mainRoomId}:${taskId}`;
+  }
+
+  private async invalidateTaskCaches(
+    mainRoomId: string,
+    taskId?: string,
+  ): Promise<void> {
+    await this.cache.del(this.indexCacheKey(mainRoomId));
+    if (taskId) {
+      await this.cache.del(this.taskMetaCacheKey(mainRoomId, taskId));
+    }
+  }
 
   // ── Create ──────────────────────────────────────────────────────
 
@@ -193,6 +222,13 @@ export class TasksService {
       'upsert',
     );
 
+    // 7. Warm the cache with the fresh meta
+    await this.cache.set(
+      this.taskMetaCacheKey(params.mainRoomId, taskId),
+      taskMeta,
+      TASK_META_CACHE_TTL,
+    );
+
     this.logger.log(`Task ${taskId} created successfully`);
     return { taskId, taskMeta, roomId, roomAlias };
   }
@@ -200,24 +236,42 @@ export class TasksService {
   // ── Get ─────────────────────────────────────────────────────────
 
   async getTask(params: GetTaskParams): Promise<TaskMeta> {
-    if (params.hasPage) {
-      const targetRoomId = params.roomId ?? params.mainRoomId;
-      return this.readTaskMetaFromDoc(targetRoomId);
+    const { taskId, mainRoomId } = params;
+
+    // Check cache first
+    const cacheKey = this.taskMetaCacheKey(mainRoomId, taskId);
+    const cached = await this.cache.get<TaskMeta>(cacheKey);
+    if (cached) return cached;
+
+    const entry = await this.resolveTaskEntry(mainRoomId, taskId);
+    let meta: TaskMeta;
+
+    if (entry.hasPage) {
+      const targetRoomId = entry.roomId ?? mainRoomId;
+      meta = await this.readTaskMetaFromDoc(targetRoomId);
+    } else {
+      // Read state event from main room
+      const client = this.getSimpleMatrixClient();
+      const content = await client.mxClient.getRoomStateEvent(
+        mainRoomId,
+        TASK_STATE_EVENT_TYPE,
+        taskId,
+      );
+      meta = content as unknown as TaskMeta;
     }
 
-    // Read state event from main room
-    const client = this.getSimpleMatrixClient();
-    const content = await client.mxClient.getRoomStateEvent(
-      params.mainRoomId,
-      TASK_STATE_EVENT_TYPE,
-      params.taskId,
-    );
-    return content as unknown as TaskMeta;
+    await this.cache.set(cacheKey, meta, TASK_META_CACHE_TTL);
+    return meta;
   }
 
   // ── List ────────────────────────────────────────────────────────
 
   async listTasks(mainRoomId: string): Promise<TaskIndexEntry[]> {
+    // Check cache first
+    const cacheKey = this.indexCacheKey(mainRoomId);
+    const cached = await this.cache.get<TaskIndexEntry[]>(cacheKey);
+    if (cached) return cached;
+
     try {
       const client = this.getSimpleMatrixClient();
       const content = await client.mxClient.getRoomStateEvent(
@@ -226,7 +280,9 @@ export class TasksService {
         '',
       );
       const index = content as unknown as TasksIndexContent;
-      return index.tasks ?? [];
+      const tasks = index.tasks ?? [];
+      await this.cache.set(cacheKey, tasks, INDEX_CACHE_TTL);
+      return tasks;
     } catch {
       // No index yet — return empty
       return [];
@@ -236,20 +292,21 @@ export class TasksService {
   // ── Update ──────────────────────────────────────────────────────
 
   async updateTask(params: UpdateTaskParams): Promise<TaskMeta> {
-    const { taskId, mainRoomId, updates, hasPage } = params;
+    const { taskId, mainRoomId, updates } = params;
     this.logger.log(`Updating task ${taskId}`);
 
+    const entry = await this.resolveTaskEntry(mainRoomId, taskId);
+
+    // Invalidate meta cache before writes so reads within this flow are fresh
+    await this.cache.del(this.taskMetaCacheKey(mainRoomId, taskId));
+
     // 1. Apply metadata updates
-    if (hasPage) {
-      const targetRoomId = params.roomId ?? mainRoomId;
+    if (entry.hasPage) {
+      const targetRoomId = entry.roomId ?? mainRoomId;
       await this.updateTaskMetaInDoc(targetRoomId, updates);
     } else {
       // Read current, merge, write back
-      const current = await this.getTask({
-        taskId,
-        mainRoomId,
-        hasPage: false,
-      });
+      const current = await this.getTask({ taskId, mainRoomId });
       const merged = {
         ...current,
         ...updates,
@@ -263,17 +320,15 @@ export class TasksService {
       );
     }
 
+    // Invalidate again after write
+    await this.cache.del(this.taskMetaCacheKey(mainRoomId, taskId));
+
     // 2. If schedule changed, cancel and reschedule
     if (
       params.newScheduleCron !== undefined ||
       params.newDeadlineIso !== undefined
     ) {
-      const taskMeta = await this.getTask({
-        taskId,
-        mainRoomId,
-        roomId: params.roomId,
-        hasPage,
-      });
+      const taskMeta = await this.getTask({ taskId, mainRoomId });
 
       await this.scheduler.cancelAllJobsForTask(
         taskId,
@@ -281,12 +336,7 @@ export class TasksService {
       );
 
       // Re-read after update to get latest meta for scheduling
-      const updatedMeta = await this.getTask({
-        taskId,
-        mainRoomId,
-        roomId: params.roomId,
-        hasPage,
-      });
+      const updatedMeta = await this.getTask({ taskId, mainRoomId });
 
       const scheduleResult = await this.scheduleTask(updatedMeta, {
         mainRoomId,
@@ -302,15 +352,11 @@ export class TasksService {
         nextRunAt: scheduleResult.nextRunAt,
       };
 
-      if (hasPage) {
-        const targetRoomId = params.roomId ?? mainRoomId;
+      if (entry.hasPage) {
+        const targetRoomId = entry.roomId ?? mainRoomId;
         await this.updateTaskMetaInDoc(targetRoomId, schedulerUpdates);
       } else {
-        const current = await this.getTask({
-          taskId,
-          mainRoomId,
-          hasPage: false,
-        });
+        const current = await this.getTask({ taskId, mainRoomId });
         const merged = {
           ...current,
           ...schedulerUpdates,
@@ -323,26 +369,19 @@ export class TasksService {
           merged,
         );
       }
+
+      // Invalidate after scheduler updates
+      await this.cache.del(this.taskMetaCacheKey(mainRoomId, taskId));
     }
 
     // 3. Read final state and update index
-    const finalMeta = await this.getTask({
-      taskId,
-      mainRoomId,
-      roomId: params.roomId,
-      hasPage,
-    });
+    const finalMeta = await this.getTask({ taskId, mainRoomId });
 
     await this.updateTasksIndex(
       mainRoomId,
       {
-        taskId,
-        title: finalMeta.taskId, // title not in TaskMeta — use taskId for index
+        ...entry,
         status: finalMeta.status,
-        taskType: finalMeta.taskType,
-        channelType: finalMeta.channelType,
-        roomId: finalMeta.customRoomId,
-        roomAlias: null,
         nextRunAt: finalMeta.nextRunAt,
         hasPage: finalMeta.hasPage,
       },
@@ -356,21 +395,48 @@ export class TasksService {
   // ── Delete ──────────────────────────────────────────────────────
 
   async deleteTask(params: DeleteTaskParams): Promise<void> {
-    const { taskId, mainRoomId, repeatKey } = params;
+    const { taskId, mainRoomId } = params;
     this.logger.log(`Deleting task ${taskId}`);
+
+    // Look up the task to get its repeat key for cancellation
+    const entry = await this.resolveTaskEntry(mainRoomId, taskId);
+    let repeatKey: string | null = null;
+    try {
+      const meta = await this.getTask({ taskId, mainRoomId });
+      repeatKey = meta.bullmqRepeatKey;
+    } catch {
+      // Task meta may already be gone — best effort
+    }
 
     // 1. Cancel all BullMQ jobs
     await this.scheduler.cancelAllJobsForTask(taskId, repeatKey);
 
     // 2. Remove from index
-    await this.updateTasksIndex(
-      mainRoomId,
-      { taskId } as TaskIndexEntry,
-      'remove',
-    );
+    await this.updateTasksIndex(mainRoomId, entry, 'remove');
+
+    // 3. Clean up caches
+    await this.cache.del(this.taskMetaCacheKey(mainRoomId, taskId));
 
     // Note: Room archival is handled by ORA-192 (separate issue)
     this.logger.log(`Task ${taskId} deleted`);
+  }
+
+  // ── Private: Index Lookup ───────────────────────────────────────
+
+  /**
+   * Look up a task's index entry to resolve hasPage, roomId, etc.
+   * Avoids callers needing to pass these for every operation.
+   */
+  private async resolveTaskEntry(
+    mainRoomId: string,
+    taskId: string,
+  ): Promise<TaskIndexEntry> {
+    const tasks = await this.listTasks(mainRoomId);
+    const entry = tasks.find((t) => t.taskId === taskId);
+    if (!entry) {
+      throw new Error(`Task ${taskId} not found in index`);
+    }
+    return entry;
   }
 
   // ── Private: Room Creation ──────────────────────────────────────
@@ -621,6 +687,9 @@ export class TasksService {
       '',
       indexContent,
     );
+
+    // Invalidate index cache — next read will fetch fresh data
+    await this.cache.del(this.indexCacheKey(mainRoomId));
   }
 
   // ── Private: Scheduling ─────────────────────────────────────────
