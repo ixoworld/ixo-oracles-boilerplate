@@ -582,7 +582,7 @@ Promise<ReactAgent<any>> => {
     ],
     middleware,
     stateSchema: z.object({
-      editorRoomId: z.string(),
+      editorRoomId: z.string().optional(),
     }),
     systemPrompt: finalSystemPrompt,
     checkpointer: SqliteSaver.fromDatabase(
