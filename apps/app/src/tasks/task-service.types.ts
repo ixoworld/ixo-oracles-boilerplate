@@ -77,8 +77,6 @@ export interface CreateTaskParams {
 export interface GetTaskParams {
   taskId: string;
   mainRoomId: string;
-  roomId?: string;
-  hasPage: boolean;
 }
 
 /** Params for updating a task */
@@ -86,8 +84,6 @@ export interface UpdateTaskParams {
   taskId: string;
   mainRoomId: string;
   updates: Partial<TaskMeta>;
-  roomId?: string;
-  hasPage: boolean;
   /** New schedule (will cancel old jobs and reschedule) */
   newScheduleCron?: string;
   newDeadlineIso?: string;
@@ -97,9 +93,6 @@ export interface UpdateTaskParams {
 export interface DeleteTaskParams {
   taskId: string;
   mainRoomId: string;
-  roomId?: string;
-  hasPage: boolean;
-  repeatKey?: string | null;
 }
 
 /** Result from createTask */
