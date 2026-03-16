@@ -403,17 +403,13 @@ List blocks 10-20:
           .int()
           .optional()
           .default(0)
-          .describe(
-            'Starting index (0-based) for pagination. Defaults to 0.',
-          ),
+          .describe('Starting index (0-based) for pagination. Defaults to 0.'),
         end: z
           .number()
           .int()
           .optional()
           .default(10)
-          .describe(
-            'Ending index (exclusive) for pagination. Defaults to 10.',
-          ),
+          .describe('Ending index (exclusive) for pagination. Defaults to 10.'),
       }),
     },
   );
