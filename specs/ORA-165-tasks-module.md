@@ -108,7 +108,6 @@ User: "Remind me to submit the report at 5pm"
     userId: '@yousef:ixo.world',
     roomId: '!taskRoom:ixo.world',
     message: '🔔 Reminder: Submit the report',
-    messageType: 'reminder',
   },
   opts: {
     delay: msUntilDeliveryTime,       // One-shot
@@ -292,7 +291,7 @@ Short summary (2-3 sentences), current price with daily change, and a source lin
 
 ### 6.1 Architecture
 
-Every task has a Y.Doc. The editor owns the document structure (`root`, `title`, `document`, `flow`, `runtime`, `delegations`, `invocations`, `auditTrail`). We write a single `taskMeta` Y.Map alongside those keys — no overlap.
+Tasks WITH pages get a Y.Doc. The editor owns the document structure (`root`, `title`, `document`, `flow`, `runtime`, `delegations`, `invocations`, `auditTrail`). We write a single `taskMeta` Y.Map alongside those keys — no overlap.
 
 ```
 Y.Doc (task with page — created by editor's createPage())
@@ -300,17 +299,18 @@ Y.Doc (task with page — created by editor's createPage())
 └── taskMeta: Y.Map              ← Technical metadata (our sidecar)
 ```
 
+Tasks WITHOUT pages store metadata as a Matrix state event on the main agent room — no Y.Doc needed.
+
 ```
-Y.Doc (task without page — standalone)
-└── taskMeta: Y.Map              ← Technical metadata only
+Main agent room state events:
+├── ixo.ora.task.meta [stateKey=taskId]  ← Per-task metadata (TaskMeta shape)
+└── ixo.ora.tasks.index [stateKey='']    ← Live index of all tasks
 ```
 
 **Two initialization paths:**
 
-- **Tasks WITH pages:** Editor creates the Y.Doc via `createPage({ content: markdown })`. We then call `writeTaskMetaToDoc(doc, meta)` to write our `taskMeta` Y.Map into the editor's existing doc.
-- **Tasks WITHOUT pages** (reminders, quick lookups): We call `createStandaloneTaskDoc(meta)` to create a fresh Y.Doc with only the `taskMeta` map.
-
-The Y.Doc still lives in a Matrix room (either the task's dedicated room or a system room for page-less tasks).
+- **Tasks WITH pages** (`hasPage: true`): Get a dedicated `[Task]` Matrix room + Y.Doc with `taskMeta` Y.Map sidecar + Markdown page. The editor creates the Y.Doc via `createPage()`, then `writeTaskMetaToDoc(doc, meta)` writes our sidecar.
+- **Tasks WITHOUT pages** (`hasPage: false`): Metadata is stored as a `ixo.ora.task.meta` state event (keyed by `taskId`) on the main agent room. No Y.Doc, no dedicated room. Lightweight.
 
 **Why Y.Map instead of YAML frontmatter?** Y.Map is CRDT-native — each key is an independent register, so concurrent edits (user editing page + backend updating `nextRunAt`) never corrupt each other. YAML in a text CRDT can get mangled by concurrent character-level merges.
 
@@ -460,7 +460,7 @@ The user's **main agent channel** maintains a Matrix state event that acts as a 
 ### 8.2 Event Structure
 
 ```typescript
-// State event type: 'com.ora.tasks.index'
+// State event type: 'ixo.ora.tasks.index'
 // State key: '' (single instance per room)
 {
   tasks: [
@@ -537,20 +537,20 @@ Since the main Oracle delegates to sub-agents for specialized work, task managem
 
 **Tools:**
 
-| Tool                    | Description                                                                                      |
-| ----------------------- | ------------------------------------------------------------------------------------------------ |
-| `createTask`            | Creates Y.Doc (+ optional page), sets Y.Map, schedules BullMQ job, updates task list state event |
-| `updateTaskPrompt`      | Edits the Markdown content of a task page                                                        |
-| `updateTaskSchedule`    | Parses new schedule, updates Y.Map + reschedules BullMQ                                          |
-| `pauseTask`             | Status → paused, removes pending BullMQ jobs                                                     |
-| `resumeTask`            | Status → active, re-schedules BullMQ jobs                                                        |
-| `cancelTask`            | Status → cancelled, removes jobs, archives room                                                  |
-| `listTasks`             | Reads task list state event from main channel                                                    |
-| `getTaskStatus`         | Returns current status, next run, cost for one task                                              |
-| `createTaskRoom`        | Creates `[Task]`-prefixed Matrix room, invites user                                              |
-| `setNotificationPolicy` | Updates policy in Y.Map                                                                          |
-| `setApprovalGate`       | Enables/disables approval requirement                                                            |
-| `checkBudget`           | Returns token usage vs budget                                                                    |
+| Tool                    | Description                                                                                            |
+| ----------------------- | ------------------------------------------------------------------------------------------------------ |
+| `createTask`            | Creates task (Y.Doc + page, or state event for simple tasks), schedules BullMQ job, updates task index |
+| `updateTaskPrompt`      | Edits the Markdown content of a task page                                                              |
+| `updateTaskSchedule`    | Parses new schedule, updates Y.Map + reschedules BullMQ                                                |
+| `pauseTask`             | Status → paused, removes pending BullMQ jobs                                                           |
+| `resumeTask`            | Status → active, re-schedules BullMQ jobs                                                              |
+| `cancelTask`            | Status → cancelled, removes jobs, archives room                                                        |
+| `listTasks`             | Reads task list state event from main channel                                                          |
+| `getTaskStatus`         | Returns current status, next run, cost for one task                                                    |
+| `createTaskRoom`        | Creates `[Task]`-prefixed Matrix room, invites user                                                    |
+| `setNotificationPolicy` | Updates policy in Y.Map                                                                                |
+| `setApprovalGate`       | Enables/disables approval requirement                                                                  |
+| `checkBudget`           | Returns token usage vs budget                                                                          |
 
 ### 9.2 Delegation Flow
 

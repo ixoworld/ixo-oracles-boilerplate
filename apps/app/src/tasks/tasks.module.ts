@@ -19,6 +19,7 @@ import type { ENV } from 'src/types';
 
 import { QUEUE_DEFAULT_OPTIONS, QUEUE_NAMES } from './scheduler/task-queues';
 import { TasksScheduler } from './scheduler/tasks-scheduler.service';
+import { TasksService } from './task.service';
 
 @Module({
   imports: [
@@ -51,7 +52,7 @@ import { TasksScheduler } from './scheduler/tasks-scheduler.service';
     // Register FlowProducer for one-shot Pattern B jobs
     BullModule.registerFlowProducer({ name: 'task-flow' }),
   ],
-  providers: [TasksScheduler],
-  exports: [TasksScheduler],
+  providers: [TasksScheduler, TasksService],
+  exports: [TasksScheduler, TasksService],
 })
 export class TasksModule {}
