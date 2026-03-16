@@ -39,3 +39,24 @@ export {
   appendOutputRow,
   generateTaskId,
 } from './task-doc';
+
+// Scheduler (queues, types, service)
+export type {
+  SimpleJobData,
+  WorkJobData,
+  DeliverJobData,
+  QueueName,
+  ScheduleSimpleJobParams,
+  ScheduleFlowJobParams,
+  ScheduleRecurringFlowParams,
+  ScheduleNextWorkJobParams,
+} from './scheduler';
+export {
+  QUEUE_NAMES,
+  QUEUE_DEFAULT_OPTIONS,
+  WORKER_OPTIONS,
+  TasksScheduler,
+} from './scheduler';
+
+// TasksModule
+export { TasksModule } from './tasks.module';

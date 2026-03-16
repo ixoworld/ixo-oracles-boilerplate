@@ -23,6 +23,7 @@ import { ClaimProcessingService } from './claim-processing/claim-processing.serv
 import { UcanModule } from './ucan/ucan.module';
 import { normalizeDid } from './utils/header.utils';
 import { RedisService } from './utils/redis.service';
+import { TasksModule } from './tasks/tasks.module';
 import { WsModule } from './ws/ws.module';
 
 @Module({
@@ -59,7 +60,7 @@ import { WsModule } from './ws/ws.module';
     SessionsModule,
     MessagesModule,
     UcanModule,
-    // QueueModule,
+    TasksModule,
     // KnowledgeModule,
     ScheduleModule.forRoot(),
     SlackModule,
