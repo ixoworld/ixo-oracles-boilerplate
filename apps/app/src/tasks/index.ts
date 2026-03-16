@@ -49,10 +49,15 @@ export type {
   UpdateTaskParams,
   DeleteTaskParams,
   CreateTaskResult,
+  ListTasksOptions,
+  ListTasksResult,
   TaskIndexEntry,
-  TasksIndexContent,
+  TasksIndexHeader,
+  TasksIndexChunk,
 } from './task-service.types';
 export {
+  DEFAULT_CHUNK_SIZE,
+  DEFAULT_PAGE_SIZE,
   TASK_STATE_EVENT_TYPE,
   TASKS_INDEX_EVENT_TYPE,
 } from './task-service.types';
@@ -74,6 +79,30 @@ export {
   WORKER_OPTIONS,
   TasksScheduler,
 } from './scheduler';
+
+// Task doc helpers
+export { sharedServerEditor, withTaskDoc } from './task-doc-helpers';
+
+// Processors
+export {
+  SimpleProcessor,
+  WorkProcessor,
+  DeliverProcessor,
+  TASK_RUN_EVENT_TYPE,
+  MAX_CONSECUTIVE_FAILURES,
+  buildMentionMessage,
+  escapeHtml,
+  formatOutputDate,
+  handleJobFailure,
+  isTaskRunnable,
+  resolveMainRoomId,
+  sendTaskNotification,
+  truncateText,
+  SimpleJobDataSchema,
+  WorkJobDataSchema,
+  DeliverJobDataSchema,
+} from './processors';
+export type { TaskRunEventContent, WorkResult } from './processors';
 
 // TasksModule
 export { TasksModule } from './tasks.module';

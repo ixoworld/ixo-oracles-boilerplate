@@ -135,9 +135,6 @@ export class TasksScheduler {
         taskId: params.taskId,
         data: params.firstWork.data,
         delay: params.firstWork.delay,
-        dateSuffix: new Date(Date.now() + params.firstWork.delay)
-          .toISOString()
-          .slice(0, 10),
       });
       workJobId = result.jobId;
     }
@@ -152,11 +149,14 @@ export class TasksScheduler {
   /**
    * Schedule the next one-shot work job for a recurring flow.
    * Called by the deliver processor after each delivery.
+   * Each job gets a unique UUID-based ID so history is preserved in Redis.
+   * The deliver processor finds the right job via `currentWorkJobId` in TaskMeta.
    */
   async scheduleNextWorkJob(
     params: ScheduleNextWorkJobParams,
   ): Promise<{ jobId: string }> {
-    const jobId = `${params.taskId}:work:${params.dateSuffix}`;
+    const suffix = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+    const jobId = `${params.taskId}:work:${suffix}`;
 
     await this.workQueue.add(QUEUE_NAMES.WORK, params.data, {
       delay: params.delay,
@@ -202,7 +202,7 @@ export class TasksScheduler {
   ): Promise<boolean> {
     const queue = this.getQueue(queueName);
 
-    const removed = await queue.removeRepeatableByKey(repeatKey);
+    const removed = await queue.removeJobScheduler(repeatKey);
     if (removed) {
       this.logger.log(`Cancelled repeatable ${repeatKey} from ${queueName}`);
     } else {
@@ -218,26 +218,47 @@ export class TasksScheduler {
   async cancelAllJobsForTask(
     taskId: string,
     repeatKey?: string | null,
+    currentWorkJobId?: string | null,
   ): Promise<void> {
+    const errors: string[] = [];
+
     // Cancel simple job
-    await this.cancelJob(QUEUE_NAMES.SIMPLE, `${taskId}:simple`).catch(
-      () => {},
+    await this.cancelJob(QUEUE_NAMES.SIMPLE, `${taskId}:simple`).catch((e) =>
+      errors.push(`simple: ${e instanceof Error ? e.message : String(e)}`),
     );
     // Cancel deliver job
-    await this.cancelJob(QUEUE_NAMES.DELIVER, `${taskId}:deliver`).catch(
-      () => {},
+    await this.cancelJob(QUEUE_NAMES.DELIVER, `${taskId}:deliver`).catch((e) =>
+      errors.push(`deliver: ${e instanceof Error ? e.message : String(e)}`),
     );
-    // Cancel work job (one-shot flow)
-    await this.cancelJob(QUEUE_NAMES.WORK, `${taskId}:work`).catch(() => {});
+    // Cancel work job — one-shot uses `{taskId}:work`, recurring uses UUID-based ID
+    await this.cancelJob(QUEUE_NAMES.WORK, `${taskId}:work`).catch((e) =>
+      errors.push(`work: ${e instanceof Error ? e.message : String(e)}`),
+    );
+    if (currentWorkJobId && currentWorkJobId !== `${taskId}:work`) {
+      await this.cancelJob(QUEUE_NAMES.WORK, currentWorkJobId).catch((e) =>
+        errors.push(
+          `work-current: ${e instanceof Error ? e.message : String(e)}`,
+        ),
+      );
+    }
 
     // Cancel repeatable if key is known
     if (repeatKey) {
-      // Try both queues — we don't always know which one holds it
-      await this.cancelRepeatable(QUEUE_NAMES.SIMPLE, repeatKey).catch(
-        () => {},
+      await this.cancelRepeatable(QUEUE_NAMES.SIMPLE, repeatKey).catch((e) =>
+        errors.push(
+          `simple-repeat: ${e instanceof Error ? e.message : String(e)}`,
+        ),
       );
-      await this.cancelRepeatable(QUEUE_NAMES.DELIVER, repeatKey).catch(
-        () => {},
+      await this.cancelRepeatable(QUEUE_NAMES.DELIVER, repeatKey).catch((e) =>
+        errors.push(
+          `deliver-repeat: ${e instanceof Error ? e.message : String(e)}`,
+        ),
+      );
+    }
+
+    if (errors.length > 0) {
+      this.logger.warn(
+        `Some cancellations failed for task ${taskId}: ${errors.join(', ')}`,
       );
     }
 
@@ -275,8 +296,8 @@ export class TasksScheduler {
     queue: Queue,
     jobId: string,
   ): Promise<string | null> {
-    const repeatables = await queue.getRepeatableJobs();
-    const match = repeatables.find((r) => r.id === jobId);
+    const schedulers = await queue.getJobSchedulers();
+    const match = schedulers.find((r) => r.id === jobId);
     return match?.key ?? null;
   }
 }

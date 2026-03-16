@@ -5,6 +5,7 @@ import { type LLMResult } from '@langchain/core/outputs';
 import { HttpException, HttpStatus, Logger } from '@nestjs/common';
 import crypto from 'node:crypto';
 import { getConfig } from 'src/config';
+import { getModelPricing } from 'src/graph/llm-provider';
 import z from 'zod';
 import { RedisService } from './redis.service';
 
@@ -76,6 +77,42 @@ export class TokenLimiter {
     const creditsPerUsd = isMainnet ? 1000 : 1_000_000;
     const markup = isMainnet ? 1.6 : 5;
     return Math.round(usdCost * creditsPerUsd * markup);
+  }
+
+  /**
+   * Calculate cost in USD with our markup applied, using the same
+   * 3-priority fallback as the token limiter middleware.
+   *
+   * Priority 1: exact provider cost (e.g. OpenRouter) × markup
+   * Priority 2: per-model pricing from cache × markup
+   * Priority 3: flat-rate $0.75/1M tokens × markup
+   */
+  static calculateCostUsdWithMarkup(params: {
+    providerCost?: number;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    model?: string;
+  }): number {
+    const markup = config.getOrThrow('NETWORK') === 'mainnet' ? 1.6 : 5;
+
+    // Priority 1: exact provider cost
+    if (params.providerCost != null && params.providerCost > 0) {
+      return params.providerCost * markup;
+    }
+
+    // Priority 2: per-model pricing from cache
+    const pricing = params.model ? getModelPricing(params.model) : null;
+    if (pricing) {
+      const inputCost =
+        (params.inputTokens / 1_000_000) * pricing.inputPricePerMillionTokens;
+      const outputCost =
+        (params.outputTokens / 1_000_000) * pricing.outputPricePerMillionTokens;
+      return (inputCost + outputCost) * markup;
+    }
+
+    // Priority 3: flat-rate fallback
+    return (params.totalTokens / 1_000_000) * 0.75 * markup;
   }
 
   static llmTokenToCredits(tokenCount: number): number {

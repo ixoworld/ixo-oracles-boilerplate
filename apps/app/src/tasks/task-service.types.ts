@@ -20,6 +20,14 @@ export const TASK_STATE_EVENT_TYPE = 'ixo.ora.task.meta';
 /** Task list index state event type (all tasks) */
 export const TASKS_INDEX_EVENT_TYPE = 'ixo.ora.tasks.index';
 
+// ── Constants ──────────────────────────────────────────────────────
+
+/** Max entries per index chunk event */
+export const DEFAULT_CHUNK_SIZE = 100;
+
+/** Default page size for listTasks pagination */
+export const DEFAULT_PAGE_SIZE = 20;
+
 // ── Types ───────────────────────────────────────────────────────────
 
 /** Entry in the task index state event */
@@ -35,10 +43,41 @@ export interface TaskIndexEntry {
   hasPage: boolean;
 }
 
-/** Content of the `ixo.ora.tasks.index` state event */
-export interface TasksIndexContent {
-  tasks: TaskIndexEntry[];
+/**
+ * Header event for the chunked task index.
+ * Event type: `ixo.ora.tasks.index`, state key: `''`
+ */
+export interface TasksIndexHeader {
+  totalCount: number;
+  chunkSize: number;
+  chunkCount: number;
   updatedAt: string;
+  /** Quick lookup: taskId → chunk number */
+  taskChunkMap: Record<string, number>;
+}
+
+/**
+ * A single chunk of the task index.
+ * Event type: `ixo.ora.tasks.index`, state key: `'chunk:0'`, `'chunk:1'`, etc.
+ * Keyed by taskId, max `chunkSize` entries per chunk.
+ */
+export type TasksIndexChunk = Record<string, TaskIndexEntry>;
+
+/** Options for paginated task listing */
+export interface ListTasksOptions {
+  /** Page number (0-based). Defaults to 0. */
+  page?: number;
+  /** Number of entries per page. Defaults to DEFAULT_PAGE_SIZE (20). */
+  pageSize?: number;
+}
+
+/** Paginated result from listTasks */
+export interface ListTasksResult {
+  tasks: TaskIndexEntry[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  pageCount: number;
 }
 
 /** Input params for creating a task */
