@@ -77,6 +77,8 @@ interface InvokeMainAgentParams {
   ucanService?: UcanService;
   /** Optional file processing service for the process_file tool */
   fileProcessingService?: FileProcessingService;
+  /** Optional model override — a provider model ID (e.g. from getModelForRole). When set, overrides the default 'main' model. */
+  modelOverride?: string;
 }
 
 const configService = getConfig();
@@ -99,6 +101,7 @@ export const createMainAgent = async ({
   config,
   ucanService,
   fileProcessingService,
+  modelOverride,
 }: InvokeMainAgentParams): // eslint-disable-next-line @typescript-eslint/no-explicit-any
 Promise<ReactAgent<any>> => {
   const msgFromMatrixRoom = Boolean(
@@ -619,8 +622,12 @@ Promise<ReactAgent<any>> => {
     middleware.push(createTokenLimiterMiddleware());
   }
 
+  const effectiveModel = modelOverride
+    ? getProviderChatModel('main', { model: modelOverride })
+    : llm;
+
   const agent = createAgent({
-    model: llm,
+    model: effectiveModel,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     contextSchema: contextSchema as any,
     tools: [

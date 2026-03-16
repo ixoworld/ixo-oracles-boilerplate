@@ -73,6 +73,8 @@ export interface TaskMeta {
   bullmqJobId: string;
   /** Key for cancelling repeatable jobs. Null for one-shot. */
   bullmqRepeatKey: string | null;
+  /** Current work job ID for recurring flows. Updated each cycle by deliver processor. */
+  currentWorkJobId: string | null;
 
   // ── State ─────────────────────────────────────────────────────────
   /** Current lifecycle status */

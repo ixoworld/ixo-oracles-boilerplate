@@ -16,6 +16,12 @@ export type { QueueName } from './task-queues';
 export interface SimpleJobData {
   taskId: string;
   userId: string;
+  /**
+   * Room id here will be the Custom RoomId if the task has a task page (Y.js Doc)
+   * and will be mainAgent room if it's a normal quick task.
+   *
+   * @see {@link TasksService.scheduleTask} for how roomId is resolved (`taskMeta.customRoomId ?? params.mainRoomId`)
+   */
   roomId: string;
   message: string;
 }
@@ -24,6 +30,12 @@ export interface SimpleJobData {
 export interface WorkJobData {
   taskId: string;
   userId: string;
+  /**
+   * Room id here will be the Custom RoomId if the task has a task page (Y.js Doc)
+   * and will be mainAgent room if it's a normal quick task.
+   *
+   * @see {@link TasksService.scheduleTask} for how roomId is resolved (`taskMeta.customRoomId ?? params.mainRoomId`)
+   */
   roomId: string;
   /** ISO 8601 timestamp of the delivery this work prepares for (recurring only) */
   forDeliveryAt?: string;
@@ -73,6 +85,4 @@ export interface ScheduleNextWorkJobParams {
   taskId: string;
   data: WorkJobData;
   delay: number;
-  /** Date string suffix for job ID uniqueness, e.g. '2026-03-23' */
-  dateSuffix: string;
 }

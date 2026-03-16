@@ -76,7 +76,7 @@ The main Oracle already delegates to sub-agents for specialized work. Task lifec
 
 ### 2.6 Logs Are Room Events, Not Page Content
 
-Execution logs are posted as custom Matrix events (`com.ora.task.run`) in the task room. The task page stays compact with just a "Recent Output" table linking to channel messages.
+Execution logs are posted as custom Matrix events (`ixo.ora.task.run`) in the task room. The task page stays compact with just a "Recent Output" table linking to channel messages.
 
 ---
 
@@ -342,6 +342,7 @@ interface TaskMeta {
   jobPattern: 'simple' | 'flow';
   bullmqJobId: string; // 'task_abc123:simple' or 'task_abc123:deliver'
   bullmqRepeatKey: string | null; // For cancelling repeatables
+  currentWorkJobId: string | null; // Current work job ID (recurring flows)
 
   // State
   status: 'active' | 'paused' | 'cancelled' | 'completed' | 'dry_run';
@@ -455,50 +456,68 @@ When the user opts for the main channel (or for simple tasks that don't ask):
 
 ### 8.1 Purpose
 
-The user's **main agent channel** maintains a Matrix state event that acts as a live index of all their tasks. This gives the frontend (and the agent) a single place to look up all tasks without scanning every room.
+The user's **main agent channel** maintains a set of Matrix state events that act as a live, chunked index of all their tasks. This gives the frontend (and the agent) a single place to look up all tasks without scanning every room. Chunked storage avoids the ~65KB Matrix state event limit and provides O(1) task lookups via a header map.
 
 ### 8.2 Event Structure
 
+The index is split across a **header event** and one or more **chunk events**, all sharing the same event type (`ixo.ora.tasks.index`) but using different state keys.
+
+#### Header event (state key: `''`)
+
 ```typescript
-// State event type: 'ixo.ora.tasks.index'
-// State key: '' (single instance per room)
 {
-  tasks: [
-    {
-      taskId: 'task_abc123',
-      title: 'Oil Price Monitor',
-      status: 'active',
-      taskType: 'monitor',
-      channelType: 'custom',
-      roomId: '!oilMonitor:ixo.world',
-      roomAlias: '#task-oil-price-monitor:ixo.world',
-      nextRunAt: '2026-03-16T14:30:00+02:00',
-      hasPage: true,
-    },
-    {
-      taskId: 'task_def456',
-      title: 'Submit report reminder',
-      status: 'active',
-      taskType: 'reminder',
-      channelType: 'main',
-      roomId: null,                     // Uses main channel
-      roomAlias: null,
-      nextRunAt: '2026-03-16T17:00:00+02:00',
-      hasPage: false,
-    },
-    {
-      taskId: 'task_ghi789',
-      title: 'AI Daily Digest',
-      status: 'paused',
-      taskType: 'report',
-      channelType: 'custom',
-      roomId: '!aiDigest:ixo.world',
-      roomAlias: '#task-ai-daily-digest:ixo.world',
-      nextRunAt: null,
-      hasPage: true,
-    }
-  ],
-  updatedAt: '2026-03-16T14:00:00+02:00'
+  totalCount: 3,
+  chunkSize: 100,        // max entries per chunk (default)
+  chunkCount: 1,         // ceil(totalCount / chunkSize)
+  updatedAt: '2026-03-16T14:00:00+02:00',
+  taskChunkMap: {        // taskId → chunk number (O(1) lookup)
+    'task_abc123': 0,
+    'task_def456': 0,
+    'task_ghi789': 0,
+  }
+}
+```
+
+#### Chunk events (state key: `'chunk:0'`, `'chunk:1'`, etc.)
+
+Each chunk is a `Record<taskId, TaskIndexEntry>` object map (not an array) with at most `chunkSize` entries:
+
+```typescript
+// State key: 'chunk:0'
+{
+  'task_abc123': {
+    taskId: 'task_abc123',
+    title: 'Oil Price Monitor',
+    status: 'active',
+    taskType: 'monitor',
+    channelType: 'custom',
+    roomId: '!oilMonitor:ixo.world',
+    roomAlias: '#task-oil-price-monitor:ixo.world',
+    nextRunAt: '2026-03-16T14:30:00+02:00',
+    hasPage: true,
+  },
+  'task_def456': {
+    taskId: 'task_def456',
+    title: 'Submit report reminder',
+    status: 'active',
+    taskType: 'reminder',
+    channelType: 'main',
+    roomId: null,
+    roomAlias: null,
+    nextRunAt: '2026-03-16T17:00:00+02:00',
+    hasPage: false,
+  },
+  'task_ghi789': {
+    taskId: 'task_ghi789',
+    title: 'AI Daily Digest',
+    status: 'paused',
+    taskType: 'report',
+    channelType: 'custom',
+    roomId: '!aiDigest:ixo.world',
+    roomAlias: '#task-ai-daily-digest:ixo.world',
+    nextRunAt: null,
+    hasPage: true,
+  }
 }
 ```
 
@@ -567,6 +586,132 @@ User: "Schedule a daily AI news digest at 9am"
 ---
 
 ## 10. BullMQ Job Design
+
+### 10.0 Job Flow Overview
+
+#### Pattern A — Simple Job (reminders, quick lookups)
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant A as Agent
+    participant TS as TasksService
+    participant R as Redis (BullMQ)
+    participant SP as SimpleProcessor
+    participant MX as Matrix Room
+
+    U->>A: "Remind me every Monday 9 AM"
+    A->>TS: createTask(reminder, cron)
+    TS->>TS: buildTaskMeta()
+    TS->>MX: store meta (state event)
+    TS->>R: scheduleSimpleJob(cron)
+    Note over R: Job ID: {taskId}:simple
+
+    rect rgb(230, 245, 230)
+        Note over R,MX: Every Monday 9 AM
+        R->>SP: job fires
+        SP->>SP: resolveMainRoomId(userId)
+        SP->>MX: getTask() → read TaskMeta
+        SP->>SP: guard: status = active?
+        SP->>MX: send message (notification policy)
+        SP->>MX: post ixo.ora.task.run event
+        SP->>MX: updateTask(lastRunAt, totalRuns)
+    end
+```
+
+#### Pattern B — One-Shot Flow Job (research, report with deadline)
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant A as Agent
+    participant TS as TasksService
+    participant R as Redis (BullMQ)
+    participant WP as WorkProcessor
+    participant AI as MainAgentGraph
+    participant DP as DeliverProcessor
+    participant MX as Matrix Room
+
+    U->>A: "Research X by Friday 5 PM"
+    A->>TS: createTask(research, deadline)
+    TS->>TS: buildTaskMeta(hasPage: true)
+    TS->>MX: create Y.Doc with task page
+    TS->>R: FlowProducer.add(deliver + work)
+    Note over R: deliver {taskId}:deliver waits for child<br/>work {taskId}:work starts at deadline - buffer
+
+    rect rgb(230, 240, 255)
+        Note over R,AI: Work phase (deadline - 30 min)
+        R->>WP: work job fires
+        WP->>MX: read TaskMeta
+        WP->>MX: read Y.Doc page sections
+        WP->>AI: sendMessage(prompt)
+        AI-->>WP: AI response + token usage
+        WP-->>R: return WorkResult
+    end
+
+    rect rgb(255, 245, 230)
+        Note over R,MX: Deliver phase (at deadline)
+        R->>DP: deliver job unblocked
+        DP->>R: getChildrenValues() → WorkResult
+        DP->>MX: send formatted result (notification policy)
+        DP->>MX: append output row to Y.Doc
+        DP->>MX: post ixo.ora.task.run event
+        DP->>MX: updateTask(runs, tokens, cost)
+    end
+```
+
+#### Pattern B — Recurring Flow Job (weekly report, daily monitor)
+
+```mermaid
+sequenceDiagram
+    participant TS as TasksService
+    participant R as Redis (BullMQ)
+    participant WP as WorkProcessor
+    participant AI as MainAgentGraph
+    participant DP as DeliverProcessor
+    participant MX as Matrix Room
+    participant TM as TaskMeta
+
+    Note over TS,R: Creation
+    TS->>R: repeatable deliver (cron: 0 9 * * 1)
+    TS->>R: first work job {taskId}:work:{uuid1}
+    TS->>TM: currentWorkJobId = {taskId}:work:{uuid1}
+
+    rect rgb(230, 240, 255)
+        Note over R,MX: Cycle 1 — Work (Mon 8:30 AM)
+        R->>WP: work job fires
+        WP->>AI: sendMessage(prompt from Y.Doc)
+        AI-->>WP: result
+        WP-->>R: return WorkResult
+    end
+
+    rect rgb(255, 245, 230)
+        Note over R,MX: Cycle 1 — Deliver (Mon 9:00 AM)
+        R->>DP: deliver fires (cron)
+        DP->>TM: read currentWorkJobId
+        DP->>R: getJob(currentWorkJobId) → WorkResult
+        DP->>MX: post result to room
+        DP->>MX: updateTask(runs, tokens, cost)
+        Note over DP,R: Schedule next cycle
+        DP->>R: new work job {taskId}:work:{uuid2}
+        DP->>TM: currentWorkJobId = {taskId}:work:{uuid2}
+    end
+
+    rect rgb(230, 240, 255)
+        Note over R,MX: Cycle 2 — Work (next Mon 8:30 AM)
+        R->>WP: work job {uuid2} fires
+        WP->>AI: sendMessage(prompt)
+        AI-->>WP: result
+    end
+
+    rect rgb(255, 245, 230)
+        Note over R,MX: Cycle 2 — Deliver (next Mon 9:00 AM)
+        R->>DP: deliver fires (cron)
+        DP->>TM: read currentWorkJobId (uuid2)
+        DP->>R: getJob → WorkResult
+        DP->>MX: post result, schedule next...
+    end
+```
 
 ### 10.1 Queues
 
@@ -645,6 +790,8 @@ await flowProducer.add({
 
 ### 10.4 Recurring Flow Job
 
+BullMQ FlowProducer does not support `repeat` on any job in a flow, so recurring flows use independent jobs:
+
 ```typescript
 // 1. Repeatable deliver job (fires on schedule)
 await deliverQueue.add(
@@ -656,24 +803,30 @@ await deliverQueue.add(
   },
 );
 
-// 2. One-shot work job for the next delivery (scheduled buffer_minutes before)
+// 2. One-shot work job (unique timestamp-based ID, preserved for history)
+const workJobId = `${taskId}:work:${Date.now()}`;
 await workQueue.add(
   'task_work',
-  {
-    taskId,
-    userId,
-    roomId,
-    forDeliveryAt: nextDeliveryIso,
-  },
+  { taskId, userId, roomId, forDeliveryAt: nextDeliveryIso },
   {
     delay: msUntilNextWorkStart,
-    jobId: `${taskId}:work:${nextDeliveryDate}`,
+    jobId: workJobId,
   },
 );
 
-// 3. After each delivery, the deliver processor schedules the next work job
-//    (inside processDeliverJob, after posting the result)
+// 3. Store the work job ID in TaskMeta so deliver can find it
+await updateTaskMeta({ currentWorkJobId: workJobId });
+
+// 4. After each delivery, the deliver processor:
+//    a) Reads `currentWorkJobId` from TaskMeta to find the completed work job
+//    b) Schedules the next work job with a new timestamp-based ID
+//    c) Updates `currentWorkJobId` in TaskMeta
+//    d) This runs even if the current cycle had no result, to keep the chain alive
 ```
+
+**Work job IDs:** Each cycle gets a unique ID (`{taskId}:work:{timestamp}`), so completed jobs are preserved in Redis for the `removeOnComplete.age` window (7 days). The deliver processor reads `currentWorkJobId` from TaskMeta to know exactly which job to fetch — no date guessing.
+
+**Deliver retries if work not done:** If the work job is still `active`/`waiting`/`delayed` when deliver fires, the deliver processor throws so BullMQ retries with backoff — avoiding silent skips when the buffer is too short.
 
 ### 10.5 Buffer Defaults by Complexity
 
@@ -883,18 +1036,14 @@ Budget exceeded → auto-pause. Task limit hit → agent tells user to pause/can
 After each run, the processor posts a custom Matrix timeline event:
 
 ```typescript
-await matrixClient.sendEvent(roomId, 'com.ora.task.run', {
+await matrixClient.sendEvent(roomId, 'ixo.ora.task.run', {
   taskId,
-  runNumber: 42,
-  status: 'completed',
-  startedAt: '2026-03-16T14:00:00Z',
-  completedAt: '2026-03-16T14:02:30Z',
-  durationMs: 150000,
-  tokensUsed: 1200,
-  costUsd: 0.0024,
-  modelUsed: 'kimi-k2-thinking',
-  resultEventId: '$abc123',
-  error: null,
+  runAt: '2026-03-16T14:02:30Z',
+  status: 'success', // 'success' | 'failure'
+  totalRuns: 42,
+  summary: 'Weekly report generated with 3 key findings', // optional, max ~100 chars
+  tokensUsed: 1200, // optional, flow jobs only
+  costUsd: 0.0024, // optional, flow jobs only
 });
 ```
 
@@ -904,18 +1053,72 @@ The frontend filters these from the normal message view. A "Run History" panel c
 
 ## 22. Error Handling & Resilience
 
+### 22.0 Error Flow Overview
+
+```mermaid
+flowchart TD
+    WF[Work job fails] --> WR{BullMQ retries<br/>left?}
+    WR -->|Yes| WRY[Retry with<br/>exponential backoff]
+    WRY --> WF
+    WR -->|No, all 3<br/>exhausted| WP{Job pattern?}
+
+    WP -->|One-shot flow| OSF[Work processor runs<br/>handleJobFailure on<br/>final attempt]
+    OSF --> INC1[Increment<br/>consecutiveFailures]
+    INC1 --> CHK1{failures >= 5?}
+    CHK1 -->|Yes| PAUSE1[Auto-pause task<br/>+ notify user]
+    CHK1 -->|No| STUCK[Deliver stays in<br/>waiting-children]
+
+    WP -->|Recurring flow| RDF[Deliver fires on cron<br/>finds work state = failed]
+    RDF --> DT[Deliver throws error]
+    DT --> DR{Deliver retries<br/>left?}
+    DR -->|Yes| DRY[Retry deliver]
+    DRY --> RDF
+    DR -->|No, all 8<br/>exhausted| INC2[handleJobFailure<br/>increments failures]
+    INC2 --> CHK2{failures >= 5?}
+    CHK2 -->|Yes| PAUSE2[Auto-pause task<br/>+ notify user]
+    CHK2 -->|No| NEXT[scheduleNextWork<br/>keeps chain alive]
+
+    DF[Deliver job fails<br/>network / Matrix error] --> DR2{BullMQ retries<br/>left?}
+    DR2 -->|Yes| DRY2[Retry with<br/>exponential backoff]
+    DRY2 --> DF
+    DR2 -->|No| INC3[handleJobFailure<br/>increments failures]
+    INC3 --> CHK3{failures >= 5?}
+    CHK3 -->|Yes| PAUSE3[Auto-pause task<br/>+ notify user]
+    CHK3 -->|No| DONE[Job marked failed<br/>in Redis]
+
+    WND[Work not done when<br/>deliver fires] --> WCHK[Check work job state]
+    WCHK -->|active / waiting /<br/>delayed| THROW[Deliver throws<br/>"still running, retry"]
+    THROW --> DR
+    WCHK -->|completed| OK[Read returnvalue<br/>proceed normally]
+
+    style PAUSE1 fill:#ff6b6b,color:#fff
+    style PAUSE2 fill:#ff6b6b,color:#fff
+    style PAUSE3 fill:#ff6b6b,color:#fff
+    style OK fill:#51cf66,color:#fff
+    style STUCK fill:#ffd43b
+```
+
 ### 22.1 Work Failures
 
-BullMQ retries (3 attempts, exponential backoff). After all retries exhausted:
+BullMQ retries (3 attempts, exponential backoff 30s). After all retries exhausted:
 
+- Increment `consecutiveFailures` in TaskMeta
 - Post failure notification to channel
-- Post `com.ora.task.run` with `status: 'failed'`
-- Increment `consecutiveFailures` in Y.Map
 - If `consecutiveFailures >= 5` → auto-pause, notify user
+
+For **one-shot flows** (FlowProducer): the deliver parent stays in `waiting-children` when the work child fails. The work processor handles failure on the final attempt — incrementing `consecutiveFailures` and notifying the user directly, since the deliver processor will never fire.
+
+For **recurring flows**: the deliver processor detects the failed work job, throws, and its own error handler increments `consecutiveFailures`.
 
 ### 22.2 Delivery Failures
 
-3 retries, 10s backoff. If channel unreachable → fall back to main channel. Result is preserved in job return value and run event regardless.
+8 attempts, exponential backoff starting at 15s. Result is preserved in job return value and run event regardless.
+
+**Deliver retries when work isn't done:** If the deliver processor fires and the work job is still `active`/`waiting`/`delayed`, it throws an error so BullMQ retries with backoff. This handles cases where `bufferMinutes` was too short for the actual work duration.
+
+### 22.2.1 Stall Prevention
+
+Long-running work processors call `job.updateProgress()` periodically to prevent BullMQ from marking the job as stalled. Worker `lockDuration` is set to 300s for work jobs (60s for simple/deliver).
 
 ### 22.3 Boot Recovery
 
@@ -1104,7 +1307,7 @@ DeliverProcessor → Matrix SDK + Y.Doc provider (update output table) + TasksSc
 
 - [ ] Task dependencies / chaining
 - [ ] Frontend "My Tasks" view (from task list state event)
-- [ ] Frontend "Run History" view (from `com.ora.task.run` events)
+- [ ] Frontend "Run History" view (from `ixo.ora.task.run` events)
 - [ ] Custom user-created templates
 - [ ] LangSmith trace integration per run
 - [ ] Prometheus metrics

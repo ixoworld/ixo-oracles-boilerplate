@@ -16,7 +16,7 @@
  * @see spec §6.1 — Architecture
  */
 
-import * as Y from 'yjs';
+import type * as Y from 'yjs';
 
 import {
   BUFFER_MINUTES,
@@ -119,6 +119,7 @@ export function buildTaskMeta(params: CreateTaskMetaParams): TaskMeta {
     jobPattern: DEFAULT_JOB_PATTERN[params.taskType],
     bullmqJobId: '',
     bullmqRepeatKey: null,
+    currentWorkJobId: null,
 
     // State
     status: 'active',
