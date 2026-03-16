@@ -28,7 +28,9 @@ export type ModelRole =
   | 'guard'
   | 'routing'
   | 'session-title'
-  | 'embedding';
+  | 'embedding'
+  | 'custom_medium'
+  | 'custom_low';
 
 const MODEL_MAP: Record<LLMProvider, Record<ModelRole, string>> = {
   openrouter: {
@@ -41,10 +43,14 @@ const MODEL_MAP: Record<LLMProvider, Record<ModelRole, string>> = {
     vision: 'google/gemini-2.5-flash-lite',
     guard: 'meta-llama/llama-3.1-8b-instruct',
     routing: 'openai/gpt-oss-20b',
+    custom_low: 'openai/gpt-oss-20b',
+    custom_medium: 'openai/gpt-oss-120b',
     'session-title': 'meta-llama/llama-3.1-8b-instruct',
     embedding: 'text-embedding-3-small',
   },
   nebius: {
+    custom_low: '',
+    custom_medium: '',
     main: 'Qwen/Qwen3-235B-A22B-Thinking-2507',
     skills: 'Qwen/Qwen3-235B-A22B-Thinking-2507',
     subagent: 'Qwen/Qwen3-235B-A22B-Instruct-2507',

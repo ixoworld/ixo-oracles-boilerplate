@@ -20,6 +20,10 @@ import type { ENV } from 'src/types';
 import { QUEUE_DEFAULT_OPTIONS, QUEUE_NAMES } from './scheduler/task-queues';
 import { TasksScheduler } from './scheduler/tasks-scheduler.service';
 import { TasksService } from './task.service';
+import { MainAgentGraph } from 'src/graph';
+import { SimpleProcessor } from './processors/simple.processor';
+import { WorkProcessor } from './processors/work.processor';
+import { DeliverProcessor } from './processors/deliver.processor';
 
 @Module({
   imports: [
@@ -52,7 +56,17 @@ import { TasksService } from './task.service';
     // Register FlowProducer for one-shot Pattern B jobs
     BullModule.registerFlowProducer({ name: 'task-flow' }),
   ],
-  providers: [TasksScheduler, TasksService],
+  providers: [
+    TasksScheduler,
+    TasksService,
+    SimpleProcessor,
+    WorkProcessor,
+    DeliverProcessor,
+    {
+      provide: 'MAIN_AGENT_GRAPH',
+      useFactory: () => new MainAgentGraph(),
+    },
+  ],
   exports: [TasksScheduler, TasksService],
 })
 export class TasksModule {}

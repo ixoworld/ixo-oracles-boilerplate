@@ -213,6 +213,10 @@ export class MainAgentGraph {
       ...(initialUserContext ? { userContext: initialUserContext } : {}),
     } satisfies Partial<TMainAgentGraphState>;
 
+    const configModelOverride = (
+      runnableConfig.configurable as Record<string, unknown>
+    ).modelOverride as string | undefined;
+
     const agent = await createMainAgent({
       state,
       config: {
@@ -225,6 +229,7 @@ export class MainAgentGraph {
       },
       ucanService: ucanOptions?.ucanService,
       fileProcessingService,
+      modelOverride: configModelOverride,
     });
 
     const invokeConfig = {
@@ -249,7 +254,7 @@ export class MainAgentGraph {
         ...invokeConfig,
         metadata: {
           llmProvider: getLLMProvider(),
-          llmModel: getModelForRole('main'),
+          llmModel: configModelOverride ?? getModelForRole('main'),
         },
         context: {
           userDid: runnableConfig.configurable.configs?.user.did ?? '',
