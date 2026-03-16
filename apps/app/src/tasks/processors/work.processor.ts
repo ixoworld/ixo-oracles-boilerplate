@@ -29,6 +29,7 @@ import {
   handleJobFailure,
   isTaskRunnable,
   resolveMainRoomId,
+  resolveModelForTask,
   type WorkResult,
 } from './processor-utils';
 
@@ -74,6 +75,15 @@ export class WorkProcessor extends WorkerHost {
 
     await job.updateProgress(10);
 
+    // Resolve model from tier/override
+    const { modelName, modelRole } = resolveModelForTask(
+      meta.modelTier,
+      meta.modelOverride,
+    );
+    this.logger.log(
+      `Task ${taskId} model selection: model=${modelName}, role=${modelRole ?? 'override'}, tier=${meta.modelTier}`,
+    );
+
     const startedAt = new Date().toISOString();
 
     // Build runnable config
@@ -82,7 +92,7 @@ export class WorkProcessor extends WorkerHost {
     const sessionId = `task:${taskId}:${Date.now()}`;
 
     const runnableConfig: IRunnableConfigWithRequiredFields & {
-      configurable: { sessionId: string };
+      configurable: { sessionId: string; modelOverride: string };
     } = {
       configurable: {
         thread_id: sessionId,
@@ -98,6 +108,7 @@ export class WorkProcessor extends WorkerHost {
             did: normalizeDid(userId),
           },
         },
+        modelOverride: modelName,
       },
     };
 
@@ -119,7 +130,7 @@ export class WorkProcessor extends WorkerHost {
       // Extract token usage and cost from message metadata
       let tokensUsed = 0;
       let costUsd = 0;
-      let modelUsed = '';
+      let modelUsed = modelName;
 
       if (lastMessage && lastMessage instanceof AIMessageChunk) {
         const usageMeta = lastMessage.usage_metadata;
@@ -207,6 +218,7 @@ export class WorkProcessor extends WorkerHost {
       const fragment = doc.getXmlFragment('document');
       const blocks = sharedServerEditor.yXmlFragmentToBlocks(fragment);
       const markdown = await sharedServerEditor.blocksToMarkdownLossy(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         blocks as any,
       );
 

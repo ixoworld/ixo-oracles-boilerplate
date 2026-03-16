@@ -14,7 +14,33 @@ import { getMatrixHomeServerCroppedForDid } from '@ixo/oracles-chain-client';
 import type { ENV } from 'src/types';
 import { normalizeDid } from 'src/utils/header.utils';
 
-import type { NotificationPolicy, TaskMeta } from '../task-meta';
+import { getModelForRole, type ModelRole } from 'src/graph/llm-provider';
+
+import type { ModelTier, NotificationPolicy, TaskMeta } from '../task-meta';
+
+// ── Model Tier → Role Mapping ────────────────────────────────────────
+
+/** Maps task model tier to the LLM provider role used for model resolution. */
+export const MODEL_TIER_ROLE_MAP: Record<ModelTier, ModelRole> = {
+  low: 'custom_low',
+  medium: 'custom_medium',
+  high: 'main',
+};
+
+/**
+ * Resolve the model name for a task based on its tier and optional override.
+ * Returns { modelName, modelRole } so the caller can log which was selected.
+ */
+export function resolveModelForTask(
+  modelTier: ModelTier,
+  modelOverride: string | null,
+): { modelName: string; modelRole: ModelRole | null } {
+  if (modelOverride) {
+    return { modelName: modelOverride, modelRole: null };
+  }
+  const role = MODEL_TIER_ROLE_MAP[modelTier];
+  return { modelName: getModelForRole(role), modelRole: role };
+}
 
 // ── Constants ────────────────────────────────────────────────────────
 
