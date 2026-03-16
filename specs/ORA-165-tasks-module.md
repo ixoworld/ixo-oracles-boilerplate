@@ -102,7 +102,7 @@ User: "Remind me to submit the report at 5pm"
 
 ```typescript
 {
-  name: 'task:simple',
+  name: 'task_simple',
   data: {
     taskId: 'task_abc123',
     userId: '@yousef:ixo.world',
@@ -135,8 +135,8 @@ A BullMQ FlowProducer flow with two linked jobs: a **Work** child that fires ear
 User: "Every Monday at 9am, give me an AI news digest"
     → Agent estimates: Medium complexity, 30 min buffer
     → FlowProducer creates:
-        Parent (task:deliver) — fires at 9:00 AM
-          └─ Child (task:work) — fires at 8:30 AM
+        Parent (task_deliver) — fires at 9:00 AM
+          └─ Child (task_work) — fires at 8:30 AM
 
     → 8:30 AM: Work child fires
         → Reads task prompt from Y.Doc
@@ -169,7 +169,7 @@ This keeps the scheduling within BullMQ — no custom scheduler. The repeatable 
 ```typescript
 // Recurring Flow: the repeatable deliver job
 {
-  name: 'task:deliver',
+  name: 'task_deliver',
   data: { taskId, userId, roomId },
   opts: {
     repeat: { pattern: '0 9 * * 1', tz: 'Africa/Cairo' },
@@ -179,7 +179,7 @@ This keeps the scheduling within BullMQ — no custom scheduler. The repeatable 
 
 // One-shot work job for the next delivery (created by the deliver processor after each run)
 {
-  name: 'task:work',
+  name: 'task_work',
   data: { taskId, userId, roomId, forDeliveryAt: '2026-03-23T09:00:00+02:00' },
   opts: {
     delay: msUntilWorkStart,  // delivery time - buffer
@@ -573,7 +573,7 @@ User: "Schedule a daily AI news digest at 9am"
 ```typescript
 export const TASK_QUEUES = {
   SIMPLE: {
-    name: 'task:simple',
+    name: 'task_simple',
     defaultJobOptions: {
       attempts: 3,
       backoff: { type: 'fixed', delay: 10_000 },
@@ -582,7 +582,7 @@ export const TASK_QUEUES = {
     },
   },
   WORK: {
-    name: 'task:work',
+    name: 'task_work',
     defaultJobOptions: {
       attempts: 3,
       backoff: { type: 'exponential', delay: 30_000 },
@@ -591,7 +591,7 @@ export const TASK_QUEUES = {
     },
   },
   DELIVER: {
-    name: 'task:deliver',
+    name: 'task_deliver',
     defaultJobOptions: {
       attempts: 5,
       backoff: { type: 'fixed', delay: 10_000 },
@@ -602,24 +602,24 @@ export const TASK_QUEUES = {
 };
 ```
 
-Three queues: `task:simple` for Pattern A, `task:work` + `task:deliver` for Pattern B. Separate queues allow independent concurrency and rate limits.
+Three queues: `task_simple` for Pattern A, `task_work` + `task_deliver` for Pattern B. Separate queues allow independent concurrency and rate limits.
 
 ### 10.2 Workers
 
 ```typescript
 // Simple job worker — fast, high concurrency
-new Worker('task:simple', processSimpleJob, {
+new Worker('task_simple', processSimpleJob, {
   concurrency: 20,
 });
 
 // Work job worker — slow (LLM calls), limited
-new Worker('task:work', processWorkJob, {
+new Worker('task_work', processWorkJob, {
   concurrency: 5,
   limiter: { max: 3, duration: 60_000, groupKey: 'userId' },
 });
 
 // Deliver job worker — fast (just sends messages), high concurrency
-new Worker('task:deliver', processDeliverJob, {
+new Worker('task_deliver', processDeliverJob, {
   concurrency: 20,
 });
 ```
@@ -628,14 +628,14 @@ new Worker('task:deliver', processDeliverJob, {
 
 ```typescript
 await flowProducer.add({
-  name: 'task:deliver',
-  queueName: 'task:deliver',
+  name: 'task_deliver',
+  queueName: 'task_deliver',
   data: { taskId, userId, roomId },
   opts: { delay: msUntilDeadline, jobId: `${taskId}:deliver` },
   children: [
     {
-      name: 'task:work',
-      queueName: 'task:work',
+      name: 'task_work',
+      queueName: 'task_work',
       data: { taskId, userId, roomId },
       opts: { delay: msUntilWorkStart, jobId: `${taskId}:work` },
     },
@@ -648,7 +648,7 @@ await flowProducer.add({
 ```typescript
 // 1. Repeatable deliver job (fires on schedule)
 await deliverQueue.add(
-  'task:deliver',
+  'task_deliver',
   { taskId, userId, roomId },
   {
     repeat: { pattern: '0 9 * * 1', tz: 'Africa/Cairo' },
@@ -658,7 +658,7 @@ await deliverQueue.add(
 
 // 2. One-shot work job for the next delivery (scheduled buffer_minutes before)
 await workQueue.add(
-  'task:work',
+  'task_work',
   {
     taskId,
     userId,
