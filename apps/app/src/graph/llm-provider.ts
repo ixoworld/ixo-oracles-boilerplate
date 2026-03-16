@@ -29,8 +29,8 @@ export type ModelRole =
   | 'routing'
   | 'session-title'
   | 'embedding'
-  | "custom_medium"
-  |"custom_low"
+  | 'custom_medium'
+  | 'custom_low';
 
 const MODEL_MAP: Record<LLMProvider, Record<ModelRole, string>> = {
   openrouter: {
