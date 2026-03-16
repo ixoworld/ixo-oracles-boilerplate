@@ -50,7 +50,7 @@ interface SplitContext {
 }
 
 @Injectable()
-export class TasksService {
+export class ClaimProcessingService {
   private readonly denom: Denom;
   private readonly claimProcessingCheckpointer: SqliteSaver;
   private readonly claimProcessingDbPath: string;
@@ -83,7 +83,7 @@ export class TasksService {
       this.claimProcessingDbPath,
     );
   }
-  private readonly logger = new Logger(TasksService.name);
+  private readonly logger = new Logger(ClaimProcessingService.name);
 
   private readonly retryPolicy = {
     maxAttempts: 3,

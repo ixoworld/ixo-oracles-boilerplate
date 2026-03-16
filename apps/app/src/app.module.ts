@@ -19,7 +19,7 @@ import { AuthHeaderMiddleware } from './middleware/auth-header.middleware';
 import { SubscriptionMiddleware } from './middleware/subscription.middleware';
 import { SessionsModule } from './sessions/sessions.module';
 import { SlackModule } from './slack/slack.module';
-import { TasksService } from './tasks/tasks.service';
+import { ClaimProcessingService } from './claim-processing/claim-processing.service';
 import { UcanModule } from './ucan/ucan.module';
 import { normalizeDid } from './utils/header.utils';
 import { RedisService } from './utils/redis.service';
@@ -81,14 +81,14 @@ import { WsModule } from './ws/ws.module';
       inject: [ConfigService],
     },
     {
-      provide: TasksService,
+      provide: ClaimProcessingService,
       useFactory: (configService: ConfigService<ENV>) => {
         const config = getConfig(configService);
         if (config.get('DISABLE_CREDITS')) {
-          Logger.log('TasksService disabled (DISABLE_CREDITS=true)');
+          Logger.log('ClaimProcessingService disabled (DISABLE_CREDITS=true)');
           return null;
         }
-        return new TasksService(configService);
+        return new ClaimProcessingService(configService);
       },
       inject: [ConfigService],
     },
