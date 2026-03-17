@@ -23,7 +23,8 @@ function buildSampleMeta(
 ): TaskMeta {
   const meta = buildTaskMeta({
     taskId: 'task_test123456',
-    userId: '@yousef:ixo.world',
+    userDid: 'did:ixo:ixo1abc',
+    matrixUserId: '@did-ixo-ixo1abc:ixo.world',
     taskType: 'monitor',
     hasPage: true,
     timezone: 'Africa/Cairo',

@@ -83,7 +83,8 @@ export interface ListTasksResult {
 /** Input params for creating a task */
 export interface CreateTaskParams {
   title: string;
-  userId: string;
+  userDid: string;
+  matrixUserId: string;
   mainRoomId: string;
   taskType: TaskType;
   hasPage: boolean;

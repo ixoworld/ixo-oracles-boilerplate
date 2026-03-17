@@ -48,7 +48,10 @@ export class TasksScheduler {
   async scheduleSimpleJob(
     params: ScheduleSimpleJobParams,
   ): Promise<{ jobId: string; repeatKey: string | null }> {
-    const jobId = `${params.taskId}:simple`;
+    const jobId = `${params.taskId}-simple`;
+    this.logger.debug(
+      `scheduleSimpleJob: taskId=${params.taskId}, delay=${params.delay ?? 'none'}, repeat=${params.repeat ? JSON.stringify(params.repeat) : 'none'}`,
+    );
 
     const job = await this.simpleQueue.add(QUEUE_NAMES.SIMPLE, params.data, {
       ...(params.delay != null ? { delay: params.delay } : {}),
@@ -61,7 +64,7 @@ export class TasksScheduler {
       : null;
 
     this.logger.log(
-      `Scheduled simple job ${jobId} (${params.repeat ? 'recurring' : 'one-shot'})`,
+      `Scheduled simple job ${jobId} (${params.repeat ? 'recurring' : 'one-shot'}), actualJobId=${job.id}, repeatKey=${repeatKey ?? 'none'}`,
     );
 
     return { jobId: job.id ?? jobId, repeatKey };
@@ -76,8 +79,12 @@ export class TasksScheduler {
   async scheduleFlowJob(
     params: ScheduleFlowJobParams,
   ): Promise<{ deliverJobId: string; workJobId: string }> {
-    const deliverJobId = `${params.taskId}:deliver`;
-    const workJobId = `${params.taskId}:work`;
+    const deliverJobId = `${params.taskId}-deliver`;
+    const workJobId = `${params.taskId}-work`;
+
+    this.logger.debug(
+      `scheduleFlowJob: taskId=${params.taskId}, workDelay=${params.workDelay}ms, deliverDelay=${params.deliverDelay}ms`,
+    );
 
     await this.flowProducer.add({
       name: QUEUE_NAMES.DELIVER,
@@ -95,7 +102,7 @@ export class TasksScheduler {
     });
 
     this.logger.log(
-      `Scheduled flow job: work=${workJobId}, deliver=${deliverJobId}`,
+      `Scheduled flow job: work=${workJobId} (delay=${params.workDelay}ms), deliver=${deliverJobId} (delay=${params.deliverDelay}ms)`,
     );
 
     return { deliverJobId, workJobId };
@@ -115,7 +122,10 @@ export class TasksScheduler {
     repeatKey: string | null;
     workJobId: string | null;
   }> {
-    const deliverJobId = `${params.taskId}:deliver`;
+    const deliverJobId = `${params.taskId}-deliver`;
+    this.logger.debug(
+      `scheduleRecurringFlow: taskId=${params.taskId}, cron=${params.repeat.pattern}, tz=${params.repeat.tz ?? 'default'}, firstWorkDelay=${params.firstWork?.delay ?? 'none'}`,
+    );
 
     // 1. Repeatable deliver job (fires on cron schedule)
     await this.deliverQueue.add(QUEUE_NAMES.DELIVER, params.deliverData, {
@@ -126,6 +136,9 @@ export class TasksScheduler {
     const repeatKey = await this.getRepeatableKey(
       this.deliverQueue,
       deliverJobId,
+    );
+    this.logger.debug(
+      `scheduleRecurringFlow: deliver job added, repeatKey=${repeatKey ?? 'not found'}`,
     );
 
     // 2. Schedule the first work job (if provided)
@@ -140,7 +153,7 @@ export class TasksScheduler {
     }
 
     this.logger.log(
-      `Scheduled recurring flow: deliver=${deliverJobId} (${params.repeat.pattern}), work=${workJobId ?? 'none yet'}`,
+      `Scheduled recurring flow: deliver=${deliverJobId} (${params.repeat.pattern}), repeatKey=${repeatKey ?? 'none'}, work=${workJobId ?? 'none yet'}`,
     );
 
     return { deliverJobId, repeatKey, workJobId };
@@ -156,14 +169,20 @@ export class TasksScheduler {
     params: ScheduleNextWorkJobParams,
   ): Promise<{ jobId: string }> {
     const suffix = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
-    const jobId = `${params.taskId}:work:${suffix}`;
+    const jobId = `${params.taskId}-work-${suffix}`;
+
+    this.logger.debug(
+      `scheduleNextWorkJob: taskId=${params.taskId}, delay=${params.delay ?? 0}ms, forDeliveryAt=${params.data.forDeliveryAt ?? 'none'}`,
+    );
 
     await this.workQueue.add(QUEUE_NAMES.WORK, params.data, {
       delay: params.delay,
       jobId,
     });
 
-    this.logger.log(`Scheduled next work job ${jobId}`);
+    this.logger.log(
+      `Scheduled next work job ${jobId} (delay=${params.delay ?? 0}ms)`,
+    );
     return { jobId };
   }
 
@@ -174,6 +193,7 @@ export class TasksScheduler {
    * Removes the job if it exists and hasn't completed.
    */
   async cancelJob(queueName: QueueName, jobId: string): Promise<boolean> {
+    this.logger.debug(`cancelJob: looking up job ${jobId} in ${queueName}...`);
     const queue = this.getQueue(queueName);
     const job = await queue.getJob(jobId);
 
@@ -183,13 +203,14 @@ export class TasksScheduler {
     }
 
     const state = await job.getState();
+    this.logger.debug(`cancelJob: job ${jobId} state=${state}`);
     if (state === 'completed' || state === 'failed') {
       this.logger.warn(`Job ${jobId} already ${state}, skipping cancel`);
       return false;
     }
 
     await job.remove();
-    this.logger.log(`Cancelled job ${jobId} from ${queueName}`);
+    this.logger.log(`Cancelled job ${jobId} from ${queueName} (was ${state})`);
     return true;
   }
 
@@ -223,18 +244,18 @@ export class TasksScheduler {
     const errors: string[] = [];
 
     // Cancel simple job
-    await this.cancelJob(QUEUE_NAMES.SIMPLE, `${taskId}:simple`).catch((e) =>
+    await this.cancelJob(QUEUE_NAMES.SIMPLE, `${taskId}-simple`).catch((e) =>
       errors.push(`simple: ${e instanceof Error ? e.message : String(e)}`),
     );
     // Cancel deliver job
-    await this.cancelJob(QUEUE_NAMES.DELIVER, `${taskId}:deliver`).catch((e) =>
+    await this.cancelJob(QUEUE_NAMES.DELIVER, `${taskId}-deliver`).catch((e) =>
       errors.push(`deliver: ${e instanceof Error ? e.message : String(e)}`),
     );
-    // Cancel work job — one-shot uses `{taskId}:work`, recurring uses UUID-based ID
-    await this.cancelJob(QUEUE_NAMES.WORK, `${taskId}:work`).catch((e) =>
+    // Cancel work job — one-shot uses `{taskId}-work`, recurring uses UUID-based ID
+    await this.cancelJob(QUEUE_NAMES.WORK, `${taskId}-work`).catch((e) =>
       errors.push(`work: ${e instanceof Error ? e.message : String(e)}`),
     );
-    if (currentWorkJobId && currentWorkJobId !== `${taskId}:work`) {
+    if (currentWorkJobId && currentWorkJobId !== `${taskId}-work`) {
       await this.cancelJob(QUEUE_NAMES.WORK, currentWorkJobId).catch((e) =>
         errors.push(
           `work-current: ${e instanceof Error ? e.message : String(e)}`,

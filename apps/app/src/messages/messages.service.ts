@@ -52,6 +52,7 @@ import {
 import { TokenLimiter } from 'src/utils/token-limit-handler';
 import { type ListMessagesDto } from './dto/list-messages.dto';
 import { type SendMessagePayload } from './dto/send-message.dto';
+import { TasksService } from 'src/tasks/task.service';
 import {
   FileProcessingService,
   type SandboxUploadConfig,
@@ -91,6 +92,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     private readonly config: ConfigService<ENV>,
     private readonly checkpointStorageSyncService: UserMatrixSqliteSyncService,
     private readonly fileProcessingService: FileProcessingService,
+    @Optional() private readonly tasksService?: TasksService,
     @Optional() private readonly ucanService?: UcanService,
   ) {
     this.matrixManager = this.sessionManagerService.matrixManger;
@@ -727,6 +729,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
                 },
                 this.fileProcessingService,
                 params.metadata?.spaceId,
+                this.tasksService,
               );
 
               let fullContent = '';
@@ -1126,6 +1129,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         },
         this.fileProcessingService,
         params.metadata?.spaceId,
+        this.tasksService,
       );
       const lastMessage = result.messages.at(-1);
       if (!lastMessage) {

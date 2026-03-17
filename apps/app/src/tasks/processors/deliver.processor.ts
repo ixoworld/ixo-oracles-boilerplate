@@ -17,9 +17,10 @@ import { CronExpressionParser } from 'cron-parser';
 
 import type { ENV } from 'src/types';
 
-import { appendOutputRow } from '../task-doc';
-import { withTaskDoc } from '../task-doc-helpers';
+import { appendOutputRow, readTaskMeta } from '../task-doc';
+import { sharedServerEditor, withTaskDoc } from '../task-doc-helpers';
 import type { TaskMeta } from '../task-meta';
+import { formatOutputTable } from '../task-page-template';
 import { QUEUE_NAMES, WORKER_OPTIONS } from '../scheduler/task-queues';
 import type { DeliverJobData } from '../scheduler/types';
 import { TasksScheduler } from '../scheduler/tasks-scheduler.service';
@@ -52,11 +53,21 @@ export class DeliverProcessor extends WorkerHost {
   async process(job: Job<DeliverJobData>): Promise<void> {
     DeliverJobDataSchema.parse(job.data);
 
-    const { taskId, userId, roomId } = job.data;
-    this.logger.log(`Processing deliver job for task ${taskId}`);
+    const { taskId, userDid, matrixUserId, roomId } = job.data;
+    this.logger.log(
+      `Processing deliver job for task ${taskId} [jobId=${job.id}, attempt=${job.attemptsMade + 1}/${job.opts.attempts ?? 1}, roomId=${roomId}]`,
+    );
+    this.logger.debug(`Deliver job data: ${JSON.stringify(job.data)}`);
 
-    const mainRoomId = await resolveMainRoomId(userId, this.config);
+    this.logger.debug(`Resolving main room for user ${userDid}...`);
+    const mainRoomId = await resolveMainRoomId(userDid, this.config);
+    this.logger.debug(`Resolved mainRoomId=${mainRoomId}`);
+
+    this.logger.debug(`Reading TaskMeta for task ${taskId}...`);
     const meta = await this.tasksService.getTask({ taskId, mainRoomId });
+    this.logger.debug(
+      `TaskMeta loaded: status=${meta.status}, totalRuns=${meta.totalRuns}, scheduleCron=${meta.scheduleCron ?? 'none'}, currentWorkJobId=${meta.currentWorkJobId ?? 'none'}, hasPage=${meta.hasPage}`,
+    );
 
     // Guard: skip if not active/dry_run
     if (!isTaskRunnable(meta)) {
@@ -70,10 +81,16 @@ export class DeliverProcessor extends WorkerHost {
     const now = new Date();
 
     // Get work result from child job
+    this.logger.debug(
+      `Retrieving work result for task ${taskId} (currentWorkJobId=${meta.currentWorkJobId ?? 'none'})...`,
+    );
     const workResult = await this.getWorkResult(
       job,
       taskId,
       meta.currentWorkJobId,
+    );
+    this.logger.debug(
+      `Work result: ${workResult ? `skipped=${workResult.skipped}, resultLen=${workResult.result.length}, tokens=${workResult.tokensUsed}, cost=$${workResult.costUsd.toFixed(4)}` : 'null'}`,
     );
 
     try {
@@ -82,22 +99,30 @@ export class DeliverProcessor extends WorkerHost {
       } else {
         // Post formatted result to room (respecting dry_run and notificationPolicy)
         const formattedMessage = this.formatDeliveryMessage(taskId, workResult);
+        this.logger.debug(
+          `Sending delivery notification: policy=${meta.notificationPolicy}, isDryRun=${meta.status === 'dry_run'}, messageLen=${formattedMessage.length}`,
+        );
         const messageEventId = await sendTaskNotification({
           roomId,
-          userId,
+          matrixUserId,
           message: formattedMessage,
           notificationPolicy: meta.notificationPolicy,
           isDryRun: meta.status === 'dry_run',
         });
+        this.logger.debug(
+          `Delivery notification sent: eventId=${messageEventId ?? 'none (dry_run/silent)'}`,
+        );
 
         // If hasPage: append output row via Y.Doc
         if (meta.hasPage) {
+          this.logger.debug(`Appending output to task page Y.Doc...`);
           await this.appendOutputToPage(
             meta,
             mainRoomId,
             workResult,
             messageEventId,
           );
+          this.logger.debug(`Output appended to task page`);
         }
 
         // Post task run event
@@ -110,39 +135,65 @@ export class DeliverProcessor extends WorkerHost {
           tokensUsed: workResult.tokensUsed,
           costUsd: workResult.costUsd,
         };
+        this.logger.debug(
+          `Posting run event: ${JSON.stringify(runEventContent)}`,
+        );
         await mxManager.sendMatrixEvent(
           roomId,
           TASK_RUN_EVENT_TYPE,
           runEventContent,
         );
+        this.logger.debug(`Run event posted to room ${roomId}`);
 
         // Update TaskMeta
+        const updates = {
+          lastRunAt: now.toISOString(),
+          totalRuns: meta.totalRuns + 1,
+          consecutiveFailures: 0,
+          totalTokensUsed: meta.totalTokensUsed + workResult.tokensUsed,
+          totalCostUsd: meta.totalCostUsd + workResult.costUsd,
+        };
+        this.logger.debug(`Updating TaskMeta: ${JSON.stringify(updates)}`);
         await this.tasksService.updateTask({
           taskId,
           mainRoomId,
-          updates: {
-            lastRunAt: now.toISOString(),
-            totalRuns: meta.totalRuns + 1,
-            consecutiveFailures: 0,
-            totalTokensUsed: meta.totalTokensUsed + workResult.tokensUsed,
-            totalCostUsd: meta.totalCostUsd + workResult.costUsd,
-          },
+          updates,
         });
+        this.logger.debug(`TaskMeta updated for task ${taskId}`);
       }
 
       // Schedule next work job for recurring tasks — recheck status to avoid scheduling for paused tasks
       if (meta.scheduleCron) {
+        this.logger.debug(
+          `Task ${taskId} is recurring (cron=${meta.scheduleCron}), checking if next work should be scheduled...`,
+        );
         const freshMeta = await this.tasksService.getTask(
           { taskId, mainRoomId },
           { bypassCache: true },
         );
+        this.logger.debug(
+          `Fresh status for task ${taskId}: ${freshMeta.status}`,
+        );
         if (isTaskRunnable(freshMeta)) {
           await this.scheduleNextWork(freshMeta, mainRoomId);
+        } else {
+          this.logger.log(
+            `Task ${taskId} no longer runnable (status=${freshMeta.status}), skipping next work schedule`,
+          );
         }
       }
 
-      this.logger.log(`Deliver job for task ${taskId} completed`);
+      this.logger.log(
+        `Deliver job for task ${taskId} completed (run #${meta.totalRuns + 1})`,
+      );
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `Deliver job for task ${taskId} failed on attempt ${job.attemptsMade + 1}/${job.opts.attempts ?? 1}: ${errorMsg}`,
+      );
+      if (error instanceof Error && error.stack) {
+        this.logger.debug(`Stack trace: ${error.stack}`);
+      }
       await handleJobFailure({
         error,
         taskId,
@@ -177,27 +228,38 @@ export class DeliverProcessor extends WorkerHost {
     currentWorkJobId: string | null,
   ): Promise<WorkResult | null> {
     // For one-shot flows, try getChildrenValues first (FlowProducer link)
+    this.logger.debug(`Checking children values for deliver job ${job.id}...`);
     const childrenValues = await job.getChildrenValues<WorkResult>();
     const childResults = Object.values(childrenValues);
+    this.logger.debug(
+      `Children values: ${childResults.length} result(s) found`,
+    );
     if (childResults.length > 0) {
+      this.logger.debug(`Using child result from FlowProducer link`);
       return childResults[0];
     }
 
     // For recurring flows, look up by the stored work job ID
     if (!currentWorkJobId) {
+      this.logger.debug(`No currentWorkJobId set, returning null`);
       return null;
     }
 
+    this.logger.debug(
+      `Looking up work job ${currentWorkJobId} in work queue...`,
+    );
     const workJob = await this.scheduler
       .getWorkQueue()
       .getJob(currentWorkJobId);
 
     if (!workJob) {
+      this.logger.warn(`Work job ${currentWorkJobId} not found in queue`);
       return null;
     }
 
     // If work job exists but hasn't completed, throw to retry
     const state = await workJob.getState();
+    this.logger.debug(`Work job ${currentWorkJobId} state: ${state}`);
     if (state === 'active' || state === 'waiting' || state === 'delayed') {
       throw new Error(
         `Work job ${currentWorkJobId} is still ${state}, retrying deliver`,
@@ -205,15 +267,24 @@ export class DeliverProcessor extends WorkerHost {
     }
 
     if (state === 'failed') {
+      this.logger.error(
+        `Work job ${currentWorkJobId} failed: ${workJob.failedReason ?? 'unknown reason'}`,
+      );
       throw new Error(
         `Work job ${currentWorkJobId} failed: ${workJob.failedReason ?? 'unknown reason'}`,
       );
     }
 
     if (workJob.returnvalue) {
+      this.logger.debug(
+        `Work job ${currentWorkJobId} has return value, using it`,
+      );
       return workJob.returnvalue as unknown as WorkResult;
     }
 
+    this.logger.debug(
+      `Work job ${currentWorkJobId} completed but no return value`,
+    );
     return null;
   }
 
@@ -270,7 +341,7 @@ export class DeliverProcessor extends WorkerHost {
       taskId: meta.taskId,
       data: {
         taskId: meta.taskId,
-        userId: meta.userId,
+        userDid: meta.userDid,
         roomId,
         forDeliveryAt: nextDelivery.toISOString(),
       },

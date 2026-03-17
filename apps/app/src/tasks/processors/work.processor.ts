@@ -17,19 +17,23 @@ import { AIMessageChunk } from 'langchain';
 
 import { MainAgentGraph } from 'src/graph';
 import type { ENV } from 'src/types';
-import { normalizeDid } from 'src/utils/header.utils';
+
 import { TokenLimiter } from 'src/utils/token-limit-handler';
 
 import { QUEUE_NAMES, WORKER_OPTIONS } from '../scheduler/task-queues';
 import type { WorkJobData } from '../scheduler/types';
 import { sharedServerEditor, withTaskDoc } from '../task-doc-helpers';
+import type { TaskMeta } from '../task-meta';
 import { TasksService } from '../task.service';
 import {
   WorkJobDataSchema,
+  formatOutputDate,
   handleJobFailure,
   isTaskRunnable,
   resolveMainRoomId,
   resolveModelForTask,
+  truncateText,
+  type TaskExecutionContext,
   type WorkResult,
 } from './processor-utils';
 
@@ -48,11 +52,21 @@ export class WorkProcessor extends WorkerHost {
   async process(job: Job<WorkJobData>): Promise<WorkResult> {
     WorkJobDataSchema.parse(job.data);
 
-    const { taskId, userId, roomId } = job.data;
-    this.logger.log(`Processing work job for task ${taskId}`);
+    const { taskId, userDid, roomId } = job.data;
+    this.logger.log(
+      `Processing work job for task ${taskId} [jobId=${job.id}, attempt=${job.attemptsMade + 1}/${job.opts.attempts ?? 1}, roomId=${roomId}]`,
+    );
+    this.logger.debug(`Work job data: ${JSON.stringify(job.data)}`);
 
-    const mainRoomId = await resolveMainRoomId(userId, this.config);
+    this.logger.debug(`Resolving main room for user ${userDid}...`);
+    const mainRoomId = await resolveMainRoomId(userDid, this.config);
+    this.logger.debug(`Resolved mainRoomId=${mainRoomId}`);
+
+    this.logger.debug(`Reading TaskMeta for task ${taskId}...`);
     const meta = await this.tasksService.getTask({ taskId, mainRoomId });
+    this.logger.debug(
+      `TaskMeta loaded: status=${meta.status}, jobPattern=${meta.jobPattern}, modelTier=${meta.modelTier}, modelOverride=${meta.modelOverride ?? 'none'}, hasPage=${meta.hasPage}, complexityTier=${meta.complexityTier}`,
+    );
 
     // Guard: skip if not active/dry_run
     if (!isTaskRunnable(meta)) {
@@ -70,8 +84,12 @@ export class WorkProcessor extends WorkerHost {
 
     await job.updateProgress(5);
 
-    // Build prompt from task page or use minimal prompt
-    const prompt = await this.buildPromptFromPage(roomId);
+    // Build prompt from task page with execution context
+    this.logger.debug(`Building prompt from task page (roomId=${roomId})...`);
+    const prompt = await this.buildPromptFromPage(roomId, meta);
+    this.logger.debug(
+      `Prompt built: length=${prompt.length} chars, preview="${prompt.slice(0, 200)}..."`,
+    );
 
     await job.updateProgress(10);
 
@@ -91,8 +109,24 @@ export class WorkProcessor extends WorkerHost {
     const homeServerName = roomId.split(':').slice(1).join(':');
     const sessionId = `task:${taskId}:${Date.now()}`;
 
+    const taskExecutionContext: TaskExecutionContext = {
+      taskId,
+      taskType: meta.taskType,
+      runNumber: meta.totalRuns + 1,
+      scheduleCron: meta.scheduleCron,
+      timezone: meta.timezone,
+      totalCostUsd: meta.totalCostUsd,
+      monthlyBudgetUsd: meta.monthlyBudgetUsd,
+      consecutiveFailures: meta.consecutiveFailures,
+      channelType: meta.channelType,
+    };
+
     const runnableConfig: IRunnableConfigWithRequiredFields & {
-      configurable: { sessionId: string; modelOverride: string };
+      configurable: {
+        sessionId: string;
+        modelOverride: string;
+        taskExecutionContext: TaskExecutionContext;
+      };
     } = {
       configurable: {
         thread_id: sessionId,
@@ -105,20 +139,29 @@ export class WorkProcessor extends WorkerHost {
             homeServerName,
           },
           user: {
-            did: normalizeDid(userId),
+            did: userDid,
           },
         },
         modelOverride: modelName,
+        taskExecutionContext,
       },
     };
 
     try {
       // Invoke the agent
+      this.logger.debug(
+        `Invoking MainAgentGraph.sendMessage for task ${taskId} [sessionId=${sessionId}, model=${modelName}]`,
+      );
+      const agentStartTime = Date.now();
       const result = await this.mainAgent.sendMessage(
         prompt,
         runnableConfig,
         [], // no browser tools
         true, // msgFromMatrixRoom
+      );
+      const agentDuration = Date.now() - agentStartTime;
+      this.logger.debug(
+        `Agent invocation completed for task ${taskId} in ${agentDuration}ms, messages returned: ${result.messages.length}`,
       );
 
       await job.updateProgress(90);
@@ -126,6 +169,9 @@ export class WorkProcessor extends WorkerHost {
       // Extract result text from last AI message
       const lastMessage = result.messages.at(-1);
       const resultText = lastMessage ? String(lastMessage.content) : '';
+      this.logger.debug(
+        `Result text extracted: length=${resultText.length} chars, lastMessageType=${lastMessage?.constructor?.name ?? 'none'}`,
+      );
 
       // Extract token usage and cost from message metadata
       let tokensUsed = 0;
@@ -172,7 +218,10 @@ export class WorkProcessor extends WorkerHost {
       const completedAt = new Date().toISOString();
 
       this.logger.log(
-        `Work job for task ${taskId} completed (${tokensUsed} tokens)`,
+        `Work job for task ${taskId} completed: tokens=${tokensUsed}, cost=$${costUsd.toFixed(4)}, model=${modelUsed}, duration=${agentDuration}ms`,
+      );
+      this.logger.debug(
+        `Work result details: resultLen=${resultText.length}, startedAt=${startedAt}, completedAt=${completedAt}`,
       );
 
       return {
@@ -185,6 +234,14 @@ export class WorkProcessor extends WorkerHost {
         completedAt,
       };
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `Work job for task ${taskId} failed on attempt ${job.attemptsMade + 1}/${job.opts.attempts ?? 1}: ${errorMsg}`,
+      );
+      if (error instanceof Error && error.stack) {
+        this.logger.debug(`Stack trace: ${error.stack}`);
+      }
+
       // For one-shot flows (FlowProducer), if work exhausts all retries the
       // deliver parent stays in "waiting-children" forever. Handle failure
       // here so the task gets paused and the user is notified.
@@ -210,10 +267,13 @@ export class WorkProcessor extends WorkerHost {
   }
 
   /**
-   * Read the task page Y.Doc and extract prompt sections.
-   * Looks for "What to Do", "How to Report", and "Constraints" headings.
+   * Read the task page Y.Doc, extract markdown, and wrap it with
+   * execution context so the agent knows it's running autonomously.
    */
-  private async buildPromptFromPage(docRoomId: string): Promise<string> {
+  private async buildPromptFromPage(
+    docRoomId: string,
+    meta: TaskMeta,
+  ): Promise<string> {
     return withTaskDoc(docRoomId, async (doc) => {
       const fragment = doc.getXmlFragment('document');
       const blocks = sharedServerEditor.yXmlFragmentToBlocks(fragment);
@@ -222,7 +282,52 @@ export class WorkProcessor extends WorkerHost {
         blocks as any,
       );
 
-      return `This is Task for U to excute as in the task page\n ${markdown}`;
+      const runNumber = meta.totalRuns + 1;
+      const schedule = meta.scheduleCron ?? 'one-shot';
+      const lastRun = meta.lastRunAt
+        ? formatOutputDate(new Date(meta.lastRunAt))
+        : 'never';
+      const budgetStr = meta.monthlyBudgetUsd
+        ? `$${meta.totalCostUsd.toFixed(2)} / $${meta.monthlyBudgetUsd.toFixed(2)}`
+        : `$${meta.totalCostUsd.toFixed(2)}`;
+
+      // Build previous runs section from recentOutput
+      let previousRuns: string;
+      if (meta.recentOutput.length > 0) {
+        previousRuns = meta.recentOutput
+          .map((row) => `- ${row.when}: ${truncateText(row.summary, 200)}`)
+          .join('\n');
+      } else {
+        previousRuns = 'First run — no previous output.';
+      }
+
+      return [
+        `## Task Execution — Run #${runNumber}`,
+        '',
+        'You are running autonomously. No human is in the loop — do NOT ask questions or seek clarification.',
+        'If the user configured actions that require approval, pause and wait for it; otherwise execute fully.',
+        '',
+        '### Task Page',
+        '---',
+        markdown,
+        '---',
+        '',
+        '### Context',
+        `- Task: ${meta.taskId} | Type: ${meta.taskType}`,
+        `- Schedule: ${schedule} | Timezone: ${meta.timezone}`,
+        `- Run: #${runNumber} | Last run: ${lastRun}`,
+        `- Budget: ${budgetStr}`,
+        '',
+        '### Previous Runs',
+        previousRuns,
+        '',
+        '### Execution Rules',
+        '1. Execute immediately — use tools (Firecrawl for web data, Memory Agent for recall, skills for files)',
+        '2. Output ONLY the deliverable as described in the task page',
+        '3. Do not narrate, do not echo instructions, do not add preamble',
+        '4. If a tool fails, state the failure factually and continue with available data',
+        '5. Follow all constraints and output format specified in the task page',
+      ].join('\n');
     });
   }
 }

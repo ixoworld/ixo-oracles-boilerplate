@@ -72,7 +72,8 @@ export function updateTaskMeta(doc: Y.Doc, updates: Partial<TaskMeta>): void {
 
 export interface CreateTaskMetaParams {
   taskId: string;
-  userId: string;
+  userDid: string;
+  matrixUserId: string;
   taskType: TaskType;
   hasPage: boolean;
 
@@ -105,7 +106,8 @@ export function buildTaskMeta(params: CreateTaskMetaParams): TaskMeta {
   return {
     // Identity
     taskId: params.taskId,
-    userId: params.userId,
+    userDid: params.userDid,
+    matrixUserId: params.matrixUserId,
     taskType: params.taskType,
     hasPage: params.hasPage,
 

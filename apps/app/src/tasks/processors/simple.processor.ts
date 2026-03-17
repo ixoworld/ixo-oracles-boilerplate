@@ -43,14 +43,25 @@ export class SimpleProcessor extends WorkerHost {
 
   async process(job: Job<SimpleJobData>): Promise<void> {
     SimpleJobDataSchema.parse(job.data);
-    const { taskId, userId, roomId, message } = job.data;
-    this.logger.log(`Processing simple job for task ${taskId}`);
+    const { taskId, userDid, matrixUserId, roomId, message } = job.data;
+    this.logger.log(
+      `Processing simple job for task ${taskId} [jobId=${job.id}, attempt=${job.attemptsMade + 1}/${job.opts.attempts ?? 1}, roomId=${roomId}]`,
+    );
+    this.logger.debug(
+      `Simple job data: ${JSON.stringify({ taskId, userDid, matrixUserId, roomId, messageLen: message.length })}`,
+    );
 
-    const mainRoomId = await resolveMainRoomId(userId, this.config);
+    this.logger.debug(`Resolving main room for user ${userDid}...`);
+    const mainRoomId = await resolveMainRoomId(userDid, this.config);
+    this.logger.debug(`Resolved mainRoomId=${mainRoomId}`);
 
     try {
       // 1. Read TaskMeta
+      this.logger.debug(`Reading TaskMeta for task ${taskId}...`);
       const meta = await this.tasksService.getTask({ taskId, mainRoomId });
+      this.logger.debug(
+        `TaskMeta loaded: status=${meta.status}, totalRuns=${meta.totalRuns}, notificationPolicy=${meta.notificationPolicy}, consecutiveFailures=${meta.consecutiveFailures}`,
+      );
 
       // 2. Guard: skip if not active/dry_run
       if (!isTaskRunnable(meta)) {
@@ -61,13 +72,19 @@ export class SimpleProcessor extends WorkerHost {
       const now = new Date();
 
       // 3. Send message based on notificationPolicy
-      await sendTaskNotification({
+      this.logger.debug(
+        `Sending notification: policy=${meta.notificationPolicy}, isDryRun=${meta.status === 'dry_run'}, roomId=${roomId}`,
+      );
+      const notifEventId = await sendTaskNotification({
         roomId,
-        userId,
+        matrixUserId,
         message,
         notificationPolicy: meta.notificationPolicy,
         isDryRun: meta.status === 'dry_run',
       });
+      this.logger.debug(
+        `Notification sent: eventId=${notifEventId ?? 'none (dry_run/silent)'}`,
+      );
 
       // 4. Post task run event
       const runEventContent: TaskRunEventContent = {
@@ -77,25 +94,33 @@ export class SimpleProcessor extends WorkerHost {
         totalRuns: meta.totalRuns + 1,
         summary: message,
       };
+      this.logger.debug(
+        `Posting run event: ${JSON.stringify(runEventContent)}`,
+      );
       const mxManager = MatrixManager.getInstance();
       await mxManager.sendMatrixEvent(
         roomId,
         TASK_RUN_EVENT_TYPE,
         runEventContent,
       );
+      this.logger.debug(`Run event posted to room ${roomId}`);
 
       // 5. Update TaskMeta
+      const updates = {
+        lastRunAt: now.toISOString(),
+        totalRuns: meta.totalRuns + 1,
+        consecutiveFailures: 0,
+      };
+      this.logger.debug(`Updating TaskMeta: ${JSON.stringify(updates)}`);
       await this.tasksService.updateTask({
         taskId,
         mainRoomId,
-        updates: {
-          lastRunAt: now.toISOString(),
-          totalRuns: meta.totalRuns + 1,
-          consecutiveFailures: 0,
-        },
+        updates,
       });
 
-      this.logger.log(`Simple job for task ${taskId} completed`);
+      this.logger.log(
+        `Simple job for task ${taskId} completed (run #${meta.totalRuns + 1})`,
+      );
     } catch (error) {
       await handleJobFailure({
         error,

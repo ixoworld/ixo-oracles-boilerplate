@@ -4,7 +4,7 @@
  * @see spec §21 — Execution Logs as Room Events
  */
 
-import type { Logger } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
 
@@ -12,11 +12,16 @@ import { MatrixManager } from '@ixo/matrix';
 import { getMatrixHomeServerCroppedForDid } from '@ixo/oracles-chain-client';
 
 import type { ENV } from 'src/types';
-import { normalizeDid } from 'src/utils/header.utils';
 
 import { getModelForRole, type ModelRole } from 'src/graph/llm-provider';
 
-import type { ModelTier, NotificationPolicy, TaskMeta } from '../task-meta';
+import type {
+  ChannelType,
+  ModelTier,
+  NotificationPolicy,
+  TaskMeta,
+  TaskType,
+} from '../task-meta';
 
 // ── Model Tier → Role Mapping ────────────────────────────────────────
 
@@ -66,6 +71,19 @@ export interface TaskRunEventContent {
   costUsd?: number;
 }
 
+/** Context passed to configurable so main-agent can detect autonomous task mode */
+export interface TaskExecutionContext {
+  taskId: string;
+  taskType: TaskType;
+  runNumber: number;
+  scheduleCron: string | null;
+  timezone: string;
+  totalCostUsd: number;
+  monthlyBudgetUsd: number | null;
+  consecutiveFailures: number;
+  channelType: ChannelType;
+}
+
 /** Return value from the Work processor */
 export interface WorkResult {
   skipped: boolean;
@@ -81,23 +99,27 @@ export interface WorkResult {
 
 export const SimpleJobDataSchema = z.object({
   taskId: z.string().min(1),
-  userId: z.string().min(1),
+  userDid: z.string().min(1),
+  matrixUserId: z.string().min(1),
   roomId: z.string().min(1),
   message: z.string(),
 });
 
 export const WorkJobDataSchema = z.object({
   taskId: z.string().min(1),
-  userId: z.string().min(1),
+  userDid: z.string().min(1),
   roomId: z.string().min(1),
   forDeliveryAt: z.string().optional(),
 });
 
 export const DeliverJobDataSchema = z.object({
   taskId: z.string().min(1),
-  userId: z.string().min(1),
+  userDid: z.string().min(1),
+  matrixUserId: z.string().min(1),
   roomId: z.string().min(1),
 });
+
+const logger = new Logger('ProcessorUtils');
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -111,12 +133,15 @@ export function escapeHtml(s: string): string {
 }
 
 /**
- * Wrap a message with a Matrix mention pill for the given userId.
+ * Wrap a message with a Matrix mention pill for the given matrixUserId.
  * Matrix mention format: `<a href="https://matrix.to/#/@user:server">@user</a>`
  */
-export function buildMentionMessage(message: string, userId: string): string {
-  const displayName = escapeHtml(userId.split(':')[0].replace('@', ''));
-  const safeUserId = encodeURI(userId);
+export function buildMentionMessage(
+  message: string,
+  matrixUserId: string,
+): string {
+  const displayName = escapeHtml(matrixUserId.split(':')[0].replace('@', ''));
+  const safeUserId = encodeURI(matrixUserId);
   const safeMessage = escapeHtml(message);
   return `<a href="https://matrix.to/#/${safeUserId}">@${displayName}</a> ${safeMessage}`;
 }
@@ -148,26 +173,31 @@ export function truncateText(text: string, maxLen: number): string {
 }
 
 /**
- * Resolve the main room ID for a user from their Matrix user ID.
+ * Resolve the main room ID for a user from their DID.
  * Uses the same pattern as MessagesService.prepareForQuery().
  */
 export async function resolveMainRoomId(
-  userId: string,
+  userDid: string,
   config: ConfigService<ENV>,
 ): Promise<string> {
-  const did = normalizeDid(userId);
-  const userHomeServer = await getMatrixHomeServerCroppedForDid(did);
+  logger.debug(`resolveMainRoomId: looking up homeserver for did=${userDid}`);
+  const userHomeServer = await getMatrixHomeServerCroppedForDid(userDid);
+  logger.debug(`resolveMainRoomId: homeserver=${userHomeServer}`);
   const mxManager = MatrixManager.getInstance();
+  const oracleEntityDid = config.getOrThrow('ORACLE_ENTITY_DID');
+  logger.debug(
+    `resolveMainRoomId: looking up room (oracleEntityDid=${oracleEntityDid}, userHomeServer=${userHomeServer})`,
+  );
   const { roomId } = await mxManager.getOracleRoomIdWithHomeServer({
-    userDid: did,
-    oracleEntityDid: config.getOrThrow('ORACLE_ENTITY_DID'),
+    userDid,
+    oracleEntityDid,
     userHomeServer,
   });
   if (!roomId) {
-    throw new Error(
-      `Could not resolve main room for user ${userId} (did: ${did})`,
-    );
+    logger.error(`resolveMainRoomId: no room found for user did=${userDid}`);
+    throw new Error(`Could not resolve main room for user (did: ${userDid})`);
   }
+  logger.debug(`resolveMainRoomId: resolved roomId=${roomId}`);
   return roomId;
 }
 
@@ -177,12 +207,19 @@ export async function resolveMainRoomId(
  */
 export async function sendTaskNotification(params: {
   roomId: string;
-  userId: string;
+  matrixUserId: string;
   message: string;
   notificationPolicy: NotificationPolicy;
   isDryRun: boolean;
 }): Promise<string | undefined> {
+  logger.debug(
+    `sendTaskNotification: policy=${params.notificationPolicy}, isDryRun=${params.isDryRun}, roomId=${params.roomId}, messageLen=${params.message.length}`,
+  );
+
   if (params.isDryRun || params.notificationPolicy === 'silent') {
+    logger.debug(
+      `sendTaskNotification: skipped (${params.isDryRun ? 'dry_run' : 'silent policy'})`,
+    );
     return undefined;
   }
 
@@ -191,22 +228,35 @@ export async function sendTaskNotification(params: {
   if (params.notificationPolicy === 'channel_and_mention') {
     const client = mxManager.getClient();
     if (client) {
-      return await client.sendMessage({
+      logger.debug(
+        `sendTaskNotification: sending with mention to ${params.matrixUserId}`,
+      );
+      const eventId = await client.sendMessage({
         roomId: params.roomId,
         message: params.message,
         type: 'html',
-        formattedBody: buildMentionMessage(params.message, params.userId),
+        formattedBody: buildMentionMessage(params.message, params.matrixUserId),
       });
+      logger.debug(
+        `sendTaskNotification: sent with mention, eventId=${eventId}`,
+      );
+      return eventId;
     }
+    logger.warn(`sendTaskNotification: no Matrix client available for mention`);
     return undefined;
   }
 
   // channel_only, on_threshold, or any other policy
-  return await mxManager.sendMessage({
+  logger.debug(
+    `sendTaskNotification: sending as channel_only (policy=${params.notificationPolicy})`,
+  );
+  const eventId = await mxManager.sendMessage({
     roomId: params.roomId,
     message: params.message,
     isOracleAdmin: true,
   });
+  logger.debug(`sendTaskNotification: sent, eventId=${eventId}`);
+  return eventId;
 }
 
 /**
@@ -228,11 +278,20 @@ export async function handleJobFailure(params: {
   const errorMsg =
     params.error instanceof Error ? params.error.message : String(params.error);
   params.logger.error(`Job for task ${params.taskId} failed: ${errorMsg}`);
+  if (params.error instanceof Error && params.error.stack) {
+    params.logger.debug(`Failure stack trace: ${params.error.stack}`);
+  }
 
   try {
+    params.logger.debug(
+      `handleJobFailure: fetching fresh TaskMeta for ${params.taskId}...`,
+    );
     const meta = await params.getTask();
     const failures = meta.consecutiveFailures + 1;
     const updates: Partial<TaskMeta> = { consecutiveFailures: failures };
+    params.logger.debug(
+      `handleJobFailure: task ${params.taskId} consecutiveFailures=${failures}/${MAX_CONSECUTIVE_FAILURES}`,
+    );
 
     if (failures >= MAX_CONSECUTIVE_FAILURES) {
       updates.status = 'paused';
@@ -240,6 +299,9 @@ export async function handleJobFailure(params: {
         `Task ${params.taskId} auto-paused after ${failures} consecutive failures`,
       );
 
+      params.logger.debug(
+        `handleJobFailure: sending auto-pause notification to room ${params.roomId}`,
+      );
       const mxManager = MatrixManager.getInstance();
       await mxManager
         .sendMessage({
@@ -247,13 +309,26 @@ export async function handleJobFailure(params: {
           message: `Task ${params.taskId} has been paused after ${failures} consecutive failures. Resume it when you're ready.`,
           isOracleAdmin: true,
         })
-        .catch(() => {});
+        .catch((notifErr) => {
+          params.logger.warn(
+            `handleJobFailure: failed to send auto-pause notification: ${notifErr instanceof Error ? notifErr.message : String(notifErr)}`,
+          );
+        });
     }
 
+    params.logger.debug(
+      `handleJobFailure: updating TaskMeta: ${JSON.stringify(updates)}`,
+    );
     await params.updateTask(updates);
+    params.logger.debug(
+      `handleJobFailure: TaskMeta updated for ${params.taskId}`,
+    );
   } catch (innerError) {
     params.logger.error(
       `Failed to update task meta after failure: ${innerError instanceof Error ? innerError.message : String(innerError)}`,
     );
+    if (innerError instanceof Error && innerError.stack) {
+      params.logger.debug(`Inner error stack: ${innerError.stack}`);
+    }
   }
 }

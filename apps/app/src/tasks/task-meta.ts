@@ -49,8 +49,10 @@ export interface TaskMeta {
   // ── Identity ──────────────────────────────────────────────────────
   /** Unique task identifier, e.g. 'task_abc123' */
   taskId: string;
-  /** Matrix user ID, e.g. '@yousef:ixo.world' */
-  userId: string;
+  /** User DID, e.g. 'did:ixo:ixo1abc...' */
+  userDid: string;
+  /** Matrix user ID for room operations, e.g. '@did-ixo-ixo1abc:ixo.world' */
+  matrixUserId: string;
   /** Agent-classified task type — drives pattern selection and defaults */
   taskType: TaskType;
   /** Whether a Markdown page exists for this task */
@@ -69,7 +71,7 @@ export interface TaskMeta {
   // ── BullMQ References ─────────────────────────────────────────────
   /** Which BullMQ pattern this task uses */
   jobPattern: JobPattern;
-  /** BullMQ job ID, e.g. 'task_abc123:simple' or 'task_abc123:deliver' */
+  /** BullMQ job ID, e.g. 'task_abc123-simple' or 'task_abc123-deliver' */
   bullmqJobId: string;
   /** Key for cancelling repeatable jobs. Null for one-shot. */
   bullmqRepeatKey: string | null;
