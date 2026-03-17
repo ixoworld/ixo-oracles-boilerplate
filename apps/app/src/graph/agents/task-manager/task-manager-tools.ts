@@ -24,6 +24,8 @@ export interface TaskManagerToolsDeps {
   userDid: string;
   matrixUserId: string;
   timezone: string;
+  /** Workspace spaceId from the FE — stored in TaskMeta for editor access during execution */
+  spaceId?: string;
 }
 
 const TASK_TYPES = [
@@ -53,7 +55,8 @@ const NOTIFICATION_POLICIES = [
 export function createTaskManagerTools(
   deps: TaskManagerToolsDeps,
 ): StructuredTool[] {
-  const { tasksService, mainRoomId, userDid, matrixUserId, timezone } = deps;
+  const { tasksService, mainRoomId, userDid, matrixUserId, timezone, spaceId } =
+    deps;
 
   // ── create_task ──────────────────────────────────────────────────
 
@@ -85,6 +88,7 @@ export function createTaskManagerTools(
         whatToDo: input.objective,
         howToReport: input.outputFormat,
         constraints: input.constraints,
+        spaceId,
       });
 
       return JSON.stringify({

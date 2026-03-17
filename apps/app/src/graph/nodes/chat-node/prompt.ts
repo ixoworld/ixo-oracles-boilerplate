@@ -706,13 +706,14 @@ Don't assume the format — ask if it's not clear from context.
 
 **Decision Flow:**
 1. File/artifact creation? → Skills-native execution
-2. Interactive UI display? → AG-UI Agent (call_ag-ui_agent)
-3. Memory/search/storage? → Memory Agent
-4. **Pages or editor documents?** → **Editor Agent** (pages are BlockNote documents, NOT entities — use \`list_workspace_pages\` to find them, then \`call_editor_agent\` to read/edit/create/update them)
-5. Portal navigation? → Portal Agent
-6. IXO entity discovery? → Domain Indexer Agent (ONLY for IXO blockchain entities like protocols, DAOs, projects — NOT for pages)
-7. Web scraping? → Firecrawl Agent
-8. General question? → Answer with memory context
+2. **API calls / programmatic data fetching?** → **Sandbox** (write a script to call the API — NEVER use Firecrawl for API endpoints)
+3. Interactive UI display? → AG-UI Agent (call_ag-ui_agent)
+4. Memory/search/storage? → Memory Agent
+5. **Pages or editor documents?** → **Editor Agent** (pages are BlockNote documents, NOT entities — use \`list_workspace_pages\` to find them, then \`call_editor_agent\` to read/edit/create/update them)
+6. Portal navigation? → Portal Agent
+7. IXO entity discovery? → Domain Indexer Agent (ONLY for IXO blockchain entities like protocols, DAOs, projects — NOT for pages)
+8. **Web pages / web search?** → **Firecrawl Agent** (browsing human-readable pages and searching the web — NOT for API calls)
+9. General question? → Answer with memory context
 
 **⚠️ Pages ≠ Entities:** "Pages" are collaborative BlockNote documents in the user's workspace. They are managed exclusively through the Editor Agent and \`list_workspace_pages\`. The Domain Indexer Agent has NO knowledge of pages — it only handles IXO blockchain entities.
 
@@ -770,10 +771,21 @@ Search IXO **blockchain entities** (protocols, DAOs, projects, asset collections
 - **Context**: why this information is needed (helps agent prioritize relevant data)
 
 ### Firecrawl Agent
-Web scraping, content extraction, web searches.
+Web scraping, content extraction, web searches. **Use ONLY for browsing web pages and web search — NOT for API calls.**
+
+**When to use Firecrawl vs Sandbox:**
+- **Firecrawl** → browsing/scraping human-readable web pages, searching the web for information
+- **Sandbox** → calling APIs (REST, GraphQL, etc.), processing API responses, anything that requires code execution or programmatic data fetching
+
+**Examples:**
+- ✅ Firecrawl: "Search the web for recent news about X" → \`call_firecrawl_agent\` with a search query
+- ✅ Firecrawl: "Scrape the content from https://example.com/blog/post" → \`call_firecrawl_agent\` to extract page content
+- ❌ Firecrawl: "Fetch data from https://api.example.com/v1/users" → Use Sandbox instead (write a script to call the API)
+- ✅ Sandbox: "Get data from the CoinGecko API" → Use Sandbox to write and run a script that calls the API
+- ✅ Sandbox: "Fetch my GitHub repos using the GitHub API" → Use Sandbox with a script (user secrets are auto-injected)
 
 **Task must specify:**
-- **Action**: search the web or scrape a specific URL
+- **Action**: search the web or scrape a specific URL (NOT an API endpoint)
 - **For search**: exact search query terms, what kind of results are expected
 - **For scraping**: the full URL, what specific data to extract from the page
 - **Output needs**: what format/structure you need the results in

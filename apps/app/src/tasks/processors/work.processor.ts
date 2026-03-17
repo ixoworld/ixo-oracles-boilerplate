@@ -9,16 +9,21 @@
  */
 
 import { type IRunnableConfigWithRequiredFields } from '@ixo/matrix';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Inject, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Job } from 'bullmq';
+import type { Cache } from 'cache-manager';
 import { AIMessageChunk } from 'langchain';
 
 import { MainAgentGraph } from 'src/graph';
+import { OPENID_CACHE_PREFIX } from 'src/middleware/auth-header.middleware';
 import type { ENV } from 'src/types';
+import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 
 import { TokenLimiter } from 'src/utils/token-limit-handler';
+import { decryptToken } from '../token-encryption';
 
 import { QUEUE_NAMES, WORKER_OPTIONS } from '../scheduler/task-queues';
 import type { WorkJobData } from '../scheduler/types';
@@ -45,6 +50,8 @@ export class WorkProcessor extends WorkerHost {
     private readonly tasksService: TasksService,
     private readonly config: ConfigService<ENV>,
     @Inject('MAIN_AGENT_GRAPH') private readonly mainAgent: MainAgentGraph,
+    private readonly syncService: UserMatrixSqliteSyncService,
+    @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {
     super();
   }
@@ -82,6 +89,30 @@ export class WorkProcessor extends WorkerHost {
       };
     }
 
+    // Prevent the upload cron from closing the SQLite DB while the agent runs
+    this.syncService.markUserActive(userDid);
+    try {
+      return await this.processWork(
+        job,
+        taskId,
+        userDid,
+        roomId,
+        mainRoomId,
+        meta,
+      );
+    } finally {
+      this.syncService.markUserInactive(userDid);
+    }
+  }
+
+  private async processWork(
+    job: Job<WorkJobData>,
+    taskId: string,
+    userDid: string,
+    roomId: string,
+    mainRoomId: string,
+    meta: TaskMeta,
+  ): Promise<WorkResult> {
     await job.updateProgress(5);
 
     // Build prompt from task page with execution context
@@ -107,6 +138,29 @@ export class WorkProcessor extends WorkerHost {
     // Build runnable config
     const oracleDid = this.config.getOrThrow<string>('ORACLE_DID');
     const homeServerName = roomId.split(':').slice(1).join(':');
+
+    // Try to retrieve the user's cached openId token for tool auth
+    let matrixOpenIdToken: string | undefined;
+    try {
+      const encrypted = await this.cache.get<string>(
+        `${OPENID_CACHE_PREFIX}${userDid}`,
+      );
+      if (encrypted) {
+        const pin = this.config.getOrThrow<string>('MATRIX_VALUE_PIN');
+        matrixOpenIdToken = decryptToken(encrypted, pin);
+        this.logger.debug(
+          `Decrypted cached openId token for task ${taskId} (user ${userDid})`,
+        );
+      } else {
+        this.logger.warn(
+          `No cached openId token for user ${userDid} — task ${taskId} will run with degraded tool access (no sandbox, memory auth, or editor)`,
+        );
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Failed to decrypt cached openId token for task ${taskId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
 
     const taskExecutionContext: TaskExecutionContext = {
       taskId,
@@ -139,6 +193,8 @@ export class WorkProcessor extends WorkerHost {
           },
           user: {
             did: userDid,
+            ...(matrixOpenIdToken && { matrixOpenIdToken }),
+            timezone: meta.timezone,
           },
         },
         modelOverride: modelName,
@@ -157,6 +213,14 @@ export class WorkProcessor extends WorkerHost {
         runnableConfig,
         [], // no browser tools
         true, // msgFromMatrixRoom
+        undefined, // initialUserContext
+        undefined, // editorRoomId
+        undefined, // currentEntityDid
+        undefined, // clientType
+        undefined, // ucanOptions
+        undefined, // fileProcessingService
+        meta.spaceId ?? undefined, // spaceId from TaskMeta
+        this.tasksService, // tasksService — enables TaskManager sub-agent
       );
       const agentDuration = Date.now() - agentStartTime;
       this.logger.debug(

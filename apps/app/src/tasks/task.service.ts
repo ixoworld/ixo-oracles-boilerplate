@@ -20,6 +20,7 @@
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Cache } from 'cache-manager';
+import { CronExpressionParser } from 'cron-parser';
 import { Preset, Visibility } from 'matrix-js-sdk';
 import { normalizeDid } from 'src/utils/header.utils';
 
@@ -162,6 +163,7 @@ export class TasksService {
       modelOverride: params.modelOverride,
       requiresApproval: params.requiresApproval,
       dependsOn: params.dependsOn,
+      spaceId: params.spaceId,
     };
 
     let roomId: string | null = null;
@@ -992,15 +994,31 @@ export class TasksService {
     };
 
     if (taskMeta.scheduleCron) {
-      // Recurring flow
+      // Recurring flow — compute first work delay so it completes before the
+      // first deliver fires.  Same formula as DeliverProcessor.scheduleNextWork:
+      //   workDelay = nextCronTick − buffer − now   (clamped to 0)
+      // When buffer ≥ interval the delay resolves to 0 (immediate), which is
+      // correct — work starts right away since there isn't time for a full buffer.
       const bufferMs = taskMeta.bufferMinutes * 60_000;
+      const interval = CronExpressionParser.parse(taskMeta.scheduleCron, {
+        tz: taskMeta.timezone,
+        currentDate: new Date(),
+      });
+      const firstDelivery = interval.next().toDate();
+      const firstWorkDelay = Math.max(
+        firstDelivery.getTime() - bufferMs - Date.now(),
+        0,
+      );
       const result = await this.scheduler.scheduleRecurringFlow({
         taskId: taskMeta.taskId,
         deliverData,
         repeat: { pattern: taskMeta.scheduleCron, tz: taskMeta.timezone },
         firstWork: {
-          data: workData,
-          delay: Math.max(bufferMs, 0),
+          data: {
+            ...workData,
+            forDeliveryAt: firstDelivery.toISOString(),
+          },
+          delay: firstWorkDelay,
         },
       });
       return {

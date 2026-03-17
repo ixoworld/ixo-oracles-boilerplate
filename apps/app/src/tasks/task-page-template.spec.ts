@@ -94,12 +94,8 @@ describe('formatOutputSection', () => {
     ]);
 
     const output = formatOutputSection(meta);
-    expect(output).toContain(
-      '**Mar 16, 2:30 PM** — Brent $86 — [View](#evt1)',
-    );
-    expect(output).toContain(
-      '**Mar 16, 2:00 PM** — Brent $82 — [View](#evt2)',
-    );
+    expect(output).toContain('**Mar 16, 2:30 PM** — Brent $86 — [View](#evt1)');
+    expect(output).toContain('**Mar 16, 2:00 PM** — Brent $82 — [View](#evt2)');
   });
 
   it('omits link portion when link is empty', () => {

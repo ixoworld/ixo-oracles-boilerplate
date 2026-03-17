@@ -130,6 +130,10 @@ export interface TaskMeta {
   /** Task ID that triggered this run (if dependency-based) */
   triggeredBy: string | null;
 
+  // ── Editor Context ──────────────────────────────────────────────
+  /** Workspace spaceId — enables standalone editor access during task execution */
+  spaceId: string | null;
+
   // ── Recent Output ───────────────────────────────────────────────
   /** Last N output rows, stored in metadata so user page edits can't corrupt them */
   recentOutput: OutputRow[];

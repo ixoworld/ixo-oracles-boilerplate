@@ -92,6 +92,9 @@ export interface CreateTaskMetaParams {
   modelOverride?: string;
   requiresApproval?: boolean;
   dependsOn?: string[];
+
+  // Editor context
+  spaceId?: string;
 }
 
 /**
@@ -155,6 +158,9 @@ export function buildTaskMeta(params: CreateTaskMetaParams): TaskMeta {
     // Dependencies
     dependsOn: params.dependsOn ?? [],
     triggeredBy: null,
+
+    // Editor context
+    spaceId: params.spaceId ?? null,
 
     // Recent output (rendered to page markdown, safe from user edits)
     recentOutput: [],

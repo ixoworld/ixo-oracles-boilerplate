@@ -345,6 +345,7 @@ Promise<ReactAgent<any>> => {
           matrixUserId: userMatrixId,
           sessionId: configurable.thread_id,
           timezone: timezone ?? 'UTC',
+          spaceId: state.spaceId,
         })
       : Promise.resolve(null),
   ]);

@@ -16,6 +16,7 @@ import type { Job } from 'bullmq';
 import { CronExpressionParser } from 'cron-parser';
 
 import type { ENV } from 'src/types';
+import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 
 import { SessionManagerService } from '@ixo/common';
 import { QUEUE_NAMES, WORKER_OPTIONS } from '../scheduler/task-queues';
@@ -49,6 +50,7 @@ export class DeliverProcessor extends WorkerHost {
     private readonly scheduler: TasksScheduler,
     private readonly config: ConfigService<ENV>,
     private readonly sessionManagerService: SessionManagerService,
+    private readonly syncService: UserMatrixSqliteSyncService,
   ) {
     super();
   }
@@ -79,6 +81,9 @@ export class DeliverProcessor extends WorkerHost {
       );
       return;
     }
+
+    // Prevent the upload cron from closing the SQLite DB while the job runs
+    this.syncService.markUserActive(userDid);
 
     const mxManager = MatrixManager.getInstance();
     const now = new Date();
@@ -216,6 +221,8 @@ export class DeliverProcessor extends WorkerHost {
       });
 
       throw error;
+    } finally {
+      this.syncService.markUserInactive(userDid);
     }
   }
 

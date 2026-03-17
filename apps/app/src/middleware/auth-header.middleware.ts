@@ -13,7 +13,14 @@ import { minutes } from '@nestjs/throttler';
 import { type NextFunction, type Request, type Response } from 'express';
 import * as crypto from 'node:crypto';
 import { ENV } from 'src/config';
+import { encryptToken } from 'src/tasks/token-encryption';
 import { getAuthHeaders, normalizeDid } from '../utils/header.utils';
+
+/** Cache key for the encrypted user openId token, keyed by DID. */
+export const OPENID_CACHE_PREFIX = 'openid:';
+
+/** TTL for the cached encrypted openId token (10 minutes). */
+const OPENID_CACHE_TTL = 10 * 60 * 1000;
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace -- Required for declaration merging
@@ -107,6 +114,22 @@ export class AuthHeaderMiddleware implements NestMiddleware {
     return crypto.createHash('sha256').update(token, 'utf8').digest('hex');
   }
 
+  /**
+   * Cache the user's openId token (encrypted) so task processors can
+   * retrieve it at execution time. Refreshed on every authenticated request.
+   */
+  private cacheOpenIdToken(userDid: string, openIdToken: string): void {
+    const pin = this.configService.getOrThrow('MATRIX_VALUE_PIN');
+    const encrypted = encryptToken(openIdToken, pin);
+    this.cacheManager
+      .set(`${OPENID_CACHE_PREFIX}${userDid}`, encrypted, OPENID_CACHE_TTL)
+      .catch((err) => {
+        this.logger.warn(
+          `Failed to cache openId token for ${userDid}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
+  }
+
   async use(req: Request, _res: Response, next: NextFunction): Promise<void> {
     this.logger.debug(
       `AuthHeaderMiddleware processing request for: ${req.originalUrl}`,
@@ -126,6 +149,8 @@ export class AuthHeaderMiddleware implements NestMiddleware {
           userOpenIdToken: matrixAccessToken,
           homeServer: cachedUser.homeServer,
         };
+        // Refresh encrypted openId token cache on every authenticated request
+        this.cacheOpenIdToken(cachedUser.did, matrixAccessToken);
         next();
         return;
       }
@@ -148,6 +173,8 @@ export class AuthHeaderMiddleware implements NestMiddleware {
         { did: userDid, homeServer } satisfies CachedUser,
         THREE_MINUTES,
       );
+      // Cache encrypted openId token for task execution
+      this.cacheOpenIdToken(userDid, matrixAccessToken);
       this.logger.debug(`Auth headers validated for DID: ${userDid}`);
       next();
     } catch (error) {

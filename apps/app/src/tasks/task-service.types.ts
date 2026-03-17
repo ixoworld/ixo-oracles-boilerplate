@@ -111,6 +111,9 @@ export interface CreateTaskParams {
   requiresApproval?: boolean;
   dependsOn?: string[];
   inviteUserIds?: string[];
+
+  // Editor context
+  spaceId?: string;
 }
 
 /** Params for getting a single task */

@@ -65,14 +65,7 @@ export function generateTaskPage(params: TaskPageParams): string {
     sections.push('', '## Constraints', '', params.constraints);
   }
 
-  sections.push(
-    '',
-    '---',
-    '',
-    '## Recent Output',
-    '',
-    '*No output yet.*',
-  );
+  sections.push('', '---', '', '## Recent Output', '', '*No output yet.*');
 
   return sections.join('\n');
 }

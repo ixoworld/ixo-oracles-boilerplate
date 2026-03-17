@@ -140,6 +140,7 @@ export const createTaskManagerAgent = async (params: {
   matrixUserId: string;
   sessionId: string;
   timezone: string;
+  spaceId?: string;
 }): Promise<AgentSpec> => {
   const tools = createTaskManagerTools({
     tasksService: params.tasksService,
@@ -147,6 +148,7 @@ export const createTaskManagerAgent = async (params: {
     userDid: params.userDid,
     matrixUserId: params.matrixUserId,
     timezone: params.timezone,
+    spaceId: params.spaceId,
   });
 
   return {
