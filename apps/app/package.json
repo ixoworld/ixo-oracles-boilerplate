@@ -28,7 +28,7 @@
     "@blocknote/server-util": "0.29.1",
     "@ixo/common": "1.1.35",
     "@ixo/editor": "3.0.0-beta.11",
-    "@ixo/matrix": "1.2.2",
+    "@ixo/matrix": "workspace:*",
     "@ixo/matrix-crdt": "^1.1.0",
     "@ixo/oracles-chain-client": "1.2.1",
     "@ixo/oracles-events": "1.0.4",

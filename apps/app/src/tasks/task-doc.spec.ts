@@ -5,7 +5,6 @@ import {
   buildTaskMeta,
   readTaskMeta,
   updateTaskMeta,
-  writeTaskMetaToDoc,
   YDOC_TASK_META_KEY,
 } from './task-doc';
 import type { CreateTaskMetaParams } from './task-doc';
@@ -15,7 +14,8 @@ import type { TaskMeta } from './task-meta';
 
 const baseParams: CreateTaskMetaParams = {
   taskId: 'task_test123456',
-  userId: '@yousef:ixo.world',
+  userDid: 'did:ixo:ixo1abc',
+  matrixUserId: '@did-ixo-ixo1abc:ixo.world',
   taskType: 'research',
   hasPage: true,
   timezone: 'Africa/Cairo',
@@ -57,11 +57,11 @@ describe('buildTaskMeta', () => {
 });
 
 describe('Y.Doc round-trip', () => {
-  it('writeTaskMetaToDoc + readTaskMeta preserves all fields', () => {
+  it('updateTaskMeta + readTaskMeta preserves all fields', () => {
     const doc = new Y.Doc();
     const meta = buildMeta();
 
-    writeTaskMetaToDoc(doc, meta);
+    updateTaskMeta(doc, meta);
     const read = readTaskMeta(doc);
 
     // Spot-check across different field groups
@@ -76,7 +76,7 @@ describe('Y.Doc round-trip', () => {
     const doc = new Y.Doc();
     doc.getMap('root').set('editorData', 'hello');
 
-    writeTaskMetaToDoc(doc, buildMeta());
+    updateTaskMeta(doc, buildMeta());
 
     expect(doc.getMap('root').get('editorData')).toBe('hello');
     expect(doc.getMap(YDOC_TASK_META_KEY).get('taskId')).toBe(
@@ -86,7 +86,7 @@ describe('Y.Doc round-trip', () => {
 
   it('updateTaskMeta partially updates without clobbering', () => {
     const doc = new Y.Doc();
-    writeTaskMetaToDoc(doc, buildMeta());
+    updateTaskMeta(doc, buildMeta());
 
     updateTaskMeta(doc, { status: 'paused', totalRuns: 5 });
 
@@ -96,10 +96,10 @@ describe('Y.Doc round-trip', () => {
     expect(read.taskId).toBe('task_test123456');
   });
 
-  it('writeTaskMetaToDoc + readTaskMeta works for tasks without pages', () => {
+  it('updateTaskMeta + readTaskMeta works for tasks without pages', () => {
     const doc = new Y.Doc();
     const meta = buildMeta({ hasPage: false, taskType: 'reminder' });
-    writeTaskMetaToDoc(doc, meta);
+    updateTaskMeta(doc, meta);
     const read = readTaskMeta(doc);
     expect(read.taskType).toBe('reminder');
     expect(read.hasPage).toBe(false);
@@ -109,7 +109,7 @@ describe('Y.Doc round-trip', () => {
 describe('appendOutputRow', () => {
   it('prepends newest row and trims to 5', () => {
     const doc = new Y.Doc();
-    writeTaskMetaToDoc(doc, buildMeta());
+    updateTaskMeta(doc, buildMeta());
 
     for (let i = 0; i < 7; i++) {
       appendOutputRow(doc, {

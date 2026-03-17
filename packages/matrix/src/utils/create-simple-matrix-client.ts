@@ -29,6 +29,8 @@ export interface IMessageOptions {
 
   type?: 'text' | 'html';
   formattedBody?: string;
+  /** Custom fields spread onto the Matrix event content (e.g. `{ 'ixo.task_id': '...' }`) */
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -194,6 +196,7 @@ export class SimpleMatrixClient {
               formatted_body: options.formattedBody,
             }
           : {}),
+        ...(options.metadata ?? {}),
       });
 
       Logger.info(`✅ Message sent successfully: ${eventId}`);

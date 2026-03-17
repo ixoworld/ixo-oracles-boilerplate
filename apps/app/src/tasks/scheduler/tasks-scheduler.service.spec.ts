@@ -29,21 +29,22 @@ function createMockFlowProducer() {
 
 const simpleData: SimpleJobData = {
   taskId: 'task_abc123',
-  userId: '@yousef:ixo.world',
+  userDid: 'did:ixo:ixo1abc',
+  matrixUserId: '@did-ixo-ixo1abc:ixo.world',
   roomId: '!room:ixo.world',
   message: 'Reminder: Submit the report',
-  messageType: 'reminder',
 };
 
 const workData: WorkJobData = {
   taskId: 'task_abc123',
-  userId: '@yousef:ixo.world',
+  userDid: 'did:ixo:ixo1abc',
   roomId: '!room:ixo.world',
 };
 
 const deliverData: DeliverJobData = {
   taskId: 'task_abc123',
-  userId: '@yousef:ixo.world',
+  userDid: 'did:ixo:ixo1abc',
+  matrixUserId: '@did-ixo-ixo1abc:ixo.world',
   roomId: '!room:ixo.world',
 };
 
@@ -96,7 +97,7 @@ describe('TasksScheduler', () => {
         simpleData,
         expect.objectContaining({
           delay: 60_000,
-          jobId: 'task_abc123:simple',
+          jobId: 'task_abc123-simple',
         }),
       );
       expect(result.jobId).toBeDefined();
@@ -105,7 +106,7 @@ describe('TasksScheduler', () => {
 
     it('should schedule a repeatable job', async () => {
       simpleQueue.getRepeatableJobs.mockResolvedValue([
-        { id: 'task_abc123:simple', key: 'repeat-key-123' },
+        { id: 'task_abc123-simple', key: 'repeat-key-123' },
       ]);
 
       const result = await scheduler.scheduleSimpleJob({
@@ -119,7 +120,7 @@ describe('TasksScheduler', () => {
         simpleData,
         expect.objectContaining({
           repeat: { pattern: '0 8 * * *', tz: 'Africa/Cairo' },
-          jobId: 'task_abc123:simple',
+          jobId: 'task_abc123-simple',
         }),
       );
       expect(result.repeatKey).toBe('repeat-key-123');
@@ -142,18 +143,18 @@ describe('TasksScheduler', () => {
         name: QUEUE_NAMES.DELIVER,
         queueName: QUEUE_NAMES.DELIVER,
         data: deliverData,
-        opts: { delay: 3_600_000, jobId: 'task_abc123:deliver' },
+        opts: { delay: 3_600_000, jobId: 'task_abc123-deliver' },
         children: [
           {
             name: QUEUE_NAMES.WORK,
             queueName: QUEUE_NAMES.WORK,
             data: workData,
-            opts: { delay: 1_800_000, jobId: 'task_abc123:work' },
+            opts: { delay: 1_800_000, jobId: 'task_abc123-work' },
           },
         ],
       });
-      expect(result.deliverJobId).toBe('task_abc123:deliver');
-      expect(result.workJobId).toBe('task_abc123:work');
+      expect(result.deliverJobId).toBe('task_abc123-deliver');
+      expect(result.workJobId).toBe('task_abc123-work');
     });
   });
 
@@ -162,7 +163,7 @@ describe('TasksScheduler', () => {
   describe('scheduleRecurringFlow', () => {
     it('should schedule a repeatable deliver job', async () => {
       deliverQueue.getRepeatableJobs.mockResolvedValue([
-        { id: 'task_abc123:deliver', key: 'deliver-repeat-key' },
+        { id: 'task_abc123-deliver', key: 'deliver-repeat-key' },
       ]);
 
       const result = await scheduler.scheduleRecurringFlow({
@@ -176,17 +177,17 @@ describe('TasksScheduler', () => {
         deliverData,
         {
           repeat: { pattern: '0 9 * * 1', tz: 'Africa/Cairo' },
-          jobId: 'task_abc123:deliver',
+          jobId: 'task_abc123-deliver',
         },
       );
-      expect(result.deliverJobId).toBe('task_abc123:deliver');
+      expect(result.deliverJobId).toBe('task_abc123-deliver');
       expect(result.repeatKey).toBe('deliver-repeat-key');
       expect(result.workJobId).toBeNull();
     });
 
     it('should schedule first work job when provided', async () => {
       deliverQueue.getRepeatableJobs.mockResolvedValue([]);
-      workQueue.add.mockResolvedValue({ id: 'task_abc123:work:2026-03-23' });
+      workQueue.add.mockResolvedValue({ id: 'task_abc123-work-abc123def456' });
 
       const result = await scheduler.scheduleRecurringFlow({
         taskId: 'task_abc123',
@@ -206,19 +207,18 @@ describe('TasksScheduler', () => {
   // ── scheduleNextWorkJob ────────────────────────────────────────
 
   describe('scheduleNextWorkJob', () => {
-    it('should schedule a one-shot work job with date suffix', async () => {
+    it('should schedule a one-shot work job with unique suffix', async () => {
       const result = await scheduler.scheduleNextWorkJob({
         taskId: 'task_abc123',
         data: workData,
         delay: 1_800_000,
-        dateSuffix: '2026-03-23',
       });
 
       expect(workQueue.add).toHaveBeenCalledWith(QUEUE_NAMES.WORK, workData, {
         delay: 1_800_000,
-        jobId: 'task_abc123:work:2026-03-23',
+        jobId: expect.stringMatching(/^task_abc123-work-[a-f0-9]{12}$/),
       });
-      expect(result.jobId).toBe('task_abc123:work:2026-03-23');
+      expect(result.jobId).toMatch(/^task_abc123-work-[a-f0-9]{12}$/);
     });
   });
 
@@ -234,7 +234,7 @@ describe('TasksScheduler', () => {
 
       const result = await scheduler.cancelJob(
         QUEUE_NAMES.SIMPLE,
-        'task_abc123:simple',
+        'task_abc123-simple',
       );
 
       expect(result).toBe(true);
@@ -246,7 +246,7 @@ describe('TasksScheduler', () => {
 
       const result = await scheduler.cancelJob(
         QUEUE_NAMES.SIMPLE,
-        'task_missing:simple',
+        'task_missing-simple',
       );
 
       expect(result).toBe(false);
@@ -261,7 +261,7 @@ describe('TasksScheduler', () => {
 
       const result = await scheduler.cancelJob(
         QUEUE_NAMES.SIMPLE,
-        'task_abc123:simple',
+        'task_abc123-simple',
       );
 
       expect(result).toBe(false);
@@ -308,9 +308,9 @@ describe('TasksScheduler', () => {
 
       await scheduler.cancelAllJobsForTask('task_abc123', 'repeat-key-123');
 
-      expect(simpleQueue.getJob).toHaveBeenCalledWith('task_abc123:simple');
-      expect(deliverQueue.getJob).toHaveBeenCalledWith('task_abc123:deliver');
-      expect(workQueue.getJob).toHaveBeenCalledWith('task_abc123:work');
+      expect(simpleQueue.getJob).toHaveBeenCalledWith('task_abc123-simple');
+      expect(deliverQueue.getJob).toHaveBeenCalledWith('task_abc123-deliver');
+      expect(workQueue.getJob).toHaveBeenCalledWith('task_abc123-work');
     });
   });
 

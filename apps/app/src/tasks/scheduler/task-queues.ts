@@ -1,8 +1,8 @@
 /**
  * BullMQ Queue Definitions — Three queues for the two job patterns.
  *
- * Pattern A (Simple Job):  task:simple
- * Pattern B (Flow Job):    task:work + task:deliver
+ * Pattern A (Simple Job):  task_simple queue
+ * Pattern B (Flow Job):    task_work + task_deliver queues
  *
  * @see spec §10.1 — Queues
  */

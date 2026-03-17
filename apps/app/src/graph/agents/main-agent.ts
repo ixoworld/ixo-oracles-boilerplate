@@ -12,6 +12,7 @@ import {
 import { getConfig } from 'src/config';
 import { type UcanService } from 'src/ucan/ucan.service';
 
+import { createPageContextMiddleware } from '../middlewares/page-context-middleware';
 import { createTokenLimiterMiddleware } from '../middlewares/token-limiter-middelware';
 import { createToolValidationMiddleware } from '../middlewares/tool-validation-middleware';
 import {
@@ -37,6 +38,7 @@ import { createMemoryAgent } from './memory-agent';
 import { createAguiAgent } from './agui-agent';
 import { createPortalAgent } from './portal-agent';
 import { createSubagentAsTool, type AgentSpec } from './subagent-as-tool';
+import { createTaskManagerAgent } from './task-manager';
 
 import { DynamicStructuredTool } from 'langchain';
 import fs from 'node:fs';
@@ -46,6 +48,8 @@ import {
   type SandboxUploadConfig,
 } from 'src/messages/file-processing.service';
 import { SecretsService } from 'src/secrets/secrets.service';
+import type { TaskExecutionContext } from 'src/tasks/processors/processor-utils';
+import { type TasksService } from 'src/tasks/task.service';
 import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 import z from 'zod';
 import oracleConfig from '../../../oracle.config.json';
@@ -79,6 +83,8 @@ interface InvokeMainAgentParams {
   fileProcessingService?: FileProcessingService;
   /** Optional model override — a provider model ID (e.g. from getModelForRole). When set, overrides the default 'main' model. */
   modelOverride?: string;
+  /** Optional TasksService for the Task Manager sub-agent */
+  tasksService?: TasksService;
 }
 
 const configService = getConfig();
@@ -102,6 +108,7 @@ export const createMainAgent = async ({
   ucanService,
   fileProcessingService,
   modelOverride,
+  tasksService,
 }: InvokeMainAgentParams): // eslint-disable-next-line @typescript-eslint/no-explicit-any
 Promise<ReactAgent<any>> => {
   const msgFromMatrixRoom = Boolean(
@@ -113,6 +120,13 @@ Promise<ReactAgent<any>> => {
   Logger.log(
     `[createMainAgent] homeServerName: ${configurable.configs?.matrix.homeServerName}`,
   );
+  // Derive user's Matrix ID from DID + homeserver for page invitations
+  const userDid = configurable?.configs?.user?.did;
+  const homeServer = configurable?.configs?.matrix?.homeServerName;
+  const userMatrixId =
+    userDid && homeServer
+      ? `@${userDid.replace(/:/g, '-')}:${homeServer}`
+      : undefined;
   const oracleOpenIdToken = configurable.configs?.user.matrixOpenIdToken
     ? await oracleOpenIdTokenProvider.getToken()
     : undefined;
@@ -300,11 +314,16 @@ Promise<ReactAgent<any>> => {
       ? STANDALONE_EDITOR_PROMPTS
       : null;
 
+  const taskExecCtx = (configurable as Record<string, unknown>)
+    .taskExecutionContext as TaskExecutionContext | undefined;
+
   const operationalMode = editorPrompts
     ? editorPrompts.operationalMode
     : state.currentEntityDid
       ? `**Entity Context Active**\n\nYou are currently viewing an entity (DID: ${state.currentEntityDid}). The entity is the default context for this conversation. Use the Domain Indexer Agent tool for entity discovery/overviews/FAQs, the Portal Agent tool for navigation or UI actions (e.g., \`showEntity\`), and the Memory Agent tool for historical knowledge. For entities like ecs, supamoto, ixo, QI, use both Domain Indexer and Memory Agent tools together for best results.\n\n**Important:** Pages (BlockNote documents) are NOT entities. If the user asks about pages, use \`list_workspace_pages\` and \`call_editor_agent\` — never the Domain Indexer.`
-      : `**General Conversation Mode**\n\nDefault to conversation mode, using the Memory Agent tool for recall and the Firecrawl Agent tool for any external research or fresh data.`;
+      : taskExecCtx
+        ? `**Autonomous Task Execution Mode**\n\nYou are running a scheduled task autonomously — no human is in the loop. Follow the instructions in the user message, execute immediately using available tools, and deliver only the requested output. Do not ask questions, seek clarification, or narrate what you are doing.`
+        : `**General Conversation Mode**\n\nDefault to conversation mode, using the Memory Agent tool for recall and the Firecrawl Agent tool for any external research or fresh data.`;
 
   const editorSection = editorPrompts?.editorSection ?? '';
 
@@ -355,6 +374,7 @@ Promise<ReactAgent<any>> => {
     domainIndexerResult,
     mcpToolsResult,
     sandboxResult,
+    taskManagerResult,
   ] = await Promise.allSettled([
     createPortalAgent({
       tools:
@@ -384,6 +404,17 @@ Promise<ReactAgent<any>> => {
     }),
     getMcpTools(),
     sandboxMCP?.getTools() ?? Promise.resolve([]),
+    matrix?.roomId && tasksService && userMatrixId
+      ? createTaskManagerAgent({
+          tasksService,
+          mainRoomId: matrix.roomId,
+          userDid: configurable.configs.user.did,
+          matrixUserId: userMatrixId,
+          sessionId: configurable.thread_id,
+          timezone: timezone ?? 'UTC',
+          spaceId: state.spaceId,
+        })
+      : Promise.resolve(null),
   ]);
 
   const portalAgent = settled(portalResult, null, 'Portal Agent');
@@ -404,6 +435,11 @@ Promise<ReactAgent<any>> => {
   );
   const mcpTools = settled(mcpToolsResult, [], 'MCP tools');
   const sandboxTools = settled(sandboxResult, [], 'Sandbox MCP');
+  const taskManagerAgent = settled(
+    taskManagerResult,
+    null,
+    'Task Manager Agent',
+  );
 
   // Wrap sandbox_run for lazy secret injection (both oracle and user secrets).
   // MCP adapters snapshot headers at construction time, so we create a new
@@ -485,13 +521,7 @@ Promise<ReactAgent<any>> => {
   if (state.editorRoomId) {
     Logger.log(`Editor room ID provided: ${state.editorRoomId}`);
     Logger.log('Initializing BlockNote tools...');
-    // Derive user's Matrix ID from DID + homeserver for page invitations
-    const userDid = configurable?.configs?.user?.did;
-    const homeServer = configurable?.configs?.matrix?.homeServerName;
-    const userMatrixId =
-      userDid && homeServer
-        ? `@${userDid.replace(/:/g, '-')}:${homeServer}`
-        : undefined;
+
     try {
       blockNoteAgentSpec = await createEditorAgent({
         room: state.editorRoomId,
@@ -593,6 +623,11 @@ Promise<ReactAgent<any>> => {
           : undefined,
       })
     : null;
+  const callTaskManagerAgentTool = taskManagerAgent
+    ? createSubagentAsTool(withTimeContext(taskManagerAgent), {
+        forwardTools: ['create_task', 'list_tasks', 'get_task_status'],
+      })
+    : null;
 
   // Build degraded-services notice for the system prompt
   let finalSystemPrompt = systemPrompt;
@@ -616,7 +651,11 @@ Promise<ReactAgent<any>> => {
   // Build middleware list conditionally
   const disableCredits = configService.get('DISABLE_CREDITS');
 
-  const middleware = [createToolValidationMiddleware(), toolRetryMiddleware()];
+  const middleware = [
+    createToolValidationMiddleware(),
+    toolRetryMiddleware(),
+    createPageContextMiddleware(),
+  ];
 
   if (!disableCredits) {
     middleware.push(createTokenLimiterMiddleware());
@@ -641,6 +680,7 @@ Promise<ReactAgent<any>> => {
       ...(callFirecrawlAgentTool ? [callFirecrawlAgentTool] : []),
       ...(callDomainIndexerAgentTool ? [callDomainIndexerAgentTool] : []),
       ...(callEditorAgentTool ? [callEditorAgentTool] : []),
+      ...(callTaskManagerAgentTool ? [callTaskManagerAgentTool] : []),
       ...(fileProcessingService
         ? [
             createFileProcessingTool(

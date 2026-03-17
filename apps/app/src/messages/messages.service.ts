@@ -43,6 +43,7 @@ import * as crypto from 'node:crypto';
 import { MainAgentGraph } from 'src/graph';
 import { cleanAdditionalKwargs } from 'src/graph/nodes/chat-node/utils';
 import { type TMainAgentGraphState } from 'src/graph/state';
+import { TasksService } from 'src/tasks/task.service';
 import { type ENV } from 'src/types';
 import { UcanService } from 'src/ucan/ucan.service';
 import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
@@ -97,6 +98,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     private readonly config: ConfigService<ENV>,
     private readonly checkpointStorageSyncService: UserMatrixSqliteSyncService,
     private readonly fileProcessingService: FileProcessingService,
+    @Optional() private readonly tasksService?: TasksService,
     @Optional() private readonly ucanService?: UcanService,
   ) {
     this.matrixManager = this.sessionManagerService.matrixManger;
@@ -229,11 +231,17 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     const did = normalizeDid(event.sender);
     const isBot = did === this.config.getOrThrow('ORACLE_DID');
     if (isBot) {
+      Logger.log(
+        `[Matrix][handleMessage] Ignoring message from bot (DID: ${did})`,
+      );
       return;
     }
 
     // Skip internal messages
     if ('INTERNAL' in event.content) {
+      Logger.log(
+        `[Matrix][handleMessage] Ignoring INTERNAL message eventId=${event.eventId} sender=${event.sender}`,
+      );
       return;
     }
 
@@ -244,21 +252,51 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       typeof event.content.body === 'string';
     const isFile =
       typeof msgtype === 'string' && MessagesService.FILE_MSGTYPES.has(msgtype);
-
-    if (!isText && !isFile) {
-      return;
-    }
-
     const threadId = await this.getThreadRoot(event, roomId);
     if (!threadId) {
+      Logger.warn(
+        `[Matrix][handleMessage] Could not find thread root for eventId=${event.eventId} roomId=${roomId}, aborting`,
+      );
       return;
     }
 
-    const hasSession = await this.sessionManagerService.getSession(
-      event.eventId,
-      did,
-      false,
+    const threadEv = await this.matrixManager.getEventById(roomId, threadId);
+    const langchainThreadId = (threadEv.content as any)?.sessionId;
+    const sessionId = threadId;
+    if (!isText && !isFile) {
+      Logger.log(
+        `[Matrix][handleMessage] Ignoring non-text, non-file message: eventId=${event.eventId} msgtype=${msgtype} sender=${event.sender}`,
+      );
+      return;
+    }
+
+    Logger.log(
+      `[Matrix][handleMessage] Processing message eventId=${event.eventId} roomId=${roomId} threadId=${threadId} sender=${event.sender} sessionId=${sessionId ?? event.eventId}`,
     );
+
+    const checkSessionId = sessionId ?? event.eventId;
+    let hasSession: ChatSession | undefined;
+    try {
+      hasSession = await this.sessionManagerService.getSession(
+        checkSessionId,
+        did,
+        false,
+      );
+      if (hasSession) {
+        Logger.log(
+          `[Matrix][handleMessage] FOUND existing session for did=${did} sessionId=${checkSessionId} (threadId=${threadId})`,
+        );
+      } else {
+        Logger.log(
+          `[Matrix][handleMessage] No existing session found for did=${did} sessionId=${checkSessionId} (threadId=${threadId}), will create new session`,
+        );
+      }
+    } catch (err) {
+      Logger.error(
+        `[Matrix][handleMessage] Error checking for session did=${did} sessionId=${checkSessionId}`,
+        err,
+      );
+    }
 
     if (!hasSession) {
       const userHomeServer = event.sender.split(':').slice(1).join(':');
@@ -267,25 +305,46 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         .replace(/\/$/, '')
         .replace(/^https?:\/\//, '');
 
-      await this.sessionManagerService.createSession(
-        {
-          did,
-          oracleDid: this.config.getOrThrow('ORACLE_DID'),
-          oracleEntityDid: this.config.getOrThrow('ORACLE_ENTITY_DID'),
-          oracleName: this.config.getOrThrow('ORACLE_NAME'),
-          homeServer: userHomeServer,
-          oracleHomeServer,
-          userHomeServer,
-        },
-        event.eventId,
-      );
+      try {
+        Logger.log(
+          `[Matrix][handleMessage] Creating NEW session for did=${did} sessionId=${checkSessionId} homeServer=${userHomeServer} oracleHomeServer=${oracleHomeServer}`,
+        );
+        await this.sessionManagerService.createSession(
+          {
+            did,
+            oracleDid: this.config.getOrThrow('ORACLE_DID'),
+            oracleEntityDid: this.config.getOrThrow('ORACLE_ENTITY_DID'),
+            oracleName: this.config.getOrThrow('ORACLE_NAME'),
+            homeServer: userHomeServer,
+            oracleHomeServer,
+            userHomeServer,
+          },
+          event.eventId,
+        );
+        Logger.log(
+          `[Matrix][handleMessage] Session CREATED for did=${did} sessionId=${checkSessionId}`,
+        );
+      } catch (err) {
+        Logger.error(
+          `[Matrix][handleMessage] Error creating session for did=${did} sessionId=${checkSessionId}`,
+          err,
+        );
+        return;
+      }
     }
+
     // Buffer the event — the debounce timer will flush once no more events arrive
     const existing = this.matrixEventBuffer.get(threadId);
     if (existing) {
+      Logger.log(
+        `[Matrix][handleMessage] Found existing buffer for threadId=${threadId}, appending eventId=${event.eventId}`,
+      );
       clearTimeout(existing.timer);
       existing.events.push({ event, roomId });
     } else {
+      Logger.log(
+        `[Matrix][handleMessage] Creating new buffer for threadId=${threadId} with eventId=${event.eventId}`,
+      );
       this.matrixEventBuffer.set(threadId, {
         events: [{ event, roomId }],
         timer: null as unknown as NodeJS.Timeout,
@@ -294,7 +353,10 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
 
     const entry = this.matrixEventBuffer.get(threadId)!;
     entry.timer = setTimeout(() => {
-      this.flushMatrixEvents(threadId).catch((err) => {
+      Logger.log(
+        `[Matrix][handleMessage] Debounce timer elapsed for threadId=${threadId}, flushing events (sessionId=${sessionId})`,
+      );
+      this.flushMatrixEvents(threadId, langchainThreadId).catch((err) => {
         Logger.error(
           `Failed to flush Matrix events for thread ${threadId}`,
           err,
@@ -307,13 +369,26 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
    * Flush all buffered Matrix events for a thread into a single sendMessage() call.
    * Separates text messages from file attachments and batches them together.
    */
-  private async flushMatrixEvents(threadId: string): Promise<void> {
+  private async flushMatrixEvents(
+    threadId: string,
+    overRideSessionId?: string,
+  ): Promise<void> {
     const entry = this.matrixEventBuffer.get(threadId);
-    if (!entry) return;
+    if (!entry) {
+      Logger.warn(
+        `[Matrix][flushMatrixEvents] No event buffer for threadId=${threadId}`,
+      );
+      return;
+    }
     this.matrixEventBuffer.delete(threadId);
 
     const { events } = entry;
-    if (events.length === 0) return;
+    if (events.length === 0) {
+      Logger.warn(
+        `[Matrix][flushMatrixEvents] No events to flush for threadId=${threadId}`,
+      );
+      return;
+    }
 
     // Use the roomId from the first event (all events in a thread share the same room)
     const roomId = events[0].roomId;
@@ -355,11 +430,15 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         : `User shared ${attachments.length} file(s): ${attachments.map((a) => a.filename).join(', ')}`);
 
     try {
+      Logger.log(
+        `[Matrix][flushMatrixEvents] Sending message for threadId=${threadId} sessionId=${overRideSessionId ?? threadId} did=${did} attachments=${attachments.length}`,
+      );
       const aiMessage = await this.sendMessage({
         clientType: 'matrix',
         message,
         did,
         sessionId: threadId,
+        overrideLangchainThreadId: overRideSessionId,
         homeServer,
         msgFromMatrixRoom: true,
         userMatrixOpenIdToken: '',
@@ -367,6 +446,9 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         ...(attachments.length > 0 && { attachments }),
       });
       if (!aiMessage) {
+        Logger.warn(
+          `[Matrix][flushMatrixEvents] sendMessage did not return a message for threadId=${threadId}`,
+        );
         return;
       }
 
@@ -377,6 +459,9 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         isOracleAdmin: true,
         disablePrefix: true,
       });
+      Logger.log(
+        `[Matrix][flushMatrixEvents] Message sent to Matrix roomId=${roomId} threadId=${threadId} by Oracle`,
+      );
     } catch (error) {
       Logger.error('Failed to send message', error);
     }
@@ -457,6 +542,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       res?: Response;
       clientType?: 'matrix' | 'slack';
       msgFromMatrixRoom?: boolean;
+      overrideLangchainThreadId?: string;
       req?: Request;
     },
   ): Promise<
@@ -687,24 +773,25 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
               emitSSEEvent(thinkingEvent);
               thinkingEvent.emit();
 
-              const stream = await this.mainAgent.streamMessage(
-                inputMessages,
+              const stream = await this.mainAgent.streamMessage({
+                input: inputMessages,
                 runnableConfig,
-                params.tools ?? [],
+                browserTools: params.tools ?? [],
                 msgFromMatrixRoom,
-                userContext,
+                initialUserContext: userContext,
                 abortController,
-                params.metadata?.editorRoomId,
-                params.metadata?.currentEntityDid,
-                params.agActions ?? [],
+                editorRoomId: params.metadata?.editorRoomId,
+                currentEntityDid: params.metadata?.currentEntityDid,
+                agActions: params.agActions ?? [],
                 // UCAN options for MCP tool authorization
-                {
+                ucanOptions: {
                   ucanService: this.ucanService,
                   mcpInvocations: params.mcpInvocations,
                 },
-                this.fileProcessingService,
-                params.metadata?.spaceId,
-              );
+                fileProcessingService: this.fileProcessingService,
+                spaceId: params.metadata?.spaceId,
+                tasksService: this.tasksService,
+              });
 
               let fullContent = '';
               if (params.sessionId) {
@@ -1087,23 +1174,24 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
-      const result = await this.mainAgent.sendMessage(
-        inputMessages,
+      const result = await this.mainAgent.sendMessage({
+        input: inputMessages,
         runnableConfig,
-        params.tools ?? [],
+        browserTools: params.tools ?? [],
         msgFromMatrixRoom,
-        userContext,
-        params.metadata?.editorRoomId,
-        params.metadata?.currentEntityDid,
-        params.clientType,
+        initialUserContext: userContext,
+        editorRoomId: params.metadata?.editorRoomId,
+        currentEntityDid: params.metadata?.currentEntityDid,
+        clientType: params.clientType,
         // UCAN options for MCP tool authorization
-        {
+        ucanOptions: {
           ucanService: this.ucanService,
           mcpInvocations: params.mcpInvocations,
         },
-        this.fileProcessingService,
-        params.metadata?.spaceId,
-      );
+        fileProcessingService: this.fileProcessingService,
+        spaceId: params.metadata?.spaceId,
+        tasksService: this.tasksService,
+      });
       const lastMessage = result.messages.at(-1);
       if (!lastMessage) {
         throw new BadRequestException('No message returned from the oracle');
@@ -1270,7 +1358,10 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async prepareForQuery(
-    payload: SendMessagePayload & { req?: Request },
+    payload: SendMessagePayload & {
+      req?: Request;
+      overrideLangchainThreadId?: string;
+    },
   ): Promise<{
     sessionId: string;
     roomId: string;
@@ -1335,9 +1426,9 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       };
     } = {
       configurable: {
-        thread_id: sessionId,
+        thread_id: payload.overrideLangchainThreadId ?? sessionId,
         requestId,
-        sessionId,
+        sessionId: payload.overrideLangchainThreadId ?? sessionId,
         configs: {
           matrix: {
             roomId,

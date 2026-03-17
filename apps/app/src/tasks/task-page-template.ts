@@ -65,15 +65,7 @@ export function generateTaskPage(params: TaskPageParams): string {
     sections.push('', '## Constraints', '', params.constraints);
   }
 
-  sections.push(
-    '',
-    '---',
-    '',
-    '## Recent Output',
-    '',
-    '| When | Summary | Link |',
-    '|------|---------|------|',
-  );
+  sections.push('', '---', '', '## Recent Output', '', '*No output yet.*');
 
   return sections.join('\n');
 }
@@ -109,24 +101,22 @@ export function buildTaskPageParams(input: TaskPageInput): TaskPageParams {
   };
 }
 
-// ── Output Table (rendered from metadata) ────────────────────────────
+// ── Output Section (rendered from metadata) ──────────────────────────
 
 /**
- * Renders the "Recent Output" Markdown table from the taskMeta's
- * `recentOutput` array. Because output rows live in metadata (not in
- * the page markdown), user edits to the page can never corrupt them.
+ * Renders the "Recent Output" section as a release-notes style list
+ * from the taskMeta's `recentOutput` array. Each entry is a bold
+ * timestamp, a dash, a one-line summary, and an optional view link.
  *
  * Keeps the last `maxRows` entries (default 5).
  */
-export function formatOutputTable(meta: TaskMeta, maxRows = 5): string {
-  const header = '| When | Summary | Link |\n|------|---------|------|';
+export function formatOutputSection(meta: TaskMeta, maxRows = 5): string {
   const rows = (meta.recentOutput ?? []).slice(0, maxRows);
-  const body = rows
-    .map(
-      (row: OutputRow) =>
-        `| ${row.when} | ${row.summary} | [View](${row.link}) |`,
-    )
-    .join('\n');
-
-  return `${header}\n${body}`;
+  if (rows.length === 0) return '*No output yet.*';
+  return rows
+    .map((row: OutputRow) => {
+      const link = row.link ? ` — [View](${row.link})` : '';
+      return `**${row.when}** — ${row.summary}${link}`;
+    })
+    .join('\n\n');
 }

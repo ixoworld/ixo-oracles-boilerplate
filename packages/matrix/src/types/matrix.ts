@@ -12,6 +12,8 @@ export interface IMessageOptions {
   oracleName?: string;
   threadId?: string;
   disablePrefix?: boolean;
+  /** Custom fields spread onto the Matrix event content (e.g. `{ 'ixo.task_id': '...' }`) */
+  metadata?: Record<string, unknown>;
 }
 
 export interface ICreateRoomAndJoinOptions {

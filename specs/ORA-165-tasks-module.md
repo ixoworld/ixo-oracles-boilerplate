@@ -113,7 +113,7 @@ User: "Remind me to submit the report at 5pm"
     delay: msUntilDeliveryTime,       // One-shot
     // OR
     repeat: { pattern: '0 8 * * *', tz: 'Africa/Cairo' },  // Recurring
-    jobId: 'task_abc123:simple',
+    jobId: 'task_abc123-simple',
   }
 }
 ```
@@ -172,7 +172,7 @@ This keeps the scheduling within BullMQ — no custom scheduler. The repeatable 
   data: { taskId, userId, roomId },
   opts: {
     repeat: { pattern: '0 9 * * 1', tz: 'Africa/Cairo' },
-    jobId: 'task_abc123:deliver',
+    jobId: 'task_abc123-deliver',
   }
 }
 
@@ -182,7 +182,7 @@ This keeps the scheduling within BullMQ — no custom scheduler. The repeatable 
   data: { taskId, userId, roomId, forDeliveryAt: '2026-03-23T09:00:00+02:00' },
   opts: {
     delay: msUntilWorkStart,  // delivery time - buffer
-    jobId: 'task_abc123:work:2026-03-23',
+    jobId: 'task_abc123-work:2026-03-23',
   }
 }
 ```
@@ -340,7 +340,7 @@ interface TaskMeta {
 
   // BullMQ references
   jobPattern: 'simple' | 'flow';
-  bullmqJobId: string; // 'task_abc123:simple' or 'task_abc123:deliver'
+  bullmqJobId: string; // 'task_abc123-simple' or 'task_abc123-deliver'
   bullmqRepeatKey: string | null; // For cancelling repeatables
   currentWorkJobId: string | null; // Current work job ID (recurring flows)
 
@@ -776,13 +776,13 @@ await flowProducer.add({
   name: 'task_deliver',
   queueName: 'task_deliver',
   data: { taskId, userId, roomId },
-  opts: { delay: msUntilDeadline, jobId: `${taskId}:deliver` },
+  opts: { delay: msUntilDeadline, jobId: `${taskId}-deliver` },
   children: [
     {
       name: 'task_work',
       queueName: 'task_work',
       data: { taskId, userId, roomId },
-      opts: { delay: msUntilWorkStart, jobId: `${taskId}:work` },
+      opts: { delay: msUntilWorkStart, jobId: `${taskId}-work` },
     },
   ],
 });
@@ -799,12 +799,12 @@ await deliverQueue.add(
   { taskId, userId, roomId },
   {
     repeat: { pattern: '0 9 * * 1', tz: 'Africa/Cairo' },
-    jobId: `${taskId}:deliver`,
+    jobId: `${taskId}-deliver`,
   },
 );
 
 // 2. One-shot work job (unique timestamp-based ID, preserved for history)
-const workJobId = `${taskId}:work:${Date.now()}`;
+const workJobId = `${taskId}-work-${Date.now()}`;
 await workQueue.add(
   'task_work',
   { taskId, userId, roomId, forDeliveryAt: nextDeliveryIso },

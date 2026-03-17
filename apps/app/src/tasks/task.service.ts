@@ -20,6 +20,7 @@
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Cache } from 'cache-manager';
+import { CronExpressionParser } from 'cron-parser';
 import { Preset, Visibility } from 'matrix-js-sdk';
 import { normalizeDid } from 'src/utils/header.utils';
 
@@ -39,7 +40,6 @@ import {
   generateTaskId,
   readTaskMeta,
   updateTaskMeta,
-  writeTaskMetaToDoc,
 } from './task-doc';
 import { sharedServerEditor, withTaskDoc } from './task-doc-helpers';
 import type { ChannelType, TaskMeta, TaskType } from './task-meta';
@@ -62,6 +62,7 @@ import {
   TASK_STATE_EVENT_TYPE,
   TASKS_INDEX_EVENT_TYPE,
 } from './task-service.types';
+import { resolveWorkDelay } from './processors/processor-utils';
 
 export {
   DEFAULT_CHUNK_SIZE,
@@ -139,11 +140,18 @@ export class TasksService {
   async createTask(params: CreateTaskParams): Promise<CreateTaskResult> {
     const taskId = generateTaskId();
     this.logger.log(`Creating task ${taskId}: ${params.title}`);
+    this.logger.debug(
+      `createTask params: ${JSON.stringify({ taskId, title: params.title, taskType: params.taskType, hasPage: params.hasPage, channelType: params.channelType, jobPattern: params.scheduleCron ? 'cron' : params.deadlineIso ? 'deadline' : 'immediate', userDid: params.userDid })}`,
+    );
 
     // 1. Build TaskMeta
+    this.logger.debug(
+      `[createTask ${taskId}] Step 1: Building TaskMeta (taskType=${params.taskType}, hasPage=${params.hasPage}, channelType=${params.channelType}, modelOverride=${params.modelOverride ?? 'none'}, complexityTier=${params.complexityTier ?? 'default'}, timezone=${params.timezone})`,
+    );
     const metaParams: CreateTaskMetaParams = {
       taskId,
-      userId: params.userId,
+      userDid: params.userDid,
+      matrixUserId: params.matrixUserId,
       taskType: params.taskType,
       hasPage: params.hasPage,
       timezone: params.timezone,
@@ -153,8 +161,10 @@ export class TasksService {
       complexityTier: params.complexityTier,
       monthlyBudgetUsd: params.monthlyBudgetUsd,
       modelOverride: params.modelOverride,
+      notificationPolicy: params.notificationPolicy,
       requiresApproval: params.requiresApproval,
       dependsOn: params.dependsOn,
+      spaceId: params.spaceId,
     };
 
     let roomId: string | null = null;
@@ -162,23 +172,39 @@ export class TasksService {
 
     // 2. If custom channel, create a dedicated [Task] room
     if (params.channelType === 'custom') {
+      this.logger.debug(
+        `[createTask ${taskId}] Step 2: Creating custom task room (matrixUserId=${params.matrixUserId})`,
+      );
       const roomResult = await this.createTaskRoom({
         taskId,
         title: params.title,
-        userId: params.userId,
+        matrixUserId: params.matrixUserId,
         inviteUserIds: params.inviteUserIds,
       });
       roomId = roomResult.roomId;
       roomAlias = roomResult.alias;
       metaParams.customRoomId = roomId;
+      this.logger.debug(
+        `[createTask ${taskId}] Step 2: Custom room created (roomId=${roomId}, alias=${roomAlias})`,
+      );
+    } else {
+      this.logger.debug(
+        `[createTask ${taskId}] Step 2: Skipped — channelType=main, using mainRoomId=${params.mainRoomId}`,
+      );
     }
 
     const taskMeta = buildTaskMeta(metaParams);
+    this.logger.debug(
+      `[createTask ${taskId}] TaskMeta built: modelTier=${taskMeta.modelTier}, modelOverride=${taskMeta.modelOverride ?? 'none'}, jobPattern=${taskMeta.jobPattern}, bufferMinutes=${taskMeta.bufferMinutes}, complexityTier=${taskMeta.complexityTier}, notificationPolicy=${taskMeta.notificationPolicy}`,
+    );
 
     // 3. Store metadata
     if (params.hasPage) {
-      // Create Y.Doc with page content + taskMeta sidecar
       const targetRoomId = roomId ?? params.mainRoomId;
+      this.logger.debug(
+        `[createTask ${taskId}] Step 3: Storing as Y.Doc page (targetRoomId=${targetRoomId})`,
+      );
+      // Create Y.Doc with page content + taskMeta sidecar
       await this.initTaskPageDoc({
         taskId,
         title: params.title,
@@ -191,7 +217,13 @@ export class TasksService {
         channelType: params.channelType,
         taskType: params.taskType,
       });
+      this.logger.debug(
+        `[createTask ${taskId}] Step 3: Y.Doc page initialized`,
+      );
     } else {
+      this.logger.debug(
+        `[createTask ${taskId}] Step 3: Storing as state event (mainRoomId=${params.mainRoomId})`,
+      );
       // Store as state event on main room
       await this.sendStateEvent(
         params.mainRoomId,
@@ -199,12 +231,22 @@ export class TasksService {
         taskId,
         taskMeta,
       );
+      this.logger.debug(`[createTask ${taskId}] Step 3: State event sent`);
     }
 
     // 4. Schedule BullMQ job
+    this.logger.debug(
+      `[createTask ${taskId}] Step 4: Scheduling BullMQ job (pattern=${taskMeta.jobPattern}, cron=${taskMeta.scheduleCron ?? 'none'}, deadline=${taskMeta.deadlineIso ?? 'none'})`,
+    );
     const scheduleResult = await this.scheduleTask(taskMeta, params);
+    this.logger.debug(
+      `[createTask ${taskId}] Step 4: Scheduled (bullmqJobId=${scheduleResult.bullmqJobId}, repeatKey=${scheduleResult.bullmqRepeatKey ?? 'none'}, nextRunAt=${scheduleResult.nextRunAt ?? 'none'}, workJobId=${scheduleResult.currentWorkJobId ?? 'none'})`,
+    );
 
     // 5. Update TaskMeta with scheduler references
+    this.logger.debug(
+      `[createTask ${taskId}] Step 5: Updating TaskMeta with scheduler references`,
+    );
     const schedulerUpdates: Partial<TaskMeta> = {
       bullmqJobId: scheduleResult.bullmqJobId,
       bullmqRepeatKey: scheduleResult.bullmqRepeatKey,
@@ -215,6 +257,7 @@ export class TasksService {
     if (params.hasPage) {
       const targetRoomId = roomId ?? params.mainRoomId;
       await this.updateTaskMetaInDoc(targetRoomId, schedulerUpdates);
+      this.logger.debug(`[createTask ${taskId}] Step 5: Updated Y.Doc meta`);
     } else {
       const currentMeta = { ...taskMeta, ...schedulerUpdates };
       await this.sendStateEvent(
@@ -223,11 +266,15 @@ export class TasksService {
         taskId,
         currentMeta,
       );
+      this.logger.debug(`[createTask ${taskId}] Step 5: Updated state event`);
     }
 
     const finalTaskMeta = { ...taskMeta, ...schedulerUpdates };
 
     // 6. Update task index
+    this.logger.debug(
+      `[createTask ${taskId}] Step 6: Updating task index (mainRoomId=${params.mainRoomId})`,
+    );
     await this.updateTasksIndex(
       params.mainRoomId,
       {
@@ -243,15 +290,19 @@ export class TasksService {
       },
       'upsert',
     );
+    this.logger.debug(`[createTask ${taskId}] Step 6: Task index updated`);
 
     // 7. Warm the cache with the fresh meta
+    this.logger.debug(`[createTask ${taskId}] Step 7: Warming cache`);
     await this.cache.set(
       this.taskMetaCacheKey(params.mainRoomId, taskId),
       finalTaskMeta,
       TASK_META_CACHE_TTL,
     );
 
-    this.logger.log(`Task ${taskId} created successfully`);
+    this.logger.log(
+      `Task ${taskId} created successfully (type=${taskMeta.taskType}, pattern=${taskMeta.jobPattern}, model=${taskMeta.modelOverride ?? taskMeta.modelTier}, nextRunAt=${finalTaskMeta.nextRunAt ?? 'none'})`,
+    );
     return { taskId, taskMeta: finalTaskMeta, roomId, roomAlias };
   }
 
@@ -267,17 +318,33 @@ export class TasksService {
     if (!options?.bypassCache) {
       const cacheKey = this.taskMetaCacheKey(mainRoomId, taskId);
       const cached = await this.cache.get<TaskMeta>(cacheKey);
-      if (cached) return cached;
+      if (cached) {
+        this.logger.debug(`getTask: cache HIT for task ${taskId}`);
+        return cached;
+      }
+      this.logger.debug(`getTask: cache MISS for task ${taskId}`);
+    } else {
+      this.logger.debug(`getTask: cache bypassed for task ${taskId}`);
     }
 
+    this.logger.debug(`getTask: resolving index entry for task ${taskId}...`);
     const entry = await this.resolveTaskEntry(mainRoomId, taskId);
+    this.logger.debug(
+      `getTask: entry resolved — hasPage=${entry.hasPage}, roomId=${entry.roomId ?? 'main'}`,
+    );
     let meta: TaskMeta;
 
     if (entry.hasPage) {
       const targetRoomId = entry.roomId ?? mainRoomId;
+      this.logger.debug(
+        `getTask: reading TaskMeta from Y.Doc (room=${targetRoomId})`,
+      );
       meta = await this.readTaskMetaFromDoc(targetRoomId);
     } else {
       // Read state event from main room
+      this.logger.debug(
+        `getTask: reading TaskMeta from state event (room=${mainRoomId})`,
+      );
       const client = this.getSimpleMatrixClient();
       const content = await client.mxClient.getRoomStateEvent(
         mainRoomId,
@@ -287,6 +354,9 @@ export class TasksService {
       meta = content as unknown as TaskMeta;
     }
 
+    this.logger.debug(
+      `getTask: loaded task ${taskId} — status=${meta.status}, totalRuns=${meta.totalRuns}`,
+    );
     const cacheKey = this.taskMetaCacheKey(mainRoomId, taskId);
     await this.cache.set(cacheKey, meta, TASK_META_CACHE_TTL);
     return meta;
@@ -342,6 +412,9 @@ export class TasksService {
   async updateTask(params: UpdateTaskParams): Promise<TaskMeta> {
     const { taskId, mainRoomId, updates } = params;
     this.logger.log(`Updating task ${taskId}`);
+    this.logger.debug(
+      `updateTask: updates=${JSON.stringify(updates)}, hasNewSchedule=${params.newScheduleCron !== undefined}, hasNewDeadline=${params.newDeadlineIso !== undefined}`,
+    );
 
     const entry = await this.resolveTaskEntry(mainRoomId, taskId);
 
@@ -474,6 +547,19 @@ export class TasksService {
     this.logger.log(`Task ${taskId} deleted`);
   }
 
+  // ── Public: Index Lookup ────────────────────────────────────────
+
+  /**
+   * Public accessor for a single task's index entry.
+   * Delegates to the cached `resolveTaskEntry` method.
+   */
+  async getTaskIndexEntry(
+    mainRoomId: string,
+    taskId: string,
+  ): Promise<TaskIndexEntry> {
+    return this.resolveTaskEntry(mainRoomId, taskId);
+  }
+
   // ── Private: Index Lookup ───────────────────────────────────────
 
   /**
@@ -514,7 +600,7 @@ export class TasksService {
   private async createTaskRoom(params: {
     taskId: string;
     title: string;
-    userId: string;
+    matrixUserId: string;
     inviteUserIds?: string[];
   }): Promise<{ roomId: string; alias: string }> {
     const editorClient = EditorMatrixClient.getInstance();
@@ -530,8 +616,8 @@ export class TasksService {
 
     // Power levels: creator 100, invited users 50
     const users: Record<string, number> = { [creatorId]: 100 };
-    if (params.userId) {
-      users[params.userId] = 50;
+    if (params.matrixUserId) {
+      users[params.matrixUserId] = 50;
     }
     if (params.inviteUserIds) {
       for (const uid of params.inviteUserIds) {
@@ -539,9 +625,10 @@ export class TasksService {
       }
     }
 
-    const inviteList = [params.userId, ...(params.inviteUserIds ?? [])].filter(
-      (id) => id !== creatorId,
-    );
+    const inviteList = [
+      params.matrixUserId,
+      ...(params.inviteUserIds ?? []),
+    ].filter((id) => id !== creatorId);
 
     const initialState: Array<{
       type: string;
@@ -634,7 +721,7 @@ export class TasksService {
         sharedServerEditor.blocksToYXmlFragment(blocks, fragment);
       }
 
-      writeTaskMetaToDoc(doc, params.taskMeta);
+      updateTaskMeta(doc, params.taskMeta);
     });
 
     this.logger.log(`Task page doc initialized for ${params.taskId}`);
@@ -851,7 +938,8 @@ export class TasksService {
   }> {
     const data: SimpleJobData = {
       taskId: taskMeta.taskId,
-      userId: taskMeta.userId,
+      userDid: taskMeta.userDid,
+      matrixUserId: taskMeta.matrixUserId,
       roomId,
       message: params.message ?? '',
     };
@@ -908,26 +996,45 @@ export class TasksService {
   }> {
     const workData: WorkJobData = {
       taskId: taskMeta.taskId,
-      userId: taskMeta.userId,
+      userDid: taskMeta.userDid,
       roomId,
     };
 
     const deliverData: DeliverJobData = {
       taskId: taskMeta.taskId,
-      userId: taskMeta.userId,
+      userDid: taskMeta.userDid,
+      matrixUserId: taskMeta.matrixUserId,
       roomId,
     };
 
     if (taskMeta.scheduleCron) {
-      // Recurring flow
+      // Recurring flow — compute first work delay so it completes before the
+      // first deliver fires.  Same formula as DeliverProcessor.scheduleNextWork:
+      //   workDelay = nextCronTick − buffer − now   (clamped to 0)
+      // When buffer ≥ interval the delay resolves to 0 (immediate), which is
+      // correct — work starts right away since there isn't time for a full buffer.
       const bufferMs = taskMeta.bufferMinutes * 60_000;
+      const interval = CronExpressionParser.parse(taskMeta.scheduleCron, {
+        tz: taskMeta.timezone,
+        currentDate: new Date(),
+      });
+      const firstDelivery = interval.next().toDate();
+      const firstWorkDelay = resolveWorkDelay(
+        firstDelivery.getTime(),
+        bufferMs,
+        this.logger,
+        taskMeta.taskId,
+      );
       const result = await this.scheduler.scheduleRecurringFlow({
         taskId: taskMeta.taskId,
         deliverData,
         repeat: { pattern: taskMeta.scheduleCron, tz: taskMeta.timezone },
         firstWork: {
-          data: workData,
-          delay: Math.max(bufferMs, 0),
+          data: {
+            ...workData,
+            forDeliveryAt: firstDelivery.toISOString(),
+          },
+          delay: firstWorkDelay,
         },
       });
       return {
@@ -940,17 +1047,29 @@ export class TasksService {
 
     if (taskMeta.deadlineIso) {
       // One-shot flow — work job ID is deterministic via FlowProducer
-      const deliverDelay =
-        new Date(taskMeta.deadlineIso).getTime() - Date.now();
+      const deliverAtMs = new Date(taskMeta.deadlineIso).getTime();
+      const deliverDelay = deliverAtMs - Date.now();
+
+      if (deliverDelay < 0) {
+        throw new Error(
+          `Task deadline is in the past: ${taskMeta.deadlineIso}`,
+        );
+      }
+
       const bufferMs = taskMeta.bufferMinutes * 60_000;
-      const workDelay = Math.max(deliverDelay - bufferMs, 0);
+      const workDelay = resolveWorkDelay(
+        deliverAtMs,
+        bufferMs,
+        this.logger,
+        taskMeta.taskId,
+      );
 
       const result = await this.scheduler.scheduleFlowJob({
         taskId: taskMeta.taskId,
         workData,
         deliverData,
         workDelay,
-        deliverDelay: Math.max(deliverDelay, 0),
+        deliverDelay,
       });
       return {
         bullmqJobId: result.deliverJobId,
