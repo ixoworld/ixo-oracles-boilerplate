@@ -296,7 +296,8 @@ export class DeliverProcessor extends WorkerHost {
   }
 
   /**
-   * Append an output row to the task page Y.Doc.
+   * Append an output row to the task page Y.Doc and regenerate the
+   * "Recent Output" table in the BlockNote document content.
    */
   private async appendOutputToPage(
     meta: TaskMeta,
@@ -306,11 +307,64 @@ export class DeliverProcessor extends WorkerHost {
   ): Promise<void> {
     const docRoomId = meta.customRoomId ?? mainRoomId;
 
-    await withTaskDoc(docRoomId, (doc) => {
+    await withTaskDoc(docRoomId, async (doc) => {
+      // 1. Append the new row to the Y.Map sidecar
       appendOutputRow(doc, {
         when: formatOutputDate(new Date()),
         summary: truncateText(workResult.result, 200),
         link: messageEventId ? `#msg-${messageEventId}` : '',
+      });
+
+      // 2. Regenerate the "Recent Output" table in the document
+      const updatedMeta = readTaskMeta(doc);
+      const tableMd = formatOutputTable(updatedMeta);
+      const tableBlocks =
+        await sharedServerEditor.tryParseMarkdownToBlocks(tableMd);
+
+      const fragment = doc.getXmlFragment('document');
+      const blocks = sharedServerEditor.yXmlFragmentToBlocks(fragment);
+
+      // Find the "Recent Output" heading
+      const headingIdx = blocks.findIndex(
+        (b) =>
+          b.type === 'heading' &&
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ((b.content as any)?.[0]?.text as string | undefined)
+            ?.trim()
+            .toLowerCase() === 'recent output',
+      );
+
+      if (headingIdx === -1) {
+        this.logger.warn(
+          `"Recent Output" heading not found in task page, skipping table update`,
+        );
+        return;
+      }
+
+      // Find the range after the heading until the next heading or end of doc
+      const afterHeading = headingIdx + 1;
+      let endIdx = blocks.length;
+      for (let i = afterHeading; i < blocks.length; i++) {
+        if (blocks[i].type === 'heading') {
+          endIdx = i;
+          break;
+        }
+      }
+
+      // Rebuild: everything before table section + heading + new table blocks + rest
+      const rebuilt = [
+        ...blocks.slice(0, afterHeading),
+        ...tableBlocks,
+        ...blocks.slice(endIdx),
+      ];
+
+      // Replace document content
+      doc.transact(() => {
+        while (fragment.length > 0) {
+          fragment.delete(0, 1);
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        sharedServerEditor.blocksToYXmlFragment(rebuilt as any, fragment);
       });
     });
   }
