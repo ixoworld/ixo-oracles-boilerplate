@@ -298,7 +298,10 @@ export async function sendTaskNotification(params: {
     oracleEntityDid: params.configService.getOrThrow('ORACLE_ENTITY_DID'),
     oracleName: params.configService.getOrThrow('ORACLE_NAME'),
   };
-  if (params.notificationPolicy === 'channel_and_mention') {
+  if (
+    params.notificationPolicy === 'channel_and_mention' ||
+    params.notificationPolicy === 'on_threshold'
+  ) {
     const client = mxManager.getClient();
     if (client) {
       logger.debug(
@@ -322,14 +325,7 @@ export async function sendTaskNotification(params: {
     return undefined;
   }
 
-  // TODO: implement on_threshold — should only notify when a metric crosses a threshold
-  if (params.notificationPolicy === 'on_threshold') {
-    logger.warn(
-      `sendTaskNotification: on_threshold policy not yet implemented, falling through to channel_only)`,
-    );
-  }
-
-  // channel_only or on_threshold (fallback)
+  // channel_only or on_threshold (threshold gate is handled upstream in DeliverProcessor)
   logger.debug(
     `sendTaskNotification: sending as channel_only (policy=${params.notificationPolicy})`,
   );

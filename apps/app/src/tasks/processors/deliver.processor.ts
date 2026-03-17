@@ -108,8 +108,7 @@ export class DeliverProcessor extends WorkerHost {
       } else {
         // Post formatted result to room (respecting dry_run and notificationPolicy)
         // Guard: skip if already sent on a previous attempt (idempotent retry)
-        const progress =
-          (job.progress as Record<string, unknown>) || {};
+        const progress = (job.progress as Record<string, unknown>) || {};
         let messageEventId: string | undefined;
         if (progress.notificationSent) {
           messageEventId = progress.notificationEventId as string | undefined;
@@ -117,23 +116,33 @@ export class DeliverProcessor extends WorkerHost {
             `Delivery notification already sent on previous attempt, skipping (eventId=${messageEventId ?? 'none'})`,
           );
         } else {
-          const formattedMessage = this.formatDeliveryMessage(
-            taskId,
-            workResult,
-          );
-          this.logger.debug(
-            `Sending delivery notification: policy=${meta.notificationPolicy}, isDryRun=${meta.status === 'dry_run'}, messageLen=${formattedMessage.length}`,
-          );
-          messageEventId = await sendTaskNotification({
-            roomId,
-            matrixUserId,
-            message: formattedMessage,
-            notificationPolicy: meta.notificationPolicy,
-            isDryRun: meta.status === 'dry_run',
-            sessionId:meta.sessionId,
-            sessionManagerService: this.sessionManagerService,
-            configService: this.config,
-          });
+          const conditionMet = workResult.result.includes('⚠️');
+          const shouldNotify =
+            meta.notificationPolicy !== 'on_threshold' || conditionMet;
+
+          if (!shouldNotify) {
+            this.logger.log(
+              `Monitor condition not met for task ${taskId}, skipping notification`,
+            );
+          } else {
+            const formattedMessage = this.formatDeliveryMessage(
+              taskId,
+              workResult,
+            );
+            this.logger.debug(
+              `Sending delivery notification: policy=${meta.notificationPolicy}, isDryRun=${meta.status === 'dry_run'}, messageLen=${formattedMessage.length}`,
+            );
+            messageEventId = await sendTaskNotification({
+              roomId,
+              matrixUserId,
+              message: formattedMessage,
+              notificationPolicy: meta.notificationPolicy,
+              isDryRun: meta.status === 'dry_run',
+              sessionId: meta.sessionId,
+              sessionManagerService: this.sessionManagerService,
+              configService: this.config,
+            });
+          }
           await job.updateProgress({
             ...progress,
             notificationSent: true,

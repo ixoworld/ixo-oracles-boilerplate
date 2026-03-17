@@ -106,77 +106,78 @@ export function createTaskManagerTools(
       name: 'create_task',
       description:
         'Creates a new scheduled task. Handles the full creation flow: generates a task ID, creates a Y.Doc with the taskMeta Y.Map (and optional Markdown page), creates a [Task]-prefixed Matrix room if the user chose a custom channel, schedules the BullMQ job (Simple Job for Pattern A, FlowProducer for Pattern B one-shot, repeatable deliver + one-shot work for Pattern B recurring), and updates the task index state event on the main channel. Call this once when you have all required details after negotiation.',
-      schema: z.object({
-        title: z
-          .string()
-          .describe('Human-readable task title, e.g. "Oil Price Monitor"'),
-        objective: z
-          .string()
-          .describe(
-            'What the agent should do — becomes the "What to Do" section',
-          ),
-        taskType: z
-          .enum(TASK_TYPES)
-          .describe(
-            'Task classification: reminder (simple notification), quick_lookup (fast data fetch), research (deep investigation with page), report (periodic report with page), monitor (ongoing watch), scheduled_action (triggered workflow)',
-          ),
-        scheduleCron: z
-          .string()
-          .optional()
-          .describe('Cron expression for recurring tasks, e.g. "0 9 * * *"'),
-        deadlineIso: z
-          .string()
-          .optional()
-          .describe(
-            'ISO timestamp for one-shot tasks, e.g. "2026-03-20T17:00:00+02:00"',
-          ),
-        channelType: z
-          .enum(['main', 'custom'])
-          .optional()
-          .describe(
-            'Where results are delivered: "main" (current chat) or "custom" (dedicated room). Default: main.',
-          ),
-        createPage: z
-          .boolean()
-          .optional()
-          .describe(
-            'Whether to create a task page (Y.Doc). Default: false for reminders/quick_lookup, true for research/report/monitor/scheduled_action.',
-          ),
-        outputFormat: z
-          .string()
-          .optional()
-          .describe('"How to Report" section content'),
-        constraints: z
-          .string()
-          .optional()
-          .describe('"Constraints" section content'),
-        notificationPolicy: z
-          .enum(NOTIFICATION_POLICIES)
-          .optional()
-          .describe(
-            'Notification policy. Defaults: reminder→channel_and_mention, monitor→on_threshold, report→channel_only',
-          ),
-        modelTier: z
-          .enum(['low', 'medium', 'high'])
-          .optional()
-          .describe('Model tier override. Default: derived from taskType'),
-        timezone: z
-          .string()
-          .optional()
-          .describe("Override timezone. Default: user's profile timezone"),
-        message: z
-          .string()
-          .optional()
-          .describe(
-            'For Pattern A only — the literal message to send at the scheduled time',
-          ),
-        complexityTier: z
-          .enum(['trivial', 'light', 'medium', 'heavy'])
-          .optional()
-          .describe(
-            'Complexity tier override. Affects buffer time before delivery.',
-          ),
-      })
+      schema: z
+        .object({
+          title: z
+            .string()
+            .describe('Human-readable task title, e.g. "Oil Price Monitor"'),
+          objective: z
+            .string()
+            .describe(
+              'What the agent should do — becomes the "What to Do" section',
+            ),
+          taskType: z
+            .enum(TASK_TYPES)
+            .describe(
+              'Task classification: reminder (simple notification), quick_lookup (fast data fetch), research (deep investigation with page), report (periodic report with page), monitor (ongoing watch), scheduled_action (triggered workflow)',
+            ),
+          scheduleCron: z
+            .string()
+            .optional()
+            .describe('Cron expression for recurring tasks, e.g. "0 9 * * *"'),
+          deadlineIso: z
+            .string()
+            .optional()
+            .describe(
+              'ISO timestamp for one-shot tasks, e.g. "2026-03-20T17:00:00+02:00"',
+            ),
+          channelType: z
+            .enum(['main', 'custom'])
+            .optional()
+            .describe(
+              'Where results are delivered: "main" (current chat) or "custom" (dedicated room). Default: main.',
+            ),
+          createPage: z
+            .boolean()
+            .optional()
+            .describe(
+              'Whether to create a task page (Y.Doc). Default: false for reminders/quick_lookup, true for research/report/monitor/scheduled_action.',
+            ),
+          outputFormat: z
+            .string()
+            .optional()
+            .describe('"How to Report" section content'),
+          constraints: z
+            .string()
+            .optional()
+            .describe('"Constraints" section content'),
+          notificationPolicy: z
+            .enum(NOTIFICATION_POLICIES)
+            .optional()
+            .describe(
+              'Notification policy. Defaults: reminder→channel_and_mention, monitor→on_threshold, report→channel_only',
+            ),
+          modelTier: z
+            .enum(['low', 'medium', 'high'])
+            .optional()
+            .describe('Model tier override. Default: derived from taskType'),
+          timezone: z
+            .string()
+            .optional()
+            .describe("Override timezone. Default: user's profile timezone"),
+          message: z
+            .string()
+            .optional()
+            .describe(
+              'For Pattern A only — the literal message to send at the scheduled time',
+            ),
+          complexityTier: z
+            .enum(['trivial', 'light', 'medium', 'heavy'])
+            .optional()
+            .describe(
+              'Complexity tier override. Affects buffer time before delivery.',
+            ),
+        })
         .refine(
           (data) => {
             if (['reminder', 'monitor'].includes(data.taskType)) {

@@ -367,6 +367,17 @@ export class WorkProcessor extends WorkerHost {
         previousRuns = 'First run — no previous output.';
       }
 
+      const alertRule =
+        meta.taskType === 'monitor'
+          ? [
+              '',
+              '### Alert Rule',
+              '- If any condition from "What to Do" or "Constraints" is triggered: begin your response with ⚠️ and write the full detailed message the user will receive.',
+              '- If nothing triggered: begin your response with ✅ and briefly state what you checked.',
+              '- Do NOT use ⚠️ unless a threshold was actually crossed.',
+            ]
+          : [];
+
       return [
         `## ${taskName} — Run #${runNumber}`,
         '',
@@ -393,6 +404,7 @@ export class WorkProcessor extends WorkerHost {
         '3. Do not narrate, do not echo instructions, do not add preamble',
         '4. If a tool fails, state the failure factually and continue with available data',
         '5. Follow all constraints and output format specified in the task page',
+        ...alertRule,
       ].join('\n');
     });
   }
