@@ -25,6 +25,7 @@
     "db:test": "ts-node src/scripts/test-connections.ts"
   },
   "dependencies": {
+    "@blocknote/server-util": "0.29.1",
     "@ixo/common": "workspace:*",
     "@ixo/editor": "3.0.0-beta.11",
     "@ixo/matrix": "1.2.2",
@@ -70,6 +71,7 @@
     "langsmith": "^0.5.8",
     "lodash-es": "^4.17.21",
     "matrix-js-sdk": "^37.11.0",
+    "node-emoji": "^2.2.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "socket.io": "4.8.0",
@@ -78,10 +80,10 @@
     "zod-to-json-schema": "^3.24.6"
   },
   "devDependencies": {
+    "@ixo/vitest-config": "^1.0.0",
     "@nestjs/cli": "^11.0.16",
     "@nestjs/schematics": "^11.0.9",
     "@nestjs/testing": "^11.1.16",
-    "@ixo/vitest-config": "^1.0.0",
     "@swc/cli": "^0.6.0",
     "@swc/core": "^1.10.7",
     "@types/better-sqlite3": "^7.6.13",

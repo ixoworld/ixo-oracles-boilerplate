@@ -3,14 +3,18 @@ import { type IRunnableConfigWithRequiredFields } from '@ixo/matrix';
 import { OpenIdTokenProvider } from '@ixo/oracles-chain-client';
 import { SqliteSaver } from '@ixo/sqlite-saver';
 import { Logger } from '@nestjs/common';
-import { createAgent, type ReactAgent, toolRetryMiddleware } from 'langchain';
+import {
+  createAgent,
+  toolRetryMiddleware,
+  type ReactAgent,
+  type StructuredTool,
+} from 'langchain';
 import { getConfig } from 'src/config';
 import { type UcanService } from 'src/ucan/ucan.service';
 
 import { createTokenLimiterMiddleware } from '../middlewares/token-limiter-middelware';
 import { createToolValidationMiddleware } from '../middlewares/tool-validation-middleware';
 import {
-  AG_UI_TOOLS_DOCUMENTATION,
   AI_ASSISTANT_PROMPT,
   SLACK_FORMATTING_CONSTRAINTS_CONTENT,
 } from '../nodes/chat-node/prompt';
@@ -19,11 +23,20 @@ import { contextSchema } from '../types';
 import { createDomainIndexerAgent } from './domain-indexer-agent';
 import { createApplySandboxOutputToBlockTool } from './editor/apply-sandbox-output-to-block';
 import { createEditorAgent } from './editor/editor-agent';
-import { EDITOR_DOCUMENTATION_CONTENT } from './editor/prompts';
+import {
+  logEditorSessionToMemory,
+  type PageMemoryAuth,
+} from './editor/page-memory';
+import {
+  EDITOR_MODE_PROMPTS,
+  STANDALONE_EDITOR_PROMPTS,
+} from './editor/prompts';
+import { createStandaloneEditorTool } from './editor/standalone-editor-tool';
 import { createFirecrawlAgent } from './firecrawl-agent';
 import { createMemoryAgent } from './memory-agent';
+import { createAguiAgent } from './agui-agent';
 import { createPortalAgent } from './portal-agent';
-import { createSubagentAsTool } from './subagent-as-tool';
+import { createSubagentAsTool, type AgentSpec } from './subagent-as-tool';
 
 import { DynamicStructuredTool } from 'langchain';
 import fs from 'node:fs';
@@ -34,7 +47,8 @@ import {
 } from 'src/messages/file-processing.service';
 import { SecretsService } from 'src/secrets/secrets.service';
 import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
-import oracleConfig from '../../../../../config.json';
+import z from 'zod';
+import oracleConfig from '../../../oracle.config.json';
 import { getProviderChatModel } from '../llm-provider';
 import {
   createMCPClient,
@@ -99,6 +113,24 @@ Promise<ReactAgent<any>> => {
   const oracleOpenIdToken = configurable.configs?.user.matrixOpenIdToken
     ? await oracleOpenIdTokenProvider.getToken()
     : undefined;
+
+  // Build memory auth for page/block operation tracking
+  const pageMemoryAuth: PageMemoryAuth | undefined =
+    oracleOpenIdToken &&
+    configurable.configs?.user.matrixOpenIdToken &&
+    matrix?.roomId
+      ? {
+          oracleToken: oracleOpenIdToken,
+          userToken: configurable.configs.user.matrixOpenIdToken,
+          oracleHomeServer: oracleMatrixBaseUrl.replace(/^https?:\/\//, ''),
+          userHomeServer: configurable.configs.matrix.homeServerName ?? '',
+          chatRoomId: matrix.roomId,
+        }
+      : undefined;
+
+  Logger.log(
+    `[createMainAgent] PageMemory auth ${pageMemoryAuth ? 'available' : 'unavailable (missing tokens or roomId)'}`,
+  );
 
   // Load secret index (cheap — one state query per message)
   const roomId = configurable.configs?.matrix.roomId;
@@ -229,6 +261,16 @@ Promise<ReactAgent<any>> => {
       ? state.agActions.map((action) => parserActionTool(action))
       : [];
 
+  // Build AG-UI sub-agent when actions are available
+  const aguiAgentSpec =
+    agActionTools.length > 0
+      ? createAguiAgent({
+          tools: agActionTools,
+          userDid: configurable.configs.user.did,
+          sessionId: configurable.thread_id,
+        })
+      : null;
+
   // Create MCP tools - use UCAN-wrapped version if service is available
   const getMcpTools = async () => {
     if (ucanService) {
@@ -242,6 +284,21 @@ Promise<ReactAgent<any>> => {
     return createMCPClientAndGetTools();
   };
 
+  // Build operational mode + editor section via JS — cleaner than nested mustache conditionals
+  const editorPrompts = state.editorRoomId
+    ? EDITOR_MODE_PROMPTS
+    : state.spaceId
+      ? STANDALONE_EDITOR_PROMPTS
+      : null;
+
+  const operationalMode = editorPrompts
+    ? editorPrompts.operationalMode
+    : state.currentEntityDid
+      ? `**Entity Context Active**\n\nYou are currently viewing an entity (DID: ${state.currentEntityDid}). The entity is the default context for this conversation. Use the Domain Indexer Agent tool for entity discovery/overviews/FAQs, the Portal Agent tool for navigation or UI actions (e.g., \`showEntity\`), and the Memory Agent tool for historical knowledge. For entities like ecs, supamoto, ixo, QI, use both Domain Indexer and Memory Agent tools together for best results.\n\n**Important:** Pages (BlockNote documents) are NOT entities. If the user asks about pages, use \`list_workspace_pages\` and \`call_editor_agent\` — never the Domain Indexer.`
+      : `**General Conversation Mode**\n\nDefault to conversation mode, using the Memory Agent tool for recall and the Firecrawl Agent tool for any external research or fresh data.`;
+
+  const editorSection = editorPrompts?.editorSection ?? '';
+
   // System prompt is critical — failure here is a code bug, not a transient issue
   const systemPrompt = await AI_ASSISTANT_PROMPT.format({
     APP_NAME:
@@ -254,14 +311,11 @@ Promise<ReactAgent<any>> => {
     RELATIONSHIPS_CONTEXT: jsonToYaml(state?.userContext?.relationships ?? {}),
     RECENT_CONTEXT: jsonToYaml(state?.userContext?.recent ?? {}),
     TIME_CONTEXT: timeContext,
-    EDITOR_DOCUMENTATION: state.editorRoomId
-      ? EDITOR_DOCUMENTATION_CONTENT
-      : '',
     CURRENT_ENTITY_DID: state.currentEntityDid ?? '',
+    OPERATIONAL_MODE: operationalMode,
+    EDITOR_SECTION: editorSection,
     SLACK_FORMATTING_CONSTRAINTS:
       state.client === 'slack' ? SLACK_FORMATTING_CONSTRAINTS_CONTENT : '',
-    AG_UI_TOOLS_DOCUMENTATION:
-      agActionTools.length > 0 ? AG_UI_TOOLS_DOCUMENTATION : '',
     USER_SECRETS_CONTEXT:
       secretIndex.length > 0
         ? secretIndex.map((s) => `- _USER_SECRET_${s.name}`).join('\n')
@@ -302,13 +356,23 @@ Promise<ReactAgent<any>> => {
             toolName: tool.name,
           }),
         ) ?? [],
+      userDid: configurable.configs.user.did,
+      sessionId: configurable.thread_id,
     }),
     createMemoryAgent({
       headers: memoryHeaders,
       mode: 'user',
+      userDid: configurable.configs.user.did,
+      sessionId: configurable.thread_id,
     }),
-    createFirecrawlAgent(),
-    createDomainIndexerAgent(),
+    createFirecrawlAgent({
+      userDid: configurable.configs.user.did,
+      sessionId: configurable.thread_id,
+    }),
+    createDomainIndexerAgent({
+      userDid: configurable.configs.user.did,
+      sessionId: configurable.thread_id,
+    }),
     getMcpTools(),
     sandboxMCP?.getTools() ?? Promise.resolve([]),
   ]);
@@ -412,10 +476,22 @@ Promise<ReactAgent<any>> => {
   if (state.editorRoomId) {
     Logger.log(`Editor room ID provided: ${state.editorRoomId}`);
     Logger.log('Initializing BlockNote tools...');
+    // Derive user's Matrix ID from DID + homeserver for page invitations
+    const userDid = configurable?.configs?.user?.did;
+    const homeServer = configurable?.configs?.matrix?.homeServerName;
+    const userMatrixId =
+      userDid && homeServer
+        ? `@${userDid.replace(/:/g, '-')}:${homeServer}`
+        : undefined;
     try {
       blockNoteAgentSpec = await createEditorAgent({
         room: state.editorRoomId,
         mode: 'edit',
+        userMatrixId,
+        spaceId: state.spaceId,
+        memoryAuth: pageMemoryAuth,
+        userDid: configurable.configs.user.did,
+        sessionId: configurable.thread_id,
       });
     } catch (error) {
       Logger.error(
@@ -423,6 +499,36 @@ Promise<ReactAgent<any>> => {
       );
       unavailableServices.push('Editor Agent');
     }
+  }
+
+  // Helper to inject time context into sub-agent system prompts
+  const withTimeContext = (spec: AgentSpec): AgentSpec => ({
+    ...spec,
+    systemPrompt: `${spec.systemPrompt}\n\n## Current Time\n${timeContext}`,
+  });
+
+  // Create standalone editor tool when spaceId is present but no editor session.
+  // Accepts a room_id per call, spinning up an ephemeral editor agent with full
+  // BlockNote capabilities for that page.
+  let standaloneEditorTool: StructuredTool | null = null;
+  if (!state.editorRoomId && state.spaceId) {
+    const userDid = configurable?.configs?.user?.did;
+    const homeServer = configurable?.configs?.matrix?.homeServerName;
+    const standaloneUserMatrixId =
+      userDid && homeServer
+        ? `@${userDid.replace(/:/g, '-')}:${homeServer}`
+        : undefined;
+
+    standaloneEditorTool = createStandaloneEditorTool({
+      userMatrixId: standaloneUserMatrixId,
+      spaceId: state.spaceId,
+      memoryAuth: pageMemoryAuth,
+      transformSpec: withTimeContext,
+      userDid: configurable.configs.user.did,
+      sessionId: configurable.thread_id,
+    });
+
+    Logger.log(`Created standalone editor tool with spaceId: ${state.spaceId}`);
   }
 
   // Create apply_sandbox_output_to_block tool when both sandbox and editor are available
@@ -443,19 +549,40 @@ Promise<ReactAgent<any>> => {
   }
 
   const callPortalAgentTool = portalAgent
-    ? createSubagentAsTool(portalAgent)
+    ? createSubagentAsTool(withTimeContext(portalAgent))
     : null;
   const callMemoryAgentTool = memoryAgent
-    ? createSubagentAsTool(memoryAgent)
+    ? createSubagentAsTool(withTimeContext(memoryAgent))
     : null;
   const callFirecrawlAgentTool = firecrawlAgent
-    ? createSubagentAsTool(firecrawlAgent)
+    ? createSubagentAsTool(withTimeContext(firecrawlAgent))
     : null;
   const callDomainIndexerAgentTool = domainIndexerAgent
-    ? createSubagentAsTool(domainIndexerAgent)
+    ? createSubagentAsTool(withTimeContext(domainIndexerAgent))
+    : null;
+  const callAguiAgentTool = aguiAgentSpec
+    ? createSubagentAsTool(withTimeContext(aguiAgentSpec), {
+        forwardTools: agActionTools.map((t) => t.name),
+      })
     : null;
   const callEditorAgentTool = blockNoteAgentSpec
-    ? createSubagentAsTool(blockNoteAgentSpec)
+    ? createSubagentAsTool(withTimeContext(blockNoteAgentSpec), {
+        forwardTools: [
+          'create_page',
+          'update_page',
+          'edit_block',
+          'create_block',
+        ],
+        onComplete: pageMemoryAuth
+          ? (messages, task) =>
+              logEditorSessionToMemory(
+                pageMemoryAuth,
+                messages,
+                state.editorRoomId!,
+                task,
+              )
+          : undefined,
+      })
     : null;
 
   // Build degraded-services notice for the system prompt
@@ -493,7 +620,7 @@ Promise<ReactAgent<any>> => {
     tools: [
       ...mcpTools,
       ...wrappedSandboxTools,
-      ...agActionTools,
+      ...(callAguiAgentTool ? [callAguiAgentTool] : []),
       listSkillsTool,
       searchSkillsTool,
       ...(callPortalAgentTool ? [callPortalAgentTool] : []),
@@ -512,8 +639,12 @@ Promise<ReactAgent<any>> => {
         : []),
       ...(matrix?.roomId ? [createListRoomFilesTool(matrix.roomId)] : []),
       ...(applySandboxOutputToBlockTool ? [applySandboxOutputToBlockTool] : []),
+      ...(standaloneEditorTool ? [standaloneEditorTool] : []),
     ],
     middleware,
+    stateSchema: z.object({
+      editorRoomId: z.string(),
+    }),
     systemPrompt: finalSystemPrompt,
     checkpointer: SqliteSaver.fromDatabase(
       await UserMatrixSqliteSyncService.getInstance().getUserDatabase(

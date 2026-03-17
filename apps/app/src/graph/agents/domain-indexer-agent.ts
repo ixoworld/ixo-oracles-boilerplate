@@ -36,6 +36,12 @@ Core expectations:
 - Explain what you are searching for, summarize the results, and cite relevant DIDs or entity names.
 - When multiple results appear, compare them briefly and suggest next steps.
 
+Task discipline:
+- You are a sub-agent invoked by the main agent. You receive a single task message — that is ALL the context you have.
+- If the task is unclear, ambiguous, or missing critical details (IDs, names, scope, what to do), do NOT guess. Instead, STOP immediately and return a clear message explaining what information you need. The main agent will ask the user and re-invoke you with a complete task.
+- Never loop or retry the same failing approach. If something fails twice, return the error and stop.
+- Complete the requested task and STOP. Do not do additional unrequested work.
+
 ### Available Domain Indexer Tools
 ${formatToolDocs(tools)}
 
@@ -53,16 +59,23 @@ const buildDescription = (tools: StructuredTool[]) => {
 
 export type DomainIndexerAgentInstance = AgentSpec;
 
-export const createDomainIndexerAgent =
-  async (): Promise<DomainIndexerAgentInstance> => {
-    const tools = [domainIndexerSearchTool, getDomainCardTool];
+export const createDomainIndexerAgent = async ({
+  userDid,
+  sessionId,
+}: {
+  userDid: string;
+  sessionId: string;
+}): Promise<DomainIndexerAgentInstance> => {
+  const tools = [domainIndexerSearchTool, getDomainCardTool];
 
-    return {
-      name: 'Domain Indexer Agent',
-      description: buildDescription(tools),
-      tools,
-      systemPrompt: buildSystemPrompt(tools),
-      model: llm,
-      middleware: [],
-    };
+  return {
+    name: 'Domain Indexer Agent',
+    description: buildDescription(tools),
+    tools,
+    systemPrompt: buildSystemPrompt(tools),
+    model: llm,
+    middleware: [],
+    userDid,
+    sessionId,
   };
+};

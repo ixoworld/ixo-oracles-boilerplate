@@ -71,6 +71,14 @@
 
 ---
 
+## Post-Phase Updates
+
+| Date       | Files Updated                                                                                         | Notes                                                                                                                                                                       |
+| ---------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-03-13 | `05-sub-agents.md`, `guides/memory-engine.md`, `reference/state-schema.md`, `02-project-structure.md` | Added ORA-166 features: Editor Agent page tools section, automatic page memory logging, `spaceId` state field, editor/page files in project structure tree and cheat sheet. |
+
+---
+
 ## Already Complete (don't rewrite unless asked)
 
 - `docs/playbook/01-quickstart.md` ✅ — may need minor skills mention later
