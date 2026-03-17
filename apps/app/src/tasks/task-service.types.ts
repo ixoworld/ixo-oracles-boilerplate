@@ -7,6 +7,7 @@
 import type {
   ChannelType,
   ComplexityTier,
+  NotificationPolicy,
   TaskMeta,
   TaskStatus,
   TaskType,
@@ -83,7 +84,8 @@ export interface ListTasksResult {
 /** Input params for creating a task */
 export interface CreateTaskParams {
   title: string;
-  userId: string;
+  userDid: string;
+  matrixUserId: string;
   mainRoomId: string;
   taskType: TaskType;
   hasPage: boolean;
@@ -107,9 +109,13 @@ export interface CreateTaskParams {
   complexityTier?: ComplexityTier;
   monthlyBudgetUsd?: number;
   modelOverride?: string;
+  notificationPolicy?: NotificationPolicy;
   requiresApproval?: boolean;
   dependsOn?: string[];
   inviteUserIds?: string[];
+
+  // Editor context
+  spaceId?: string;
 }
 
 /** Params for getting a single task */

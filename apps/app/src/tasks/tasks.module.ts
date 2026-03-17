@@ -17,13 +17,17 @@ import { ConfigService } from '@nestjs/config';
 
 import type { ENV } from 'src/types';
 
+import { MemoryEngineService, SessionManagerService } from '@ixo/common';
+import { MatrixManager } from '@ixo/matrix';
+import { MainAgentGraph } from 'src/graph';
+import { CheckpointStorageSyncModule } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.module';
+import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
+import { DeliverProcessor } from './processors/deliver.processor';
+import { SimpleProcessor } from './processors/simple.processor';
+import { WorkProcessor } from './processors/work.processor';
 import { QUEUE_DEFAULT_OPTIONS, QUEUE_NAMES } from './scheduler/task-queues';
 import { TasksScheduler } from './scheduler/tasks-scheduler.service';
 import { TasksService } from './task.service';
-import { MainAgentGraph } from 'src/graph';
-import { SimpleProcessor } from './processors/simple.processor';
-import { WorkProcessor } from './processors/work.processor';
-import { DeliverProcessor } from './processors/deliver.processor';
 
 @Module({
   imports: [
@@ -55,6 +59,9 @@ import { DeliverProcessor } from './processors/deliver.processor';
 
     // Register FlowProducer for one-shot Pattern B jobs
     BullModule.registerFlowProducer({ name: 'task-flow' }),
+
+    // Provides UserMatrixSqliteSyncService for SessionManagerService
+    CheckpointStorageSyncModule,
   ],
   providers: [
     TasksScheduler,
@@ -63,8 +70,35 @@ import { DeliverProcessor } from './processors/deliver.processor';
     WorkProcessor,
     DeliverProcessor,
     {
+      // MainAgentGraph is a stateless wrapper — all dependencies (services,
+      // config) are passed per-call via the SendMessageOptions object, so no
+      // constructor injection is needed.
       provide: 'MAIN_AGENT_GRAPH',
       useFactory: () => new MainAgentGraph(),
+    },
+
+    {
+      provide: MemoryEngineService,
+      useFactory: (configService: ConfigService<ENV>) => {
+        const memoryEngineUrl =
+          configService.getOrThrow<string>('MEMORY_ENGINE_URL');
+        return new MemoryEngineService(memoryEngineUrl);
+      },
+      inject: [ConfigService],
+    },
+    {
+      provide: SessionManagerService,
+      useFactory: (
+        syncService: UserMatrixSqliteSyncService,
+        memoryEngineService: MemoryEngineService,
+      ) => {
+        return new SessionManagerService(
+          syncService,
+          MatrixManager.getInstance(),
+          memoryEngineService,
+        );
+      },
+      inject: [UserMatrixSqliteSyncService, MemoryEngineService],
     },
   ],
   exports: [TasksScheduler, TasksService],

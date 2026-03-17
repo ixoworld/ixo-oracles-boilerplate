@@ -49,8 +49,10 @@ export interface TaskMeta {
   // ── Identity ──────────────────────────────────────────────────────
   /** Unique task identifier, e.g. 'task_abc123' */
   taskId: string;
-  /** Matrix user ID, e.g. '@yousef:ixo.world' */
-  userId: string;
+  /** User DID, e.g. 'did:ixo:ixo1abc...' */
+  userDid: string;
+  /** Matrix user ID for room operations, e.g. '@did-ixo-ixo1abc:ixo.world' */
+  matrixUserId: string;
   /** Agent-classified task type — drives pattern selection and defaults */
   taskType: TaskType;
   /** Whether a Markdown page exists for this task */
@@ -69,8 +71,8 @@ export interface TaskMeta {
   // ── BullMQ References ─────────────────────────────────────────────
   /** Which BullMQ pattern this task uses */
   jobPattern: JobPattern;
-  /** BullMQ job ID, e.g. 'task_abc123:simple' or 'task_abc123:deliver' */
-  bullmqJobId: string;
+  /** BullMQ job ID, e.g. 'task_abc123-simple' or 'task_abc123-deliver'. Null before scheduling. */
+  bullmqJobId: string | null;
   /** Key for cancelling repeatable jobs. Null for one-shot. */
   bullmqRepeatKey: string | null;
   /** Current work job ID for recurring flows. Updated each cycle by deliver processor. */
@@ -128,6 +130,10 @@ export interface TaskMeta {
   /** Task ID that triggered this run (if dependency-based) */
   triggeredBy: string | null;
 
+  // ── Editor Context ──────────────────────────────────────────────
+  /** Workspace spaceId — enables standalone editor access during task execution */
+  spaceId: string | null;
+
   // ── Recent Output ───────────────────────────────────────────────
   /** Last N output rows, stored in metadata so user page edits can't corrupt them */
   recentOutput: OutputRow[];
@@ -137,6 +143,8 @@ export interface TaskMeta {
   createdAt: string;
   /** ISO 8601 last-updated timestamp */
   updatedAt: string;
+
+  sessionId?: string;
 }
 
 // ── Output Row ───────────────────────────────────────────────────────

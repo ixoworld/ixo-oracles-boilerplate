@@ -83,8 +83,8 @@ importers:
         specifier: 3.0.0-beta.11
         version: 3.0.0-beta.11(@cosmjs/crypto@0.33.1)(@cosmjs/encoding@0.33.1)(@ixo/matrix-crdt@1.1.0(lib0@0.2.114)(matrix-js-sdk@37.13.0)(y-protocols@1.0.6(yjs@13.6.27))(yjs@13.6.27))(@ixo/surveys@0.1.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@mantine/core@7.17.8(@mantine/hooks@7.17.8(react@18.3.1))(@types/react@18.3.27)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@mantine/hooks@7.17.8(react@18.3.1))(@types/hast@3.0.4)(@types/react@18.3.27)(matrix-js-sdk@37.13.0)(react-dom@18.3.1(react@18.3.1))(react-jazzicon@1.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)(typescript@5.9.3)(use-sync-external-store@1.6.0(react@18.3.1))
       '@ixo/matrix':
-        specifier: 1.2.2
-        version: 1.2.2(@langchain/core@1.1.31(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.0(@opentelemetry/api@1.9.0))(openai@6.27.0(ws@8.18.2)(zod@4.3.6)))
+        specifier: workspace:*
+        version: link:../../packages/matrix
       '@ixo/matrix-crdt':
         specifier: ^1.1.0
         version: 1.1.0(lib0@0.2.114)(matrix-js-sdk@37.13.0)(y-protocols@1.0.6(yjs@13.6.27))(yjs@13.6.27)
@@ -3203,9 +3203,6 @@ packages:
   '@ixo/matrix-sdk-crypto-nodejs@0.4.2':
     resolution: {integrity: sha512-kzDNrsr9CojYX+8JfrND+/KbNRDcliwkaY9FTxo8OCM3ye7a4n2RmV6qo4jfRA4V9IqYA0G++s2Sr7XLMEhdng==}
     engines: {node: '>= 22'}
-
-  '@ixo/matrix@1.2.2':
-    resolution: {integrity: sha512-fApRa6O6lvMeKQTaPrsk4BFaei47qtz4COJDVicU1LgNwJbFLM1g8miQNgo1LYVKj4Z+6CJnx+oKtj6dGYG8zQ==}
 
   '@ixo/matrixclient-sdk@1.0.0':
     resolution: {integrity: sha512-+9N3eJU1QlmQOk5vN/mwLObVw/WFesvvbJ4IHjxvjdwKdHtZU6okrOpnd7ICjj6VU4qeEXEFXvJJBbil7CQf3Q==}
@@ -16301,19 +16298,6 @@ snapshots:
       https-proxy-agent: 7.0.6
       node-downloader-helper: 2.1.9
     transitivePeerDependencies:
-      - supports-color
-
-  '@ixo/matrix@1.2.2(@langchain/core@1.1.31(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.0(@opentelemetry/api@1.9.0))(openai@6.27.0(ws@8.18.2)(zod@4.3.6)))':
-    dependencies:
-      '@ixo/logger': 0.0.2
-      '@langchain/langgraph-checkpoint': 1.0.0(@langchain/core@1.1.31(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.0(@opentelemetry/api@1.9.0))(openai@6.27.0(ws@8.18.2)(zod@4.3.6)))
-      dotenv: 17.2.3
-      marked: 16.4.2
-      matrix-bot-sdk: '@ixo/matrix-bot-sdk@0.8.0-ixo.6'
-      matrix-js-sdk: 37.13.0
-      superjson: 1.13.3
-    transitivePeerDependencies:
-      - '@langchain/core'
       - supports-color
 
   '@ixo/matrixclient-sdk@1.0.0':

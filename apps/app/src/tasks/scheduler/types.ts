@@ -15,7 +15,10 @@ export type { QueueName } from './task-queues';
 /** Data payload for Pattern A (Simple Job) */
 export interface SimpleJobData {
   taskId: string;
-  userId: string;
+  /** User DID, e.g. 'did:ixo:ixo1abc...' — used for room resolution and agent config */
+  userDid: string;
+  /** Matrix user ID, e.g. '@did-ixo-ixo1abc:ixo.world' — used for mentions and invites */
+  matrixUserId: string;
   /**
    * Room id here will be the Custom RoomId if the task has a task page (Y.js Doc)
    * and will be mainAgent room if it's a normal quick task.
@@ -29,7 +32,8 @@ export interface SimpleJobData {
 /** Data payload for Pattern B — Work child */
 export interface WorkJobData {
   taskId: string;
-  userId: string;
+  /** User DID — used for room resolution and agent config */
+  userDid: string;
   /**
    * Room id here will be the Custom RoomId if the task has a task page (Y.js Doc)
    * and will be mainAgent room if it's a normal quick task.
@@ -44,7 +48,10 @@ export interface WorkJobData {
 /** Data payload for Pattern B — Deliver parent */
 export interface DeliverJobData {
   taskId: string;
-  userId: string;
+  /** User DID — used for room resolution */
+  userDid: string;
+  /** Matrix user ID — used for mention pills in notifications */
+  matrixUserId: string;
   roomId: string;
 }
 

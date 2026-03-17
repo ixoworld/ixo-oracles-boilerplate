@@ -1,6 +1,6 @@
 import {
   buildTaskPageParams,
-  formatOutputTable,
+  formatOutputSection,
   generateTaskPage,
 } from './task-page-template';
 import type { TaskPageParams } from './task-page-template';
@@ -23,7 +23,8 @@ function buildSampleMeta(
 ): TaskMeta {
   const meta = buildTaskMeta({
     taskId: 'task_test123456',
-    userId: '@yousef:ixo.world',
+    userDid: 'did:ixo:ixo1abc',
+    matrixUserId: '@did-ixo-ixo1abc:ixo.world',
     taskType: 'monitor',
     hasPage: true,
     timezone: 'Africa/Cairo',
@@ -47,6 +48,12 @@ describe('generateTaskPage', () => {
     });
     expect(withConstraints).toContain('## Constraints');
     expect(withConstraints).toContain('Use Reuters only.');
+  });
+
+  it('shows "No output yet." placeholder in Recent Output', () => {
+    const page = generateTaskPage(sampleParams);
+    expect(page).toContain('*No output yet.*');
+    expect(page).not.toContain('| When |');
   });
 });
 
@@ -74,16 +81,31 @@ describe('buildTaskPageParams', () => {
   });
 });
 
-describe('formatOutputTable', () => {
-  it('renders rows from taskMeta.recentOutput', () => {
+describe('formatOutputSection', () => {
+  it('returns placeholder when no output rows', () => {
+    const result = formatOutputSection(buildSampleMeta([]));
+    expect(result).toBe('*No output yet.*');
+  });
+
+  it('renders entries as bold timestamp + summary + link', () => {
     const meta = buildSampleMeta([
       { when: 'Mar 16, 2:30 PM', summary: 'Brent $86', link: '#evt1' },
       { when: 'Mar 16, 2:00 PM', summary: 'Brent $82', link: '#evt2' },
     ]);
 
-    const table = formatOutputTable(meta);
-    expect(table).toContain('| Mar 16, 2:30 PM | Brent $86 | [View](#evt1) |');
-    expect(table).toContain('| Mar 16, 2:00 PM | Brent $82 | [View](#evt2) |');
+    const output = formatOutputSection(meta);
+    expect(output).toContain('**Mar 16, 2:30 PM** — Brent $86 — [View](#evt1)');
+    expect(output).toContain('**Mar 16, 2:00 PM** — Brent $82 — [View](#evt2)');
+  });
+
+  it('omits link portion when link is empty', () => {
+    const meta = buildSampleMeta([
+      { when: 'Mar 16, 2:30 PM', summary: 'Brent $86', link: '' },
+    ]);
+
+    const output = formatOutputSection(meta);
+    expect(output).toBe('**Mar 16, 2:30 PM** — Brent $86');
+    expect(output).not.toContain('[View]');
   });
 
   it('respects maxRows limit', () => {
@@ -93,8 +115,23 @@ describe('formatOutputTable', () => {
       link: `#${i}`,
     }));
 
-    const table = formatOutputTable(buildSampleMeta(rows), 2);
-    const dataLines = table.split('\n').slice(2); // skip header + separator
-    expect(dataLines).toHaveLength(2);
+    const output = formatOutputSection(buildSampleMeta(rows), 2);
+    const entries = output.split('\n\n');
+    expect(entries).toHaveLength(2);
+  });
+
+  it('handles summaries with pipes and markdown safely', () => {
+    const meta = buildSampleMeta([
+      {
+        when: 'Mar 17, 2:45 PM',
+        summary: 'S&P 500 – 4,835.04 (-2.13%) – Iran headlines',
+        link: '#evt3',
+      },
+    ]);
+
+    const output = formatOutputSection(meta);
+    // Should render as a single clean line, no table breakage
+    expect(output).not.toContain('|');
+    expect(output).toContain('S&P 500');
   });
 });
