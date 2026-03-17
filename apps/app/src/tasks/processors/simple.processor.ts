@@ -8,16 +8,16 @@
  * @see spec §10.2 — Simple Job
  */
 
+import { MatrixManager } from '@ixo/matrix';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { MatrixManager } from '@ixo/matrix';
 import type { Job } from 'bullmq';
 
 import type { ENV } from 'src/types';
 
-import { QUEUE_NAMES } from '../scheduler/task-queues';
-import { WORKER_OPTIONS } from '../scheduler/task-queues';
+import { SessionManagerService } from '@ixo/common';
+import { QUEUE_NAMES, WORKER_OPTIONS } from '../scheduler/task-queues';
 import type { SimpleJobData } from '../scheduler/types';
 import { TasksService } from '../task.service';
 import {
@@ -37,6 +37,7 @@ export class SimpleProcessor extends WorkerHost {
   constructor(
     private readonly tasksService: TasksService,
     private readonly config: ConfigService<ENV>,
+    private readonly sessionManagerService: SessionManagerService,
   ) {
     super();
   }
@@ -81,6 +82,9 @@ export class SimpleProcessor extends WorkerHost {
         message,
         notificationPolicy: meta.notificationPolicy,
         isDryRun: meta.status === 'dry_run',
+        taskId,
+        configService: this.config,
+        sessionManagerService: this.sessionManagerService,
       });
       this.logger.debug(
         `Notification sent: eventId=${notifEventId ?? 'none (dry_run/silent)'}`,

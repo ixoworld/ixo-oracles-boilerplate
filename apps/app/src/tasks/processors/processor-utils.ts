@@ -15,6 +15,8 @@ import type { ENV } from 'src/types';
 
 import { getModelForRole, type ModelRole } from 'src/graph/llm-provider';
 
+import { type SessionManagerService } from '@ixo/common';
+import { normalizeDid } from 'src/utils/header.utils';
 import type {
   ChannelType,
   ModelTier,
@@ -173,6 +175,23 @@ export function truncateText(text: string, maxLen: number): string {
 }
 
 /**
+ * Collapse rich markdown to a clean one-liner suitable for display
+ * in the "Recent Output" section. Strips headings, images, links,
+ * code blocks, bold/italic markers, and pipes.
+ */
+export function sanitizeSummary(text: string): string {
+  return text
+    .replace(/^#{1,6}\s+/gm, '') // strip heading markers
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1') // images → alt text
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // links → link text
+    .replace(/`{1,3}[^`]*`{1,3}/g, '') // inline/fenced code
+    .replace(/[*_]{1,3}/g, '') // bold/italic markers
+    .replace(/\|/g, '–') // pipes → dashes
+    .replace(/\s+/g, ' ') // collapse whitespace
+    .trim();
+}
+
+/**
  * Resolve the main room ID for a user from their DID.
  * Uses the same pattern as MessagesService.prepareForQuery().
  */
@@ -204,6 +223,9 @@ export async function resolveMainRoomId(
 /**
  * Send a task notification respecting the notification policy.
  * Shared by SimpleProcessor and DeliverProcessor to avoid duplication.
+ *
+ * Every sent event includes `ixo.task_id` in its content (via metadata)
+ * so clients can associate messages with the originating task.
  */
 export async function sendTaskNotification(params: {
   roomId: string;
@@ -211,6 +233,9 @@ export async function sendTaskNotification(params: {
   message: string;
   notificationPolicy: NotificationPolicy;
   isDryRun: boolean;
+  taskId: string;
+  sessionManagerService: SessionManagerService;
+  configService: ConfigService<ENV>;
 }): Promise<string | undefined> {
   logger.debug(
     `sendTaskNotification: policy=${params.notificationPolicy}, isDryRun=${params.isDryRun}, roomId=${params.roomId}, messageLen=${params.message.length}`,
@@ -224,7 +249,15 @@ export async function sendTaskNotification(params: {
   }
 
   const mxManager = MatrixManager.getInstance();
+  const taskMetadata = { taskId: params.taskId };
+  const userDid = normalizeDid(params.matrixUserId);
 
+  const sessionParams = {
+    did: userDid,
+    oracleDid: params.configService?.getOrThrow('ORACLE_DID'),
+    oracleEntityDid: params.configService?.getOrThrow('ORACLE_ENTITY_DID'),
+    oracleName: params.configService?.getOrThrow('ORACLE_NAME'),
+  };
   if (params.notificationPolicy === 'channel_and_mention') {
     const client = mxManager.getClient();
     if (client) {
@@ -236,7 +269,10 @@ export async function sendTaskNotification(params: {
         message: params.message,
         type: 'html',
         formattedBody: buildMentionMessage(params.message, params.matrixUserId),
+        metadata: taskMetadata,
       });
+      await params.sessionManagerService.createSession(sessionParams, eventId);
+
       logger.debug(
         `sendTaskNotification: sent with mention, eventId=${eventId}`,
       );
@@ -254,7 +290,10 @@ export async function sendTaskNotification(params: {
     roomId: params.roomId,
     message: params.message,
     isOracleAdmin: true,
+    metadata: taskMetadata,
   });
+  await params.sessionManagerService.createSession(sessionParams, eventId);
+
   logger.debug(`sendTaskNotification: sent, eventId=${eventId}`);
   return eventId;
 }

@@ -376,6 +376,7 @@ export class MatrixManager {
         type: 'html',
         formattedBody: htmlContent,
         threadId: options.threadId,
+        metadata: options.metadata,
       });
     } catch (error) {
       Logger.error('❌ Error sending message:', error);

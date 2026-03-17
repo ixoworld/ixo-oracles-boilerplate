@@ -107,7 +107,6 @@ export class WorkProcessor extends WorkerHost {
     // Build runnable config
     const oracleDid = this.config.getOrThrow<string>('ORACLE_DID');
     const homeServerName = roomId.split(':').slice(1).join(':');
-    const sessionId = `task:${taskId}:${Date.now()}`;
 
     const taskExecutionContext: TaskExecutionContext = {
       taskId,
@@ -129,12 +128,12 @@ export class WorkProcessor extends WorkerHost {
       };
     } = {
       configurable: {
-        thread_id: sessionId,
+        thread_id: taskId,
         requestId: `task-work-${taskId}-${Date.now()}`,
-        sessionId,
+        sessionId: taskId,
         configs: {
           matrix: {
-            roomId,
+            roomId: mainRoomId,
             oracleDid,
             homeServerName,
           },
@@ -150,7 +149,7 @@ export class WorkProcessor extends WorkerHost {
     try {
       // Invoke the agent
       this.logger.debug(
-        `Invoking MainAgentGraph.sendMessage for task ${taskId} [sessionId=${sessionId}, model=${modelName}]`,
+        `Invoking MainAgentGraph.sendMessage for task ${taskId} [sessionId=${taskId}, model=${modelName}]`,
       );
       const agentStartTime = Date.now();
       const result = await this.mainAgent.sendMessage(
@@ -282,6 +281,10 @@ export class WorkProcessor extends WorkerHost {
         blocks as any,
       );
 
+      // Extract human-readable task name from the first heading (e.g. "# Oil Price Monitor")
+      const titleMatch = markdown.match(/^#\s+(.+)$/m);
+      const taskName = titleMatch ? titleMatch[1].trim() : meta.taskId;
+
       const runNumber = meta.totalRuns + 1;
       const schedule = meta.scheduleCron ?? 'one-shot';
       const lastRun = meta.lastRunAt
@@ -302,7 +305,7 @@ export class WorkProcessor extends WorkerHost {
       }
 
       return [
-        `## Task Execution — Run #${runNumber}`,
+        `## ${taskName} — Run #${runNumber}`,
         '',
         'You are running autonomously. No human is in the loop — do NOT ask questions or seek clarification.',
         'If the user configured actions that require approval, pause and wait for it; otherwise execute fully.',
@@ -313,7 +316,7 @@ export class WorkProcessor extends WorkerHost {
         '---',
         '',
         '### Context',
-        `- Task: ${meta.taskId} | Type: ${meta.taskType}`,
+        `- Task: ${taskName} (${meta.taskType})`,
         `- Schedule: ${schedule} | Timezone: ${meta.timezone}`,
         `- Run: #${runNumber} | Last run: ${lastRun}`,
         `- Budget: ${budgetStr}`,

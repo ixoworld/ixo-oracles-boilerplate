@@ -23,7 +23,7 @@ export type { TaskPageParams, TaskPageInput } from './task-page-template';
 export {
   generateTaskPage,
   buildTaskPageParams,
-  formatOutputTable,
+  formatOutputSection,
 } from './task-page-template';
 
 // Y.Doc structure and helpers

@@ -251,7 +251,7 @@ Promise<ReactAgent<any>> => {
     : state.currentEntityDid
       ? `**Entity Context Active**\n\nYou are currently viewing an entity (DID: ${state.currentEntityDid}). The entity is the default context for this conversation. Use the Domain Indexer Agent tool for entity discovery/overviews/FAQs, the Portal Agent tool for navigation or UI actions (e.g., \`showEntity\`), and the Memory Agent tool for historical knowledge. For entities like ecs, supamoto, ixo, QI, use both Domain Indexer and Memory Agent tools together for best results.\n\n**Important:** Pages (BlockNote documents) are NOT entities. If the user asks about pages, use \`list_workspace_pages\` and \`call_editor_agent\` — never the Domain Indexer.`
       : taskExecCtx
-        ? `**Autonomous Task Execution Mode**\n\nYou are executing task "${taskExecCtx.taskId}" (${taskExecCtx.taskType}) autonomously. No human is monitoring this run. Execute the instructions in the user message immediately using available tools. Do not ask questions or seek clarification.`
+        ? `**Autonomous Task Execution Mode**\n\nYou are running a scheduled task autonomously — no human is in the loop. Follow the instructions in the user message, execute immediately using available tools, and deliver only the requested output. Do not ask questions, seek clarification, or narrate what you are doing.`
         : `**General Conversation Mode**\n\nDefault to conversation mode, using the Memory Agent tool for recall and the Firecrawl Agent tool for any external research or fresh data.`;
 
   const editorSection = editorPrompts?.editorSection ?? '';

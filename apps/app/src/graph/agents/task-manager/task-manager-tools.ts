@@ -234,9 +234,16 @@ export function createTaskManagerTools(
         mainRoomId,
       });
 
+      // Resolve human-readable title from the task index (TaskMeta doesn't store it)
+      const listResult = await tasksService.listTasks(mainRoomId, { page: 0 });
+      const indexEntry = listResult.tasks.find(
+        (t) => t.taskId === input.taskId,
+      );
+      const title = indexEntry?.title ?? input.taskId;
+
       return JSON.stringify({
         taskId: meta.taskId,
-        title: `task_${meta.taskId}`,
+        title,
         status: meta.status,
         taskType: meta.taskType,
         jobPattern: meta.jobPattern,

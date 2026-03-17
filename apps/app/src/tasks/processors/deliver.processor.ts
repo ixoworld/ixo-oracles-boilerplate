@@ -17,13 +17,14 @@ import { CronExpressionParser } from 'cron-parser';
 
 import type { ENV } from 'src/types';
 
+import { SessionManagerService } from '@ixo/common';
+import { QUEUE_NAMES, WORKER_OPTIONS } from '../scheduler/task-queues';
+import { TasksScheduler } from '../scheduler/tasks-scheduler.service';
+import type { DeliverJobData } from '../scheduler/types';
 import { appendOutputRow, readTaskMeta } from '../task-doc';
 import { sharedServerEditor, withTaskDoc } from '../task-doc-helpers';
 import type { TaskMeta } from '../task-meta';
-import { formatOutputTable } from '../task-page-template';
-import { QUEUE_NAMES, WORKER_OPTIONS } from '../scheduler/task-queues';
-import type { DeliverJobData } from '../scheduler/types';
-import { TasksScheduler } from '../scheduler/tasks-scheduler.service';
+import { formatOutputSection } from '../task-page-template';
 import { TasksService } from '../task.service';
 import {
   DeliverJobDataSchema,
@@ -32,6 +33,7 @@ import {
   handleJobFailure,
   isTaskRunnable,
   resolveMainRoomId,
+  sanitizeSummary,
   sendTaskNotification,
   truncateText,
   type TaskRunEventContent,
@@ -46,6 +48,7 @@ export class DeliverProcessor extends WorkerHost {
     private readonly tasksService: TasksService,
     private readonly scheduler: TasksScheduler,
     private readonly config: ConfigService<ENV>,
+    private readonly sessionManagerService: SessionManagerService,
   ) {
     super();
   }
@@ -108,6 +111,9 @@ export class DeliverProcessor extends WorkerHost {
           message: formattedMessage,
           notificationPolicy: meta.notificationPolicy,
           isDryRun: meta.status === 'dry_run',
+          taskId,
+          sessionManagerService: this.sessionManagerService,
+          configService: this.config,
         });
         this.logger.debug(
           `Delivery notification sent: eventId=${messageEventId ?? 'none (dry_run/silent)'}`,
@@ -311,13 +317,13 @@ export class DeliverProcessor extends WorkerHost {
       // 1. Append the new row to the Y.Map sidecar
       appendOutputRow(doc, {
         when: formatOutputDate(new Date()),
-        summary: truncateText(workResult.result, 200),
+        summary: truncateText(sanitizeSummary(workResult.result), 200),
         link: messageEventId ? `#msg-${messageEventId}` : '',
       });
 
       // 2. Regenerate the "Recent Output" table in the document
       const updatedMeta = readTaskMeta(doc);
-      const tableMd = formatOutputTable(updatedMeta);
+      const tableMd = formatOutputSection(updatedMeta);
       const tableBlocks =
         await sharedServerEditor.tryParseMarkdownToBlocks(tableMd);
 
