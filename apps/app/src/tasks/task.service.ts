@@ -21,7 +21,7 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Cache } from 'cache-manager';
 import { CronExpressionParser } from 'cron-parser';
-import { Preset, Visibility } from 'matrix-js-sdk';
+import { EventType, Preset, Visibility } from 'matrix-js-sdk';
 import { normalizeDid } from 'src/utils/header.utils';
 
 import { MatrixManager } from '@ixo/matrix';
@@ -43,14 +43,21 @@ import {
 } from './task-doc';
 import { sharedServerEditor, withTaskDoc } from './task-doc-helpers';
 import type { ChannelType, TaskMeta, TaskType } from './task-meta';
-import { buildTaskPageParams, generateTaskPage } from './task-page-template';
+import {
+  buildTaskPageParams,
+  formatStatusLabel,
+  generateTaskPage,
+} from './task-page-template';
 import type {
+  CancelTaskParams,
   CreateTaskParams,
   CreateTaskResult,
   DeleteTaskParams,
   GetTaskParams,
   ListTasksOptions,
   ListTasksResult,
+  PauseTaskParams,
+  ResumeTaskParams,
   TaskIndexEntry,
   TasksIndexChunk,
   TasksIndexHeader,
@@ -71,13 +78,17 @@ export {
   TASKS_INDEX_EVENT_TYPE,
 } from './task-service.types';
 export type {
+  CancelTaskParams,
   CreateTaskParams,
   CreateTaskResult,
   DeleteTaskParams,
   GetTaskParams,
   ListTasksOptions,
   ListTasksResult,
+  PauseTaskParams,
+  ResumeTaskParams,
   TaskIndexEntry,
+  TaskLifecycleParams,
   TasksIndexChunk,
   TasksIndexHeader,
   UpdateTaskParams,
@@ -214,6 +225,7 @@ export class TasksService {
         whatToDo: params.whatToDo ?? '',
         howToReport: params.howToReport ?? '',
         constraints: params.constraints,
+        notes: params.notes,
         channelType: params.channelType,
         taskType: params.taskType,
       });
@@ -547,6 +559,133 @@ export class TasksService {
     this.logger.log(`Task ${taskId} deleted`);
   }
 
+  // ── Lifecycle: Pause / Resume / Cancel ──────────────────────────
+
+  /**
+   * Pause an active task — cancel BullMQ jobs, set status to paused.
+   * The schedule is preserved; call resumeTask() to restart.
+   */
+  async pauseTask(params: PauseTaskParams): Promise<TaskMeta> {
+    const meta = await this.getTask(params);
+    if (['paused', 'cancelled', 'completed'].includes(meta.status)) {
+      throw new Error(`Cannot pause task with status: ${meta.status}`);
+    }
+    if (!meta.scheduleCron && !meta.deadlineIso) {
+      throw new Error(
+        'Cannot pause an immediate task — it has no schedule to resume from',
+      );
+    }
+
+    await this.scheduler.cancelAllJobsForTask(
+      params.taskId,
+      meta.bullmqRepeatKey,
+      meta.currentWorkJobId,
+    );
+
+    const entry = await this.resolveTaskEntry(params.mainRoomId, params.taskId);
+
+    const result = await this.updateTask({
+      taskId: params.taskId,
+      mainRoomId: params.mainRoomId,
+      updates: {
+        status: 'paused',
+        nextRunAt: null,
+        bullmqRepeatKey: null,
+        currentWorkJobId: null,
+      },
+    });
+
+    if (entry.hasPage) {
+      const targetRoomId = entry.roomId ?? params.mainRoomId;
+      await this.updatePageStatus(targetRoomId, 'paused');
+    }
+
+    return result;
+  }
+
+  /**
+   * Resume a paused task — re-create BullMQ jobs from the existing schedule.
+   * Throws if the task is not paused, or if a one-shot deadline has already passed.
+   */
+  async resumeTask(params: ResumeTaskParams): Promise<TaskMeta> {
+    const meta = await this.getTask(params);
+    if (meta.status !== 'paused') {
+      throw new Error(`Task is not paused (current status: ${meta.status})`);
+    }
+    if (
+      meta.deadlineIso &&
+      !meta.scheduleCron &&
+      new Date(meta.deadlineIso).getTime() < Date.now()
+    ) {
+      throw new Error(
+        `Cannot resume: the deadline for this task has already passed (${meta.deadlineIso})`,
+      );
+    }
+
+    const entry = await this.resolveTaskEntry(params.mainRoomId, params.taskId);
+
+    const updateParams: UpdateTaskParams = {
+      taskId: params.taskId,
+      mainRoomId: params.mainRoomId,
+      updates: { status: 'active' },
+    };
+    if (meta.scheduleCron) {
+      updateParams.newScheduleCron = meta.scheduleCron;
+    } else if (meta.deadlineIso) {
+      updateParams.newDeadlineIso = meta.deadlineIso;
+    }
+
+    const result = await this.updateTask(updateParams);
+
+    if (entry.hasPage) {
+      const targetRoomId = entry.roomId ?? params.mainRoomId;
+      await this.updatePageStatus(targetRoomId, 'active');
+    }
+
+    return result;
+  }
+
+  /**
+   * Cancel a task permanently — cancel BullMQ jobs, set status to cancelled,
+   * archive the dedicated room (if any), and update the page status.
+   * The task entry remains in the index with cancelled status.
+   */
+  async cancelTask(params: CancelTaskParams): Promise<TaskMeta> {
+    const meta = await this.getTask(params);
+    if (['cancelled', 'completed'].includes(meta.status)) {
+      throw new Error(`Cannot cancel task with status: ${meta.status}`);
+    }
+
+    await this.scheduler.cancelAllJobsForTask(
+      params.taskId,
+      meta.bullmqRepeatKey,
+      meta.currentWorkJobId,
+    );
+
+    // Archive the dedicated room if one exists
+    const entry = await this.resolveTaskEntry(params.mainRoomId, params.taskId);
+    if (entry.roomId) {
+      await this.archiveTaskRoom(entry.roomId);
+    }
+
+    // Update page status before archival makes the room read-only
+    if (entry.hasPage) {
+      const targetRoomId = entry.roomId ?? params.mainRoomId;
+      await this.updatePageStatus(targetRoomId, 'cancelled');
+    }
+
+    return this.updateTask({
+      taskId: params.taskId,
+      mainRoomId: params.mainRoomId,
+      updates: {
+        status: 'cancelled',
+        bullmqRepeatKey: null,
+        currentWorkJobId: null,
+        nextRunAt: null,
+      },
+    });
+  }
+
   // ── Public: Index Lookup ────────────────────────────────────────
 
   /**
@@ -675,6 +814,55 @@ export class TasksService {
     return { roomId, alias: `#${alias}:${homeserver}` };
   }
 
+  // ── Private: Room Archival ─────────────────────────────────────────
+
+  /**
+   * Archive a task room by making it read-only and updating the room name.
+   * Sets events_default to 100 so only the bot (power 100) can post.
+   */
+  private async archiveTaskRoom(roomId: string): Promise<void> {
+    try {
+      const editorClient = EditorMatrixClient.getInstance();
+      await editorClient.init();
+      const matrixClient = editorClient.getClient();
+
+      // Fetch current power levels to preserve user entries
+      const currentPower = await matrixClient.getStateEvent(
+        roomId,
+        'm.room.power_levels',
+        '',
+      );
+
+      await matrixClient.sendStateEvent(
+        roomId,
+        EventType.RoomPowerLevels,
+        { ...currentPower, events_default: 100 },
+        '',
+      );
+
+      // Prefix room name with [Archived] so the user can see it's inactive
+      const nameEvent = await matrixClient
+        .getStateEvent(roomId, 'm.room.name', '')
+        .catch(() => null);
+      const currentName: string | undefined = nameEvent?.name;
+      if (currentName && !currentName.startsWith('[Archived]')) {
+        await matrixClient.sendStateEvent(
+          roomId,
+          EventType.RoomName,
+          { name: `[Archived] ${currentName}` },
+          '',
+        );
+      }
+
+      this.logger.log(`Task room archived: ${roomId}`);
+    } catch (err) {
+      // Room archival is best-effort — don't fail the cancel flow
+      this.logger.warn(
+        `Failed to archive task room ${roomId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   // ── Private: Y.Doc Init ─────────────────────────────────────────
 
   private async initTaskPageDoc(params: {
@@ -686,6 +874,7 @@ export class TasksService {
     whatToDo: string;
     howToReport: string;
     constraints?: string;
+    notes?: string;
     channelType: ChannelType;
     taskType: TaskType;
   }): Promise<void> {
@@ -697,6 +886,7 @@ export class TasksService {
       whatToDo: params.whatToDo,
       howToReport: params.howToReport,
       constraints: params.constraints,
+      notes: params.notes,
     });
     const markdown = generateTaskPage(pageParams);
     const blocks = await sharedServerEditor.tryParseMarkdownToBlocks(markdown);
@@ -740,6 +930,58 @@ export class TasksService {
     await withTaskDoc(roomId, (doc) => {
       updateTaskMeta(doc, { ...updates, updatedAt: new Date().toISOString() });
     });
+  }
+
+  /**
+   * Best-effort update of the "**Status:**" line in a task page's Y.Doc.
+   * Finds the paragraph block containing "Status:", replaces it with the
+   * new label, and writes the blocks back.
+   */
+  private async updatePageStatus(
+    roomId: string,
+    status: TaskMeta['status'],
+  ): Promise<void> {
+    try {
+      await withTaskDoc(roomId, async (doc) => {
+        const fragment = doc.getXmlFragment('document');
+        const blocks = sharedServerEditor.yXmlFragmentToBlocks(fragment);
+
+        const statusIdx = blocks.findIndex(
+          (b) =>
+            b.type === 'paragraph' &&
+            Array.isArray(b.content) &&
+            b.content.some(
+              (c) =>
+                'type' in c &&
+                c.type === 'text' &&
+                'text' in c &&
+                typeof c.text === 'string' &&
+                c.text.includes('Status:'),
+            ),
+        );
+
+        if (statusIdx === -1) return;
+
+        const newLabel = formatStatusLabel(status);
+        const statusMd = `**Status:** ${newLabel}`;
+        const [statusBlock] =
+          await sharedServerEditor.tryParseMarkdownToBlocks(statusMd);
+
+        blocks[statusIdx] = { ...statusBlock, id: blocks[statusIdx].id };
+
+        doc.transact(() => {
+          while (fragment.length > 0) {
+            fragment.delete(0, 1);
+          }
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          sharedServerEditor.blocksToYXmlFragment(blocks as any, fragment);
+        });
+      });
+    } catch (err) {
+      this.logger.warn(
+        `Failed to update page status: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   // ── Private: Task Index (Chunked) ──────────────────────────────
