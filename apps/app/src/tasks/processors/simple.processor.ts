@@ -77,22 +77,36 @@ export class SimpleProcessor extends WorkerHost {
       const now = new Date();
 
       // 3. Send message based on notificationPolicy
-      this.logger.debug(
-        `Sending notification: policy=${meta.notificationPolicy}, isDryRun=${meta.status === 'dry_run'}, roomId=${roomId}`,
-      );
-      const notifEventId = await sendTaskNotification({
-        roomId,
-        matrixUserId,
-        message,
-        notificationPolicy: meta.notificationPolicy,
-        isDryRun: meta.status === 'dry_run',
-        taskId,
-        configService: this.config,
-        sessionManagerService: this.sessionManagerService,
-      });
-      this.logger.debug(
-        `Notification sent: eventId=${notifEventId ?? 'none (dry_run/silent)'}`,
-      );
+      // Guard: skip if already sent on a previous attempt (idempotent retry)
+      const progress = (job.progress as Record<string, unknown>) || {};
+      let sentEventId: string | undefined;
+      if (progress.notificationSent) {
+        sentEventId = progress.notificationEventId as string | undefined;
+        this.logger.debug(
+          `Notification already sent on previous attempt, skipping (eventId=${sentEventId ?? 'none'})`,
+        );
+      } else {
+        this.logger.debug(
+          `Sending notification: policy=${meta.notificationPolicy}, isDryRun=${meta.status === 'dry_run'}, roomId=${roomId}`,
+        );
+        sentEventId = await sendTaskNotification({
+          roomId,
+          matrixUserId,
+          message,
+          notificationPolicy: meta.notificationPolicy,
+          isDryRun: meta.status === 'dry_run',
+          configService: this.config,
+          sessionManagerService: this.sessionManagerService,
+        });
+        await job.updateProgress({
+          ...progress,
+          notificationSent: true,
+          notificationEventId: sentEventId,
+        });
+        this.logger.debug(
+          `Notification sent: eventId=${sentEventId ?? 'none (dry_run/silent)'}`,
+        );
+      }
 
       // 4. Post task run event
       const runEventContent: TaskRunEventContent = {

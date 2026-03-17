@@ -9,8 +9,8 @@
  */
 
 import { type IRunnableConfigWithRequiredFields } from '@ixo/matrix';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Inject, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Job } from 'bullmq';
@@ -25,6 +25,7 @@ import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service
 import { TokenLimiter } from 'src/utils/token-limit-handler';
 import { decryptToken } from '../token-encryption';
 
+import crypto from 'node:crypto';
 import { QUEUE_NAMES, WORKER_OPTIONS } from '../scheduler/task-queues';
 import type { WorkJobData } from '../scheduler/types';
 import { sharedServerEditor, withTaskDoc } from '../task-doc-helpers';
@@ -174,6 +175,7 @@ export class WorkProcessor extends WorkerHost {
       channelType: meta.channelType,
     };
 
+    const sessionId = crypto.randomUUID();
     const runnableConfig: IRunnableConfigWithRequiredFields & {
       configurable: {
         sessionId: string;
@@ -184,7 +186,7 @@ export class WorkProcessor extends WorkerHost {
       configurable: {
         thread_id: taskId,
         requestId: `task-work-${taskId}-${Date.now()}`,
-        sessionId: taskId,
+        sessionId,
         configs: {
           matrix: {
             roomId: mainRoomId,
@@ -208,20 +210,14 @@ export class WorkProcessor extends WorkerHost {
         `Invoking MainAgentGraph.sendMessage for task ${taskId} [sessionId=${taskId}, model=${modelName}]`,
       );
       const agentStartTime = Date.now();
-      const result = await this.mainAgent.sendMessage(
-        prompt,
+      const result = await this.mainAgent.sendMessage({
+        input: prompt,
         runnableConfig,
-        [], // no browser tools
-        true, // msgFromMatrixRoom
-        undefined, // initialUserContext
-        undefined, // editorRoomId
-        undefined, // currentEntityDid
-        undefined, // clientType
-        undefined, // ucanOptions
-        undefined, // fileProcessingService
-        meta.spaceId ?? undefined, // spaceId from TaskMeta
-        this.tasksService, // tasksService — enables TaskManager sub-agent
-      );
+        browserTools: [],
+        msgFromMatrixRoom: true,
+        spaceId: meta.spaceId ?? undefined,
+        tasksService: this.tasksService,
+      });
       const agentDuration = Date.now() - agentStartTime;
       this.logger.debug(
         `Agent invocation completed for task ${taskId} in ${agentDuration}ms, messages returned: ${result.messages.length}`,
@@ -287,6 +283,13 @@ export class WorkProcessor extends WorkerHost {
         `Work result details: resultLen=${resultText.length}, startedAt=${startedAt}, completedAt=${completedAt}`,
       );
 
+      // Reset consecutiveFailures on successful work
+      await this.tasksService.updateTask({
+        taskId,
+        mainRoomId,
+        updates: { consecutiveFailures: 0, sessionId },
+      });
+
       return {
         skipped: false,
         result: resultText,
@@ -305,25 +308,21 @@ export class WorkProcessor extends WorkerHost {
         this.logger.debug(`Stack trace: ${error.stack}`);
       }
 
-      // For one-shot flows (FlowProducer), if work exhausts all retries the
-      // deliver parent stays in "waiting-children" forever. Handle failure
-      // here so the task gets paused and the user is notified.
-      if (job.attemptsMade >= (job.opts.attempts ?? 3) - 1) {
-        await handleJobFailure({
-          error,
-          taskId,
-          mainRoomId,
-          roomId,
-          getTask: () =>
-            this.tasksService.getTask(
-              { taskId, mainRoomId },
-              { bypassCache: true },
-            ),
-          updateTask: (updates) =>
-            this.tasksService.updateTask({ taskId, mainRoomId, updates }),
-          logger: this.logger,
-        });
-      }
+      // Increment consecutiveFailures on every failed attempt (not just the last)
+      await handleJobFailure({
+        error,
+        taskId,
+        mainRoomId,
+        roomId,
+        getTask: () =>
+          this.tasksService.getTask(
+            { taskId, mainRoomId },
+            { bypassCache: true },
+          ),
+        updateTask: (updates) =>
+          this.tasksService.updateTask({ taskId, mainRoomId, updates }),
+        logger: this.logger,
+      });
 
       throw error;
     }
@@ -352,7 +351,7 @@ export class WorkProcessor extends WorkerHost {
       const runNumber = meta.totalRuns + 1;
       const schedule = meta.scheduleCron ?? 'one-shot';
       const lastRun = meta.lastRunAt
-        ? formatOutputDate(new Date(meta.lastRunAt))
+        ? formatOutputDate(new Date(meta.lastRunAt), meta.timezone)
         : 'never';
       const budgetStr = meta.monthlyBudgetUsd
         ? `$${meta.totalCostUsd.toFixed(2)} / $${meta.monthlyBudgetUsd.toFixed(2)}`

@@ -70,6 +70,9 @@ import { TasksService } from './task.service';
     WorkProcessor,
     DeliverProcessor,
     {
+      // MainAgentGraph is a stateless wrapper — all dependencies (services,
+      // config) are passed per-call via the SendMessageOptions object, so no
+      // constructor injection is needed.
       provide: 'MAIN_AGENT_GRAPH',
       useFactory: () => new MainAgentGraph(),
     },

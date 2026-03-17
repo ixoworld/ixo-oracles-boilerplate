@@ -34,6 +34,7 @@ import {
   handleJobFailure,
   isTaskRunnable,
   resolveMainRoomId,
+  resolveWorkDelay,
   sanitizeSummary,
   sendTaskNotification,
   truncateText,
@@ -64,6 +65,9 @@ export class DeliverProcessor extends WorkerHost {
     );
     this.logger.debug(`Deliver job data: ${JSON.stringify(job.data)}`);
 
+    // Prevent the upload cron from closing the SQLite DB while the job runs
+    this.syncService.markUserActive(userDid);
+
     this.logger.debug(`Resolving main room for user ${userDid}...`);
     const mainRoomId = await resolveMainRoomId(userDid, this.config);
     this.logger.debug(`Resolved mainRoomId=${mainRoomId}`);
@@ -81,9 +85,6 @@ export class DeliverProcessor extends WorkerHost {
       );
       return;
     }
-
-    // Prevent the upload cron from closing the SQLite DB while the job runs
-    this.syncService.markUserActive(userDid);
 
     const mxManager = MatrixManager.getInstance();
     const now = new Date();
@@ -106,23 +107,42 @@ export class DeliverProcessor extends WorkerHost {
         this.logger.log(`No work result for task ${taskId}, skipping delivery`);
       } else {
         // Post formatted result to room (respecting dry_run and notificationPolicy)
-        const formattedMessage = this.formatDeliveryMessage(taskId, workResult);
-        this.logger.debug(
-          `Sending delivery notification: policy=${meta.notificationPolicy}, isDryRun=${meta.status === 'dry_run'}, messageLen=${formattedMessage.length}`,
-        );
-        const messageEventId = await sendTaskNotification({
-          roomId,
-          matrixUserId,
-          message: formattedMessage,
-          notificationPolicy: meta.notificationPolicy,
-          isDryRun: meta.status === 'dry_run',
-          taskId,
-          sessionManagerService: this.sessionManagerService,
-          configService: this.config,
-        });
-        this.logger.debug(
-          `Delivery notification sent: eventId=${messageEventId ?? 'none (dry_run/silent)'}`,
-        );
+        // Guard: skip if already sent on a previous attempt (idempotent retry)
+        const progress =
+          (job.progress as Record<string, unknown>) || {};
+        let messageEventId: string | undefined;
+        if (progress.notificationSent) {
+          messageEventId = progress.notificationEventId as string | undefined;
+          this.logger.debug(
+            `Delivery notification already sent on previous attempt, skipping (eventId=${messageEventId ?? 'none'})`,
+          );
+        } else {
+          const formattedMessage = this.formatDeliveryMessage(
+            taskId,
+            workResult,
+          );
+          this.logger.debug(
+            `Sending delivery notification: policy=${meta.notificationPolicy}, isDryRun=${meta.status === 'dry_run'}, messageLen=${formattedMessage.length}`,
+          );
+          messageEventId = await sendTaskNotification({
+            roomId,
+            matrixUserId,
+            message: formattedMessage,
+            notificationPolicy: meta.notificationPolicy,
+            isDryRun: meta.status === 'dry_run',
+            sessionId:meta.sessionId,
+            sessionManagerService: this.sessionManagerService,
+            configService: this.config,
+          });
+          await job.updateProgress({
+            ...progress,
+            notificationSent: true,
+            notificationEventId: messageEventId,
+          });
+          this.logger.debug(
+            `Delivery notification sent: eventId=${messageEventId ?? 'none (dry_run/silent)'}`,
+          );
+        }
 
         // If hasPage: append output row via Y.Doc
         if (meta.hasPage) {
@@ -323,7 +343,7 @@ export class DeliverProcessor extends WorkerHost {
     await withTaskDoc(docRoomId, async (doc) => {
       // 1. Append the new row to the Y.Map sidecar
       appendOutputRow(doc, {
-        when: formatOutputDate(new Date()),
+        when: formatOutputDate(new Date(), meta.timezone),
         summary: truncateText(sanitizeSummary(workResult.result), 200),
         link: messageEventId ? `#msg-${messageEventId}` : '',
       });
@@ -398,9 +418,11 @@ export class DeliverProcessor extends WorkerHost {
     });
     const nextDelivery = interval.next().toDate();
     const bufferMs = meta.bufferMinutes * 60_000;
-    const workDelay = Math.max(
-      nextDelivery.getTime() - bufferMs - Date.now(),
-      0,
+    const workDelay = resolveWorkDelay(
+      nextDelivery.getTime(),
+      bufferMs,
+      this.logger,
+      meta.taskId,
     );
     const roomId = meta.customRoomId ?? mainRoomId;
 

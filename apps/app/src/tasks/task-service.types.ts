@@ -7,6 +7,7 @@
 import type {
   ChannelType,
   ComplexityTier,
+  NotificationPolicy,
   TaskMeta,
   TaskStatus,
   TaskType,
@@ -108,6 +109,7 @@ export interface CreateTaskParams {
   complexityTier?: ComplexityTier;
   monthlyBudgetUsd?: number;
   modelOverride?: string;
+  notificationPolicy?: NotificationPolicy;
   requiresApproval?: boolean;
   dependsOn?: string[];
   inviteUserIds?: string[];

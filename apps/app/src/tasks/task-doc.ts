@@ -5,7 +5,7 @@
  *
  * For tasks WITH a page, the editor owns the Y.Doc structure
  * (root, title, document, etc.) — we only write our `taskMeta` map
- * into the existing doc via `writeTaskMetaToDoc()`.
+ * into the existing doc via `updateTaskMeta()`.
  *
  * For tasks WITHOUT a page (reminders, quick lookups), metadata is
  * stored as a Matrix state event on the main room — no Y.Doc needed.
@@ -26,6 +26,7 @@ import {
   DEFAULT_NOTIFICATION_POLICY,
   type ChannelType,
   type ComplexityTier,
+  type NotificationPolicy,
   type OutputRow,
   type TaskMeta,
   type TaskType,
@@ -46,12 +47,58 @@ export function getTaskMetaMap(doc: Y.Doc): Y.Map<unknown> {
 // ── Read / Write Helpers ────────────────────────────────────────────
 
 /**
+ * Build a TaskMeta with safe defaults for all fields.
+ * Used as a base when reading from Y.Map to ensure no undefined fields.
+ */
+function buildDefaultTaskMeta(): TaskMeta {
+  return {
+    taskId: '',
+    userDid: '',
+    matrixUserId: '',
+    taskType: 'reminder',
+    hasPage: false,
+    scheduleCron: null,
+    deadlineIso: null,
+    timezone: '',
+    bufferMinutes: 0,
+    jobPattern: 'simple',
+    bullmqJobId: null,
+    bullmqRepeatKey: null,
+    currentWorkJobId: null,
+    status: 'active',
+    needsReplan: false,
+    complexityTier: 'trivial',
+    lastRunAt: null,
+    nextRunAt: null,
+    totalRuns: 0,
+    consecutiveFailures: 0,
+    totalTokensUsed: 0,
+    totalCostUsd: 0,
+    monthlyBudgetUsd: null,
+    modelTier: 'low',
+    modelOverride: null,
+    channelType: 'main',
+    customRoomId: null,
+    notificationPolicy: 'channel_only',
+    requiresApproval: false,
+    pendingApprovalEventId: null,
+    dependsOn: [],
+    triggeredBy: null,
+    spaceId: null,
+    recentOutput: [],
+    createdAt: '',
+    updatedAt: '',
+  };
+}
+
+/**
  * Read the full TaskMeta from a Y.Doc's taskMeta map.
- * Returns undefined for any missing keys (partial reads are safe).
+ * Merges Y.Map entries over safe defaults to ensure all fields are present.
  */
 export function readTaskMeta(doc: Y.Doc): TaskMeta {
   const map = getTaskMetaMap(doc);
-  return Object.fromEntries(map.entries()) as unknown as TaskMeta;
+  const raw = Object.fromEntries(map.entries());
+  return { ...buildDefaultTaskMeta(), ...raw };
 }
 
 /**
@@ -90,6 +137,7 @@ export interface CreateTaskMetaParams {
   complexityTier?: ComplexityTier;
   monthlyBudgetUsd?: number;
   modelOverride?: string;
+  notificationPolicy?: NotificationPolicy;
   requiresApproval?: boolean;
   dependsOn?: string[];
 
@@ -122,7 +170,7 @@ export function buildTaskMeta(params: CreateTaskMetaParams): TaskMeta {
 
     // BullMQ references (set by TasksScheduler after job creation)
     jobPattern: DEFAULT_JOB_PATTERN[params.taskType],
-    bullmqJobId: '',
+    bullmqJobId: null,
     bullmqRepeatKey: null,
     currentWorkJobId: null,
 
@@ -149,7 +197,8 @@ export function buildTaskMeta(params: CreateTaskMetaParams): TaskMeta {
     // Channel & notification
     channelType: params.channelType,
     customRoomId: params.customRoomId ?? null,
-    notificationPolicy: DEFAULT_NOTIFICATION_POLICY[params.taskType],
+    notificationPolicy:
+      params.notificationPolicy ?? DEFAULT_NOTIFICATION_POLICY[params.taskType],
 
     // Approval gate
     requiresApproval: params.requiresApproval ?? false,
@@ -171,15 +220,6 @@ export function buildTaskMeta(params: CreateTaskMetaParams): TaskMeta {
   };
 }
 
-/**
- * Write the full TaskMeta into an existing Y.Doc (e.g. one owned by the editor).
- * Use this for tasks WITH pages — the caller gets the doc from the editor,
- * and we just write our `taskMeta` Y.Map into it.
- */
-export function writeTaskMetaToDoc(doc: Y.Doc, meta: TaskMeta): void {
-  updateTaskMeta(doc, meta);
-}
-
 // ── Output Row Helper ────────────────────────────────────────────────
 
 const MAX_RECENT_OUTPUT_ROWS = 5;
@@ -191,9 +231,10 @@ const MAX_RECENT_OUTPUT_ROWS = 5;
  */
 export function appendOutputRow(doc: Y.Doc, row: OutputRow): void {
   const map = getTaskMetaMap(doc);
-  const existing = (map.get('recentOutput') as OutputRow[] | undefined) ?? [];
-  const updated = [row, ...existing].slice(0, MAX_RECENT_OUTPUT_ROWS);
   doc.transact(() => {
+    const raw = map.get('recentOutput');
+    const existing: OutputRow[] = Array.isArray(raw) ? raw : [];
+    const updated = [row, ...existing].slice(0, MAX_RECENT_OUTPUT_ROWS);
     map.set('recentOutput', updated);
     map.set('updatedAt', new Date().toISOString());
   });

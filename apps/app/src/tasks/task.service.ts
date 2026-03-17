@@ -40,7 +40,6 @@ import {
   generateTaskId,
   readTaskMeta,
   updateTaskMeta,
-  writeTaskMetaToDoc,
 } from './task-doc';
 import { sharedServerEditor, withTaskDoc } from './task-doc-helpers';
 import type { ChannelType, TaskMeta, TaskType } from './task-meta';
@@ -63,6 +62,7 @@ import {
   TASK_STATE_EVENT_TYPE,
   TASKS_INDEX_EVENT_TYPE,
 } from './task-service.types';
+import { resolveWorkDelay } from './processors/processor-utils';
 
 export {
   DEFAULT_CHUNK_SIZE,
@@ -161,6 +161,7 @@ export class TasksService {
       complexityTier: params.complexityTier,
       monthlyBudgetUsd: params.monthlyBudgetUsd,
       modelOverride: params.modelOverride,
+      notificationPolicy: params.notificationPolicy,
       requiresApproval: params.requiresApproval,
       dependsOn: params.dependsOn,
       spaceId: params.spaceId,
@@ -546,6 +547,19 @@ export class TasksService {
     this.logger.log(`Task ${taskId} deleted`);
   }
 
+  // ── Public: Index Lookup ────────────────────────────────────────
+
+  /**
+   * Public accessor for a single task's index entry.
+   * Delegates to the cached `resolveTaskEntry` method.
+   */
+  async getTaskIndexEntry(
+    mainRoomId: string,
+    taskId: string,
+  ): Promise<TaskIndexEntry> {
+    return this.resolveTaskEntry(mainRoomId, taskId);
+  }
+
   // ── Private: Index Lookup ───────────────────────────────────────
 
   /**
@@ -707,7 +721,7 @@ export class TasksService {
         sharedServerEditor.blocksToYXmlFragment(blocks, fragment);
       }
 
-      writeTaskMetaToDoc(doc, params.taskMeta);
+      updateTaskMeta(doc, params.taskMeta);
     });
 
     this.logger.log(`Task page doc initialized for ${params.taskId}`);
@@ -1005,9 +1019,11 @@ export class TasksService {
         currentDate: new Date(),
       });
       const firstDelivery = interval.next().toDate();
-      const firstWorkDelay = Math.max(
-        firstDelivery.getTime() - bufferMs - Date.now(),
-        0,
+      const firstWorkDelay = resolveWorkDelay(
+        firstDelivery.getTime(),
+        bufferMs,
+        this.logger,
+        taskMeta.taskId,
       );
       const result = await this.scheduler.scheduleRecurringFlow({
         taskId: taskMeta.taskId,
@@ -1031,17 +1047,29 @@ export class TasksService {
 
     if (taskMeta.deadlineIso) {
       // One-shot flow — work job ID is deterministic via FlowProducer
-      const deliverDelay =
-        new Date(taskMeta.deadlineIso).getTime() - Date.now();
+      const deliverAtMs = new Date(taskMeta.deadlineIso).getTime();
+      const deliverDelay = deliverAtMs - Date.now();
+
+      if (deliverDelay < 0) {
+        throw new Error(
+          `Task deadline is in the past: ${taskMeta.deadlineIso}`,
+        );
+      }
+
       const bufferMs = taskMeta.bufferMinutes * 60_000;
-      const workDelay = Math.max(deliverDelay - bufferMs, 0);
+      const workDelay = resolveWorkDelay(
+        deliverAtMs,
+        bufferMs,
+        this.logger,
+        taskMeta.taskId,
+      );
 
       const result = await this.scheduler.scheduleFlowJob({
         taskId: taskMeta.taskId,
         workData,
         deliverData,
         workDelay,
-        deliverDelay: Math.max(deliverDelay, 0),
+        deliverDelay,
       });
       return {
         bullmqJobId: result.deliverJobId,

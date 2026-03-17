@@ -34,7 +34,6 @@ export {
   readTaskMeta,
   updateTaskMeta,
   buildTaskMeta,
-  writeTaskMetaToDoc,
   appendOutputRow,
   generateTaskId,
 } from './task-doc';

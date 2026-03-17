@@ -82,6 +82,7 @@ export function createTaskManagerTools(
         deadlineIso: input.deadlineIso,
         message: input.message,
         complexityTier: complexity,
+        notificationPolicy: input.notificationPolicy ?? undefined,
         modelOverride: input.modelTier
           ? resolveModelForTask(input.modelTier as ModelTier, null).modelName
           : undefined,
@@ -175,7 +176,19 @@ export function createTaskManagerTools(
           .describe(
             'Complexity tier override. Affects buffer time before delivery.',
           ),
-      }),
+      })
+        .refine(
+          (data) => {
+            if (['reminder', 'monitor'].includes(data.taskType)) {
+              return data.scheduleCron || data.deadlineIso;
+            }
+            return true;
+          },
+          {
+            message:
+              'Reminders and monitors require either scheduleCron or deadlineIso',
+          },
+        ),
     },
   );
 
@@ -183,13 +196,39 @@ export function createTaskManagerTools(
 
   const listTasks = tool(
     async (input) => {
-      const result = await tasksService.listTasks(mainRoomId, {
-        page: input.page ?? 0,
-      });
+      const page = input.page ?? 0;
+      const statusFilter = input.statusFilter;
+      const needsFilter = statusFilter && statusFilter !== 'all';
 
-      let tasks = result.tasks;
-      if (input.statusFilter && input.statusFilter !== 'all') {
-        tasks = tasks.filter((t) => t.status === input.statusFilter);
+      let tasks: Array<{
+        taskId: string;
+        title: string;
+        status: string;
+        taskType: string;
+        channelType: string;
+        roomId: string | null;
+        nextRunAt: string | null;
+        hasPage: boolean;
+      }>;
+      let total: number;
+
+      if (needsFilter) {
+        // Load all entries so we can filter before paginating
+        const allResult = await tasksService.listTasks(mainRoomId, {
+          page: 0,
+          pageSize: 10_000,
+        });
+        const filtered = allResult.tasks.filter(
+          (t) => t.status === statusFilter,
+        );
+        total = filtered.length;
+        const pageSize = 20;
+        const start = page * pageSize;
+        tasks = filtered.slice(start, start + pageSize);
+      } else {
+        const result = await tasksService.listTasks(mainRoomId, { page });
+        tasks = result.tasks;
+        total = result.totalCount;
       }
 
       if (tasks.length === 0) {
@@ -207,7 +246,7 @@ export function createTaskManagerTools(
           nextRunAt: t.nextRunAt,
           hasPage: t.hasPage,
         })),
-        total: tasks.length,
+        total,
       });
     },
     {
@@ -239,11 +278,11 @@ export function createTaskManagerTools(
       });
 
       // Resolve human-readable title from the task index (TaskMeta doesn't store it)
-      const listResult = await tasksService.listTasks(mainRoomId, { page: 0 });
-      const indexEntry = listResult.tasks.find(
-        (t) => t.taskId === input.taskId,
+      const indexEntry = await tasksService.getTaskIndexEntry(
+        mainRoomId,
+        input.taskId,
       );
-      const title = indexEntry?.title ?? input.taskId;
+      const title = indexEntry.title;
 
       return JSON.stringify({
         taskId: meta.taskId,

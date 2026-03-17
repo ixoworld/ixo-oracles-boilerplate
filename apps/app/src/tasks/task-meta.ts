@@ -71,8 +71,8 @@ export interface TaskMeta {
   // ── BullMQ References ─────────────────────────────────────────────
   /** Which BullMQ pattern this task uses */
   jobPattern: JobPattern;
-  /** BullMQ job ID, e.g. 'task_abc123-simple' or 'task_abc123-deliver' */
-  bullmqJobId: string;
+  /** BullMQ job ID, e.g. 'task_abc123-simple' or 'task_abc123-deliver'. Null before scheduling. */
+  bullmqJobId: string | null;
   /** Key for cancelling repeatable jobs. Null for one-shot. */
   bullmqRepeatKey: string | null;
   /** Current work job ID for recurring flows. Updated each cycle by deliver processor. */
@@ -143,6 +143,8 @@ export interface TaskMeta {
   createdAt: string;
   /** ISO 8601 last-updated timestamp */
   updatedAt: string;
+
+  sessionId?: string;
 }
 
 // ── Output Row ───────────────────────────────────────────────────────

@@ -125,6 +125,45 @@ const logger = new Logger('ProcessorUtils');
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
+/**
+ * Compute the work job delay given a delivery timestamp and the desired buffer.
+ * If the buffer exceeds the available window, clips it to 80% of that window
+ * and logs a warning so the task still fires instead of silently misbehaving.
+ *
+ * @param deliverAtMs  Epoch ms when the deliver job fires (absolute)
+ * @param bufferMs     Desired buffer in ms (from complexityTier)
+ * @param taskLogger   Logger instance for warnings
+ * @param taskId       For log context
+ * @returns workDelay in ms (delay before the work job starts)
+ */
+export function resolveWorkDelay(
+  deliverAtMs: number,
+  bufferMs: number,
+  taskLogger: Logger,
+  taskId: string,
+): number {
+  const availableMs = deliverAtMs - Date.now();
+
+  if (availableMs <= 0) {
+    taskLogger.warn(
+      `Task ${taskId}: delivery time is in the past, starting work immediately`,
+    );
+    return 0;
+  }
+
+  if (bufferMs >= availableMs) {
+    const effectiveBufferMs = Math.floor(availableMs * 0.8);
+    taskLogger.warn(
+      `Task ${taskId}: buffer (${Math.round(bufferMs / 60_000)}min) exceeds ` +
+        `available window (${Math.round(availableMs / 60_000)}min). ` +
+        `Clipping buffer to ${Math.round(effectiveBufferMs / 60_000)}min.`,
+    );
+    return Math.max(availableMs - effectiveBufferMs, 0);
+  }
+
+  return availableMs - bufferMs;
+}
+
 export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -144,8 +183,7 @@ export function buildMentionMessage(
 ): string {
   const displayName = escapeHtml(matrixUserId.split(':')[0].replace('@', ''));
   const safeUserId = encodeURI(matrixUserId);
-  const safeMessage = escapeHtml(message);
-  return `<a href="https://matrix.to/#/${safeUserId}">@${displayName}</a> ${safeMessage}`;
+  return `<a href="https://matrix.to/#/${safeUserId}">@${displayName}</a> ${message}`;
 }
 
 /** Check if a task status allows execution */
@@ -156,13 +194,14 @@ export function isTaskRunnable(meta: { status: string }): boolean {
 /**
  * Format a date as a short display string: "Mar 16, 2:30 PM"
  */
-export function formatOutputDate(date: Date): string {
+export function formatOutputDate(date: Date, timezone?: string): string {
   return date.toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
+    ...(timezone && { timeZone: timezone }),
   });
 }
 
@@ -184,7 +223,8 @@ export function sanitizeSummary(text: string): string {
     .replace(/^#{1,6}\s+/gm, '') // strip heading markers
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1') // images → alt text
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // links → link text
-    .replace(/`{1,3}[^`]*`{1,3}/g, '') // inline/fenced code
+    .replace(/```[\s\S]*?```/g, '') // fenced code blocks
+    .replace(/`[^`\n]*`/g, '') // inline code
     .replace(/[*_]{1,3}/g, '') // bold/italic markers
     .replace(/\|/g, '–') // pipes → dashes
     .replace(/\s+/g, ' ') // collapse whitespace
@@ -233,7 +273,7 @@ export async function sendTaskNotification(params: {
   message: string;
   notificationPolicy: NotificationPolicy;
   isDryRun: boolean;
-  taskId: string;
+  sessionId?: string;
   sessionManagerService: SessionManagerService;
   configService: ConfigService<ENV>;
 }): Promise<string | undefined> {
@@ -249,14 +289,14 @@ export async function sendTaskNotification(params: {
   }
 
   const mxManager = MatrixManager.getInstance();
-  const taskMetadata = { taskId: params.taskId };
+  const taskMetadata = { sessionId: params.sessionId };
   const userDid = normalizeDid(params.matrixUserId);
 
   const sessionParams = {
     did: userDid,
-    oracleDid: params.configService?.getOrThrow('ORACLE_DID'),
-    oracleEntityDid: params.configService?.getOrThrow('ORACLE_ENTITY_DID'),
-    oracleName: params.configService?.getOrThrow('ORACLE_NAME'),
+    oracleDid: params.configService.getOrThrow('ORACLE_DID'),
+    oracleEntityDid: params.configService.getOrThrow('ORACLE_ENTITY_DID'),
+    oracleName: params.configService.getOrThrow('ORACLE_NAME'),
   };
   if (params.notificationPolicy === 'channel_and_mention') {
     const client = mxManager.getClient();
@@ -282,7 +322,14 @@ export async function sendTaskNotification(params: {
     return undefined;
   }
 
-  // channel_only, on_threshold, or any other policy
+  // TODO: implement on_threshold — should only notify when a metric crosses a threshold
+  if (params.notificationPolicy === 'on_threshold') {
+    logger.warn(
+      `sendTaskNotification: on_threshold policy not yet implemented, falling through to channel_only)`,
+    );
+  }
+
+  // channel_only or on_threshold (fallback)
   logger.debug(
     `sendTaskNotification: sending as channel_only (policy=${params.notificationPolicy})`,
   );
@@ -348,9 +395,9 @@ export async function handleJobFailure(params: {
           message: `Task ${params.taskId} has been paused after ${failures} consecutive failures. Resume it when you're ready.`,
           isOracleAdmin: true,
         })
-        .catch((notifErr) => {
+        .catch((notificationErr) => {
           params.logger.warn(
-            `handleJobFailure: failed to send auto-pause notification: ${notifErr instanceof Error ? notifErr.message : String(notifErr)}`,
+            `handleJobFailure: failed to send auto-pause notification: ${notificationErr instanceof Error ? notificationErr.message : String(notificationErr)}`,
           );
         });
     }

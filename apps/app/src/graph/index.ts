@@ -17,32 +17,74 @@ import { type TMainAgentGraphState } from './state';
 /**
  * Options for agent methods that support UCAN
  */
-interface UCANOptions {
+export interface UCANOptions {
   /** UCAN service for MCP tool authorization */
   ucanService?: UcanService;
   /** Map of tool names to serialized invocations */
   mcpInvocations?: Record<string, string>;
 }
 
+/**
+ * Options for {@link MainAgentGraph.sendMessage}
+ */
+export interface SendMessageOptions {
+  input: string | BaseMessage[];
+  runnableConfig: IRunnableConfigWithRequiredFields & {
+    configurable: { sessionId: string };
+  };
+  browserTools?: BrowserToolCallDto[];
+  msgFromMatrixRoom?: boolean;
+  initialUserContext?: TMainAgentGraphState['userContext'];
+  editorRoomId?: string;
+  currentEntityDid?: string;
+  clientType?: 'matrix' | 'slack';
+  ucanOptions?: UCANOptions;
+  fileProcessingService?: FileProcessingService;
+  spaceId?: string;
+  tasksService?: TasksService;
+}
+
+/**
+ * Options for {@link MainAgentGraph.streamMessage}
+ */
+export interface StreamMessageOptions {
+  input: string | BaseMessage[];
+  runnableConfig: IRunnableConfigWithRequiredFields & {
+    configurable: { sessionId: string };
+  };
+  browserTools?: BrowserToolCallDto[];
+  msgFromMatrixRoom?: boolean;
+  initialUserContext?: TMainAgentGraphState['userContext'];
+  abortController?: AbortController;
+  editorRoomId?: string;
+  currentEntityDid?: string;
+  clientType?: 'matrix' | 'slack';
+  agActions?: AgActionDto[];
+  ucanOptions?: UCANOptions;
+  fileProcessingService?: FileProcessingService;
+  spaceId?: string;
+  tasksService?: TasksService;
+}
+
 export class MainAgentGraph {
   async sendMessage(
-    input: string | BaseMessage[],
-    runnableConfig: IRunnableConfigWithRequiredFields & {
-      configurable: {
-        sessionId: string;
-      };
-    },
-    browserTools?: BrowserToolCallDto[],
-    msgFromMatrixRoom = false,
-    initialUserContext?: TMainAgentGraphState['userContext'],
-    editorRoomId?: string,
-    currentEntityDid?: string,
-    clientType?: 'matrix' | 'slack',
-    ucanOptions?: UCANOptions,
-    fileProcessingService?: FileProcessingService,
-    spaceId?: string,
-    tasksService?: TasksService,
+    options: SendMessageOptions,
   ): Promise<Pick<TMainAgentGraphState, 'messages'>> {
+    const {
+      input,
+      runnableConfig,
+      browserTools,
+      msgFromMatrixRoom = false,
+      initialUserContext,
+      editorRoomId,
+      currentEntityDid,
+      clientType,
+      ucanOptions,
+      fileProcessingService,
+      spaceId,
+      tasksService,
+    } = options;
+
     if (!runnableConfig.configurable.sessionId) {
       throw new Error('sessionId is required');
     }
@@ -130,25 +172,24 @@ export class MainAgentGraph {
     };
   }
 
-  async streamMessage(
-    input: string | BaseMessage[],
-    runnableConfig: IRunnableConfigWithRequiredFields & {
-      configurable: {
-        sessionId: string;
-      };
-    },
-    browserTools?: BrowserToolCallDto[],
-    msgFromMatrixRoom = false,
-    initialUserContext?: TMainAgentGraphState['userContext'],
-    abortController?: AbortController,
-    editorRoomId?: string,
-    currentEntityDid?: string,
-    agActions?: AgActionDto[],
-    ucanOptions?: UCANOptions,
-    fileProcessingService?: FileProcessingService,
-    spaceId?: string,
-    tasksService?: TasksService,
-  ) {
+  async streamMessage(options: StreamMessageOptions) {
+    const {
+      input,
+      runnableConfig,
+      browserTools,
+      msgFromMatrixRoom = false,
+      initialUserContext,
+      abortController,
+      editorRoomId,
+      currentEntityDid,
+      clientType = 'portal',
+      agActions,
+      ucanOptions,
+      fileProcessingService,
+      spaceId,
+      tasksService,
+    } = options;
+
     if (!runnableConfig.configurable.sessionId) {
       throw new Error('sessionId is required');
     }
@@ -188,7 +229,7 @@ export class MainAgentGraph {
       editorRoomId,
       currentEntityDid,
       spaceId,
-      client: 'portal',
+      client: clientType,
       mcpUcanContext,
       ...(initialUserContext ? { userContext: initialUserContext } : {}),
       agActions,
