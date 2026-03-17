@@ -82,18 +82,27 @@ export {
 // Task doc helpers
 export { sharedServerEditor, withTaskDoc } from './task-doc-helpers';
 
+// Approval service
+export { ApprovalService } from './approval.service';
+
 // Processors
 export {
   SimpleProcessor,
   WorkProcessor,
   DeliverProcessor,
+  ApprovalProcessor,
   TASK_RUN_EVENT_TYPE,
   MAX_CONSECUTIVE_FAILURES,
+  APPROVAL_REQUEST_EVENT_TYPE,
+  APPROVAL_REMINDER_MS,
+  APPROVAL_EXPIRY_MS,
   buildMentionMessage,
   escapeHtml,
   formatOutputDate,
+  formatApprovalRequestMessage,
   handleJobFailure,
   isTaskRunnable,
+  parseApprovalResponse,
   resolveMainRoomId,
   sendTaskNotification,
   truncateText,
@@ -101,7 +110,12 @@ export {
   WorkJobDataSchema,
   DeliverJobDataSchema,
 } from './processors';
-export type { TaskRunEventContent, WorkResult } from './processors';
+export type {
+  ApprovalStatus,
+  ApprovalRequestEventContent,
+  TaskRunEventContent,
+  WorkResult,
+} from './processors';
 
 // TasksModule
 export { TasksModule } from './tasks.module';

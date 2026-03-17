@@ -54,8 +54,23 @@ export function resolveModelForTask(
 /** Custom Matrix event type posted after each task run */
 export const TASK_RUN_EVENT_TYPE = 'ixo.ora.task.run';
 
+/** Custom Matrix event type for approval requests */
+export const APPROVAL_REQUEST_EVENT_TYPE = 'ixo.ora.task.approval';
+
 /** Maximum consecutive failures before auto-pausing */
 export const MAX_CONSECUTIVE_FAILURES = 5;
+
+/** How long to wait before sending a reminder for pending approvals (24h) */
+export const APPROVAL_REMINDER_MS = 24 * 60 * 60 * 1000;
+
+/** How long to wait before auto-discarding a pending approval (48h) */
+export const APPROVAL_EXPIRY_MS = 48 * 60 * 60 * 1000;
+
+/** Redis key prefix for storing pending work results awaiting approval */
+export const APPROVAL_RESULT_PREFIX = 'task:approval:';
+
+/** TTL for approval results in Redis (48h + 1h buffer) */
+export const APPROVAL_RESULT_TTL_SECONDS = 49 * 60 * 60;
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -95,6 +110,30 @@ export interface WorkResult {
   modelUsed: string;
   startedAt: string;
   completedAt: string;
+}
+
+// ── Approval Gate Types ─────────────────────────────────────────────
+
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'expired';
+
+/** Content of the `ixo.ora.task.approval` custom event */
+export interface ApprovalRequestEventContent {
+  taskId: string;
+  status: ApprovalStatus;
+  preview: string;
+  requestedAt: string;
+  resolvedAt?: string;
+}
+
+/** Data payload for the approval timeout queue */
+export interface ApprovalJobData {
+  taskId: string;
+  userDid: string;
+  matrixUserId: string;
+  roomId: string;
+  mainRoomId: string;
+  /** Whether this is a reminder (24h) or final expiry (48h) */
+  phase: 'reminder' | 'expiry';
 }
 
 // ── Job Data Validation Schemas ─────────────────────────────────────
@@ -413,4 +452,54 @@ export async function handleJobFailure(params: {
       params.logger.debug(`Inner error stack: ${innerError.stack}`);
     }
   }
+}
+
+// ── Approval NLP Helper ─────────────────────────────────────────────
+
+const APPROVE_PATTERNS = [
+  /^(yes|yep|yeah|yup|sure|ok|okay|approve|approved|confirm|confirmed|go ahead|deliver|send it|lgtm|looks good|ship it|do it|proceed)$/i,
+  /^(yes|yep|yeah|yup|sure|ok|okay)\b/i,
+];
+
+const REJECT_PATTERNS = [
+  /^(no|nope|nah|reject|rejected|discard|cancel|skip|don'?t|do not|stop)$/i,
+  /^(no|nope|nah)\b/i,
+];
+
+/**
+ * Parse a user's natural language response to an approval request.
+ * Returns 'approved', 'rejected', or null if the text doesn't clearly
+ * indicate an approval decision.
+ */
+export function parseApprovalResponse(
+  text: string,
+): 'approved' | 'rejected' | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+
+  for (const pattern of APPROVE_PATTERNS) {
+    if (pattern.test(trimmed)) return 'approved';
+  }
+  for (const pattern of REJECT_PATTERNS) {
+    if (pattern.test(trimmed)) return 'rejected';
+  }
+
+  return null;
+}
+
+/**
+ * Format the approval request message sent to the user.
+ */
+export function formatApprovalRequestMessage(
+  taskId: string,
+  preview: string,
+): string {
+  const truncatedPreview = truncateText(preview, 500);
+  return [
+    `**Task result ready for review**`,
+    '',
+    truncatedPreview,
+    '',
+    'Reply with **yes** to deliver, or **no** to discard.',
+  ].join('\n');
 }

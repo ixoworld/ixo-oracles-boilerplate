@@ -19,6 +19,7 @@ import type { ENV } from 'src/types';
 import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 
 import { SessionManagerService } from '@ixo/common';
+import { ApprovalService } from '../approval.service';
 import { QUEUE_NAMES, WORKER_OPTIONS } from '../scheduler/task-queues';
 import { TasksScheduler } from '../scheduler/tasks-scheduler.service';
 import type { DeliverJobData } from '../scheduler/types';
@@ -52,6 +53,7 @@ export class DeliverProcessor extends WorkerHost {
     private readonly config: ConfigService<ENV>,
     private readonly sessionManagerService: SessionManagerService,
     private readonly syncService: UserMatrixSqliteSyncService,
+    private readonly approvalService: ApprovalService,
   ) {
     super();
   }
@@ -105,6 +107,25 @@ export class DeliverProcessor extends WorkerHost {
     try {
       if (!workResult || workResult.skipped) {
         this.logger.log(`No work result for task ${taskId}, skipping delivery`);
+      } else if (meta.requiresApproval && meta.status !== 'dry_run') {
+        // ── Approval Gate ─────────────────────────────────────────
+        // Instead of delivering immediately, request user approval.
+        // The ApprovalService stores the result in Redis and posts
+        // an approval request message. Delivery happens when the
+        // user responds (via Portal or Matrix).
+        this.logger.log(
+          `Task ${taskId} requires approval — requesting user confirmation`,
+        );
+        await this.approvalService.requestApproval({
+          taskId,
+          userDid,
+          matrixUserId,
+          roomId,
+          mainRoomId,
+          workResult,
+          meta,
+        });
+        // Still schedule next work for recurring tasks
       } else {
         // Post formatted result to room (respecting dry_run and notificationPolicy)
         // Guard: skip if already sent on a previous attempt (idempotent retry)

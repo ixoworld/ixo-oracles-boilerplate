@@ -4,6 +4,7 @@ export type {
   SimpleJobData,
   WorkJobData,
   DeliverJobData,
+  ApprovalTimeoutJobData,
   ScheduleSimpleJobParams,
   ScheduleFlowJobParams,
   ScheduleRecurringFlowParams,

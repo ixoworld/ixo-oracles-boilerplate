@@ -90,6 +90,7 @@ export function createTaskManagerTools(
         howToReport: input.outputFormat,
         constraints: input.constraints,
         spaceId,
+        requiresApproval: input.requiresApproval,
       });
 
       return JSON.stringify({
@@ -176,6 +177,12 @@ export function createTaskManagerTools(
             .optional()
             .describe(
               'Complexity tier override. Affects buffer time before delivery.',
+            ),
+          requiresApproval: z
+            .boolean()
+            .optional()
+            .describe(
+              'Whether results require user approval before delivery. Set to true when the user asks to "confirm", "review", "check with me", or "approve" results before they are sent.',
             ),
         })
         .refine(
@@ -316,5 +323,35 @@ export function createTaskManagerTools(
     },
   );
 
-  return [createTask, listTasks, getTaskStatus];
+  // ── set_approval_gate ───────────────────────────────────────────
+
+  const setApprovalGate = tool(
+    async (input) => {
+      await tasksService.updateTask({
+        taskId: input.taskId,
+        mainRoomId,
+        updates: { requiresApproval: input.enabled },
+      });
+
+      return JSON.stringify({
+        taskId: input.taskId,
+        requiresApproval: input.enabled,
+      });
+    },
+    {
+      name: 'set_approval_gate',
+      description:
+        'Enables or disables the approval gate for a task. When enabled, the agent will ask the user to review and approve results before they are delivered. Use when the user says "check with me before sending", "I want to review before delivery", "confirm with me first", "get my approval", or similar. Also use to disable approval when the user says "no need to confirm anymore" or "just send it directly".',
+      schema: z.object({
+        taskId: z
+          .string()
+          .describe('The task ID to enable/disable approval for'),
+        enabled: z
+          .boolean()
+          .describe('true to require approval, false to deliver automatically'),
+      }),
+    },
+  );
+
+  return [createTask, listTasks, getTaskStatus, setApprovalGate];
 }

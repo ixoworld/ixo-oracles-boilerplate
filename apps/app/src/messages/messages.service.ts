@@ -37,6 +37,8 @@ import * as crypto from 'node:crypto';
 import { MainAgentGraph } from 'src/graph';
 import { cleanAdditionalKwargs } from 'src/graph/nodes/chat-node/utils';
 import { type TMainAgentGraphState } from 'src/graph/state';
+import { ApprovalService } from 'src/tasks/approval.service';
+import { parseApprovalResponse } from 'src/tasks/processors/processor-utils';
 import { TasksService } from 'src/tasks/task.service';
 import { type ENV } from 'src/types';
 import { UcanService } from 'src/ucan/ucan.service';
@@ -93,6 +95,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     private readonly checkpointStorageSyncService: UserMatrixSqliteSyncService,
     private readonly fileProcessingService: FileProcessingService,
     @Optional() private readonly tasksService?: TasksService,
+    @Optional() private readonly approvalService?: ApprovalService,
     @Optional() private readonly ucanService?: UcanService,
   ) {
     this.matrixManager = this.sessionManagerService.matrixManger;
@@ -262,6 +265,20 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         `[Matrix][handleMessage] Ignoring non-text, non-file message: eventId=${event.eventId} msgtype=${msgtype} sender=${event.sender}`,
       );
       return;
+    }
+
+    // ── Approval gate interception ────────────────────────────────
+    // If this is a text reply and we have an ApprovalService, check
+    // if it's a response to a pending approval request.
+    if (isText && this.approvalService) {
+      const body = 'body' in event.content ? String(event.content.body) : '';
+      const handled = await this.tryHandleApprovalResponse(body, did, roomId);
+      if (handled) {
+        Logger.log(
+          `[Matrix][handleMessage] Handled as approval response, skipping normal flow`,
+        );
+        return;
+      }
     }
 
     Logger.log(
@@ -485,6 +502,85 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  /**
+   * Check if a message is a response to a pending approval request.
+   * If so, process the approval and return true to skip the normal message flow.
+   *
+   * Works for both Portal and Matrix paths:
+   * - Parses the message text for approval/rejection keywords
+   * - Looks up pending approvals for the user
+   * - Delegates to ApprovalService if a match is found
+   */
+  private async tryHandleApprovalResponse(
+    messageText: string,
+    userDid: string,
+    roomId: string,
+  ): Promise<boolean> {
+    if (!this.approvalService) return false;
+
+    const decision = parseApprovalResponse(messageText);
+    if (!decision) return false;
+
+    try {
+      // Resolve the user's main room to look up their tasks
+      const userHomeServer = await getMatrixHomeServerCroppedForDid(userDid);
+      const { roomId: mainRoomId } =
+        await this.sessionManagerService.matrixManger.getOracleRoomIdWithHomeServer(
+          {
+            userDid,
+            oracleEntityDid: this.config.getOrThrow('ORACLE_ENTITY_DID'),
+            userHomeServer,
+          },
+        );
+
+      if (!mainRoomId) return false;
+
+      // Look for a task with a pending approval in this room
+      const { tasks } = await this.tasksService!.listTasks(mainRoomId, {
+        page: 0,
+        pageSize: 10_000,
+      });
+
+      for (const entry of tasks) {
+        if (entry.status !== 'active') continue;
+
+        try {
+          const meta = await this.tasksService!.getTask({
+            taskId: entry.taskId,
+            mainRoomId,
+          });
+
+          if (!meta.pendingApprovalEventId) continue;
+
+          // Check if this task's room matches the room the message came from
+          const taskRoomId = meta.customRoomId ?? mainRoomId;
+          if (taskRoomId !== roomId) continue;
+
+          // Found a matching pending approval
+          Logger.log(
+            `[ApprovalGate] Message matches pending approval for task ${entry.taskId}: decision=${decision}`,
+          );
+
+          await this.approvalService.handleApprovalResponse({
+            taskId: entry.taskId,
+            approved: decision === 'approved',
+            mainRoomId,
+          });
+
+          return true;
+        } catch {
+          // Skip tasks that can't be loaded
+        }
+      }
+    } catch (err) {
+      Logger.error(
+        `[ApprovalGate] Error checking for approval response: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
+    return false;
+  }
+
   public async onModuleInit(): Promise<void> {
     // Don't block server startup — defer listener until Matrix is ready.
     // matrixManager.init() is idempotent: returns the existing promise if already in progress.
@@ -611,6 +707,33 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         userContext,
         targetSession,
       } = queryResult;
+
+      // ── Portal approval gate interception ───────────────────────
+      // Check if this message is a response to a pending approval.
+      // Only check for portal clients (Matrix is handled in handleMessage).
+      if (!params.msgFromMatrixRoom && roomId && this.approvalService) {
+        const handled = await this.tryHandleApprovalResponse(
+          params.message,
+          params.did,
+          roomId,
+        );
+        if (handled) {
+          Logger.log(
+            `[ApprovalGate] Portal message handled as approval response`,
+          );
+          return {
+            message: {
+              type: 'ai',
+              content:
+                parseApprovalResponse(params.message) === 'approved'
+                  ? 'Result approved and delivered.'
+                  : 'Result discarded.',
+              id: crypto.randomUUID(),
+            },
+            sessionId,
+          };
+        }
+      }
 
       // Build messages array: user text message + separate file messages
       const msgFromMatrixRoom = params.msgFromMatrixRoom ?? false;
