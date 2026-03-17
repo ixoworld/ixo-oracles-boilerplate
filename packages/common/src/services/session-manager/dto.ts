@@ -66,6 +66,10 @@ export class CreateChatSessionDto extends UserAuthDto {
   @IsString()
   @IsOptional()
   userHomeServer?: string;
+
+  @IsString()
+  @IsOptional()
+  ucanInvocation?: string;
 }
 
 export class DeleteChatSessionDto extends UserAuthDto {

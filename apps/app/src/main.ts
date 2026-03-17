@@ -13,6 +13,7 @@ import type { Cache } from 'cache-manager';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { type ENV } from './config';
+import { UcanService } from './ucan/ucan.service';
 import { EditorMatrixClient } from './graph/agents/editor/editor-mx';
 import { initModelPricingCache } from './graph/llm-provider';
 import { SecretsService } from './secrets/secrets.service';
@@ -41,6 +42,7 @@ async function bootstrap(): Promise<void> {
       'x-did',
       'x-request-id',
       'x-timezone',
+      'x-ucan-delegation',
     ],
     exposedHeaders: ['X-Request-Id'],
   });
@@ -127,12 +129,10 @@ async function bootstrap(): Promise<void> {
       Logger.log('EditorMatrixClient initialization started in background...');
 
       const matrixAccountRoomId = configService.get('MATRIX_ACCOUNT_ROOM_ID');
-      const disableCredits =
-        configService.get('DISABLE_CREDITS', false) || !matrixAccountRoomId;
-      if (!disableCredits) {
+      // still run setupClaimSigningMnemonics even if DISABLE_CREDITS as need it for ucan signing
         Logger.log('Setting up claim signing mnemonics...');
         Logger.log(`Matrix account room id: ${matrixAccountRoomId}`);
-        await setupClaimSigningMnemonics({
+        const signingMnemonic = await setupClaimSigningMnemonics({
           matrixRoomId: matrixAccountRoomId,
           matrixAccessToken: configService.getOrThrow(
             'MATRIX_ORACLE_ADMIN_ACCESS_TOKEN',
@@ -143,9 +143,14 @@ async function bootstrap(): Promise<void> {
           network: configService.getOrThrow('NETWORK'),
         });
         Logger.log('Claim signing mnemonics setup complete');
-      } else {
-        Logger.log('Signing mnemonic creation skipped (DISABLE_CREDITS=true)');
-      }
+
+        if (signingMnemonic) {
+          const ucanService = app.get(UcanService);
+          ucanService.setSigningMnemonic(
+            signingMnemonic,
+            configService.getOrThrow('ORACLE_DID'),
+          );
+        }
 
       // Load P-256 encryption key for user secrets
       if (matrixAccountRoomId) {

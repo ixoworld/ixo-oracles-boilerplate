@@ -12,6 +12,15 @@ export interface IWalletProps {
   matrix: IMatrixLoginProps;
 }
 
+export interface DelegationResult {
+  serialized: string;
+  expiresAt: number;
+}
+
+export type CreateDelegationFn = (
+  oracleDid: string,
+) => Promise<DelegationResult>;
+
 export interface IOraclesContextProps {
   wallet: IWalletProps | null;
   transactSignX: TransactionFn;
@@ -20,6 +29,7 @@ export interface IOraclesContextProps {
     method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
     options?: RequestInit,
   ) => Promise<T>;
+  getDelegation: (oracleDid: string) => Promise<string | null>;
   // AG-UI action management
   agActions: AgAction[];
   registerAgAction: (
@@ -39,4 +49,5 @@ export interface IOraclesContextProps {
 export interface IOraclesProviderProps {
   initialWallet: IWalletProps;
   transactSignX: TransactionFn;
+  createDelegation?: CreateDelegationFn;
 }

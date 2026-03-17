@@ -1,5 +1,6 @@
 import {
   getUserSubscription,
+  getSubscriptionUrlByNetwork,
   type GetMySubscriptionsResponseDto,
 } from '@ixo/common';
 import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
@@ -9,12 +10,14 @@ import {
   Inject,
   Injectable,
   Logger,
+  Optional,
   type NestMiddleware,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { minutes } from '@nestjs/throttler';
 import { type NextFunction, type Request, type Response } from 'express';
 import { ENV } from 'src/config';
+import { UcanService } from 'src/ucan/ucan.service';
 import { TokenLimiter } from 'src/utils/token-limit-handler';
 
 // Extend Express Request interface to include subscription data
@@ -35,6 +38,7 @@ export class SubscriptionMiddleware implements NestMiddleware {
   constructor(
     private readonly configService: ConfigService<ENV>,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    @Optional() private readonly ucanService?: UcanService,
   ) {}
 
   private checkCanContinue(
@@ -100,12 +104,46 @@ export class SubscriptionMiddleware implements NestMiddleware {
       const network: 'mainnet' | 'testnet' | 'devnet' =
         this.configService.get('NETWORK') ?? 'devnet';
 
-      // Get user subscription
-      const subscription = await getUserSubscription({
-        bearerToken: matrixAccessToken,
-        network,
-        subscriptionUrl: this.configService.get('SUBSCRIPTION_URL'),
-      });
+      const subscriptionUrl =
+        this.configService.get('SUBSCRIPTION_URL') ??
+        getSubscriptionUrlByNetwork(network);
+
+      // Try UCAN auth first, fall back to Matrix OpenID
+      let subscription: GetMySubscriptionsResponseDto | null = null;
+
+      if (this.ucanService?.hasSigningKey() && did) {
+        try {
+          const invocation = await this.ucanService.createServiceInvocation(
+            subscriptionUrl,
+            did,
+            'ixo:subscriptions',
+          );
+          if (invocation) {
+            this.logger.debug(
+              `[UCAN] Using UCAN invocation for subscription check: ${did}`,
+            );
+            subscription = await getUserSubscription({
+              bearerToken: invocation,
+              network,
+              subscriptionUrl,
+              authType: 'ucan',
+            });
+          }
+        } catch (err) {
+          this.logger.warn(
+            `[UCAN] Failed to create subscription invocation, falling back to Matrix: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
+
+      // Fall back to Matrix OpenID token
+      if (!subscription && matrixAccessToken) {
+        subscription = await getUserSubscription({
+          bearerToken: matrixAccessToken,
+          network,
+          subscriptionUrl,
+        });
+      }
 
       this.logger.debug(
         `Subscription API response for user ${did}:`,

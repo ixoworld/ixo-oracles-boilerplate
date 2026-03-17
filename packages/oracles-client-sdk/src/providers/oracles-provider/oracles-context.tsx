@@ -18,6 +18,10 @@ import {
   decryptAndRetrieve,
   encryptAndStore,
 } from '../../utils/token-cache.js';
+import {
+  getCachedDelegation,
+  setCachedDelegation,
+} from '../../utils/delegation-cache.js';
 import type { AgAction } from '../../hooks/use-ag-action.js';
 import {
   type IOraclesContextProps,
@@ -40,6 +44,7 @@ export const OraclesProvider = ({
   children,
   initialWallet,
   transactSignX,
+  createDelegation,
 }: PropsWithChildren<IOraclesProviderProps>) => {
   if ((!initialWallet as unknown) || (!transactSignX as unknown)) {
     throw new Error('initialWallet and transactSignX are required');
@@ -78,6 +83,32 @@ export const OraclesProvider = ({
   const agActionRenders = useRef<
     Map<string, (props: Record<string, unknown>) => React.ReactElement | null>
   >(new Map());
+
+  const getDelegation = useCallback(
+    async (oracleDid: string): Promise<string | null> => {
+      // Check cache first
+      const cached = getCachedDelegation(initialWallet.did, oracleDid);
+      if (cached) return cached;
+
+      // No callback provided — skip delegation
+      if (!createDelegation) return null;
+
+      try {
+        const result = await createDelegation(oracleDid);
+        setCachedDelegation(
+          initialWallet.did,
+          oracleDid,
+          result.serialized,
+          result.expiresAt,
+        );
+        return result.serialized;
+      } catch (error) {
+        console.warn('Failed to create UCAN delegation:', error);
+        return null;
+      }
+    },
+    [initialWallet.did, createDelegation],
+  );
 
   const authedRequest = useCallback(
     async (
@@ -185,6 +216,7 @@ export const OraclesProvider = ({
         method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
         options?: RequestInit,
       ) => Promise<T>,
+      getDelegation,
       agActions,
       registerAgAction,
       unregisterAgAction,
@@ -195,6 +227,7 @@ export const OraclesProvider = ({
       initialWallet,
       transactSignX,
       authedRequest,
+      getDelegation,
       agActions,
       registerAgAction,
       unregisterAgAction,

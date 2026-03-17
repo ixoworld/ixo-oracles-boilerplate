@@ -13,6 +13,7 @@ import { minutes } from '@nestjs/throttler';
 import { type NextFunction, type Request, type Response } from 'express';
 import * as crypto from 'node:crypto';
 import { ENV } from 'src/config';
+import { UcanService } from 'src/ucan/ucan.service';
 import { getAuthHeaders, normalizeDid } from '../utils/header.utils';
 
 declare global {
@@ -23,6 +24,12 @@ declare global {
         did: string;
         userOpenIdToken: string;
         homeServer: string;
+        ucanDelegation?: {
+          issuer: string;
+          audience: string;
+          capabilities: unknown[];
+          expiration?: number;
+        };
       };
     }
   }
@@ -42,6 +49,7 @@ export class AuthHeaderMiddleware implements NestMiddleware {
   constructor(
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private readonly configService: ConfigService<ENV>,
+    private readonly ucanService: UcanService,
   ) {}
 
   private resolveHomeServer(matrixHomeServer?: string): string {
@@ -120,15 +128,15 @@ export class AuthHeaderMiddleware implements NestMiddleware {
         `user_${this.hashToken(matrixAccessToken)}`,
       );
 
-      if (cachedUser?.did) {
-        req.authData = {
-          did: cachedUser.did,
-          userOpenIdToken: matrixAccessToken,
-          homeServer: cachedUser.homeServer,
-        };
-        next();
-        return;
-      }
+      // if (cachedUser?.did) {
+      //   req.authData = {
+      //     did: cachedUser.did,
+      //     userOpenIdToken: matrixAccessToken,
+      //     homeServer: cachedUser.homeServer,
+      //   };
+      //   next();
+      //   return;
+      // }
 
       const { isValid, userDid, homeServer } = await this.validateToken(
         matrixAccessToken,
@@ -149,6 +157,66 @@ export class AuthHeaderMiddleware implements NestMiddleware {
         THREE_MINUTES,
       );
       this.logger.debug(`Auth headers validated for DID: ${userDid}`);
+
+      // Validate UCAN delegation if present
+      const ucanHeader = req.headers['x-ucan-delegation'] as string | undefined;
+      this.logger.log(`[UCAN]: ${ucanHeader}`)
+      if (ucanHeader) {
+        try {
+          const oracleDid = this.configService.get('ORACLE_DID');
+          if (!oracleDid) {
+            this.logger.warn(
+              '[UCAN] ORACLE_DID not configured, skipping delegation validation',
+            );
+          } else {
+            const { createUCANValidator, createIxoDIDResolver } =
+              await import('@ixo/ucan');
+            const blocksyncUri =
+              this.configService.get('BLOCKSYNC_GRAPHQL_URL')
+
+            const validator = await createUCANValidator({
+              serverDid: oracleDid,
+              rootIssuers: [], // Any user can delegate to this oracle
+              didResolver: createIxoDIDResolver({
+                indexerUrl: blocksyncUri,
+              }),
+            });
+
+            const result = await validator.validateDelegation(ucanHeader);
+
+            if (!result.ok) {
+              this.logger.warn(
+                `[UCAN] Delegation validation failed: [${result.error?.code}] ${result.error?.message}`,
+              );
+            } else {
+              req.authData.ucanDelegation = {
+                issuer: result.invoker!,
+                audience: oracleDid,
+                capabilities: result.capability
+                  ? [result.capability]
+                  : [],
+                expiration: result.expiration,
+              };
+
+              this.logger.log(
+                `[UCAN] Delegation validated: iss=${result.invoker} aud=${oracleDid} exp=${result.expiration ? new Date(result.expiration * 1000).toISOString() : 'none'}`,
+              );
+
+              // Cache raw delegation for downstream service invocations
+              await this.ucanService.cacheDelegation(
+                userDid,
+                ucanHeader,
+                result.expiration,
+              );
+            }
+          }
+        } catch (err) {
+          this.logger.warn(
+            `[UCAN] Failed to validate delegation: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
+
       next();
     } catch (error) {
       if (error instanceof HttpException) {

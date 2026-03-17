@@ -50,7 +50,8 @@ export function useSendMessage({
     overrides,
   );
   const apiUrl = overrides?.baseUrl ?? config.apiUrl;
-  const { wallet, authedRequest, agActions } = useOraclesContext();
+  const { wallet, authedRequest, agActions, getDelegation } =
+    useOraclesContext();
   const {
     openIdToken,
     isLoading: isTokenLoading,
@@ -145,6 +146,11 @@ export function useSendMessage({
         // 2. Stream AI response
         chatRef?.current?.setStatus('streaming');
 
+        // Get UCAN delegation for this oracle (cached or freshly created)
+        const delegation = oracleDid
+          ? await getDelegation(oracleDid)
+          : null;
+
         // Create abort controller for this request
         abortControllerRef.current = new AbortController();
 
@@ -172,6 +178,7 @@ export function useSendMessage({
                   hasRender: action.hasRender,
                 }))
               : undefined,
+          delegation: delegation ?? undefined,
           abortSignal: abortControllerRef.current?.signal,
 
           // Message chunks (existing pattern)
@@ -275,6 +282,7 @@ const askOracleStream = async (props: {
   message: string;
   sessionId: string;
   matrixAccessToken: string;
+  delegation?: string;
   metadata?: Record<string, unknown>;
   attachments?: Attachment[];
   browserTools?: {
@@ -318,6 +326,7 @@ const askOracleStream = async (props: {
       'x-matrix-access-token': props.matrixAccessToken,
       'Content-Type': 'application/json',
       ...(props.homeServer ? { 'x-matrix-homeserver': props.homeServer } : {}),
+      ...(props.delegation ? { 'x-ucan-delegation': props.delegation } : {}),
     },
     body: JSON.stringify({
       message: props.message,

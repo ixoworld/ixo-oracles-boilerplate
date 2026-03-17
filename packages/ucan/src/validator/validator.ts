@@ -13,7 +13,7 @@
  */
 
 import { ed25519 } from '@ucanto/principal';
-import { Delegation } from '@ucanto/core';
+import { Delegation, UCAN } from '@ucanto/core';
 import { claim } from '@ucanto/validator';
 import { type capability } from '@ucanto/validator';
 import type { DIDKeyResolver, InvocationStore } from '../types.js';
@@ -140,6 +140,27 @@ export interface UCANValidator {
   ): Promise<ValidateResult>;
 
   /**
+   * Validate a delegation (verify signatures, audience, expiration, and proof chain)
+   *
+   * Unlike `validate()` which validates invocations against a capability definition,
+   * this method validates a standalone delegation token — verifying the cryptographic
+   * signature chain, checking audience matches this server, and validating expiration.
+   *
+   * @param delegationBase64 - Base64-encoded CAR containing the delegation
+   * @returns Validation result
+   *
+   * @example
+   * ```typescript
+   * const result = await validator.validateDelegation(delegationBase64);
+   * if (result.ok) {
+   *   console.log('Delegation from:', result.invoker);
+   *   console.log('Capabilities:', result.capability);
+   * }
+   * ```
+   */
+  validateDelegation(delegationBase64: string): Promise<ValidateResult>;
+
+  /**
    * The server's public DID (as provided in options)
    */
   readonly serverDid: string;
@@ -187,15 +208,20 @@ export async function createUCANValidator(
   const invocationStore =
     options.invocationStore ?? new InMemoryInvocationStore();
 
-  // Resolve server DID to get verifier
-  // This supports any DID method - did:key is parsed directly, others use the resolver
-  let serverVerifier: Verifier;
+  // Lazily resolve server DID to a Verifier.
+  // Only needed for validate() (invocations), NOT for validateDelegation().
+  // This avoids requiring Ed25519 keys on the server DID doc when only
+  // delegation validation is needed.
+  let serverVerifier: Verifier | undefined;
 
-  if (options.serverDid.startsWith('did:key:')) {
-    // did:key can be parsed directly (contains the public key)
-    serverVerifier = ed25519.Verifier.parse(options.serverDid);
-  } else {
-    // Non-did:key requires resolution
+  async function getServerVerifier(): Promise<Verifier> {
+    if (serverVerifier) return serverVerifier;
+
+    if (options.serverDid.startsWith('did:key:')) {
+      serverVerifier = ed25519.Verifier.parse(options.serverDid);
+      return serverVerifier;
+    }
+
     if (!options.didResolver) {
       throw new Error(
         `Cannot use ${options.serverDid} as server DID without a didResolver. ` +
@@ -220,13 +246,13 @@ export async function createUCANValidator(
       );
     }
 
-    // Use the first key (primary key)
     const keyDid = resolved.ok[0];
     if (!keyDid) {
       throw new Error(`No valid key found for server DID ${options.serverDid}`);
     }
 
     serverVerifier = ed25519.Verifier.parse(keyDid);
+    return serverVerifier;
   }
 
   // Create DID resolver for use during validation (for issuers in delegation chain)
@@ -312,6 +338,109 @@ export async function createUCANValidator(
     return exp ?? parentExp;
   }
 
+  /**
+   * Recursively verify signatures across a delegation chain.
+   * For each delegation: resolve issuer DID → did:key, verify signature,
+   * then check proof chain consistency and recurse into proofs.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- delegation type from Delegation.extract() is complex
+  async function verifyDelegationChain(delegation: any): Promise<ValidateResult> {
+    const issuerDid: string = delegation.issuer.did();
+
+    // Resolve issuer DID to did:key
+    const resolved = await resolveDIDKey(
+      issuerDid as `did:${string}:${string}`,
+    );
+    if ('error' in resolved) {
+      return {
+        ok: false,
+        error: {
+          code: 'INVALID_SIGNATURE',
+          message: `Cannot resolve issuer DID ${issuerDid}: ${resolved.error?.message ?? 'unknown'}`,
+        },
+      };
+    }
+
+    if (!resolved.ok || resolved.ok.length === 0) {
+      return {
+        ok: false,
+        error: {
+          code: 'INVALID_SIGNATURE',
+          message: `No keys found for issuer DID ${issuerDid}`,
+        },
+      };
+    }
+
+    const didKey = resolved.ok[0]!;
+    const realVerifier = ed25519.Verifier.parse(didKey);
+
+    // Get the UCAN View from the delegation for signature verification.
+    // delegation.data returns the @ipld/dag-ucan View which has .model and .signature
+    const ucanView = delegation.data;
+
+    // Create a wrapper verifier: uses the issuer's original DID for the
+    // DID equality check inside UCAN.verifySignature, but delegates actual
+    // cryptographic verification to the resolved did:key verifier.
+    // This is necessary because did:ixo issuers sign with Ed25519 keys but
+    // the UCAN's iss field contains did:ixo, not did:key.
+    const wrappedVerifier = {
+      did: () => issuerDid,
+      verify: (payload: Uint8Array, signature: unknown) =>
+        realVerifier.verify(
+          payload,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- SigAlg type mismatch between @ipld/dag-ucan and @ucanto/principal
+          signature as any,
+        ),
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- wrapped verifier satisfies runtime interface
+    const sigValid = await UCAN.verifySignature(ucanView, wrappedVerifier as any);
+    if (!sigValid) {
+      return {
+        ok: false,
+        error: {
+          code: 'INVALID_SIGNATURE',
+          message: `Signature verification failed for issuer ${issuerDid}`,
+        },
+      };
+    }
+
+    // Recursively verify proofs
+    if (delegation.proofs && delegation.proofs.length > 0) {
+      for (const proof of delegation.proofs) {
+        // Chain consistency: proof's audience should match this delegation's issuer
+        const proofAudience: string = proof.audience.did();
+        if (proofAudience !== issuerDid) {
+          // Allow DID equivalence: proof audience (did:key) may resolve to same key as issuer (did:ixo)
+          const proofAudResolved = await resolveDIDKey(
+            proofAudience as `did:${string}:${string}`,
+          );
+          const proofAudKey =
+            'ok' in proofAudResolved && proofAudResolved.ok
+              ? proofAudResolved.ok[0]
+              : null;
+
+          if (didKey !== proofAudKey) {
+            return {
+              ok: false,
+              error: {
+                code: 'UNAUTHORIZED',
+                message: `Proof chain broken: proof audience ${proofAudience} does not match delegation issuer ${issuerDid}`,
+              },
+            };
+          }
+        }
+
+        const proofResult = await verifyDelegationChain(proof);
+        if (!proofResult.ok) {
+          return proofResult;
+        }
+      }
+    }
+
+    return { ok: true };
+  }
+
   return {
     serverDid: options.serverDid,
 
@@ -376,13 +505,16 @@ export async function createUCANValidator(
         }
 
         // 6. Use ucanto's claim() to validate
-        // The serverVerifier was resolved at startup (supports any DID method)
+        // Server verifier is resolved lazily (first call resolves, subsequent calls use cache)
+        const resolvedVerifier = await getServerVerifier();
         const claimResult = claim(capabilityDef, [invocation], {
-          authority: serverVerifier,
+          authority: resolvedVerifier,
           principal: ed25519.Verifier,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ucanto claim() expects a specific DID resolver signature incompatible with our async resolver
           resolveDIDKey: resolveDIDKey as any,
           canIssue: (cap: { with: string }, issuer: string) => {
+            // Wildcard: any DID with a valid signature chain is trusted as root
+            if (options.rootIssuers.includes('*')) return true;
             // Root issuers can issue any capability
             if (options.rootIssuers.includes(issuer)) return true;
             // Allow self-issued capabilities where resource contains issuer DID
@@ -458,6 +590,101 @@ export async function createUCANValidator(
                 can: validatedCap.can,
                 with: validatedCap.with as string,
                 nb: validatedCap.nb as Record<string, unknown> | undefined,
+              }
+            : undefined,
+          expiration,
+          proofChain,
+          facts: facts && facts.length > 0 ? facts : undefined,
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        return { ok: false, error: { code: 'INVALID_FORMAT', message } };
+      }
+    },
+
+    async validateDelegation(
+      delegationBase64: string,
+    ): Promise<ValidateResult> {
+      try {
+        // 1. Decode the delegation from base64 CAR
+        const carBytes = new Uint8Array(
+          Buffer.from(delegationBase64, 'base64'),
+        );
+
+        // 2. Extract the delegation from CAR
+        const extracted = await Delegation.extract(carBytes);
+        if (extracted.error) {
+          return {
+            ok: false,
+            error: {
+              code: 'INVALID_FORMAT',
+              message: `Failed to decode: ${extracted.error?.message ?? 'unknown'}`,
+            },
+          };
+        }
+
+        const delegation = 'ok' in extracted ? extracted.ok : extracted;
+
+        // 3. Basic validation
+        if (!delegation?.issuer?.did || !delegation?.audience?.did) {
+          return {
+            ok: false,
+            error: {
+              code: 'INVALID_FORMAT',
+              message: 'Delegation missing issuer or audience',
+            },
+          };
+        }
+
+        // 4. Check audience matches this server's public DID
+        const audienceDid = delegation.audience.did();
+        if (audienceDid !== options.serverDid) {
+          return {
+            ok: false,
+            error: {
+              code: 'UNAUTHORIZED',
+              message: `Delegation addressed to ${audienceDid}, not ${options.serverDid}`,
+            },
+          };
+        }
+
+        // 5. Check expiration (effective = earliest across chain)
+        const expiration = computeEffectiveExpiration(delegation);
+        if (expiration !== undefined) {
+          const nowSeconds = Math.floor(Date.now() / 1000);
+          if (expiration < nowSeconds) {
+            return {
+              ok: false,
+              error: {
+                code: 'EXPIRED',
+                message: `Delegation expired at ${new Date(expiration * 1000).toISOString()}`,
+              },
+            };
+          }
+        }
+
+        // 6. Verify signatures across the entire delegation chain
+        const sigResult = await verifyDelegationChain(delegation);
+        if (!sigResult.ok) {
+          return sigResult;
+        }
+
+        // 7. Success — return delegation details
+        const proofChain = buildProofChain(delegation);
+        const cap = delegation.capabilities?.[0];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- delegation type from Delegation.extract() is complex
+        const facts = (delegation as any).facts as
+          | Record<string, unknown>[]
+          | undefined;
+
+        return {
+          ok: true,
+          invoker: delegation.issuer.did(),
+          capability: cap
+            ? {
+                can: cap.can,
+                with: cap.with as string,
+                nb: cap.nb as Record<string, unknown> | undefined,
               }
             : undefined,
           expiration,

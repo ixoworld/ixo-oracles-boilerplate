@@ -86,26 +86,15 @@ const llm = getProviderChatModel('subagent', {
 });
 
 export const createMemoryAgent = async ({
-  oracleToken,
-  userToken,
-  oracleHomeServer,
-  userHomeServer,
-  roomId,
+  headers,
   mode,
 }: {
-  oracleToken: string;
-  userToken: string;
-  oracleHomeServer: string;
-  userHomeServer: string;
-  roomId: string;
+  /** Pre-built auth headers (UCAN or Matrix) including x-room-id */
+  headers: Record<string, string>;
   mode: 'user' | 'orgOwner';
 }): Promise<AgentSpec> => {
   const memoryEngineTools = await getMemoryEngineMcpTools({
-    oracleToken,
-    userToken,
-    oracleHomeServer,
-    userHomeServer,
-    roomId,
+    headers,
     selectedTools: [
       'memory-engine__search_memory_engine',
       'memory-engine__add_memory',

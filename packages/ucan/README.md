@@ -74,7 +74,7 @@ const validator = await createUCANValidator({
 });
 ```
 
-### 3. Protect a Route
+### 3. Protect a Route (Invocation)
 
 ```typescript
 app.post('/employees', async (req, res) => {
@@ -96,6 +96,37 @@ app.post('/employees', async (req, res) => {
 
   const limit = result.capability?.nb?.limit ?? 10;
   res.json({ employees: getEmployees(limit) });
+});
+```
+
+### 3b. Validate a Delegation
+
+Use `validateDelegation()` to verify a standalone delegation token — e.g. when a client sends a delegation in a header alongside a traditional auth mechanism. This verifies the cryptographic signature chain, audience, and expiration without requiring a capability definition.
+
+```typescript
+app.use(async (req, res, next) => {
+  const delegationHeader = req.headers['x-ucan-delegation'];
+  if (!delegationHeader) return next();
+
+  const result = await validator.validateDelegation(delegationHeader);
+
+  if (!result.ok) {
+    console.warn(`Delegation invalid: [${result.error?.code}] ${result.error?.message}`);
+    return next();
+  }
+
+  // result.invoker — issuer DID (who granted the delegation)
+  // result.capability — first capability in the delegation
+  // result.expiration — effective expiration across the proof chain
+  // result.proofChain — e.g. ["did:ixo:root", "did:ixo:user"]
+
+  req.ucanDelegation = {
+    issuer: result.invoker,
+    capability: result.capability,
+    expiration: result.expiration,
+  };
+
+  next();
 });
 ```
 
@@ -183,18 +214,29 @@ Create a framework-agnostic validator.
 | `didResolver`     | `DIDKeyResolver`  | Resolver for non-`did:key` DIDs       |
 | `invocationStore` | `InvocationStore` | Custom store for replay protection    |
 
+#### Methods
+
+| Method                                                              | Description                                                   |
+| ------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `validate(invocationBase64, capabilityDef, resource)`               | Validate an invocation against a capability definition        |
+| `validateDelegation(delegationBase64)`                              | Validate a standalone delegation (signature, audience, chain) |
+
+**`validate()`** validates a full invocation — checks signature, capability matching, caveats, replay protection, and resource authorization.
+
+**`validateDelegation()`** validates a standalone delegation token — verifies the cryptographic signature of every delegation in the proof chain, checks audience matches `serverDid`, validates expiration, and ensures chain consistency (each proof's audience matches the child delegation's issuer). Supports `did:key` issuers natively and non-`did:key` issuers (e.g. `did:ixo`) via the configured `didResolver`.
+
 #### `ValidateResult`
 
-The `validator.validate()` method returns a `ValidateResult`:
+Both methods return a `ValidateResult`:
 
 | Field        | Type                                     | Description                                                                                          |
 | ------------ | ---------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | `ok`         | `boolean`                                | Whether validation succeeded                                                                         |
-| `invoker`    | `string`                                 | DID of the invoker (on success)                                                                      |
+| `invoker`    | `string`                                 | DID of the invoker/issuer (on success)                                                               |
 | `capability` | `object`                                 | Validated capability with `can`, `with`, and optional `nb` caveats (on success)                      |
 | `expiration` | `number \| undefined`                    | Effective expiration (Unix seconds) — the earliest across the delegation chain. Undefined = never.   |
 | `proofChain` | `string[] \| undefined`                  | Delegation path from root issuer to invoker, e.g. `["did:key:root", "did:key:alice", "did:key:bob"]` |
-| `facts`      | `Record<string, unknown>[] \| undefined` | Facts attached to the invocation. Undefined if none.                                                 |
+| `facts`      | `Record<string, unknown>[] \| undefined` | Facts attached to the invocation/delegation. Undefined if none.                                      |
 | `error`      | `object`                                 | Error with `code` and `message` (on failure)                                                         |
 
 Error codes: `INVALID_FORMAT`, `INVALID_SIGNATURE`, `UNAUTHORIZED`, `REPLAY`, `EXPIRED`, `CAVEAT_VIOLATION`.
@@ -293,7 +335,7 @@ pnpm test          # Run unit tests (vitest)
 pnpm test:ucan     # Run interactive test script with full UCAN flow
 ```
 
-The unit tests cover proof chain construction, expiration computation, facts pass-through, validation failures, caveat enforcement, and replay protection.
+The unit tests cover proof chain construction, expiration computation, facts pass-through, validation failures, caveat enforcement, replay protection, and delegation validation (signature verification, audience checks, expiration, tampered signatures, proof chain consistency, and `did:ixo` support).
 
 ## License
 

@@ -120,6 +120,11 @@ export {
   type IxoDIDResolverConfig,
 } from './did/ixo-resolver.js';
 
+export {
+  createWebDIDResolver,
+  type WebDIDResolverConfig,
+} from './did/web-resolver.js';
+
 // =============================================================================
 // Store (for replay protection)
 // =============================================================================

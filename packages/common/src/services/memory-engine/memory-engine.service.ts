@@ -10,12 +10,39 @@ interface MemoryEngineAuthHeaders {
   userToken: string;
   oracleHomeServer: string;
   userHomeServer: string;
+  /** When set, uses UCAN auth instead of Matrix tokens */
+  ucanInvocation?: string;
 }
 
 export class MemoryEngineService {
   private readonly QUERY_TIMEOUT_MS = 2500; // 2.5 seconds per query
 
   constructor(private readonly memoryEngineUrl: string) {}
+
+  /**
+   * Build HTTP headers for memory engine requests (UCAN or Matrix)
+   */
+  private buildHeaders(
+    auth: MemoryEngineAuthHeaders,
+    roomId: string,
+  ): Record<string, string> {
+    if (auth.ucanInvocation) {
+      return {
+        Authorization: `Bearer ${auth.ucanInvocation}`,
+        'X-Auth-Type': 'ucan',
+        'x-room-id': roomId,
+        'Content-Type': 'application/json',
+      };
+    }
+    return {
+      'x-oracle-token': auth.oracleToken,
+      'x-user-token': auth.userToken,
+      'x-oracle-matrix-homeserver': auth.oracleHomeServer,
+      'x-user-matrix-homeserver': auth.userHomeServer,
+      'x-room-id': roomId,
+      'Content-Type': 'application/json',
+    };
+  }
 
   /**
    * Wraps a promise with a timeout, returning fallback value if timeout is exceeded
@@ -43,6 +70,8 @@ export class MemoryEngineService {
     userToken: string;
     oracleHomeServer: string;
     userHomeServer: string;
+    /** When set, uses UCAN auth instead of Matrix tokens */
+    ucanInvocation?: string;
   }): Promise<UserContextData> {
     const {
       oracleDid,
@@ -51,6 +80,7 @@ export class MemoryEngineService {
       userToken,
       oracleHomeServer,
       userHomeServer,
+      ucanInvocation,
     } = params;
 
     Logger.info(
@@ -59,11 +89,12 @@ export class MemoryEngineService {
 
     try {
       // Execute all 6 queries in parallel with timeouts using Promise.allSettled
-      const authHeaders = {
+      const authHeaders: MemoryEngineAuthHeaders = {
         oracleToken,
         userToken,
         oracleHomeServer,
         userHomeServer,
+        ucanInvocation,
       };
 
       const results = await Promise.allSettled([
@@ -373,6 +404,7 @@ export class MemoryEngineService {
     userToken,
     oracleHomeServer,
     userHomeServer,
+    ucanInvocation,
   }: {
     messages: Array<{
       content: string;
@@ -386,6 +418,8 @@ export class MemoryEngineService {
     userToken: string;
     oracleHomeServer: string;
     userHomeServer: string;
+    /** When set, uses UCAN auth instead of Matrix tokens */
+    ucanInvocation?: string;
   }): Promise<{ success: boolean }> {
     if (!roomId) {
       Logger.warn(
@@ -393,9 +427,9 @@ export class MemoryEngineService {
       );
       return { success: false };
     }
-    if (!oracleToken || !userToken) {
+    if (!ucanInvocation && (!oracleToken || !userToken)) {
       Logger.warn(
-        `[MemoryEngineService] Missing oracle or user token, skipping conversation processing`,
+        `[MemoryEngineService] Missing auth (no UCAN and no Matrix tokens), skipping conversation processing`,
       );
       return { success: false };
     }
@@ -407,16 +441,16 @@ export class MemoryEngineService {
     }
 
     try {
+      const auth: MemoryEngineAuthHeaders = {
+        oracleToken,
+        userToken,
+        oracleHomeServer,
+        userHomeServer,
+        ucanInvocation,
+      };
       const response = await fetch(`${this.memoryEngineUrl}/messages`, {
         method: 'POST',
-        headers: {
-          'x-oracle-token': oracleToken,
-          'x-user-token': userToken,
-          'x-oracle-matrix-homeserver': oracleHomeServer,
-          'x-user-matrix-homeserver': userHomeServer,
-          'x-room-id': roomId,
-          'Content-Type': 'application/json',
-        },
+        headers: this.buildHeaders(auth, roomId),
         body: JSON.stringify({ messages }),
       });
 
@@ -455,9 +489,9 @@ export class MemoryEngineService {
       );
       return undefined;
     }
-    if (!auth.oracleToken || !auth.userToken) {
+    if (!auth.ucanInvocation && (!auth.oracleToken || !auth.userToken)) {
       Logger.warn(
-        `[MemoryEngineService] Missing oracle or user token, skipping query "${request.query}"`,
+        `[MemoryEngineService] Missing auth (no UCAN and no Matrix tokens), skipping query "${request.query}"`,
       );
       return undefined;
     }
@@ -465,14 +499,7 @@ export class MemoryEngineService {
     try {
       const response = await fetch(`${this.memoryEngineUrl}/search-enhanced`, {
         method: 'POST',
-        headers: {
-          'x-oracle-token': auth.oracleToken,
-          'x-user-token': auth.userToken,
-          'x-oracle-matrix-homeserver': auth.oracleHomeServer,
-          'x-user-matrix-homeserver': auth.userHomeServer,
-          'x-room-id': roomId,
-          'Content-Type': 'application/json',
-        },
+        headers: this.buildHeaders(auth, roomId),
         body: JSON.stringify(request),
       });
 

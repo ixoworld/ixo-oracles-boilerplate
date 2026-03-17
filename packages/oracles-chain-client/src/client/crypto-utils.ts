@@ -1,6 +1,5 @@
 import bs58 from 'bs58';
 import { decrypt, encrypt } from 'eciesjs';
-import { Logger } from '@ixo/logger';
 import type z from 'zod';
 
 /**
@@ -32,7 +31,7 @@ export class CryptoUtils {
       const encryptedBuffer = encrypt(publicKeyBytes, dataBuffer);
       return bs58.encode(encryptedBuffer); // Convert to bs58 string
     } catch (error) {
-      Logger.error('Error encrypting data:', error);
+      console.error('Error encrypting data:', error);
       throw error;
     }
   }
@@ -55,7 +54,7 @@ export class CryptoUtils {
         return new TextDecoder().decode(decryptedBuffer);
       }
     } catch (error) {
-      Logger.error('Error decrypting data:', error);
+      console.error('Error decrypting data:', error);
       throw error;
     }
   }

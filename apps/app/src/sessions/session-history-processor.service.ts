@@ -4,11 +4,12 @@ import {
   OpenIdTokenProvider,
 } from '@ixo/oracles-chain-client';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cache } from 'cache-manager';
 import { MessagesService } from '../messages/messages.service';
 import { type ENV } from '../types';
+import { UcanService } from '../ucan/ucan.service';
 
 export interface ProcessSessionHistoryParams {
   sessionId: string;
@@ -28,6 +29,7 @@ export class SessionHistoryProcessor {
     private readonly sessionManagerService: SessionManagerService,
     private readonly configService: ConfigService<ENV>,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+    @Optional() private readonly ucanService?: UcanService,
   ) {}
 
   /**
@@ -195,6 +197,28 @@ export class SessionHistoryProcessor {
     const oracleToken = await oracleOpenIdTokenProvider.getToken();
     const oracleHomeServer = oracleMatrixBaseUrl.replace(/^https?:\/\//, '');
 
+    // Try UCAN invocation for memory engine, fall back to Matrix tokens
+    let memoryUcanInvocation: string | undefined;
+    if (this.ucanService?.hasSigningKey() && did) {
+      try {
+        const invocation = await this.ucanService.createServiceInvocation(
+          this.configService.getOrThrow('MEMORY_ENGINE_URL'),
+          did,
+          'ixo:memory',
+        );
+        if (invocation) {
+          memoryUcanInvocation = invocation;
+          this.logger.debug(
+            `[UCAN] Using UCAN invocation for memory engine history processing`,
+          );
+        }
+      } catch (err) {
+        this.logger.warn(
+          `[UCAN] Failed to create memory engine invocation, falling back to Matrix: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
     // Send to memory engine
     const result = await this.memoryEngineService.processConversationHistory({
       messages: transformedMessages,
@@ -203,6 +227,7 @@ export class SessionHistoryProcessor {
       userToken,
       oracleHomeServer,
       userHomeServer,
+      ucanInvocation: memoryUcanInvocation,
     });
 
     if (!result.success) {
