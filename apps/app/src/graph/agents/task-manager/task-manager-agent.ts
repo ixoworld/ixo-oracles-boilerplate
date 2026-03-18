@@ -188,7 +188,7 @@ export const createTaskManagerAgent = async (params: {
     systemPrompt: TASK_MANAGER_PROMPT,
     model: llm,
     description:
-      'AI Agent that manages scheduled tasks — create, pause, resume, cancel, and reschedule reminders, recurring lookups, research tasks, reports, monitors, and scheduled actions. Can list existing tasks and check task status.',
+      'Manages the full lifecycle of scheduled tasks. Tools: create_task, list_tasks, get_task_status, pause_task, resume_task, cancel_task, update_task_schedule, update_notification_policy. Handles negotiation (collecting what/when/where from the user), template matching, dedicated chat creation, task pages, and schedule parsing. Supports reminders, recurring lookups, research, reports, monitors, and scheduled actions with simple (fire-and-send) and flow (work-then-deliver) job patterns.',
     middleware: [],
     userDid: params.userDid,
     sessionId: params.sessionId,

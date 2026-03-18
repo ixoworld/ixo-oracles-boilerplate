@@ -105,6 +105,9 @@ export const SimpleJobDataSchema = z.object({
   matrixUserId: z.string().min(1),
   roomId: z.string().min(1),
   message: z.string(),
+  title: z.string().optional(),
+  taskType: z.string().optional(),
+  scheduleCron: z.string().optional(),
 });
 
 export const WorkJobDataSchema = z.object({
@@ -112,6 +115,9 @@ export const WorkJobDataSchema = z.object({
   userDid: z.string().min(1),
   roomId: z.string().min(1),
   forDeliveryAt: z.string().optional(),
+  title: z.string().optional(),
+  taskType: z.string().optional(),
+  scheduleCron: z.string().optional(),
 });
 
 export const DeliverJobDataSchema = z.object({
@@ -119,6 +125,9 @@ export const DeliverJobDataSchema = z.object({
   userDid: z.string().min(1),
   matrixUserId: z.string().min(1),
   roomId: z.string().min(1),
+  title: z.string().optional(),
+  taskType: z.string().optional(),
+  scheduleCron: z.string().optional(),
 });
 
 const logger = new Logger('ProcessorUtils');

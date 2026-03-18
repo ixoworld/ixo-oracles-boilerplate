@@ -475,6 +475,7 @@ export class TasksService {
         scheduleCron: taskMeta.scheduleCron ?? undefined,
         deadlineIso: taskMeta.deadlineIso ?? undefined,
         timezone: taskMeta.timezone,
+        title: entry.title,
       });
 
       const schedulerUpdates: Partial<TaskMeta> = {
@@ -1150,6 +1151,7 @@ export class TasksService {
       scheduleCron?: string;
       deadlineIso?: string;
       timezone?: string;
+      title?: string;
     },
   ): Promise<{
     bullmqJobId: string;
@@ -1166,13 +1168,13 @@ export class TasksService {
       };
     }
 
-    return this.scheduleFlowTask(taskMeta, roomId);
+    return this.scheduleFlowTask(taskMeta, roomId, params.title);
   }
 
   private async scheduleSimpleTask(
     taskMeta: TaskMeta,
     roomId: string,
-    params: Pick<CreateTaskParams, 'message'>,
+    params: Pick<CreateTaskParams, 'message'> & { title?: string },
   ): Promise<{
     bullmqJobId: string;
     bullmqRepeatKey: string | null;
@@ -1184,6 +1186,9 @@ export class TasksService {
       matrixUserId: taskMeta.matrixUserId,
       roomId,
       message: params.message ?? '',
+      title: params.title,
+      taskType: taskMeta.taskType,
+      scheduleCron: taskMeta.scheduleCron ?? undefined,
     };
 
     if (taskMeta.scheduleCron) {
@@ -1230,16 +1235,24 @@ export class TasksService {
   private async scheduleFlowTask(
     taskMeta: TaskMeta,
     roomId: string,
+    title?: string,
   ): Promise<{
     bullmqJobId: string;
     bullmqRepeatKey: string | null;
     nextRunAt: string | null;
     currentWorkJobId: string | null;
   }> {
+    const dashboardFields = {
+      title,
+      taskType: taskMeta.taskType,
+      scheduleCron: taskMeta.scheduleCron ?? undefined,
+    };
+
     const workData: WorkJobData = {
       taskId: taskMeta.taskId,
       userDid: taskMeta.userDid,
       roomId,
+      ...dashboardFields,
     };
 
     const deliverData: DeliverJobData = {
@@ -1247,6 +1260,7 @@ export class TasksService {
       userDid: taskMeta.userDid,
       matrixUserId: taskMeta.matrixUserId,
       roomId,
+      ...dashboardFields,
     };
 
     if (taskMeta.scheduleCron) {
