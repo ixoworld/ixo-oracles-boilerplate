@@ -233,9 +233,7 @@ export class DeliverProcessor extends WorkerHost {
         });
       } else {
         // Dry run one-shot — revert to active so the real run can happen
-        this.logger.log(
-          `Task ${taskId} dry run finished, reverting to active`,
-        );
+        this.logger.log(`Task ${taskId} dry run finished, reverting to active`);
         await this.tasksService.updateTask({
           taskId,
           mainRoomId,
