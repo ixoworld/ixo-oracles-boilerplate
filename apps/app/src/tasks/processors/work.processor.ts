@@ -357,6 +357,9 @@ export class WorkProcessor extends WorkerHost {
         ? `$${meta.totalCostUsd.toFixed(2)} / $${meta.monthlyBudgetUsd.toFixed(2)}`
         : `$${meta.totalCostUsd.toFixed(2)}`;
 
+      // Calculate time budget for the agent
+      const timeBudgetMinutes = meta.bufferMinutes;
+
       // Build previous runs section from recentOutput
       let previousRuns: string;
       if (meta.recentOutput.length > 0) {
@@ -394,6 +397,7 @@ export class WorkProcessor extends WorkerHost {
         `- Schedule: ${schedule} | Timezone: ${meta.timezone}`,
         `- Run: #${runNumber} | Last run: ${lastRun}`,
         `- Budget: ${budgetStr}`,
+        `- ⏱️ Time budget: ~${timeBudgetMinutes} minutes — you MUST finish within this window. Be fast: use minimal tool calls, don't over-search.`,
         '',
         '### Previous Runs',
         previousRuns,

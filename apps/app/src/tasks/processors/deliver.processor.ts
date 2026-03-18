@@ -126,8 +126,8 @@ export class DeliverProcessor extends WorkerHost {
             );
           } else {
             const formattedMessage = this.formatDeliveryMessage(
-              taskId,
               workResult,
+              job.data.title,
             );
             this.logger.debug(
               `Sending delivery notification: policy=${meta.notificationPolicy}, isDryRun=${meta.status === 'dry_run'}, messageLen=${formattedMessage.length}`,
@@ -351,8 +351,12 @@ export class DeliverProcessor extends WorkerHost {
   /**
    * Format a delivery message from the work result.
    */
-  private formatDeliveryMessage(taskId: string, result: WorkResult): string {
-    return `📋 **Task ${taskId} — Result**\n\n${result.result}`;
+  private formatDeliveryMessage(
+    result: WorkResult,
+    title?: string,
+  ): string {
+    const header = title ? `📋 **${title}**` : '📋 **Task Result**';
+    return `${header}\n\n${result.result}`;
   }
 
   /**

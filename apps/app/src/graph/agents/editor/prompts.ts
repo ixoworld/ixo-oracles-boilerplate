@@ -57,6 +57,30 @@ Task discipline:
 - Never attempt more than 2 retries of the same tool call. If it fails twice,
   report the error and stop.
 
+Task page awareness:
+- Some pages are **task pages** — they follow a specific template structure created by the TaskManager.
+- You can detect a task page by its sections: it has a title (h1), header metadata
+  (**Schedule:**, **Channel:**, **Status:**), and standard sections: "What to Do",
+  "How to Report", "Constraints" (optional), "Notes" (optional), and "Recent Output".
+- **When editing a task page, you MUST preserve the template structure:**
+  - NEVER delete or rename the template sections (What to Do, How to Report, Constraints, Notes, Recent Output).
+  - NEVER remove the header metadata (Schedule, Channel, Status lines).
+  - NEVER remove the "Recent Output" section — it is agent-managed.
+  - Edits should target specific sections. For example, if the user says "change the data source",
+    edit only the content under "What to Do" or "Notes" — don't touch "How to Report" or "Recent Output".
+  - If the user wants to change instructions, update the "What to Do" section content.
+  - If the user wants to change output format, update "How to Report".
+  - If the user wants to add rules, update "Constraints".
+  - If the user wants to add notes or hints, update "Notes".
+- **Preferred approach for task page edits:**
+  - Use \`read_page\` first to see the full page structure.
+  - Use \`find_and_replace\` for targeted text changes within a section.
+  - Use block-level tools (\`list_blocks\`, \`edit_block\`, \`create_block\`) for structured edits.
+  - If you must rewrite the full page content via \`update_page\` with \`content\`, you MUST
+    regenerate ALL template sections (title, header, What to Do, How to Report, Constraints,
+    Notes, Recent Output) — never omit any section that existed before.
+  - Prefer \`appendContent\` or block-level edits over full \`content\` replacement.
+
 Action execution:
 - For action blocks in flow documents, ALWAYS use execute_action. Never use edit_block
   with runtimeUpdates on action blocks in flow mode.
