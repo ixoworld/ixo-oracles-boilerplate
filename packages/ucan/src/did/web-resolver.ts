@@ -70,25 +70,28 @@ export function createWebDIDResolver(
           ? `/${pathSegments.join('/')}/did.json`
           : '/.well-known/did.json';
 
+      // Use HTTP directly for localhost (no TLS available, avoids ~15s connection timeout)
+      const isLocalhost = domain.startsWith('localhost');
       const httpsUrl = `https://${domain}${path}`;
+      const httpUrl = `http://${domain}${path}`;
 
       let response: Response | null = null;
-      let fetchUrl = httpsUrl;
+      let fetchUrl = isLocalhost ? httpUrl : httpsUrl;
 
       try {
-        response = await fetchFn(httpsUrl);
-      } catch (httpsError) {
-        if (config?.fallbackToHttp) {
-          fetchUrl = `http://${domain}${path}`;
+        response = await fetchFn(fetchUrl);
+      } catch (fetchError) {
+        if (!isLocalhost && config?.fallbackToHttp) {
+          fetchUrl = httpUrl;
           response = await fetchFn(fetchUrl);
         } else {
-          throw httpsError;
+          throw fetchError;
         }
       }
 
-      if (!response.ok && config?.fallbackToHttp && fetchUrl === httpsUrl) {
+      if (!response.ok && !isLocalhost && config?.fallbackToHttp && fetchUrl === httpsUrl) {
         // HTTPS returned a non-ok status, try HTTP
-        fetchUrl = `http://${domain}${path}`;
+        fetchUrl = httpUrl;
         response = await fetchFn(fetchUrl);
       }
 

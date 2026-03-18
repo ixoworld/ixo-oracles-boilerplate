@@ -21,7 +21,7 @@ UCAN is a decentralized authorization system using cryptographically signed toke
 - 🔐 **Built on ucanto** - Battle-tested UCAN library from Storacha
 - 🎯 **Generic Capabilities** - Define your own capabilities with custom schemas
 - ⚙️ **Caveat Validation** - Enforce limits and restrictions on delegations
-- 🌐 **Multi-DID Support** - `did:key` (native) + `did:ixo` (via blockchain indexer)
+- 🌐 **Multi-DID Support** - `did:key` (native) + `did:ixo` (via blockchain indexer) + `did:web` (via HTTP) + local (in-memory registry)
 - 🚀 **Framework-Agnostic** - Works with Express, Fastify, Hono, NestJS, etc.
 - 🛡️ **Replay Protection** - Built-in invocation store prevents replay attacks
 
@@ -276,8 +276,50 @@ const invocation = await createInvocation({
 
 ```typescript
 createIxoDIDResolver(config: IxoDIDResolverConfig): DIDKeyResolver
+createWebDIDResolver(config?: WebDIDResolverConfig): DIDKeyResolver
+createLocalDIDResolver(): LocalDIDResolver
 createCompositeDIDResolver(resolvers: DIDKeyResolver[]): DIDKeyResolver
 ```
+
+#### `createIxoDIDResolver`
+
+Resolves `did:ixo` identifiers by querying the IXO blockchain indexer for verification keys.
+
+| Option       | Type     | Description                                    |
+| ------------ | -------- | ---------------------------------------------- |
+| `indexerUrl` | `string` | Blocksync GraphQL endpoint for DID lookups     |
+
+#### `createWebDIDResolver`
+
+Resolves `did:web` identifiers by fetching the DID document from `https://{domain}/.well-known/did.json` (or path-based equivalents) and extracting Ed25519 verification methods.
+
+| Option           | Type       | Description                                                      |
+| ---------------- | ---------- | ---------------------------------------------------------------- |
+| `fetch`          | `function` | Custom fetch implementation (default: `globalThis.fetch`)        |
+| `fallbackToHttp` | `boolean`  | Retry with `http://` when `https://` fails (default: `false`). Localhost always uses HTTP. |
+
+#### `createLocalDIDResolver`
+
+Creates a DID resolver backed by an in-memory registry of pre-known keys. Useful for services that know their own `did:web` identity at startup and want to avoid network calls for self-resolution.
+
+```typescript
+const localResolver = createLocalDIDResolver();
+localResolver.register('did:web:myservice.example.com', 'z6MkPublicKeyMultibase...');
+
+const didResolver = createCompositeDIDResolver([
+  localResolver,              // check local first (instant)
+  createWebDIDResolver(),     // fall back to HTTP
+  createIxoDIDResolver({ indexerUrl: '...' }),
+]);
+```
+
+| Method                                     | Description                                              |
+| ------------------------------------------ | -------------------------------------------------------- |
+| `register(did, publicKeyMultibase)`        | Register a DID with its z-base58btc Ed25519 public key   |
+
+#### `createCompositeDIDResolver`
+
+Chains multiple resolvers. Tries each in order — returns the first successful result or the last error if all fail.
 
 ### Replay Protection
 
@@ -288,11 +330,12 @@ createInvocationStore(options?)
 
 ## DID Support
 
-| DID Method | Support         | Notes                               |
-| ---------- | --------------- | ----------------------------------- |
-| `did:key`  | ✅ Native       | Parsed directly from the identifier |
-| `did:ixo`  | ✅ Via resolver | Resolved via IXO blockchain indexer |
-| `did:web`  | 🔧 Extendable   | Implement custom resolver           |
+| DID Method | Support         | Notes                                                        |
+| ---------- | --------------- | ------------------------------------------------------------ |
+| `did:key`  | ✅ Native       | Parsed directly from the identifier                          |
+| `did:ixo`  | ✅ Via resolver | Resolved via IXO blockchain indexer                          |
+| `did:web`  | ✅ Via resolver | Fetches DID document from well-known endpoint                |
+| Local      | ✅ In-memory    | Pre-registered keys resolved instantly, no network calls     |
 
 ## Environment Variables
 
@@ -312,7 +355,9 @@ import {
   UcantoServer,
   UcantoClient,
   UcantoValidator,
+  UcantoPrincipal,
   ed25519,
+  Verifier,
 } from '@ixo/ucan';
 ```
 
