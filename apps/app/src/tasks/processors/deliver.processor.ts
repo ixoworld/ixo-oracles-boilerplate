@@ -351,10 +351,7 @@ export class DeliverProcessor extends WorkerHost {
   /**
    * Format a delivery message from the work result.
    */
-  private formatDeliveryMessage(
-    result: WorkResult,
-    title?: string,
-  ): string {
+  private formatDeliveryMessage(result: WorkResult, title?: string): string {
     const header = title ? `📋 **${title}**` : '📋 **Task Result**';
     return `${header}\n\n${result.result}`;
   }

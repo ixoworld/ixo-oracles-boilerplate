@@ -112,7 +112,7 @@ async function bootstrap(): Promise<void> {
   // Fire Matrix init in background (don't await — let server start for health checks).
   // MessagesService.onModuleInit defers its listener until this completes.
   Logger.log('Initializing MatrixManager (background)...');
- try {
+  try {
     await matrixManager.init();
     Logger.log('MatrixManager initialized successfully');
     Logger.log(`Oracle: ${matrixManager.getClient()?.userId}`);
