@@ -126,8 +126,8 @@ export class DeliverProcessor extends WorkerHost {
             );
           } else {
             const formattedMessage = this.formatDeliveryMessage(
-              taskId,
               workResult,
+              job.data.title,
             );
             this.logger.debug(
               `Sending delivery notification: policy=${meta.notificationPolicy}, isDryRun=${meta.status === 'dry_run'}, messageLen=${formattedMessage.length}`,
@@ -215,12 +215,30 @@ export class DeliverProcessor extends WorkerHost {
           `Fresh status for task ${taskId}: ${freshMeta.status}`,
         );
         if (isTaskRunnable(freshMeta)) {
-          await this.scheduleNextWork(freshMeta, mainRoomId);
+          await this.scheduleNextWork(freshMeta, mainRoomId, job.data.title);
         } else {
           this.logger.log(
             `Task ${taskId} no longer runnable (status=${freshMeta.status}), skipping next work schedule`,
           );
         }
+      } else if (meta.status !== 'dry_run') {
+        // One-shot flow task — mark as completed
+        this.logger.log(
+          `Task ${taskId} is one-shot (no cron), marking as completed`,
+        );
+        await this.tasksService.updateTask({
+          taskId,
+          mainRoomId,
+          updates: { status: 'completed' },
+        });
+      } else {
+        // Dry run one-shot — revert to active so the real run can happen
+        this.logger.log(`Task ${taskId} dry run finished, reverting to active`);
+        await this.tasksService.updateTask({
+          taskId,
+          mainRoomId,
+          updates: { status: 'active' },
+        });
       }
 
       this.logger.log(
@@ -333,8 +351,9 @@ export class DeliverProcessor extends WorkerHost {
   /**
    * Format a delivery message from the work result.
    */
-  private formatDeliveryMessage(taskId: string, result: WorkResult): string {
-    return `📋 **Task ${taskId} — Result**\n\n${result.result}`;
+  private formatDeliveryMessage(result: WorkResult, title?: string): string {
+    const header = title ? `📋 **${title}**` : '📋 **Task Result**';
+    return `${header}\n\n${result.result}`;
   }
 
   /**
@@ -418,6 +437,7 @@ export class DeliverProcessor extends WorkerHost {
   private async scheduleNextWork(
     meta: TaskMeta,
     mainRoomId: string,
+    title?: string,
   ): Promise<void> {
     if (!meta.scheduleCron) return;
 
@@ -442,6 +462,9 @@ export class DeliverProcessor extends WorkerHost {
         userDid: meta.userDid,
         roomId,
         forDeliveryAt: nextDelivery.toISOString(),
+        title,
+        taskType: meta.taskType,
+        scheduleCron: meta.scheduleCron ?? undefined,
       },
       delay: workDelay,
     });

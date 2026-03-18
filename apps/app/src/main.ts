@@ -114,25 +114,26 @@ async function bootstrap(): Promise<void> {
   // Fire Matrix init in background (don't await — let server start for health checks).
   // MessagesService.onModuleInit defers its listener until this completes.
   Logger.log('Initializing MatrixManager (background)...');
-  matrixManager
-    .init()
-    .then(async () => {
-      Logger.log('MatrixManager initialized successfully');
-      Logger.log(`Oracle: ${matrixManager.getClient()?.userId}`);
+  try {
+    await matrixManager.init();
+    Logger.log('MatrixManager initialized successfully');
+    Logger.log(`Oracle: ${matrixManager.getClient()?.userId}`);
 
-      // Initialize non-critical services after Matrix is ready
-      const editorMatrixClient = EditorMatrixClient.getInstance();
-      editorMatrixClient.init().catch((error) => {
-        Logger.error('Failed to initialize EditorMatrixClient:', error);
-        Logger.warn('Editor functionality may be limited until sync completes');
-      });
-      Logger.log('EditorMatrixClient initialization started in background...');
+    // Initialize non-critical services after Matrix is ready
+    const editorMatrixClient = EditorMatrixClient.getInstance();
+    editorMatrixClient.init().catch((error) => {
+      Logger.error('Failed to initialize EditorMatrixClient:', error);
+      Logger.warn('Editor functionality may be limited until sync completes');
+    });
+    Logger.log('EditorMatrixClient initialization started in background...');
 
-      const matrixAccountRoomId = configService.get('MATRIX_ACCOUNT_ROOM_ID');
-      // still run setupClaimSigningMnemonics even if DISABLE_CREDITS as need it for ucan signing
+    const matrixAccountRoomId = configService.get('MATRIX_ACCOUNT_ROOM_ID');
+    const disableCredits =
+      configService.get('DISABLE_CREDITS', false) || !matrixAccountRoomId;
+    if (!disableCredits) {
       Logger.log('Setting up claim signing mnemonics...');
       Logger.log(`Matrix account room id: ${matrixAccountRoomId}`);
-      const signingMnemonic = await setupClaimSigningMnemonics({
+      await setupClaimSigningMnemonics({
         matrixRoomId: matrixAccountRoomId,
         matrixAccessToken: configService.getOrThrow(
           'MATRIX_ORACLE_ADMIN_ACCESS_TOKEN',
@@ -143,42 +144,36 @@ async function bootstrap(): Promise<void> {
         network: configService.getOrThrow('NETWORK'),
       });
       Logger.log('Claim signing mnemonics setup complete');
+    } else {
+      Logger.log('Signing mnemonic creation skipped (DISABLE_CREDITS=true)');
+    }
 
-      if (signingMnemonic) {
-        const ucanService = app.get(UcanService);
-        ucanService.setSigningMnemonic(
-          signingMnemonic,
-          configService.getOrThrow('ORACLE_DID'),
+    // Load P-256 encryption key for user secrets
+    if (matrixAccountRoomId) {
+      Logger.log('Loading P-256 encryption key...');
+      const encryptionKeyResult = await loadEncryptionKey({
+        matrixRoomId: matrixAccountRoomId,
+        matrixAccessToken: configService.getOrThrow(
+          'MATRIX_ORACLE_ADMIN_ACCESS_TOKEN',
+        ),
+        pin: configService.getOrThrow('MATRIX_VALUE_PIN'),
+        signerDid: configService.getOrThrow('ORACLE_DID'),
+      });
+      if (encryptionKeyResult) {
+        SecretsService.getInstance().setEncryptionKey(
+          encryptionKeyResult.privateJwk,
+        );
+        Logger.log('P-256 encryption key loaded successfully');
+      } else {
+        Logger.warn(
+          'No P-256 encryption key found. User secrets will be unavailable. ' +
+            'Run "oracles-cli setup-encryption-key" to provision one.',
         );
       }
-
-      // Load P-256 encryption key for user secrets
-      if (matrixAccountRoomId) {
-        Logger.log('Loading P-256 encryption key...');
-        const encryptionKeyResult = await loadEncryptionKey({
-          matrixRoomId: matrixAccountRoomId,
-          matrixAccessToken: configService.getOrThrow(
-            'MATRIX_ORACLE_ADMIN_ACCESS_TOKEN',
-          ),
-          pin: configService.getOrThrow('MATRIX_VALUE_PIN'),
-          signerDid: configService.getOrThrow('ORACLE_DID'),
-        });
-        if (encryptionKeyResult) {
-          SecretsService.getInstance().setEncryptionKey(
-            encryptionKeyResult.privateJwk,
-          );
-          Logger.log('P-256 encryption key loaded successfully');
-        } else {
-          Logger.warn(
-            'No P-256 encryption key found. User secrets will be unavailable. ' +
-              'Run "oracles-cli setup-encryption-key" to provision one.',
-          );
-        }
-      }
-    })
-    .catch((error) => {
-      Logger.error('Failed to initialize MatrixManager:', error);
-    });
+    }
+  } catch (error) {
+    Logger.error('Failed to initialize MatrixManager:', error);
+  }
 
   // Server starts immediately — health checks pass while Matrix syncs in background
   await app.listen(port, '0.0.0.0');

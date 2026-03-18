@@ -50,6 +50,18 @@ describe('generateTaskPage', () => {
     expect(withConstraints).toContain('Use Reuters only.');
   });
 
+  it('includes Notes section only when provided', () => {
+    const without = generateTaskPage(sampleParams);
+    expect(without).not.toContain('## Notes');
+
+    const withNotes = generateTaskPage({
+      ...sampleParams,
+      notes: 'Check threshold before alerting.',
+    });
+    expect(withNotes).toContain('## Notes');
+    expect(withNotes).toContain('Check threshold before alerting.');
+  });
+
   it('shows "No output yet." placeholder in Recent Output', () => {
     const page = generateTaskPage(sampleParams);
     expect(page).toContain('*No output yet.*');

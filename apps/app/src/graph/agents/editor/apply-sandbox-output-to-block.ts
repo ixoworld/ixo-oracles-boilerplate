@@ -89,7 +89,7 @@ const applySandboxOutputToBlockSchema = z.object({
   filePath: z
     .string()
     .describe(
-      'Absolute path to the JSON file in the sandbox (e.g. /workspace/output/result.json)',
+      'Absolute path to the JSON file in the sandbox (e.g. /workspace/data/output/result.json)',
     ),
   blockId: z
     .string()
@@ -334,20 +334,20 @@ export function createApplySandboxOutputToBlockTool({
 **Examples:**
 
 Direct transfer (all fields as top-level props):
-  {"filePath": "/workspace/output/result.json", "blockId": "uuid-here"}
+  {"filePath": "/workspace/data/output/result.json", "blockId": "uuid-here"}
 
 With field mapping (flat):
-  {"filePath": "/workspace/output/result.json", "blockId": "uuid-here", "fieldMapping": {"jwt_token": "kycCredential", "url": "kycUrl"}}
+  {"filePath": "/workspace/data/output/result.json", "blockId": "uuid-here", "fieldMapping": {"jwt_token": "kycCredential", "url": "kycUrl"}}
 
 Nest into action block inputs (dot-notation target — use this for action blocks):
-  {"filePath": "/workspace/output/credential.json", "blockId": "uuid-here", "fieldMapping": {".": "inputs.credential"}}
+  {"filePath": "/workspace/data/output/credential.json", "blockId": "uuid-here", "fieldMapping": {".": "inputs.credential"}}
   This puts the entire file content as the "credential" field inside the block's "inputs" JSON-string prop.
 
 Multiple fields into inputs:
-  {"filePath": "/workspace/output/result.json", "blockId": "uuid-here", "fieldMapping": {"credential": "inputs.credential", "roomId": "inputs.roomId"}}
+  {"filePath": "/workspace/data/output/result.json", "blockId": "uuid-here", "fieldMapping": {"credential": "inputs.credential", "roomId": "inputs.roomId"}}
 
 Extract nested object:
-  {"filePath": "/workspace/output/result.json", "blockId": "uuid-here", "jsonPath": "data.credentials"}
+  {"filePath": "/workspace/data/output/result.json", "blockId": "uuid-here", "jsonPath": "data.credentials"}
 
 **IMPORTANT for action blocks:** Action block inputs are stored as a JSON string in the \`inputs\` prop. Use dot-notation targets like \`inputs.credential\` to nest values correctly. Do NOT use direct transfer (no fieldMapping) on action blocks — it will spread fields as top-level props instead of into inputs.`,
       schema: applySandboxOutputToBlockSchema,

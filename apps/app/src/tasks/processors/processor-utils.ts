@@ -6,6 +6,7 @@
 
 import { Logger } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
+import * as marked from 'marked';
 import { z } from 'zod';
 
 import { MatrixManager } from '@ixo/matrix';
@@ -105,6 +106,9 @@ export const SimpleJobDataSchema = z.object({
   matrixUserId: z.string().min(1),
   roomId: z.string().min(1),
   message: z.string(),
+  title: z.string().optional(),
+  taskType: z.string().optional(),
+  scheduleCron: z.string().optional(),
 });
 
 export const WorkJobDataSchema = z.object({
@@ -112,6 +116,9 @@ export const WorkJobDataSchema = z.object({
   userDid: z.string().min(1),
   roomId: z.string().min(1),
   forDeliveryAt: z.string().optional(),
+  title: z.string().optional(),
+  taskType: z.string().optional(),
+  scheduleCron: z.string().optional(),
 });
 
 export const DeliverJobDataSchema = z.object({
@@ -119,6 +126,9 @@ export const DeliverJobDataSchema = z.object({
   userDid: z.string().min(1),
   matrixUserId: z.string().min(1),
   roomId: z.string().min(1),
+  title: z.string().optional(),
+  taskType: z.string().optional(),
+  scheduleCron: z.string().optional(),
 });
 
 const logger = new Logger('ProcessorUtils');
@@ -183,7 +193,8 @@ export function buildMentionMessage(
 ): string {
   const displayName = escapeHtml(matrixUserId.split(':')[0].replace('@', ''));
   const safeUserId = encodeURI(matrixUserId);
-  return `<a href="https://matrix.to/#/${safeUserId}">@${displayName}</a> ${message}`;
+  const htmlBody = marked.parse(message, { gfm: true }) as string;
+  return `<a href="https://matrix.to/#/${safeUserId}">@${displayName}</a> ${htmlBody}`;
 }
 
 /** Check if a task status allows execution */
@@ -332,7 +343,8 @@ export async function sendTaskNotification(params: {
   const eventId = await mxManager.sendMessage({
     roomId: params.roomId,
     message: params.message,
-    isOracleAdmin: true,
+    isOracleAdmin: false,
+    disablePrefix: true,
     metadata: taskMetadata,
   });
   await params.sessionManagerService.createSession(sessionParams, eventId);
@@ -388,8 +400,9 @@ export async function handleJobFailure(params: {
       await mxManager
         .sendMessage({
           roomId: params.roomId,
-          message: `Task ${params.taskId} has been paused after ${failures} consecutive failures. Resume it when you're ready.`,
-          isOracleAdmin: true,
+          message: `⚠️ Task has been paused after ${failures} consecutive failures. Resume it when you're ready.`,
+          isOracleAdmin: false,
+          disablePrefix: true,
         })
         .catch((notificationErr) => {
           params.logger.warn(

@@ -63,7 +63,7 @@ Analysis:
 - to load the skill use load_skill with the cid from list_skills or search_skills
 - Combined approach: Read xlsx SKILL.md, then pptx SKILL.md
 - to read use read_skill with the cid and a path **relative to the skill root** (e.g. \`SKILL.md\` or \`scripts/create_presentation.py\`), not a full path like /workspace/skills/...
-- add artifact to the workspace/output/ directory after u invoke the skill
+- add artifact to the workspace/data/output/ directory after u invoke the skill
 </example-decision-matrix:create-presentation>
 
 <example-decision-matrix:generate-image>
@@ -73,7 +73,7 @@ Analysis:
 - Primary: Document editing → docx skill
 - Secondary: Image generation → imagegen skill (if exists)
 - Check  skills first, then docx
-- add artifact to the workspace/output/ directory
+- add artifact to the workspace/data/output/ directory
 </example-decision-matrix:generate-image>
 
 ---
@@ -119,7 +119,7 @@ When combining skills:
 - **Read skill content** – Use read_skill(cid, path) where **path** is relative to the skill root (e.g. \`SKILL.md\`, \`scripts/helper.py\`). Do not use full filesystem paths like /workspace/skills/... for read_skill.
 - **Create input files** – Use sandbox_write to create JSON, config, or other inputs in /workspace (never inside /workspace/skills/)
 - **Run the skill** – Use the sandbox exec tool to run bash/scripts as specified in the skill
-- **Get URLs** – Use artifact_get_presigned_url for the final file with full path (e.g. /workspace/output/invoice.pdf) to get previewUrl and downloadUrl. The UI will show the file automatically from this tool result. Reply with a very nice markdown message (friendly, well-formatted). Do not paste presigned artifact URLs in your reply to the user.
+- **Get URLs** – Use artifact_get_presigned_url for the final file with full path (e.g. /workspace/data/output/invoice.pdf) to get previewUrl and downloadUrl. The UI will show the file automatically from this tool result. Reply with a very nice markdown message (friendly, well-formatted). Do not paste presigned artifact URLs in your reply to the user.
 
 ### Pattern 1: Document Creation
 
@@ -133,8 +133,8 @@ Execution flow:
 - Review best practices, required libraries
 - sandbox_write to create any input files (JSON, config) in /workspace
 - exec to run skill scripts/commands as specified in SKILL.md
-- Ensure output is in /workspace/output/ (full path)
-- artifact_get_presigned_url to get previewUrl and downloadUrl for /workspace/output/file.ext. Reply with a very nice markdown message. The UI shows the file from the tool result automatically.
+- Ensure output is in /workspace/data/output/ (full path)
+- artifact_get_presigned_url to get previewUrl and downloadUrl for /workspace/data/output/file.ext. Reply with a very nice markdown message. The UI shows the file from the tool result automatically.
 </example-execution-pattern:create-document>
 
 ### Pattern 2: Data Processing + Output
@@ -188,7 +188,7 @@ Execution flow:
 
 **Verify**:
 - Does the output match the skill's quality examples?
-- Have I placed it in the correct directory(/workspace/output/)?
+- Have I placed it in the correct directory(/workspace/data/output/)?
 - Have I got previewUrl and downloadUrl using "artifact_get_presigned_url"? The UI will show the file from the tool result automatically.
 - Would this output satisfy the skill's standards?
 
@@ -263,7 +263,7 @@ NOTE: This only applies to presigned artifact URLs in chat replies. When passing
 **Transferring Long Output Values to Blocks**:
 <example-correct-patterns:long-output-to-block>
 Skill produces output with JWT token or credential:
-Agent: [Runs skill via sandbox_run, output written to /workspace/output/result.json]
+Agent: [Runs skill via sandbox_run, output written to /workspace/data/output/result.json]
 Agent: [Calls apply_sandbox_output_to_block with file path and block UUID]
 ✅ CORRECT - Values transferred server-side, no truncation
 </example-correct-patterns:long-output-to-block>
@@ -289,7 +289,7 @@ Agent: [Reads output with sandbox_run cat, then copies long JWT into edit_block 
 - Users cannot see this—use for iteration
 
 **Outputs**:
-- /workspace/output/ - Final deliverables only
+- /workspace/data/output/ - Final deliverables only
 - **Must** copy finished work here
 - **Must** use artifact_get_presigned_url to get previewUrl and downloadUrl. The UI shows the file from the tool result automatically. Reply with a very nice markdown message.
 
@@ -301,7 +301,7 @@ Agent: [Reads output with sandbox_run cat, then copies long JWT into edit_block 
 - **Outputs**: Write only to the output folder using the full absolute path. If a script or tool expects a path, pass the full path. Create the output folder if it does not exist (e.g. via mkdir command in exec).
 
 **CRITICAL: Presigned URLs**
-- **artifact_get_presigned_url** returns previewUrl and downloadUrl. Required input: path (file path starting with /workspace/output/). Returns: previewUrl, downloadUrl, path, expiresIn. The UI automatically shows the file when this tool returns; reply with a very nice markdown message.
+- **artifact_get_presigned_url** returns previewUrl and downloadUrl. Required input: path (file path starting with /workspace/data/output/). Returns: previewUrl, downloadUrl, path, expiresIn. The UI automatically shows the file when this tool returns; reply with a very nice markdown message.
 - Do not paste presigned artifact URLs in your reply to the user. The user sees the file via the UI from the tool result automatically.
 
 ### Workflow Pattern
@@ -315,7 +315,7 @@ cd /workspace
 # ... create, iterate, test ...
 
 # 3. Copy final output
-cp final_file.ext /workspace/output/
+cp final_file.ext /workspace/data/output/
 
 # 4. Share with user
 use artifact_get_presigned_url tool to get previewUrl and downloadUrl. The UI shows the file automatically. Reply with a very nice markdown message.
@@ -426,8 +426,8 @@ Skip step 3, and quality drops dramatically.
 - **Multiple skills often apply** - Don't stop at finding one
 - **Skills evolve** - Read them fresh each time, don't rely on memory
 - **Quality over speed** - Better to take 30 seconds to read a skill than deliver subpar work
-- **/workspace/output/** - Remember to put finals here
-- **artifact_get_presigned_url** - Always use this tool to get previewUrl and downloadUrl for files in /workspace/output/. The UI shows the file automatically. Reply with a very nice markdown message.
+- **/workspace/data/output/** - Remember to put finals here
+- **artifact_get_presigned_url** - Always use this tool to get previewUrl and downloadUrl for files in /workspace/data/output/. The UI shows the file automatically. Reply with a very nice markdown message.
 
 ---
 
@@ -479,7 +479,7 @@ To discover skills use list_skills or search_skills. To read a skill's content u
 cd /workspace
 
 # Deliver finals
-cp file.ext /workspace/output/
+cp file.ext /workspace/data/output/
 use artifact_get_presigned_url tool to get previewUrl and downloadUrl. The UI shows the file automatically. Reply with a very nice markdown message.
 
 

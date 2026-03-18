@@ -8,7 +8,13 @@
  * @see spec §5.2 — Page Template
  */
 
-import type { ChannelType, OutputRow, TaskMeta, TaskType } from './task-meta';
+import type {
+  ChannelType,
+  OutputRow,
+  TaskMeta,
+  TaskStatus,
+  TaskType,
+} from './task-meta';
 
 // ── Template Input ──────────────────────────────────────────────────
 
@@ -27,6 +33,8 @@ export interface TaskPageParams {
   howToReport: string;
   /** Optional constraints / rules */
   constraints?: string;
+  /** Optional freeform notes — agent or user can add anything useful: approach hints, sub-agent suggestions, steps to follow, edge-case handling, etc. */
+  notes?: string;
 }
 
 // ── Template Function ───────────────────────────────────────────────
@@ -65,6 +73,10 @@ export function generateTaskPage(params: TaskPageParams): string {
     sections.push('', '## Constraints', '', params.constraints);
   }
 
+  if (params.notes) {
+    sections.push('', '## Notes', '', params.notes);
+  }
+
   sections.push('', '---', '', '## Recent Output', '', '*No output yet.*');
 
   return sections.join('\n');
@@ -80,6 +92,7 @@ export interface TaskPageInput {
   whatToDo: string;
   howToReport: string;
   constraints?: string;
+  notes?: string;
 }
 
 /**
@@ -94,11 +107,27 @@ export function buildTaskPageParams(input: TaskPageInput): TaskPageParams {
     title: input.title,
     scheduleDescription: input.scheduleDescription,
     channelName,
-    status: '\u2705 Active',
+    status: formatStatusLabel('active'),
     whatToDo: input.whatToDo,
     howToReport: input.howToReport,
     constraints: input.constraints,
+    notes: input.notes,
   };
+}
+
+// ── Status Label ─────────────────────────────────────────────────────
+
+const STATUS_LABELS: Record<TaskStatus, string> = {
+  active: '\u2705 Active',
+  paused: '\u23F8\uFE0F Paused',
+  cancelled: '\u274C Cancelled',
+  completed: '\u2705 Completed',
+  dry_run: '\uD83E\uDDEA Dry Run',
+};
+
+/** Returns an emoji + label for a given task status. */
+export function formatStatusLabel(status: TaskStatus): string {
+  return STATUS_LABELS[status] ?? status;
 }
 
 // ── Output Section (rendered from metadata) ──────────────────────────
