@@ -111,7 +111,9 @@ app.use(async (req, res, next) => {
   const result = await validator.validateDelegation(delegationHeader);
 
   if (!result.ok) {
-    console.warn(`Delegation invalid: [${result.error?.code}] ${result.error?.message}`);
+    console.warn(
+      `Delegation invalid: [${result.error?.code}] ${result.error?.message}`,
+    );
     return next();
   }
 
@@ -216,10 +218,10 @@ Create a framework-agnostic validator.
 
 #### Methods
 
-| Method                                                              | Description                                                   |
-| ------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `validate(invocationBase64, capabilityDef, resource)`               | Validate an invocation against a capability definition        |
-| `validateDelegation(delegationBase64)`                              | Validate a standalone delegation (signature, audience, chain) |
+| Method                                                | Description                                                   |
+| ----------------------------------------------------- | ------------------------------------------------------------- |
+| `validate(invocationBase64, capabilityDef, resource)` | Validate an invocation against a capability definition        |
+| `validateDelegation(delegationBase64)`                | Validate a standalone delegation (signature, audience, chain) |
 
 **`validate()`** validates a full invocation — checks signature, capability matching, caveats, replay protection, and resource authorization.
 
@@ -285,17 +287,17 @@ createCompositeDIDResolver(resolvers: DIDKeyResolver[]): DIDKeyResolver
 
 Resolves `did:ixo` identifiers by querying the IXO blockchain indexer for verification keys.
 
-| Option       | Type     | Description                                    |
-| ------------ | -------- | ---------------------------------------------- |
-| `indexerUrl` | `string` | Blocksync GraphQL endpoint for DID lookups     |
+| Option       | Type     | Description                                |
+| ------------ | -------- | ------------------------------------------ |
+| `indexerUrl` | `string` | Blocksync GraphQL endpoint for DID lookups |
 
 #### `createWebDIDResolver`
 
 Resolves `did:web` identifiers by fetching the DID document from `https://{domain}/.well-known/did.json` (or path-based equivalents) and extracting Ed25519 verification methods.
 
-| Option           | Type       | Description                                                      |
-| ---------------- | ---------- | ---------------------------------------------------------------- |
-| `fetch`          | `function` | Custom fetch implementation (default: `globalThis.fetch`)        |
+| Option           | Type       | Description                                                                                |
+| ---------------- | ---------- | ------------------------------------------------------------------------------------------ |
+| `fetch`          | `function` | Custom fetch implementation (default: `globalThis.fetch`)                                  |
 | `fallbackToHttp` | `boolean`  | Retry with `http://` when `https://` fails (default: `false`). Localhost always uses HTTP. |
 
 #### `createLocalDIDResolver`
@@ -304,18 +306,21 @@ Creates a DID resolver backed by an in-memory registry of pre-known keys. Useful
 
 ```typescript
 const localResolver = createLocalDIDResolver();
-localResolver.register('did:web:myservice.example.com', 'z6MkPublicKeyMultibase...');
+localResolver.register(
+  'did:web:myservice.example.com',
+  'z6MkPublicKeyMultibase...',
+);
 
 const didResolver = createCompositeDIDResolver([
-  localResolver,              // check local first (instant)
-  createWebDIDResolver(),     // fall back to HTTP
+  localResolver, // check local first (instant)
+  createWebDIDResolver(), // fall back to HTTP
   createIxoDIDResolver({ indexerUrl: '...' }),
 ]);
 ```
 
-| Method                                     | Description                                              |
-| ------------------------------------------ | -------------------------------------------------------- |
-| `register(did, publicKeyMultibase)`        | Register a DID with its z-base58btc Ed25519 public key   |
+| Method                              | Description                                            |
+| ----------------------------------- | ------------------------------------------------------ |
+| `register(did, publicKeyMultibase)` | Register a DID with its z-base58btc Ed25519 public key |
 
 #### `createCompositeDIDResolver`
 
@@ -330,12 +335,12 @@ createInvocationStore(options?)
 
 ## DID Support
 
-| DID Method | Support         | Notes                                                        |
-| ---------- | --------------- | ------------------------------------------------------------ |
-| `did:key`  | ✅ Native       | Parsed directly from the identifier                          |
-| `did:ixo`  | ✅ Via resolver | Resolved via IXO blockchain indexer                          |
-| `did:web`  | ✅ Via resolver | Fetches DID document from well-known endpoint                |
-| Local      | ✅ In-memory    | Pre-registered keys resolved instantly, no network calls     |
+| DID Method | Support         | Notes                                                    |
+| ---------- | --------------- | -------------------------------------------------------- |
+| `did:key`  | ✅ Native       | Parsed directly from the identifier                      |
+| `did:ixo`  | ✅ Via resolver | Resolved via IXO blockchain indexer                      |
+| `did:web`  | ✅ Via resolver | Fetches DID document from well-known endpoint            |
+| Local      | ✅ In-memory    | Pre-registered keys resolved instantly, no network calls |
 
 ## Environment Variables
 

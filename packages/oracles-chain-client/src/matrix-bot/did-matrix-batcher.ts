@@ -183,7 +183,9 @@ async function queryIidServices(
     }>(getBlocksyncGraphqlUrl(), QUERY_IIDS, { dids });
 
     if (!data?.iids?.nodes) {
-      console.error('[DidMatrixBatcher] Error querying IIDs: no nodes returned');
+      console.error(
+        '[DidMatrixBatcher] Error querying IIDs: no nodes returned',
+      );
       dids.forEach((did) => results.set(did, null));
       return results;
     }

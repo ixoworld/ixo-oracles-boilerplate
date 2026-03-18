@@ -344,7 +344,9 @@ export async function createUCANValidator(
    * then check proof chain consistency and recurse into proofs.
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- delegation type from Delegation.extract() is complex
-  async function verifyDelegationChain(delegation: any): Promise<ValidateResult> {
+  async function verifyDelegationChain(
+    delegation: any,
+  ): Promise<ValidateResult> {
     const issuerDid: string = delegation.issuer.did();
 
     // Resolve issuer DID to did:key
@@ -394,7 +396,10 @@ export async function createUCANValidator(
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- wrapped verifier satisfies runtime interface
-    const sigValid = await UCAN.verifySignature(ucanView, wrappedVerifier as any);
+    const sigValid = await UCAN.verifySignature(
+      ucanView,
+      wrappedVerifier as any,
+    );
     if (!sigValid) {
       return {
         ok: false,

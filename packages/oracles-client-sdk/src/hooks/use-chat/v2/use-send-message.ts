@@ -60,10 +60,15 @@ export function useSendMessage({
     if (abortControllerRef.current) {
       // Call backend abort endpoint with sessionId
       try {
-        await authedRequest(`${apiUrl}/messages/abort`, 'POST', {
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId }),
-        }, oracleDid);
+        await authedRequest(
+          `${apiUrl}/messages/abort`,
+          'POST',
+          {
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId }),
+          },
+          oracleDid,
+        );
       } catch (err) {
         console.error('Failed to abort on backend:', err);
       }
@@ -128,9 +133,7 @@ export function useSendMessage({
         chatRef?.current?.setStatus('streaming');
 
         // Get UCAN delegation for this oracle (cached or freshly created)
-        const delegation = oracleDid
-          ? await getDelegation(oracleDid)
-          : null;
+        const delegation = oracleDid ? await getDelegation(oracleDid) : null;
 
         if (!delegation) {
           throw new Error(

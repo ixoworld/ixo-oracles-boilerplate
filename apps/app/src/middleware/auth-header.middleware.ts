@@ -126,9 +126,7 @@ export class AuthHeaderMiddleware implements NestMiddleware {
     return crypto.createHash('sha256').update(token, 'utf8').digest('hex');
   }
 
-  private async validateUcanDelegation(
-    ucanHeader: string,
-  ): Promise<{
+  private async validateUcanDelegation(ucanHeader: string): Promise<{
     userDid: string;
     delegation: {
       issuer: string;
@@ -145,8 +143,9 @@ export class AuthHeaderMiddleware implements NestMiddleware {
       return null;
     }
 
-    const { createUCANValidator, createIxoDIDResolver } =
-      await import('@ixo/ucan');
+    const { createUCANValidator, createIxoDIDResolver } = await import(
+      '@ixo/ucan'
+    );
     const blocksyncUri = this.configService.get('BLOCKSYNC_GRAPHQL_URL');
 
     const validator = await createUCANValidator({
@@ -187,16 +186,13 @@ export class AuthHeaderMiddleware implements NestMiddleware {
     );
     try {
       // 1. Try UCAN delegation first
-      const ucanHeader = req.headers['x-ucan-delegation'] as
-        | string
-        | undefined;
+      const ucanHeader = req.headers['x-ucan-delegation'] as string | undefined;
       if (ucanHeader) {
         try {
           const ucanHash = this.hashToken(ucanHeader);
-          const cachedUcan =
-            await this.cacheManager.get<CachedUcanAuth>(
-              `ucan_auth_${ucanHash}`,
-            );
+          const cachedUcan = await this.cacheManager.get<CachedUcanAuth>(
+            `ucan_auth_${ucanHash}`,
+          );
 
           if (cachedUcan) {
             req.authData = {
@@ -307,9 +303,7 @@ export class AuthHeaderMiddleware implements NestMiddleware {
         { did: userDid, homeServer } satisfies CachedUser,
         THREE_MINUTES,
       );
-      this.logger.debug(
-        `[OpenID] Auth completed for DID: ${userDid}`,
-      );
+      this.logger.debug(`[OpenID] Auth completed for DID: ${userDid}`);
 
       next();
     } catch (error) {

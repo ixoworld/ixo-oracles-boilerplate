@@ -130,27 +130,27 @@ async function bootstrap(): Promise<void> {
 
       const matrixAccountRoomId = configService.get('MATRIX_ACCOUNT_ROOM_ID');
       // still run setupClaimSigningMnemonics even if DISABLE_CREDITS as need it for ucan signing
-        Logger.log('Setting up claim signing mnemonics...');
-        Logger.log(`Matrix account room id: ${matrixAccountRoomId}`);
-        const signingMnemonic = await setupClaimSigningMnemonics({
-          matrixRoomId: matrixAccountRoomId,
-          matrixAccessToken: configService.getOrThrow(
-            'MATRIX_ORACLE_ADMIN_ACCESS_TOKEN',
-          ),
-          walletMnemonic: configService.getOrThrow('SECP_MNEMONIC'),
-          pin: configService.getOrThrow('MATRIX_VALUE_PIN'),
-          signerDid: configService.getOrThrow('ORACLE_DID'),
-          network: configService.getOrThrow('NETWORK'),
-        });
-        Logger.log('Claim signing mnemonics setup complete');
+      Logger.log('Setting up claim signing mnemonics...');
+      Logger.log(`Matrix account room id: ${matrixAccountRoomId}`);
+      const signingMnemonic = await setupClaimSigningMnemonics({
+        matrixRoomId: matrixAccountRoomId,
+        matrixAccessToken: configService.getOrThrow(
+          'MATRIX_ORACLE_ADMIN_ACCESS_TOKEN',
+        ),
+        walletMnemonic: configService.getOrThrow('SECP_MNEMONIC'),
+        pin: configService.getOrThrow('MATRIX_VALUE_PIN'),
+        signerDid: configService.getOrThrow('ORACLE_DID'),
+        network: configService.getOrThrow('NETWORK'),
+      });
+      Logger.log('Claim signing mnemonics setup complete');
 
-        if (signingMnemonic) {
-          const ucanService = app.get(UcanService);
-          ucanService.setSigningMnemonic(
-            signingMnemonic,
-            configService.getOrThrow('ORACLE_DID'),
-          );
-        }
+      if (signingMnemonic) {
+        const ucanService = app.get(UcanService);
+        ucanService.setSigningMnemonic(
+          signingMnemonic,
+          configService.getOrThrow('ORACLE_DID'),
+        );
+      }
 
       // Load P-256 encryption key for user secrets
       if (matrixAccountRoomId) {

@@ -374,7 +374,9 @@ export class UcanService implements OnModuleDestroy {
       rawDelegation,
       ttlMs,
     );
-    this.logger.debug(`[UCAN] Cached delegation for ${userDid} (TTL: ${Math.round(ttlMs / 1000)}s)`);
+    this.logger.debug(
+      `[UCAN] Cached delegation for ${userDid} (TTL: ${Math.round(ttlMs / 1000)}s)`,
+    );
   }
 
   async getCachedDelegation(userDid: string): Promise<string | null> {
@@ -412,9 +414,7 @@ export class UcanService implements OnModuleDestroy {
 
       const doc = (await response.json()) as { id?: string };
       if (!doc.id) {
-        this.logger.warn(
-          `[UCAN] DID document at ${didDocUrl} has no id field`,
-        );
+        this.logger.warn(`[UCAN] DID document at ${didDocUrl} has no id field`);
         return null;
       }
 
@@ -455,21 +455,30 @@ export class UcanService implements OnModuleDestroy {
 
     const rawDelegation = await this.getCachedDelegation(userDid);
     if (!rawDelegation) {
-      this.logger.debug(`[UCAN] No cached delegation for ${userDid}, skipping invocation`);
+      this.logger.debug(
+        `[UCAN] No cached delegation for ${userDid}, skipping invocation`,
+      );
       return null;
     }
 
     const serviceDid = await this.resolveServiceDid(serviceUrl);
     if (!serviceDid) {
-      this.logger.debug(`[UCAN] Could not resolve service DID for ${serviceUrl}`);
+      this.logger.debug(
+        `[UCAN] Could not resolve service DID for ${serviceUrl}`,
+      );
       return null;
     }
 
     // Check invocation cache
     const cacheKey = `${INVOCATION_CACHE_PREFIX}${userDid}:${serviceDid}`;
-    const cached = await this.cacheManager.get<{ invocation: string; expiresAt: number }>(cacheKey);
+    const cached = await this.cacheManager.get<{
+      invocation: string;
+      expiresAt: number;
+    }>(cacheKey);
     if (cached && cached.expiresAt > Date.now() / 1000) {
-      this.logger.debug(`[UCAN] Using cached invocation for ${userDid} → ${serviceDid}`);
+      this.logger.debug(
+        `[UCAN] Using cached invocation for ${userDid} → ${serviceDid}`,
+      );
       return cached.invocation;
     }
 
@@ -490,11 +499,15 @@ export class UcanService implements OnModuleDestroy {
 
       // Invocation TTL = min(1 hour, delegation expiration), whichever comes first
       const nowSeconds = Math.floor(Date.now() / 1000);
-      const delegationExp = typeof delegation.expiration === 'number' && isFinite(delegation.expiration)
-        ? delegation.expiration
-        : null;
+      const delegationExp =
+        typeof delegation.expiration === 'number' &&
+        isFinite(delegation.expiration)
+          ? delegation.expiration
+          : null;
       const maxExp = nowSeconds + MAX_INVOCATION_TTL_SECONDS;
-      const expirationSeconds = delegationExp ? Math.min(maxExp, delegationExp) : maxExp;
+      const expirationSeconds = delegationExp
+        ? Math.min(maxExp, delegationExp)
+        : maxExp;
 
       const invocation = await createInvocation({
         issuer: signer,
@@ -509,7 +522,11 @@ export class UcanService implements OnModuleDestroy {
       // Cache the invocation for its full lifetime
       const ttlMs = (expirationSeconds - nowSeconds) * 1000;
       if (ttlMs > 0) {
-        await this.cacheManager.set(cacheKey, { invocation: serialized, expiresAt: expirationSeconds }, ttlMs);
+        await this.cacheManager.set(
+          cacheKey,
+          { invocation: serialized, expiresAt: expirationSeconds },
+          ttlMs,
+        );
         this.logger.debug(
           `[UCAN] Cached invocation for ${userDid} → ${serviceDid} (TTL: ${expirationSeconds - nowSeconds}s)`,
         );

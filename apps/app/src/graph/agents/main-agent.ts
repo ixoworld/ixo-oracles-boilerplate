@@ -174,18 +174,18 @@ Promise<ReactAgent<any>> => {
     (configurable.configs?.user.matrixOpenIdToken && oracleOpenIdToken) ||
     sandboxHeaders['X-Auth-Type'] === 'ucan';
   const sandboxMCP = hasSandboxAuth
-      ? createMCPClient({
-          mcpServers: {
-            sandbox: {
-              type: 'http',
-              url: configService.getOrThrow('SANDBOX_MCP_URL'),
-              transport: 'http',
-              headers: sandboxHeaders,
-            },
+    ? createMCPClient({
+        mcpServers: {
+          sandbox: {
+            type: 'http',
+            url: configService.getOrThrow('SANDBOX_MCP_URL'),
+            transport: 'http',
+            headers: sandboxHeaders,
           },
-          defaultToolTimeout: 180_000,
-        })
-      : undefined;
+        },
+        defaultToolTimeout: 180_000,
+      })
+    : undefined;
 
   // Build memory engine headers — UCAN first, Matrix fallback
   const memoryMatrixFallbackHeaders: Record<string, string> = {

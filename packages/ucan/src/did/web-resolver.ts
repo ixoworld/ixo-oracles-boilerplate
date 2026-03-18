@@ -89,7 +89,12 @@ export function createWebDIDResolver(
         }
       }
 
-      if (!response.ok && !isLocalhost && config?.fallbackToHttp && fetchUrl === httpsUrl) {
+      if (
+        !response.ok &&
+        !isLocalhost &&
+        config?.fallbackToHttp &&
+        fetchUrl === httpsUrl
+      ) {
         // HTTPS returned a non-ok status, try HTTP
         fetchUrl = httpUrl;
         response = await fetchFn(fetchUrl);

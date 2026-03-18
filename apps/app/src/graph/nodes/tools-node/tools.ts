@@ -38,9 +38,7 @@ const getMemoryEngineMcpTools = async ({
     headers['X-Auth-Type'] === 'ucan' ||
     (headers['x-oracle-token'] && headers['x-user-token']);
   if (!hasAuth) {
-    logger.warn(
-      'Skipping memory engine MCP — missing required auth headers',
-    );
+    logger.warn('Skipping memory engine MCP — missing required auth headers');
     return [];
   }
 
