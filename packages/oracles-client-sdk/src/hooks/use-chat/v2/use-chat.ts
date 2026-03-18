@@ -100,7 +100,7 @@ export function useChat({
     queryFn: async () => {
       const result = await authedRequest<{
         messages: IMessage[];
-      }>(`${apiUrl}/messages/${sessionId}`, 'GET', {});
+      }>(`${apiUrl}/messages/${sessionId}`, 'GET', {}, oracleDid);
 
       // Don't transform here - return raw messages
       // Transformation will happen in useEffect when agActions is available

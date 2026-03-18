@@ -153,6 +153,7 @@ export function useLiveKitAgent(
             callEndedAt,
           }),
         },
+        oracleDid,
       );
 
       return response;

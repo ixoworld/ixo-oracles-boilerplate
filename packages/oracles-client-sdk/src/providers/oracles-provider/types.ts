@@ -28,6 +28,7 @@ export interface IOraclesContextProps {
     url: string,
     method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
     options?: RequestInit,
+    oracleDid?: string,
   ) => Promise<T>;
   getDelegation: (oracleDid: string) => Promise<string | null>;
   // AG-UI action management
@@ -49,5 +50,5 @@ export interface IOraclesContextProps {
 export interface IOraclesProviderProps {
   initialWallet: IWalletProps;
   transactSignX: TransactionFn;
-  createDelegation?: CreateDelegationFn;
+  createDelegation: CreateDelegationFn;
 }

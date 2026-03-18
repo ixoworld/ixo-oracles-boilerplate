@@ -58,6 +58,7 @@ export const useOracleSessions = (
         url,
         'GET',
         {},
+        oracleDid,
       );
     },
     initialPageParam: 0,
@@ -91,7 +92,7 @@ export const useOracleSessions = (
     isError: isCreateSessionError,
   } = useMutation({
     mutationFn: () =>
-      authedRequest<IChatSession>(`${apiUrl}/sessions`, 'POST', {}),
+      authedRequest<IChatSession>(`${apiUrl}/sessions`, 'POST', {}, oracleDid),
     onSettled: async () => {
       // Invalidate and refetch to get the new session
       await queryClient.invalidateQueries({
@@ -106,7 +107,12 @@ export const useOracleSessions = (
     isError: isDeleteSessionError,
   } = useMutation({
     mutationFn: (sessionId: string) =>
-      authedRequest<void>(`${apiUrl}/sessions/${sessionId}`, 'DELETE', {}),
+      authedRequest<void>(
+        `${apiUrl}/sessions/${sessionId}`,
+        'DELETE',
+        {},
+        oracleDid,
+      ),
     onSettled: async () => {
       // Invalidate and refetch to remove the deleted session
       await queryClient.invalidateQueries({

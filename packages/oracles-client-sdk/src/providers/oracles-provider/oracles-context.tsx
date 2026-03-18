@@ -6,18 +6,11 @@ import {
   type PropsWithChildren,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useRef,
   useState,
 } from 'react';
-import { getOpenIdToken } from '../../hooks/index.js';
 import { request } from '../../utils/request.js';
-import {
-  clearTokenCache,
-  decryptAndRetrieve,
-  encryptAndStore,
-} from '../../utils/token-cache.js';
 import {
   getCachedDelegation,
   setCachedDelegation,
@@ -49,31 +42,6 @@ export const OraclesProvider = ({
   if ((!initialWallet as unknown) || (!transactSignX as unknown)) {
     throw new Error('initialWallet and transactSignX are required');
   }
-
-  // Clear token cache when wallet/DID changes
-  useEffect(() => {
-    try {
-      // Check if cached token exists and if DID matches
-      const cachedToken = localStorage.getItem('oracles_openid_token');
-      if (cachedToken) {
-        // Try to decrypt and check DID - if it doesn't match, clear it
-        decryptAndRetrieve({
-          did: initialWallet.did,
-          matrixAccessToken: initialWallet.matrix.accessToken,
-        }).catch(() => {
-          // If decryption fails or DID doesn't match, clear the cache
-          clearTokenCache();
-          console.debug(
-            'Cleared token cache due to DID mismatch or decryption failure',
-          );
-        });
-      }
-    } catch (error) {
-      console.warn('Failed to check cached token:', error);
-      // Clear cache on any error
-      clearTokenCache();
-    }
-  }, [initialWallet.did]);
 
   // AG-UI action state management
   const [agActions, setAgActions] = useState<AgAction[]>([]);
@@ -115,52 +83,25 @@ export const OraclesProvider = ({
       url: string,
       method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
       options?: RequestInit,
+      oracleDid?: string,
     ) => {
-      const matrixAccessToken = initialWallet.matrix.accessToken;
+      const headers: Record<string, string> = {
+        ...(options?.headers as Record<string, string>),
+      };
 
-      let openIdToken = undefined;
-      // If no openIdToken provided, try to get from cache
-      try {
-        const cachedToken = await decryptAndRetrieve({
-          did: initialWallet.did,
-          matrixAccessToken,
-        });
-        if (cachedToken?.access_token) {
-          openIdToken = cachedToken.access_token;
+      if (oracleDid) {
+        const delegation = await getDelegation(oracleDid);
+        if (delegation) {
+          headers['x-ucan-delegation'] = delegation;
         }
-      } catch (error) {
-        console.warn('Failed to retrieve cached token:', error);
-      }
-
-      if (!openIdToken) {
-        const matrixUserId = `@did-ixo-${initialWallet.address}:${initialWallet.matrix.homeServer}`;
-        const token = await getOpenIdToken({
-          userId: matrixUserId,
-          matrixAccessToken,
-          did: initialWallet.did,
-        });
-        openIdToken = token.access_token;
-
-        await encryptAndStore({
-          token,
-          matrixAccessToken,
-          did: initialWallet.did,
-        });
       }
 
       return request(url, method, {
         ...options,
-        headers: {
-          ...options?.headers,
-          ...(initialWallet.matrix.homeServer
-            ? { 'x-matrix-homeserver': initialWallet.matrix.homeServer }
-            : {}),
-
-          'x-matrix-access-token': openIdToken,
-        },
+        headers,
       });
     },
-    [initialWallet],
+    [getDelegation],
   );
 
   // AG-UI action management functions
@@ -215,6 +156,7 @@ export const OraclesProvider = ({
         url: string,
         method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
         options?: RequestInit,
+        oracleDid?: string,
       ) => Promise<T>,
       getDelegation,
       agActions,

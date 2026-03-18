@@ -12,7 +12,6 @@ import {
   type SSEReasoningEventData,
   type SSEToolCallEventData,
 } from '../../../utils/sse-parser.js';
-import { useGetOpenIdToken } from '../../use-get-openid-token/use-get-openid-token.js';
 import { useOraclesConfig } from '../../use-oracles-config.js';
 import {
   type Attachment,
@@ -52,12 +51,6 @@ export function useSendMessage({
   const apiUrl = overrides?.baseUrl ?? config.apiUrl;
   const { wallet, authedRequest, agActions, getDelegation } =
     useOraclesContext();
-  const {
-    openIdToken,
-    isLoading: isTokenLoading,
-    error: tokenError,
-    refetch: refetchOpenIdToken,
-  } = useGetOpenIdToken();
 
   // Abort controller for canceling requests
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -70,7 +63,7 @@ export function useSendMessage({
         await authedRequest(`${apiUrl}/messages/abort`, 'POST', {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId }),
-        });
+        }, oracleDid);
       } catch (err) {
         console.error('Failed to abort on backend:', err);
       }
@@ -93,23 +86,11 @@ export function useSendMessage({
       metadata?: Record<string, unknown>;
       attachments?: Attachment[];
     }) => {
-      const openidToken = openIdToken ?? (await refetchOpenIdToken());
       if (!apiUrl) {
         throw new Error('API URL is required');
       }
       if (!wallet?.did) {
         throw new Error('DID is required');
-      }
-      if (isTokenLoading) {
-        throw new Error(
-          'OpenID token is still loading. Please wait for authentication to complete.',
-        );
-      }
-      if (tokenError) {
-        throw new Error(`OpenID token fetch failed: ${tokenError.message}`);
-      }
-      if (!openidToken?.access_token) {
-        throw new Error('Matrix access token is required');
       }
 
       // Set status to streaming
@@ -151,14 +132,19 @@ export function useSendMessage({
           ? await getDelegation(oracleDid)
           : null;
 
+        if (!delegation) {
+          throw new Error(
+            'UCAN delegation is required. Ensure createDelegation is provided to OraclesProvider.',
+          );
+        }
+
         // Create abort controller for this request
         abortControllerRef.current = new AbortController();
 
         const results = await askOracleStream({
           apiURL: apiUrl,
-          homeServer: wallet.matrix.homeServer,
           message,
-          matrixAccessToken: openidToken.access_token,
+          delegation,
           sessionId,
           metadata,
           attachments,
@@ -178,7 +164,6 @@ export function useSendMessage({
                   hasRender: action.hasRender,
                 }))
               : undefined,
-          delegation: delegation ?? undefined,
           abortSignal: abortControllerRef.current?.signal,
 
           // Message chunks (existing pattern)
@@ -278,11 +263,9 @@ export function useSendMessage({
 // Stream AI responses from the oracle
 const askOracleStream = async (props: {
   apiURL: string;
-  homeServer: string;
   message: string;
   sessionId: string;
-  matrixAccessToken: string;
-  delegation?: string;
+  delegation: string;
   metadata?: Record<string, unknown>;
   attachments?: Attachment[];
   browserTools?: {
@@ -323,10 +306,8 @@ const askOracleStream = async (props: {
 }): Promise<{ text: string; requestId: string }> => {
   const response = await fetch(`${props.apiURL}/messages/${props.sessionId}`, {
     headers: {
-      'x-matrix-access-token': props.matrixAccessToken,
       'Content-Type': 'application/json',
-      ...(props.homeServer ? { 'x-matrix-homeserver': props.homeServer } : {}),
-      ...(props.delegation ? { 'x-ucan-delegation': props.delegation } : {}),
+      'x-ucan-delegation': props.delegation,
     },
     body: JSON.stringify({
       message: props.message,

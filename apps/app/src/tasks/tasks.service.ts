@@ -269,7 +269,7 @@ export class TasksService {
       retry: this.retryPolicy,
     },
     async (params: ProcessClaimParams & { cid: string }) => {
-      const subscriptionUrl = getSubscriptionUrlByNetwork(
+      const subscriptionUrl = this.configService.get('SUBSCRIPTION_URL') ?? getSubscriptionUrlByNetwork(
         params.configService.getOrThrow('NETWORK'),
       );
 

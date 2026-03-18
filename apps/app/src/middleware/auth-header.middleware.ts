@@ -42,6 +42,17 @@ interface CachedUser {
   homeServer: string;
 }
 
+interface CachedUcanAuth {
+  userDid: string;
+  homeServer: string;
+  delegation: {
+    issuer: string;
+    audience: string;
+    capabilities: unknown[];
+    expiration?: number;
+  };
+}
+
 @Injectable()
 export class AuthHeaderMiddleware implements NestMiddleware {
   private readonly logger = new Logger(AuthHeaderMiddleware.name);
@@ -115,28 +126,168 @@ export class AuthHeaderMiddleware implements NestMiddleware {
     return crypto.createHash('sha256').update(token, 'utf8').digest('hex');
   }
 
+  private async validateUcanDelegation(
+    ucanHeader: string,
+  ): Promise<{
+    userDid: string;
+    delegation: {
+      issuer: string;
+      audience: string;
+      capabilities: unknown[];
+      expiration?: number;
+    };
+  } | null> {
+    const oracleDid = this.configService.get('ORACLE_DID');
+    if (!oracleDid) {
+      this.logger.warn(
+        '[UCAN] ORACLE_DID not configured, skipping delegation validation',
+      );
+      return null;
+    }
+
+    const { createUCANValidator, createIxoDIDResolver } =
+      await import('@ixo/ucan');
+    const blocksyncUri = this.configService.get('BLOCKSYNC_GRAPHQL_URL');
+
+    const validator = await createUCANValidator({
+      serverDid: oracleDid,
+      rootIssuers: [],
+      didResolver: createIxoDIDResolver({
+        indexerUrl: blocksyncUri,
+      }),
+    });
+
+    const result = await validator.validateDelegation(ucanHeader);
+
+    if (!result.ok) {
+      this.logger.warn(
+        `[UCAN] Delegation validation failed: [${result.error?.code}] ${result.error?.message}`,
+      );
+      return null;
+    }
+
+    this.logger.log(
+      `[UCAN] Delegation validated: iss=${result.invoker} aud=${oracleDid} exp=${result.expiration ? new Date(result.expiration * 1000).toISOString() : 'none'}`,
+    );
+
+    return {
+      userDid: result.invoker!,
+      delegation: {
+        issuer: result.invoker!,
+        audience: oracleDid,
+        capabilities: result.capability ? [result.capability] : [],
+        expiration: result.expiration,
+      },
+    };
+  }
+
   async use(req: Request, _res: Response, next: NextFunction): Promise<void> {
     this.logger.debug(
       `AuthHeaderMiddleware processing request for: ${req.originalUrl}`,
     );
     try {
+      // 1. Try UCAN delegation first
+      const ucanHeader = req.headers['x-ucan-delegation'] as
+        | string
+        | undefined;
+      if (ucanHeader) {
+        try {
+          const ucanHash = this.hashToken(ucanHeader);
+          const cachedUcan =
+            await this.cacheManager.get<CachedUcanAuth>(
+              `ucan_auth_${ucanHash}`,
+            );
+
+          if (cachedUcan) {
+            req.authData = {
+              did: cachedUcan.userDid,
+              userOpenIdToken: '',
+              homeServer: '',
+              ucanDelegation: cachedUcan.delegation,
+            };
+
+            // Re-cache raw delegation for downstream invocations
+            await this.ucanService.cacheDelegation(
+              cachedUcan.userDid,
+              ucanHeader,
+              cachedUcan.delegation.expiration,
+            );
+
+            this.logger.debug(
+              `[UCAN] Auth from cache for DID: ${cachedUcan.userDid}`,
+            );
+            next();
+            return;
+          }
+
+          const ucanResult = await this.validateUcanDelegation(ucanHeader);
+          if (ucanResult) {
+            req.authData = {
+              did: ucanResult.userDid,
+              userOpenIdToken: '',
+              homeServer: '',
+              ucanDelegation: ucanResult.delegation,
+            };
+
+            // Cache auth result
+            const ttl = ucanResult.delegation.expiration
+              ? Math.max(
+                  0,
+                  ucanResult.delegation.expiration * 1000 - Date.now(),
+                )
+              : THREE_MINUTES;
+            await this.cacheManager.set(
+              `ucan_auth_${ucanHash}`,
+              {
+                userDid: ucanResult.userDid,
+                homeServer: '',
+                delegation: ucanResult.delegation,
+              } satisfies CachedUcanAuth,
+              ttl,
+            );
+
+            // Cache raw delegation for downstream service invocations
+            await this.ucanService.cacheDelegation(
+              ucanResult.userDid,
+              ucanHeader,
+              ucanResult.delegation.expiration,
+            );
+
+            this.logger.debug(
+              `[UCAN] Auth completed for DID: ${ucanResult.userDid}`,
+            );
+            next();
+            return;
+          }
+        } catch (err) {
+          this.logger.warn(
+            `[UCAN] Failed to validate delegation: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
+
+      // 2. Fall back to Matrix OpenID token
       const { matrixAccessToken, matrixHomeServer } = await getAuthHeaders(
         req.headers,
       );
 
+      const tokenHash = this.hashToken(matrixAccessToken);
       const cachedUser = await this.cacheManager.get<CachedUser>(
-        `user_${this.hashToken(matrixAccessToken)}`,
+        `user_${tokenHash}`,
       );
 
-      // if (cachedUser?.did) {
-      //   req.authData = {
-      //     did: cachedUser.did,
-      //     userOpenIdToken: matrixAccessToken,
-      //     homeServer: cachedUser.homeServer,
-      //   };
-      //   next();
-      //   return;
-      // }
+      if (cachedUser?.did) {
+        req.authData = {
+          did: cachedUser.did,
+          userOpenIdToken: matrixAccessToken,
+          homeServer: cachedUser.homeServer,
+        };
+        this.logger.debug(
+          `[OpenID] Auth from cache for DID: ${cachedUser.did}`,
+        );
+        next();
+        return;
+      }
 
       const { isValid, userDid, homeServer } = await this.validateToken(
         matrixAccessToken,
@@ -152,70 +303,13 @@ export class AuthHeaderMiddleware implements NestMiddleware {
         homeServer,
       };
       await this.cacheManager.set(
-        `user_${this.hashToken(matrixAccessToken)}`,
+        `user_${tokenHash}`,
         { did: userDid, homeServer } satisfies CachedUser,
         THREE_MINUTES,
       );
-      this.logger.debug(`Auth headers validated for DID: ${userDid}`);
-
-      // Validate UCAN delegation if present
-      const ucanHeader = req.headers['x-ucan-delegation'] as string | undefined;
-      this.logger.log(`[UCAN]: ${ucanHeader}`)
-      if (ucanHeader) {
-        try {
-          const oracleDid = this.configService.get('ORACLE_DID');
-          if (!oracleDid) {
-            this.logger.warn(
-              '[UCAN] ORACLE_DID not configured, skipping delegation validation',
-            );
-          } else {
-            const { createUCANValidator, createIxoDIDResolver } =
-              await import('@ixo/ucan');
-            const blocksyncUri =
-              this.configService.get('BLOCKSYNC_GRAPHQL_URL')
-
-            const validator = await createUCANValidator({
-              serverDid: oracleDid,
-              rootIssuers: [], // Any user can delegate to this oracle
-              didResolver: createIxoDIDResolver({
-                indexerUrl: blocksyncUri,
-              }),
-            });
-
-            const result = await validator.validateDelegation(ucanHeader);
-
-            if (!result.ok) {
-              this.logger.warn(
-                `[UCAN] Delegation validation failed: [${result.error?.code}] ${result.error?.message}`,
-              );
-            } else {
-              req.authData.ucanDelegation = {
-                issuer: result.invoker!,
-                audience: oracleDid,
-                capabilities: result.capability
-                  ? [result.capability]
-                  : [],
-                expiration: result.expiration,
-              };
-
-              this.logger.log(
-                `[UCAN] Delegation validated: iss=${result.invoker} aud=${oracleDid} exp=${result.expiration ? new Date(result.expiration * 1000).toISOString() : 'none'}`,
-              );
-
-              // Cache raw delegation for downstream service invocations
-              await this.ucanService.cacheDelegation(
-                userDid,
-                ucanHeader,
-                result.expiration,
-              );
-            }
-          }
-        } catch (err) {
-          this.logger.warn(
-            `[UCAN] Failed to validate delegation: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-      }
+      this.logger.debug(
+        `[OpenID] Auth completed for DID: ${userDid}`,
+      );
 
       next();
     } catch (error) {
