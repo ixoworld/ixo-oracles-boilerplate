@@ -101,6 +101,7 @@ export interface CreateTaskParams {
   whatToDo?: string;
   howToReport?: string;
   constraints?: string;
+  notes?: string;
 
   // Simple job message (only for pattern A)
   message?: string;
@@ -134,11 +135,23 @@ export interface UpdateTaskParams {
   newDeadlineIso?: string;
 }
 
-/** Params for deleting a task */
-export interface DeleteTaskParams {
+/** Base params for task lifecycle operations (pause / resume / cancel / delete) */
+export interface TaskLifecycleParams {
   taskId: string;
   mainRoomId: string;
 }
+
+/** Params for deleting a task */
+export type DeleteTaskParams = TaskLifecycleParams;
+
+/** Params for pausing a task */
+export type PauseTaskParams = TaskLifecycleParams;
+
+/** Params for resuming a paused task */
+export type ResumeTaskParams = TaskLifecycleParams;
+
+/** Params for cancelling a task */
+export type CancelTaskParams = TaskLifecycleParams;
 
 /** Result from createTask */
 export interface CreateTaskResult {

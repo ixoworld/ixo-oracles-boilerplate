@@ -55,7 +55,7 @@ export const WORKER_OPTIONS = {
   [QUEUE_NAMES.WORK]: {
     concurrency: 5,
     limiter: { max: 3, duration: 60_000 },
-    lockDuration: 300_000,
+    lockDuration: 600_000, // 10 minutes — agents with firecrawl/tools need more time
   },
   [QUEUE_NAMES.DELIVER]: {
     concurrency: 20,

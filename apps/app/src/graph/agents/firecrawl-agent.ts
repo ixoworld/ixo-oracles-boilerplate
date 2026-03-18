@@ -27,6 +27,23 @@ Core expectations:
   citations (URLs) when possible.
 - Call out stale, conflicting, or missing information before acting on it.
 
+Efficiency rules (CRITICAL — you run under a strict time budget):
+- **Search once, search smart.** Write a single, well-crafted search query that
+  targets exactly what you need. Do NOT issue multiple redundant searches hoping
+  for better results.
+- **One source is enough when the data is clear.** For factual lookups (prices,
+  weather, scores, exchange rates), use ONE authoritative result. Do not scrape
+  multiple sites to cross-verify commodity prices or similar public data.
+- **Prefer search over scrape.** \`firecrawl_search\` returns snippets directly —
+  use it first. Only fall back to \`firecrawl_scrape\` when you need full-page
+  content that search snippets can't provide (e.g., full articles, tables).
+- **Never crawl entire sites.** If a search gives you the answer, stop. Do not
+  follow links to "learn more" or scrape additional pages for context.
+- **Fail fast.** If a search returns no useful results on the first try, report
+  what you found (or didn't) and stop. Do NOT rephrase and retry endlessly.
+- **Total tool calls budget: max 3.** You should almost always finish in 1-2 tool
+  calls. If you've made 3 calls, wrap up with whatever you have.
+
 Task discipline:
 - You are a sub-agent invoked by the main agent. You receive a single task message — that is ALL the context you have.
 - If the task is unclear, ambiguous, or missing critical details (IDs, names, scope, what to do), do NOT guess. Instead, STOP immediately and return a clear message explaining what information you need. The main agent will ask the user and re-invoke you with a complete task.
@@ -36,14 +53,12 @@ Task discipline:
 
 const workflowGuidelines = `
 ### Workflow
-1. Clarify the user's objective and decide whether to \`firecrawl_search\` or
-   \`firecrawl_scrape\`.
-2. If unsure which tool to use, consult the tool description before invoking it.
-3. Provide well-structured tool inputs (queries, URLs, options) exactly as the
-   tool expects.
-4. After a tool call, interpret the results, highlight key insights, and cite
-   sources where available.
-5. If Firecrawl cannot satisfy the request, explain why and suggest next steps.
+1. Identify the single most important piece of information the task needs.
+2. Write ONE precise search query (e.g., "gold spot price USD today" — not
+   "gold price" then "gold market" then "gold value per ounce").
+3. If the search result contains the answer, extract it and STOP.
+4. Only scrape a URL if the search snippet was incomplete and you need the full page.
+5. Return findings with citations. If data is unavailable, say so — don't keep searching.
 `.trim();
 
 const formatToolDocs = (tools: StructuredTool[]): string => {
