@@ -180,15 +180,6 @@ export async function setupClaimSigningMnemonics({
   signerDid,
   network,
 }: SetupClaimSigningMnemonicsParams): Promise<string> {
-  Logger.info('Setting up claim signing mnemonics', {
-    matrixRoomId,
-    matrixAccessToken: matrixAccessToken.slice(0, 10) + '...',
-    walletMnemonic: walletMnemonic.slice(0, 5) + '...',
-    pin: pin.slice(0, 5) + '...',
-    signerDid,
-    network,
-  });
-
   const homeServerUrl = await getMatrixHomeServerForDid(signerDid);
   // Logger.info('Resolved homeserver for signer DID', { signerDid, homeServerUrl });
 
@@ -233,11 +224,7 @@ export async function setupClaimSigningMnemonics({
     signerDid,
   );
 
-  Logger.info('Identifier loaded');
-
   const { iids } = await gqlClient.GetIidVerificationMethod({ did: signerDid });
-
-  Logger.info('Iids retrieved');
 
   if (!iids || iids.nodes.length === 0) {
     Logger.error('Cannot get UserDidDocVerificationMethod');
@@ -265,17 +252,9 @@ export async function setupClaimSigningMnemonics({
       client.address,
     );
 
-    Logger.info('Message verification method creation generated', {
-      msgVerificationMethodCreation,
-    });
-
     await client.signAndBroadcast([msgVerificationMethodCreation]);
-
-    Logger.info('Transaction signed and broadcasted');
-
     return decryptedSigningMnemonic;
   }
 
-  Logger.info('Verification method already exists');
   return decryptedSigningMnemonic;
 }

@@ -172,10 +172,10 @@ export class SessionHistoryProcessor {
       session.title ?? '',
     );
 
-    // Generate oracle token for memory engine auth
-    if (!userToken) {
+    // Check if we have any auth method available (UCAN or Matrix OpenID)
+    if (!userToken && !this.ucanService?.hasSigningKey()) {
       this.logger.warn(
-        `No user token provided for session ${sessionId}, skipping memory engine processing`,
+        `No user token and no UCAN signing key for session ${sessionId}, skipping memory engine processing`,
       );
       return;
     }
@@ -217,6 +217,10 @@ export class SessionHistoryProcessor {
           `[UCAN] Failed to create memory engine invocation, falling back to Matrix: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
+    } else {
+      this.logger.warn(
+        `[Memory REST UCAN] Skipped — hasSigningKey=${this.ucanService?.hasSigningKey()}, did=${did ?? 'missing'}`,
+      );
     }
 
     // Send to memory engine
@@ -224,7 +228,7 @@ export class SessionHistoryProcessor {
       messages: transformedMessages,
       roomId,
       oracleToken,
-      userToken,
+      userToken: userToken ?? '',
       oracleHomeServer,
       userHomeServer,
       ucanInvocation: memoryUcanInvocation,

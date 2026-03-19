@@ -221,9 +221,14 @@ Promise<ReactAgent<any>> => {
       }
     } catch (err) {
       Logger.warn(
-        `[UCAN] Failed to create memory engine invocation, falling back to Matrix auth: ${err instanceof Error ? err.message : String(err)}`,
+        `[Memory MCP UCAN] Failed to create invocation, falling back to Matrix auth: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
+  } else if (ucanService) {
+    // ucanService exists but hasSigningKey is false or userDid is missing
+    Logger.warn(
+      `[Memory MCP UCAN] Skipped — hasSigningKey=${ucanService.hasSigningKey()}, userDid=${configurable.configs?.user?.did ?? 'missing'}`,
+    );
   }
 
   // Build sandbox upload config for file processing (HTTP upload, no MCP needed)

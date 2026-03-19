@@ -4,9 +4,15 @@ import {
   SessionManagerService,
 } from '@ixo/common';
 import { OpenIdTokenProvider } from '@ixo/oracles-chain-client';
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  Optional,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { type ENV } from 'src/types';
+import { UcanService } from '../ucan/ucan.service';
 import { UserMatrixSqliteSyncService } from '../user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 import { type CreateSessionDto } from './dto/create-session.dto'; // Import DTO
 import { type DeleteSessionDto } from './dto/delete-session.dto'; // Import DTO
@@ -20,6 +26,7 @@ export class SessionsService {
     private readonly configService: ConfigService<ENV>,
     private readonly sessionHistoryProcessor: SessionHistoryProcessor,
     private readonly syncService: UserMatrixSqliteSyncService,
+    @Optional() private readonly ucanService?: UcanService,
   ) {}
 
   async processPreviousSessionHistory(data: CreateSessionDto): Promise<void> {
@@ -78,13 +85,35 @@ export class SessionsService {
           this.syncService.markUserInactive(data.did);
         });
 
-      // Generate oracle token for memory engine auth
+      // Generate auth for memory engine — try UCAN first, fall back to Matrix OpenID
       const oracleMatrixBaseUrl = this.configService
         .getOrThrow<string>('MATRIX_BASE_URL')
         .replace(/\/$/, '');
 
       let oracleToken: string | undefined;
-      if (data.userToken) {
+      let memoryUcanInvocation: string | undefined;
+
+      if (this.ucanService?.hasSigningKey() && data.did) {
+        // Create UCAN invocation for memory engine
+        try {
+          const engineUrl = this.configService.getOrThrow('MEMORY_ENGINE_URL');
+          const invocation = await this.ucanService.createServiceInvocation(
+            engineUrl,
+            data.did,
+            'ixo:memory',
+          );
+          if (invocation) {
+            memoryUcanInvocation = invocation;
+          }
+        } catch (err) {
+          Logger.warn(
+            `[Session UCAN] Failed to create invocation: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
+
+      // Fall back to Matrix OpenID if no UCAN invocation
+      if (!memoryUcanInvocation && data.userToken) {
         const oracleOpenIdTokenProvider = new OpenIdTokenProvider({
           matrixAccessToken: this.configService.getOrThrow(
             'MATRIX_ORACLE_ADMIN_ACCESS_TOKEN',
@@ -110,6 +139,7 @@ export class SessionsService {
         userToken: data.userToken,
         oracleHomeServer,
         userHomeServer: data.homeServer,
+        ucanInvocation: memoryUcanInvocation,
       });
       return session;
     } catch (error) {
