@@ -278,13 +278,14 @@ Promise<ReactAgent<any>> => {
 
   // Create MCP tools - use UCAN-wrapped version if service is available
   const getMcpTools = async () => {
-    if (ucanService) {
-      // Use UCAN-wrapped tools that validate invocations
-      return createMCPClientAndGetToolsWithUCAN(
-        ucanService,
-        () => state.mcpUcanContext,
-      );
-    }
+    // TODO: plan thoroughly if it is even wanted on mcp level
+    // if (ucanService) {
+    //   // Use UCAN-wrapped tools that validate invocations
+    //   return createMCPClientAndGetToolsWithUCAN(
+    //     ucanService,
+    //     () => state.mcpUcanContext,
+    //   );
+    // }
     // Fallback to non-UCAN tools
     return createMCPClientAndGetTools();
   };
