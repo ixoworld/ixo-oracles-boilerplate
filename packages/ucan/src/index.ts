@@ -120,6 +120,16 @@ export {
   type IxoDIDResolverConfig,
 } from './did/ixo-resolver.js';
 
+export {
+  createWebDIDResolver,
+  type WebDIDResolverConfig,
+} from './did/web-resolver.js';
+
+export {
+  createLocalDIDResolver,
+  type LocalDIDResolver,
+} from './did/local-resolver.js';
+
 // =============================================================================
 // Store (for replay protection)
 // =============================================================================

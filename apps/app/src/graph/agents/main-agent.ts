@@ -139,30 +139,100 @@ Promise<ReactAgent<any>> => {
     : [];
 
   // Build base headers for sandbox MCP (auth only — secrets added lazily)
-  const sandboxHeaders: Record<string, string> = {
+  // Try UCAN invocation first, fall back to Matrix OpenID tokens
+  const matrixFallbackHeaders: Record<string, string> = {
     Authorization: `Bearer ${configurable.configs?.user.matrixOpenIdToken}`,
     'x-matrix-homeserver': configurable.configs?.matrix.homeServerName ?? '',
     'X-oracle-openid-token': oracleOpenIdToken ?? '',
     'x-oracle-homeserver': oracleMatrixBaseUrl.replace(/^https?:\/\//, ''),
   };
 
+  let sandboxHeaders: Record<string, string> = matrixFallbackHeaders;
+
+  if (ucanService?.hasSigningKey() && configurable.configs?.user?.did) {
+    try {
+      const invocation = await ucanService.createServiceInvocation(
+        configService.getOrThrow('SANDBOX_MCP_URL'),
+        configurable.configs.user.did,
+      );
+      if (invocation) {
+        sandboxHeaders = {
+          Authorization: `Bearer ${invocation}`,
+          'X-Auth-Type': 'ucan',
+        };
+        Logger.log('[UCAN] Using UCAN invocation for sandbox auth');
+      }
+    } catch (err) {
+      Logger.warn(
+        `[UCAN] Failed to create sandbox invocation, falling back to Matrix auth: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   // Create sandbox MCP with auth headers (for tool schema discovery)
-  const sandboxMCP =
-    configurable.configs?.user.matrixOpenIdToken && oracleOpenIdToken
-      ? createMCPClient({
-          mcpServers: {
-            sandbox: {
-              type: 'http',
-              url: configService.getOrThrow('SANDBOX_MCP_URL'),
-              transport: 'http',
-              headers: sandboxHeaders,
-            },
+  const hasSandboxAuth =
+    (configurable.configs?.user.matrixOpenIdToken && oracleOpenIdToken) ||
+    sandboxHeaders['X-Auth-Type'] === 'ucan';
+  const sandboxMCP = hasSandboxAuth
+    ? createMCPClient({
+        mcpServers: {
+          sandbox: {
+            type: 'http',
+            url: configService.getOrThrow('SANDBOX_MCP_URL'),
+            transport: 'http',
+            headers: sandboxHeaders,
           },
-          defaultToolTimeout: 180_000,
-        })
-      : undefined;
+        },
+        defaultToolTimeout: 180_000,
+      })
+    : undefined;
+
+  // Build memory engine headers — UCAN first, Matrix fallback
+  const memoryMatrixFallbackHeaders: Record<string, string> = {
+    'x-oracle-token': oracleOpenIdToken ?? '',
+    'x-user-token': configurable.configs?.user.matrixOpenIdToken ?? '',
+    'x-oracle-matrix-homeserver': oracleMatrixBaseUrl.replace(
+      /^https?:\/\//,
+      '',
+    ),
+    'x-user-matrix-homeserver':
+      configurable.configs?.matrix.homeServerName ?? '',
+    'x-room-id': matrix?.roomId ?? '',
+    'User-Agent': 'LangChain-MCP-Client/1.0',
+  };
+
+  let memoryHeaders: Record<string, string> = memoryMatrixFallbackHeaders;
+
+  if (ucanService?.hasSigningKey() && configurable.configs?.user?.did) {
+    try {
+      const memoryInvocation = await ucanService.createServiceInvocation(
+        configService.getOrThrow('MEMORY_MCP_URL'),
+        configurable.configs.user.did,
+        'ixo:memory',
+      );
+      if (memoryInvocation) {
+        memoryHeaders = {
+          Authorization: `Bearer ${memoryInvocation}`,
+          'X-Auth-Type': 'ucan',
+          'x-room-id': matrix?.roomId ?? '',
+          'User-Agent': 'LangChain-MCP-Client/1.0',
+        };
+        Logger.log('[UCAN] Using UCAN invocation for memory engine auth');
+      }
+    } catch (err) {
+      Logger.warn(
+        `[Memory MCP UCAN] Failed to create invocation, falling back to Matrix auth: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  } else if (ucanService) {
+    // ucanService exists but hasSigningKey is false or userDid is missing
+    Logger.warn(
+      `[Memory MCP UCAN] Skipped — hasSigningKey=${ucanService.hasSigningKey()}, userDid=${configurable.configs?.user?.did ?? 'missing'}`,
+    );
+  }
 
   // Build sandbox upload config for file processing (HTTP upload, no MCP needed)
+  // Upload still uses Matrix OpenID tokens (UCAN upload support TODO)
   const sandboxUploadConfig: SandboxUploadConfig | undefined =
     configurable.configs?.user.matrixOpenIdToken && oracleOpenIdToken
       ? {
@@ -295,11 +365,7 @@ Promise<ReactAgent<any>> => {
       sessionId: configurable.thread_id,
     }),
     createMemoryAgent({
-      oracleToken: oracleOpenIdToken ?? '',
-      userToken: configurable.configs?.user.matrixOpenIdToken ?? '',
-      oracleHomeServer: oracleMatrixBaseUrl.replace(/^https?:\/\//, ''),
-      userHomeServer: configurable.configs?.matrix.homeServerName ?? '',
-      roomId: matrix?.roomId ?? '',
+      headers: memoryHeaders,
       mode: 'user',
       userDid: configurable.configs.user.did,
       sessionId: configurable.thread_id,
@@ -582,7 +648,7 @@ Promise<ReactAgent<any>> => {
     ],
     middleware,
     stateSchema: z.object({
-      editorRoomId: z.string(),
+      editorRoomId: z.string().optional(),
     }),
     systemPrompt: finalSystemPrompt,
     checkpointer: SqliteSaver.fromDatabase(

@@ -7,12 +7,13 @@ import { type ENV } from 'src/types';
 import { MatrixManager } from '@ixo/matrix';
 import { CheckpointStorageSyncModule } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.module';
 import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
+import { UcanModule } from 'src/ucan/ucan.module';
 import { MessagesController } from './messages.controller';
 import { FileProcessingService } from './file-processing.service';
 import { MessagesService } from './messages.service';
 
 @Module({
-  imports: [CheckpointStorageSyncModule],
+  imports: [CheckpointStorageSyncModule, UcanModule],
   controllers: [MessagesController],
   providers: [
     MessagesService,

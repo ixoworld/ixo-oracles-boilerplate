@@ -4,11 +4,12 @@ import {
   OpenIdTokenProvider,
 } from '@ixo/oracles-chain-client';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cache } from 'cache-manager';
 import { MessagesService } from '../messages/messages.service';
 import { type ENV } from '../types';
+import { UcanService } from '../ucan/ucan.service';
 
 export interface ProcessSessionHistoryParams {
   sessionId: string;
@@ -28,6 +29,7 @@ export class SessionHistoryProcessor {
     private readonly sessionManagerService: SessionManagerService,
     private readonly configService: ConfigService<ENV>,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+    @Optional() private readonly ucanService?: UcanService,
   ) {}
 
   /**
@@ -170,10 +172,10 @@ export class SessionHistoryProcessor {
       session.title ?? '',
     );
 
-    // Generate oracle token for memory engine auth
-    if (!userToken) {
+    // Check if we have any auth method available (UCAN or Matrix OpenID)
+    if (!userToken && !this.ucanService?.hasSigningKey()) {
       this.logger.warn(
-        `No user token provided for session ${sessionId}, skipping memory engine processing`,
+        `No user token and no UCAN signing key for session ${sessionId}, skipping memory engine processing`,
       );
       return;
     }
@@ -195,14 +197,41 @@ export class SessionHistoryProcessor {
     const oracleToken = await oracleOpenIdTokenProvider.getToken();
     const oracleHomeServer = oracleMatrixBaseUrl.replace(/^https?:\/\//, '');
 
+    // Try UCAN invocation for memory engine, fall back to Matrix tokens
+    let memoryUcanInvocation: string | undefined;
+    if (this.ucanService?.hasSigningKey() && did) {
+      try {
+        const invocation = await this.ucanService.createServiceInvocation(
+          this.configService.getOrThrow('MEMORY_ENGINE_URL'),
+          did,
+          'ixo:memory',
+        );
+        if (invocation) {
+          memoryUcanInvocation = invocation;
+          this.logger.debug(
+            `[UCAN] Using UCAN invocation for memory engine history processing`,
+          );
+        }
+      } catch (err) {
+        this.logger.warn(
+          `[UCAN] Failed to create memory engine invocation, falling back to Matrix: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    } else {
+      this.logger.warn(
+        `[Memory REST UCAN] Skipped — hasSigningKey=${this.ucanService?.hasSigningKey()}, did=${did ?? 'missing'}`,
+      );
+    }
+
     // Send to memory engine
     const result = await this.memoryEngineService.processConversationHistory({
       messages: transformedMessages,
       roomId,
       oracleToken,
-      userToken,
+      userToken: userToken ?? '',
       oracleHomeServer,
       userHomeServer,
+      ucanInvocation: memoryUcanInvocation,
     });
 
     if (!result.success) {

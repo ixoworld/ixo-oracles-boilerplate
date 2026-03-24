@@ -101,6 +101,7 @@ export const useLiveAgent = (
         `${overrides?.baseUrl ?? config.apiUrl}/calls/${callId}/sync`,
         'POST',
         {},
+        oracleDid,
       );
 
       await startCall({

@@ -1,7 +1,7 @@
 {
   "name": "@ixo/ucan",
   "description": "UCAN authorization for any service - built on ucanto",
-  "version": "1.1.1",
+  "version": "1.2.2",
   "private": false,
   "publishConfig": {
     "access": "public"
@@ -16,28 +16,39 @@
   },
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "default": "./dist/index.js"
     },
     "./validator": {
+      "types": "./dist/validator/validator.d.ts",
       "import": "./dist/validator/validator.js",
-      "types": "./dist/validator/validator.d.ts"
+      "default": "./dist/validator/validator.js"
     },
     "./client": {
+      "types": "./dist/client/create-client.d.ts",
       "import": "./dist/client/create-client.js",
-      "types": "./dist/client/create-client.d.ts"
+      "default": "./dist/client/create-client.js"
     },
     "./capabilities": {
+      "types": "./dist/capabilities/capability.d.ts",
       "import": "./dist/capabilities/capability.js",
-      "types": "./dist/capabilities/capability.d.ts"
+      "default": "./dist/capabilities/capability.js"
     },
     "./did": {
+      "types": "./dist/did/ixo-resolver.d.ts",
       "import": "./dist/did/ixo-resolver.js",
-      "types": "./dist/did/ixo-resolver.d.ts"
+      "default": "./dist/did/ixo-resolver.js"
+    },
+    "./did/web": {
+      "types": "./dist/did/web-resolver.d.ts",
+      "import": "./dist/did/web-resolver.js",
+      "default": "./dist/did/web-resolver.js"
     },
     "./store": {
+      "types": "./dist/store/memory.d.ts",
       "import": "./dist/store/memory.js",
-      "types": "./dist/store/memory.d.ts"
+      "default": "./dist/store/memory.js"
     }
   },
   "devDependencies": {

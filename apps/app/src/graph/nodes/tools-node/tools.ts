@@ -20,32 +20,25 @@ type SupportedTools =
   | 'memory-engine__clear';
 
 interface GetMemoryEngineMcpToolsParams {
-  oracleToken: string;
-  userToken: string;
-  oracleHomeServer: string;
-  userHomeServer: string;
-  roomId: string;
+  /** Pre-built auth headers (UCAN or Matrix) including x-room-id */
+  headers: Record<string, string>;
   selectedTools?: SupportedTools[];
 }
 
 const getMemoryEngineMcpTools = async ({
-  oracleToken,
-  userToken,
-  oracleHomeServer,
-  userHomeServer,
-  roomId,
+  headers,
   selectedTools = [
     'memory-engine__search_memory_engine',
     'memory-engine__add_memory',
     'memory-engine__delete_episode',
   ],
 }: GetMemoryEngineMcpToolsParams) => {
-  if (!oracleToken || !userToken) {
-    logger.warn(
-      'Skipping memory engine MCP — missing required tokens (oracleToken: %s, userToken: %s)',
-      oracleToken ? 'present' : 'missing',
-      userToken ? 'present' : 'missing',
-    );
+  // Require either UCAN auth or Matrix tokens
+  const hasAuth =
+    headers['X-Auth-Type'] === 'ucan' ||
+    (headers['x-oracle-token'] && headers['x-user-token']);
+  if (!hasAuth) {
+    logger.warn('Skipping memory engine MCP — missing required auth headers');
     return [];
   }
 
@@ -58,14 +51,7 @@ const getMemoryEngineMcpTools = async ({
           type: 'http',
           transport: 'http',
           url: config.getOrThrow('MEMORY_MCP_URL'),
-          headers: {
-            'x-oracle-token': oracleToken,
-            'x-user-token': userToken,
-            'x-oracle-matrix-homeserver': oracleHomeServer,
-            'x-user-matrix-homeserver': userHomeServer,
-            'x-room-id': roomId,
-            'User-Agent': 'LangChain-MCP-Client/1.0',
-          },
+          headers,
           // Automatic reconnection
           reconnect: {
             enabled: true,

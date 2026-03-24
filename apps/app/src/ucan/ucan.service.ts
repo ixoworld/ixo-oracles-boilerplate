@@ -1,16 +1,17 @@
 /**
  * @fileoverview UCAN service for Oracle
  *
- * This service handles UCAN validation for MCP tool invocations.
- * It uses ucanto for validation with IXO-specific DID resolution.
- *
- * NOTE: This service includes inline implementations of some @ixo/ucan
- * functionality to avoid build-time dependencies. Once @ixo/ucan is
- * properly built and published, these can be replaced with imports.
+ * Handles:
+ * 1. UCAN validation for MCP tool invocations (client → oracle)
+ * 2. UCAN invocation creation for downstream services (oracle → sandbox, etc.)
+ * 3. Ed25519 signing key management (stored in memory at startup)
+ * 4. Service DID resolution via did:web (/.well-known/did.json)
+ * 5. User delegation caching (keyed by user DID)
  */
 
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { ENV } from 'src/config';
 import {
   type MCPUCANConfig,
@@ -26,27 +27,18 @@ import {
 
 type KeyDID = `did:key:${string}`;
 
-/**
- * DID key resolver function type
- */
 type DIDKeyResolver = (
   did: string,
 ) => Promise<
   { ok: KeyDID[] } | { error: { name: string; did: string; message: string } }
 >;
 
-/**
- * Invocation store for replay protection
- */
 interface InvocationStore {
   has(cid: string): Promise<boolean>;
   add(cid: string, ttlMs?: number): Promise<void>;
   cleanup?(): Promise<void>;
 }
 
-/**
- * In-memory implementation of InvocationStore
- */
 class InMemoryInvocationStore implements InvocationStore {
   private store = new Map<string, number>();
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
@@ -100,9 +92,6 @@ class InMemoryInvocationStore implements InvocationStore {
   }
 }
 
-/**
- * Create an IXO DID resolver that queries the blockchain indexer
- */
 function createIxoDIDResolver(config: { indexerUrl: string }): DIDKeyResolver {
   const DID_DOCUMENT_QUERY = `
     query GetDIDDocument($id: String!) {
@@ -215,9 +204,6 @@ function createIxoDIDResolver(config: { indexerUrl: string }): DIDKeyResolver {
   };
 }
 
-/**
- * Create a composite DID resolver
- */
 function createCompositeDIDResolver(
   resolvers: DIDKeyResolver[],
 ): DIDKeyResolver {
@@ -242,9 +228,6 @@ function createCompositeDIDResolver(
   };
 }
 
-/**
- * Create MCP resource URI
- */
 function createMCPResourceURI(
   oracleDid: string,
   serverName: string,
@@ -254,18 +237,20 @@ function createMCPResourceURI(
 }
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+const DELEGATION_CACHE_PREFIX = 'ucan_delegation_';
+const INVOCATION_CACHE_PREFIX = 'ucan_invocation_';
+const MAX_INVOCATION_TTL_SECONDS = 3600; // 1 hour max
+
+// ============================================================================
 // UCAN Service
 // ============================================================================
 
-/**
- * Result of validating an MCP tool invocation
- */
 export interface MCPValidationResult {
-  /** Whether the invocation is valid */
   valid: boolean;
-  /** Error message if validation failed */
   error?: string;
-  /** The invoker's DID if validation succeeded */
   invokerDid?: string;
 }
 
@@ -276,17 +261,21 @@ export class UcanService implements OnModuleDestroy {
   private readonly invocationStore: InvocationStore;
   private readonly didResolver: DIDKeyResolver;
 
-  constructor(private readonly configService: ConfigService<ENV>) {
-    // Load configuration
+  private signingMnemonic: string | null = null;
+  private oracleDid: string | null = null;
+  private readonly serviceDidCache = new Map<string, string>();
+
+  constructor(
+    private readonly configService: ConfigService<ENV>,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+  ) {
     this.config = this.loadConfig();
 
-    // Create invocation store for replay protection
     this.invocationStore = new InMemoryInvocationStore({
-      defaultTtlMs: 24 * 60 * 60 * 1000, // 24 hours
-      cleanupIntervalMs: 60 * 60 * 1000, // 1 hour
+      defaultTtlMs: 24 * 60 * 60 * 1000,
+      cleanupIntervalMs: 60 * 60 * 1000,
     });
 
-    // Create DID resolver
     const indexerUrl = this.configService.get(
       'BLOCKSYNC_GRAPHQL_URL' as keyof ENV,
     );
@@ -323,7 +312,6 @@ export class UcanService implements OnModuleDestroy {
       resolvers.push(createIxoDIDResolver({ indexerUrl }));
     }
 
-    // did:key passthrough resolver
     const didKeyResolver: DIDKeyResolver = async (did) => {
       if (did.startsWith('did:key:')) {
         return { ok: [did as KeyDID] };
@@ -341,41 +329,244 @@ export class UcanService implements OnModuleDestroy {
     return createCompositeDIDResolver(resolvers);
   }
 
+  // ============================================================================
+  // Signing key management
+  // ============================================================================
+
   /**
-   * Check if an MCP tool requires UCAN authorization
+   * Store the Ed25519 signing mnemonic in memory (called once at startup).
+   * Uses the same mnemonic from setupClaimSigningMnemonics.
    */
+  setSigningMnemonic(mnemonic: string, did: string): void {
+    this.signingMnemonic = mnemonic;
+    this.oracleDid = did;
+    this.logger.log(`[UCAN] Signing mnemonic stored for ${did}`);
+  }
+
+  hasSigningKey(): boolean {
+    return this.signingMnemonic !== null;
+  }
+
+  // ============================================================================
+  // User delegation caching
+  // ============================================================================
+
+  /**
+   * Cache a raw UCAN delegation string for a user.
+   * Called by auth-header.middleware after successful validation.
+   */
+  async cacheDelegation(
+    userDid: string,
+    rawDelegation: string,
+    expirationUnix?: number,
+  ): Promise<void> {
+    const ttlMs = expirationUnix
+      ? expirationUnix * 1000 - Date.now()
+      : 7 * 24 * 60 * 60 * 1000; // 7 days default
+
+    if (ttlMs <= 0) {
+      this.logger.warn(`[UCAN] Delegation for ${userDid} already expired`);
+      return;
+    }
+
+    await this.cacheManager.set(
+      `${DELEGATION_CACHE_PREFIX}${userDid}`,
+      rawDelegation,
+      ttlMs,
+    );
+    this.logger.debug(
+      `[UCAN] Cached delegation for ${userDid} (TTL: ${Math.round(ttlMs / 1000)}s)`,
+    );
+  }
+
+  async getCachedDelegation(userDid: string): Promise<string | null> {
+    const cached = await this.cacheManager.get<string>(
+      `${DELEGATION_CACHE_PREFIX}${userDid}`,
+    );
+    return cached ?? null;
+  }
+
+  // ============================================================================
+  // Service DID resolution (did:web via /.well-known/did.json)
+  // ============================================================================
+
+  /**
+   * Resolve a service URL to its did:web DID.
+   * Fetches /.well-known/did.json from the service's domain and caches the result.
+   */
+  async resolveServiceDid(serviceUrl: string): Promise<string | null> {
+    try {
+      const url = new URL(serviceUrl);
+      const origin = url.origin;
+
+      const cached = this.serviceDidCache.get(origin);
+      if (cached) return cached;
+
+      const didDocUrl = `${origin}/.well-known/did.json`;
+      const response = await fetch(didDocUrl);
+
+      if (!response.ok) {
+        this.logger.warn(
+          `[UCAN] Failed to fetch DID document from ${didDocUrl}: HTTP ${response.status}`,
+        );
+        return null;
+      }
+
+      const doc = (await response.json()) as { id?: string };
+      if (!doc.id) {
+        this.logger.warn(`[UCAN] DID document at ${didDocUrl} has no id field`);
+        return null;
+      }
+
+      this.serviceDidCache.set(origin, doc.id);
+      this.logger.log(`[UCAN] Resolved service DID for ${origin}: ${doc.id}`);
+      return doc.id;
+    } catch (error) {
+      this.logger.warn(
+        `[UCAN] Failed to resolve service DID for ${serviceUrl}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return null;
+    }
+  }
+
+  // ============================================================================
+  // Service invocation creation (oracle → downstream service)
+  // ============================================================================
+
+  /**
+   * Create a serialized UCAN invocation for calling a downstream service.
+   * The invocation embeds the user's delegation as proof, forming:
+   *   user (delegation.iss) → oracle (invocation.iss) → service (invocation.aud)
+   *
+   * @param serviceUrl - URL of the downstream service (used to resolve did:web)
+   * @param userDid - The user's DID (used to look up cached delegation)
+   * @param resource - The capability resource URI (e.g., 'ixo:sandbox')
+   * @returns Base64-encoded invocation CAR, or null if unavailable
+   */
+  async createServiceInvocation(
+    serviceUrl: string,
+    userDid: string,
+    resource = 'ixo:sandbox',
+  ): Promise<string | null> {
+    if (!this.signingMnemonic || !this.oracleDid) {
+      this.logger.debug('[UCAN] No signing key available, skipping invocation');
+      return null;
+    }
+
+    const rawDelegation = await this.getCachedDelegation(userDid);
+    if (!rawDelegation) {
+      this.logger.debug(
+        `[UCAN] No cached delegation for ${userDid}, skipping invocation`,
+      );
+      return null;
+    }
+
+    const serviceDid = await this.resolveServiceDid(serviceUrl);
+    if (!serviceDid) {
+      this.logger.debug(
+        `[UCAN] Could not resolve service DID for ${serviceUrl}`,
+      );
+      return null;
+    }
+
+    // Check invocation cache
+    const cacheKey = `${INVOCATION_CACHE_PREFIX}${userDid}:${serviceDid}`;
+    const cached = await this.cacheManager.get<{
+      invocation: string;
+      expiresAt: number;
+    }>(cacheKey);
+    if (cached && cached.expiresAt > Date.now() / 1000) {
+      this.logger.debug(
+        `[UCAN] Using cached invocation for ${userDid} → ${serviceDid}`,
+      );
+      return cached.invocation;
+    }
+
+    try {
+      const {
+        signerFromMnemonic,
+        createInvocation,
+        serializeInvocation,
+        parseDelegation,
+      } = await import('@ixo/ucan');
+
+      const { signer } = await signerFromMnemonic(
+        this.signingMnemonic,
+        this.oracleDid as `did:ixo:${string}`,
+      );
+
+      const delegation = await parseDelegation(rawDelegation);
+
+      // Invocation TTL = min(1 hour, delegation expiration), whichever comes first
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      const delegationExp =
+        typeof delegation.expiration === 'number' &&
+        isFinite(delegation.expiration)
+          ? delegation.expiration
+          : null;
+      const maxExp = nowSeconds + MAX_INVOCATION_TTL_SECONDS;
+      const expirationSeconds = delegationExp
+        ? Math.min(maxExp, delegationExp)
+        : maxExp;
+
+      const invocation = await createInvocation({
+        issuer: signer,
+        audience: serviceDid as `did:${string}:${string}`,
+        capability: { can: '*', with: resource as `${string}:${string}` },
+        proofs: [delegation],
+        expiration: expirationSeconds,
+      });
+
+      const serialized = await serializeInvocation(invocation);
+
+      // Cache the invocation for its full lifetime
+      const ttlMs = (expirationSeconds - nowSeconds) * 1000;
+      if (ttlMs > 0) {
+        await this.cacheManager.set(
+          cacheKey,
+          { invocation: serialized, expiresAt: expirationSeconds },
+          ttlMs,
+        );
+        this.logger.debug(
+          `[UCAN] Cached invocation for ${userDid} → ${serviceDid} (TTL: ${expirationSeconds - nowSeconds}s)`,
+        );
+      }
+
+      this.logger.debug(
+        `[UCAN] Created invocation: iss=${this.oracleDid} aud=${serviceDid} user=${userDid}`,
+      );
+      return serialized;
+    } catch (error) {
+      this.logger.warn(
+        `[UCAN] Failed to create service invocation: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return null;
+    }
+  }
+
+  // ============================================================================
+  // MCP tool validation (existing)
+  // ============================================================================
+
   requiresAuth(serverName: string, toolName?: string): boolean {
     return requiresUCANAuth(this.config, serverName, toolName);
   }
 
-  /**
-   * Validate an MCP tool invocation
-   *
-   * TODO: Implement full ucanto-based validation once @ixo/ucan package is built.
-   * For now, this is a placeholder that logs the validation attempt.
-   */
   async validateMCPInvocation(
     serverName: string,
     toolName: string,
     invocationData: Uint8Array | string,
   ): Promise<MCPValidationResult> {
     try {
-      // Convert string to Uint8Array if needed
       const invocationBytes =
         typeof invocationData === 'string'
           ? Buffer.from(invocationData, 'base64')
           : invocationData;
 
-      // TODO: Implement full ucanto validation once package is built
-      // For now, we do basic validation
       if (invocationBytes.length === 0) {
-        return {
-          valid: false,
-          error: 'Empty invocation data',
-        };
+        return { valid: false, error: 'Empty invocation data' };
       }
 
-      // Generate a simple CID-like hash for replay protection
       const crypto = await import('node:crypto');
       const hash = crypto
         .createHash('sha256')
@@ -383,7 +574,6 @@ export class UcanService implements OnModuleDestroy {
         .digest('hex');
       const pseudoCid = `bafy${hash.slice(0, 52)}`;
 
-      // Check for replay
       if (await this.invocationStore.has(pseudoCid)) {
         return {
           valid: false,
@@ -391,7 +581,6 @@ export class UcanService implements OnModuleDestroy {
         };
       }
 
-      // Build required capability
       const requiredCapability = buildRequiredCapability(
         this.config,
         serverName,
@@ -402,19 +591,13 @@ export class UcanService implements OnModuleDestroy {
         `UCAN validation for ${serverName}/${toolName} - Required capability: ${requiredCapability.can} on ${requiredCapability.with}`,
       );
 
-      // TODO: Full validation with ucanto
-      // For MVP, we mark as used and return valid
-      // This allows the system to work while full validation is being implemented
       this.logger.warn(
         `UCAN validation is in placeholder mode. Full ucanto validation will be enabled once @ixo/ucan is built.`,
       );
 
       await this.invocationStore.add(pseudoCid);
 
-      return {
-        valid: true,
-        invokerDid: 'placeholder:invoker',
-      };
+      return { valid: true, invokerDid: 'placeholder:invoker' };
     } catch (error) {
       this.logger.error(
         `UCAN validation error: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -426,29 +609,15 @@ export class UcanService implements OnModuleDestroy {
     }
   }
 
-  /**
-   * Get the required capability URI for an MCP tool
-   */
   getRequiredCapabilityURI(serverName: string, toolName: string): string {
     return createMCPResourceURI(this.config.oracleDid, serverName, toolName);
   }
 
-  /**
-   * Get the oracle's DID
-   */
   getOracleDid(): string {
     return this.config.oracleDid;
   }
 
-  /**
-   * Get the list of root issuers
-   */
   getRootIssuers(): string[] {
     return this.config.rootIssuers;
   }
 }
-
-// TODO: Replace inline implementations with @ixo/ucan imports once package is built
-// TODO: Add full ucanto-based validation
-// TODO: Add caching for validated invocations
-// TODO: Add metrics for validation success/failure rates

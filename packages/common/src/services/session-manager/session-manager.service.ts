@@ -401,18 +401,19 @@ ___________________________________________________________
     let userContext: UserContextData | undefined;
     if (
       this.memoryEngineService &&
-      createSessionDto.oracleToken &&
-      createSessionDto.userToken
+      (createSessionDto.ucanInvocation ||
+        (createSessionDto.oracleToken && createSessionDto.userToken))
     ) {
       try {
         Logger.debug('Gathering user context from Memory Engine');
         userContext = await this.memoryEngineService.gatherUserContext({
           oracleDid: createSessionDto.oracleDid,
           roomId,
-          oracleToken: createSessionDto.oracleToken,
-          userToken: createSessionDto.userToken,
+          oracleToken: createSessionDto.oracleToken ?? '',
+          userToken: createSessionDto.userToken ?? '',
           oracleHomeServer: createSessionDto.oracleHomeServer ?? '',
           userHomeServer: createSessionDto.userHomeServer ?? '',
+          ucanInvocation: createSessionDto.ucanInvocation,
         });
       } catch (error) {
         Logger.error('Failed to gather user context:', error);

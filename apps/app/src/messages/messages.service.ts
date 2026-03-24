@@ -31,7 +31,13 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
-import { AIMessageChunk, HumanMessage, ToolMessage } from 'langchain';
+import { SqliteSaver } from '@ixo/sqlite-saver';
+import {
+  AIMessageChunk,
+  HumanMessage,
+  type BaseMessage,
+  ToolMessage,
+} from 'langchain';
 import { emojify } from 'node-emoji';
 import * as crypto from 'node:crypto';
 import { MainAgentGraph } from 'src/graph';
@@ -424,52 +430,23 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       homeServer?: string;
     },
   ): Promise<ListOracleMessagesResponse> {
-    const { did, sessionId, homeServer } = params;
+    const { did, sessionId } = params;
     if (!sessionId || !did) {
       throw new BadRequestException('Invalid parameters');
     }
 
     this.checkpointStorageSyncService.markUserActive(did);
     try {
-      const userHomeServer =
-        homeServer || (await getMatrixHomeServerCroppedForDid(did));
-      const { roomId } =
-        await this.sessionManagerService.matrixManger.getOracleRoomIdWithHomeServer(
-          {
-            userDid: did,
-            oracleEntityDid: this.config.getOrThrow('ORACLE_ENTITY_DID'),
-            userHomeServer,
-          },
-        );
-
-      if (!roomId) {
-        throw new NotFoundException('Room not found or Invalid Session Id');
-      }
-
-      const config: IRunnableConfigWithRequiredFields & { sessionId: string } =
-        {
-          configurable: {
-            thread_id: sessionId,
-            configs: {
-              matrix: {
-                roomId,
-                oracleDid: this.config.getOrThrow<string>('ORACLE_DID'),
-                homeServerName: userHomeServer,
-              },
-              user: {
-                did,
-              },
-            },
-          },
-          sessionId,
-        };
-
-      const state = await this.mainAgent.getGraphState(config);
-
-      if (!state) {
-        return transformGraphStateMessageToListMessageResponse([]);
-      }
-      return transformGraphStateMessageToListMessageResponse(state.messages);
+      const db = await this.checkpointStorageSyncService.getUserDatabase(did);
+      const saver = SqliteSaver.fromDatabase(db);
+      const tuple = await saver.getTuple({
+        configurable: { thread_id: sessionId },
+      });
+      const messages =
+        (tuple?.checkpoint?.channel_values?.messages as
+          | BaseMessage[]
+          | undefined) ?? [];
+      return transformGraphStateMessageToListMessageResponse(messages);
     } finally {
       this.checkpointStorageSyncService.markUserInactive(did);
     }

@@ -6,6 +6,7 @@ import { defineCapability, Schema } from '../capabilities/capability.js';
 import {
   createDelegation,
   createInvocation,
+  serializeDelegation,
   serializeInvocation,
   type Capability,
 } from '../client/create-client.js';
@@ -772,6 +773,341 @@ describe('UCAN Validator', () => {
       );
       expect(result2.ok).toBe(false);
       expect(result2.error?.code).toBe('REPLAY');
+    });
+  });
+
+  describe('validateDelegation', () => {
+    it('should validate a simple delegation with did:key', async () => {
+      const server = await keygen();
+      const user = await keygen();
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [user.did],
+      });
+
+      const delegation = await createDelegation({
+        issuer: user.signer,
+        audience: server.did,
+        capabilities: [
+          {
+            can: '*' as Capability['can'],
+            with: 'ixo:oracle' as Capability['with'],
+          },
+        ],
+        expiration: Math.floor(Date.now() / 1000) + 3600,
+      });
+
+      const serialized = await serializeDelegation(delegation);
+      const result = await validator.validateDelegation(serialized);
+
+      expect(result.ok).toBe(true);
+      expect(result.invoker).toBe(user.did);
+      expect(result.capability?.can).toBe('*');
+      expect(result.capability?.with).toBe('ixo:oracle');
+      expect(result.proofChain).toEqual([user.did]);
+    });
+
+    it('should validate a delegation with non-did:key issuer (withDID)', async () => {
+      const server = await keygen();
+      const userKey = await keygen();
+      // Simulate a did:ixo issuer (signer with overridden DID)
+      const ixoDid = 'did:ixo:ixo1testuser123' as const;
+      const signer = userKey.signer.withDID(ixoDid);
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [ixoDid],
+        // Provide a resolver that maps did:ixo -> did:key
+        didResolver: async (did) => {
+          if (did === ixoDid) return { ok: [userKey.did] };
+          return { error: { name: 'NotFound', did, message: 'Unknown DID' } };
+        },
+      });
+
+      const delegation = await createDelegation({
+        issuer: signer,
+        audience: server.did,
+        capabilities: [
+          {
+            can: '*' as Capability['can'],
+            with: 'ixo:oracle' as Capability['with'],
+          },
+        ],
+        expiration: Math.floor(Date.now() / 1000) + 3600,
+      });
+
+      const serialized = await serializeDelegation(delegation);
+      const result = await validator.validateDelegation(serialized);
+
+      expect(result.ok).toBe(true);
+      expect(result.invoker).toBe(ixoDid);
+      expect(result.proofChain).toEqual([ixoDid]);
+    });
+
+    it('should reject delegation with wrong audience', async () => {
+      const server = await keygen();
+      const wrongServer = await keygen();
+      const user = await keygen();
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [user.did],
+      });
+
+      const delegation = await createDelegation({
+        issuer: user.signer,
+        audience: wrongServer.did,
+        capabilities: [
+          {
+            can: '*' as Capability['can'],
+            with: 'ixo:oracle' as Capability['with'],
+          },
+        ],
+      });
+
+      const serialized = await serializeDelegation(delegation);
+      const result = await validator.validateDelegation(serialized);
+
+      expect(result.ok).toBe(false);
+      expect(result.error?.code).toBe('UNAUTHORIZED');
+    });
+
+    it('should reject expired delegation', async () => {
+      const server = await keygen();
+      const user = await keygen();
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [user.did],
+      });
+
+      const delegation = await createDelegation({
+        issuer: user.signer,
+        audience: server.did,
+        capabilities: [
+          {
+            can: '*' as Capability['can'],
+            with: 'ixo:oracle' as Capability['with'],
+          },
+        ],
+        expiration: Math.floor(Date.now() / 1000) - 60, // expired 1 minute ago
+      });
+
+      const serialized = await serializeDelegation(delegation);
+      const result = await validator.validateDelegation(serialized);
+
+      expect(result.ok).toBe(false);
+      expect(result.error?.code).toBe('EXPIRED');
+    });
+
+    it('should reject delegation with tampered signature', async () => {
+      const server = await keygen();
+      const user = await keygen();
+      const attacker = await keygen();
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [user.did],
+      });
+
+      // Attacker creates delegation pretending to be user
+      // but signing with their own key (signature won't match user's DID)
+      const delegation = await createDelegation({
+        issuer: attacker.signer.withDID(user.did),
+        audience: server.did,
+        capabilities: [
+          {
+            can: '*' as Capability['can'],
+            with: 'ixo:oracle' as Capability['with'],
+          },
+        ],
+        expiration: Math.floor(Date.now() / 1000) + 3600,
+      });
+
+      const serialized = await serializeDelegation(delegation);
+      const result = await validator.validateDelegation(serialized);
+
+      expect(result.ok).toBe(false);
+      expect(result.error?.code).toBe('INVALID_SIGNATURE');
+    });
+
+    it('should reject malformed base64 input', async () => {
+      const server = await keygen();
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [],
+      });
+
+      const result = await validator.validateDelegation('not-valid-base64!!!');
+
+      expect(result.ok).toBe(false);
+      expect(result.error?.code).toBe('INVALID_FORMAT');
+    });
+
+    it('should validate delegation chain (root -> user -> server)', async () => {
+      const server = await keygen();
+      const root = await keygen();
+      const user = await keygen();
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [root.did],
+      });
+
+      // Root delegates to user
+      const rootToUser = await Client.delegate({
+        issuer: root.signer,
+        audience: user.signer,
+        capabilities: [
+          {
+            can: '*' as const,
+            with: 'ixo:oracle' as const,
+          },
+        ],
+        expiration: Math.floor(Date.now() / 1000) + 7200,
+      });
+
+      // User re-delegates to server (with proof of root delegation)
+      const userToServer = await createDelegation({
+        issuer: user.signer,
+        audience: server.did,
+        capabilities: [
+          {
+            can: '*' as Capability['can'],
+            with: 'ixo:oracle' as Capability['with'],
+          },
+        ],
+        expiration: Math.floor(Date.now() / 1000) + 3600,
+        proofs: [rootToUser],
+      });
+
+      const serialized = await serializeDelegation(userToServer);
+      const result = await validator.validateDelegation(serialized);
+
+      expect(result.ok).toBe(true);
+      expect(result.invoker).toBe(user.did);
+      expect(result.proofChain).toEqual([root.did, user.did]);
+    });
+
+    it('should return effective expiration across delegation chain', async () => {
+      const server = await keygen();
+      const root = await keygen();
+      const user = await keygen();
+
+      const laterExp = Math.floor(Date.now() / 1000) + 7200; // 2 hours
+      const earlierExp = Math.floor(Date.now() / 1000) + 3600; // 1 hour
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [root.did],
+      });
+
+      // Root -> user with later expiration
+      const rootToUser = await Client.delegate({
+        issuer: root.signer,
+        audience: user.signer,
+        capabilities: [
+          {
+            can: '*' as const,
+            with: 'ixo:oracle' as const,
+          },
+        ],
+        expiration: laterExp,
+      });
+
+      // User -> server with earlier expiration
+      const userToServer = await createDelegation({
+        issuer: user.signer,
+        audience: server.did,
+        capabilities: [
+          {
+            can: '*' as Capability['can'],
+            with: 'ixo:oracle' as Capability['with'],
+          },
+        ],
+        expiration: earlierExp,
+        proofs: [rootToUser],
+      });
+
+      const serialized = await serializeDelegation(userToServer);
+      const result = await validator.validateDelegation(serialized);
+
+      expect(result.ok).toBe(true);
+      expect(result.expiration).toBeDefined();
+      expect(result.expiration).toBeLessThanOrEqual(earlierExp);
+    });
+
+    it('should reject delegation with broken proof chain', async () => {
+      const server = await keygen();
+      const root = await keygen();
+      const user = await keygen();
+      const unrelated = await keygen();
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [root.did],
+      });
+
+      // Root delegates to an unrelated party (not user)
+      const rootToUnrelated = await Client.delegate({
+        issuer: root.signer,
+        audience: unrelated.signer,
+        capabilities: [
+          {
+            can: '*' as const,
+            with: 'ixo:oracle' as const,
+          },
+        ],
+      });
+
+      // User tries to use unrelated's delegation as proof (audience mismatch)
+      const userToServer = await createDelegation({
+        issuer: user.signer,
+        audience: server.did,
+        capabilities: [
+          {
+            can: '*' as Capability['can'],
+            with: 'ixo:oracle' as Capability['with'],
+          },
+        ],
+        proofs: [rootToUnrelated],
+      });
+
+      const serialized = await serializeDelegation(userToServer);
+      const result = await validator.validateDelegation(serialized);
+
+      expect(result.ok).toBe(false);
+      expect(result.error?.code).toBe('UNAUTHORIZED');
+    });
+
+    it('should return undefined expiration for non-expiring delegation', async () => {
+      const server = await keygen();
+      const user = await keygen();
+
+      const validator = await createUCANValidator({
+        serverDid: server.did,
+        rootIssuers: [user.did],
+      });
+
+      const delegation = await createDelegation({
+        issuer: user.signer,
+        audience: server.did,
+        capabilities: [
+          {
+            can: '*' as Capability['can'],
+            with: 'ixo:oracle' as Capability['with'],
+          },
+        ],
+        // No expiration = Infinity = no effective expiration
+      });
+
+      const serialized = await serializeDelegation(delegation);
+      const result = await validator.validateDelegation(serialized);
+
+      expect(result.ok).toBe(true);
+      expect(result.expiration).toBeUndefined();
     });
   });
 });

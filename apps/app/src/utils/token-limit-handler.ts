@@ -69,12 +69,12 @@ export class TokenLimiter {
   /**
    * Convert raw USD cost (e.g. from OpenRouter response_metadata.usage.cost)
    * to credits. 1 USD = 1000 base credits on mainnet.
-   * On devnet, 1000x multiplier so small costs are visible for testing claims.
+   * On devnet, 10x multiplier so small costs are visible for testing claims.
    */
   static usdCostToCredits(usdCost: number): number {
     const isMainnet = config.getOrThrow('NETWORK') === 'mainnet';
-    const creditsPerUsd = isMainnet ? 1000 : 1_000_000;
-    const markup = isMainnet ? 1.6 : 5;
+    const creditsPerUsd = isMainnet ? 1000 : 10_000;
+    const markup = isMainnet ? 1.6 : 4;
     return Math.round(usdCost * creditsPerUsd * markup);
   }
 
@@ -487,6 +487,7 @@ class TokenLimiterError extends Error {
     this.type = type;
     this.limit = limit;
     this.reset = reset;
+    this.currentBalance = _currentBalance;
   }
 }
 

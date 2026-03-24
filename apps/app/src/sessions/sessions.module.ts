@@ -4,6 +4,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { type ENV } from 'src/types';
 import { MessagesModule } from '../messages/messages.module';
+import { UcanModule } from '../ucan/ucan.module';
 import { CheckpointStorageSyncModule } from '../user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.module';
 import { UserMatrixSqliteSyncService } from '../user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 import { SessionHistoryProcessor } from './session-history-processor.service';
@@ -11,7 +12,7 @@ import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
 
 @Module({
-  imports: [MessagesModule, CheckpointStorageSyncModule],
+  imports: [MessagesModule, CheckpointStorageSyncModule, UcanModule],
   controllers: [SessionsController],
   providers: [
     SessionsService,
