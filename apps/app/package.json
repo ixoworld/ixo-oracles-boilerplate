@@ -26,7 +26,7 @@
   },
   "dependencies": {
     "@blocknote/server-util": "0.29.1",
-    "@ixo/common": "workspace:*",
+    "@ixo/common": "1.1.35",
     "@ixo/editor": "3.0.0-beta.11",
     "@ixo/matrix": "1.2.2",
     "@ixo/matrix-crdt": "^1.1.0",
@@ -34,7 +34,7 @@
     "@ixo/oracles-events": "1.0.4",
     "@ixo/slack": "1.0.0",
     "@ixo/sqlite-saver": "^1.0.52",
-    "@ixo/ucan": "1.2.1",
+    "@ixo/ucan": "1.2.2",
     "@langchain/community": "^1.1.22",
     "@langchain/core": "^1.1.31",
     "@langchain/langgraph": "^1.2.1",
