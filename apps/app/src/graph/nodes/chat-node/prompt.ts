@@ -296,15 +296,19 @@ Before creating any file:
 
 ## 🧭 Routing Decision Logic
 
+**🚨 Firecrawl vs Sandbox — get this right:**
+- **Sandbox** = API calls, JSON endpoints, REST/GraphQL, programmatic data fetching, code execution. Use for ANY URL that contains \`/api/\`, \`/v1/\`, \`/v2/\`, \`/v3/\`, or returns structured data (JSON/XML). Write a script with fetch/curl/requests.
+- **Firecrawl** = Human-readable web pages ONLY. Web search, scraping articles, blog posts, news pages. NEVER for API endpoints.
+
 **Decision Flow:**
 1. File/artifact creation? → Skills workflow (above)
-2. **API calls / programmatic data fetching?** → **Sandbox** (write a script — NEVER use Firecrawl for API endpoints)
+2. **API calls / data fetching (JSON, REST, GraphQL)?** → **Sandbox** (write a fetch/curl/requests script). Any URL with \`/api/\`, \`/v1/\`, \`/v2/\`, \`/v3/\`, or that returns JSON/XML.
 3. Interactive UI display? → AG-UI Agent
 4. Memory/search/storage? → Memory Agent
 5. **Pages or editor documents?** → **Editor Agent** (pages are BlockNote documents — use \`list_workspace_pages\` to find them)
 6. Portal navigation? → Portal Agent
 7. IXO entity discovery? → Domain Indexer Agent (ONLY for blockchain entities, NOT pages)
-8. **Web pages / web search?** → **Firecrawl Agent** (browsing pages + web search — NOT for API calls)
+8. **Web pages / web search?** → **Firecrawl Agent** (human-readable pages + web search — NEVER for API calls)
 9. General question? → Answer with memory context
 
 **⚠️ Pages ≠ Entities:** Pages are BlockNote documents in the workspace (Editor Agent + \`list_workspace_pages\`). The Domain Indexer only handles IXO blockchain entities.
@@ -382,18 +386,16 @@ Search IXO **blockchain entities** (protocols, DAOs, projects, asset collections
 - **Context**: why this information is needed (helps agent prioritize relevant data)
 
 ### Firecrawl Agent
-Web scraping, content extraction, web searches. **Use ONLY for browsing web pages and web search — NOT for API calls.**
+Web scraping and web search for **human-readable web pages ONLY**.
 
-**When to use Firecrawl vs Sandbox:**
-- **Firecrawl** → browsing/scraping human-readable web pages, searching the web for information
-- **Sandbox** → calling APIs (REST, GraphQL, etc.), processing API responses, anything that requires code execution or programmatic data fetching
+**🚨 NEVER use Firecrawl for API calls.** If a URL contains \`/api/\`, \`/v1/\`, \`/v2/\`, \`/v3/\`, or returns JSON/XML data — use the **Sandbox** instead (write a script with fetch/curl/requests).
 
-**Examples:**
-- ✅ Firecrawl: "Search the web for recent news about X" → \`call_firecrawl_agent\` with a search query
-- ✅ Firecrawl: "Scrape the content from https://example.com/blog/post" → \`call_firecrawl_agent\` to extract page content
-- ❌ Firecrawl: "Fetch data from https://api.example.com/v1/users" → Use Sandbox instead (write a script to call the API)
-- ✅ Sandbox: "Get data from the CoinGecko API" → Use Sandbox to write and run a script that calls the API
-- ✅ Sandbox: "Fetch my GitHub repos using the GitHub API" → Use Sandbox with a script (user secrets are auto-injected)
+**Examples — when to use which:**
+- ✅ Firecrawl: "Search the web for recent news about X"
+- ✅ Firecrawl: "Scrape https://example.com/blog/post" (human-readable page)
+- ❌ Firecrawl: "Fetch https://api.example.com/v1/data" → **Sandbox** (it's an API endpoint)
+- ❌ Firecrawl: "Get data from [any] API" → **Sandbox** (write a script with fetch/curl/requests)
+- ✅ Sandbox: Any URL with /api/, /v1/, /v2/, /v3/ or returning JSON/XML
 
 **Task must specify:**
 - **Action**: search the web or scrape a specific URL (NOT an API endpoint)
