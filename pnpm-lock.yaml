@@ -101,8 +101,8 @@ importers:
         specifier: ^1.0.52
         version: 1.0.52(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.0(@opentelemetry/api@1.9.0))(openai@6.27.0(ws@8.18.2)(zod@4.3.6))
       '@ixo/ucan':
-        specifier: workspace:*
-        version: link:../../packages/ucan
+        specifier: 1.2.1
+        version: 1.2.1(@cosmjs/crypto@0.33.1)(@cosmjs/encoding@0.33.1)(typescript@5.9.3)
       '@langchain/community':
         specifier: ^1.1.22
         version: 1.1.22(@browserbasehq/sdk@2.6.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.56.1)(deepmerge@4.3.1)(dotenv@16.6.1)(openai@6.27.0(ws@8.18.2)(zod@4.3.6))(zod@4.3.6))(@ibm-cloud/watsonx-ai@1.7.3)(@langchain/core@1.1.31(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.0(@opentelemetry/api@1.9.0))(openai@6.27.0(ws@8.18.2)(zod@4.3.6)))(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.0(@opentelemetry/api@1.9.0))(@upstash/ratelimit@2.0.7(@upstash/redis@1.35.6))(@upstash/redis@1.35.6)(better-sqlite3@12.4.6)(chromadb@1.10.5(openai@6.27.0(ws@8.18.2)(zod@4.3.6)))(duck-duck-scrape@2.2.7)(fast-xml-parser@4.5.3)(html-to-text@9.0.5)(ibm-cloud-sdk-core@5.4.4)(ignore@7.0.5)(ioredis@5.8.2)(jsdom@28.1.0(@noble/hashes@1.8.0))(lodash@4.17.23)(neo4j-driver@5.28.2)(openai@6.27.0(ws@8.18.2)(zod@4.3.6))(pg@8.16.3)(ws@8.18.2)
@@ -3217,8 +3217,8 @@ packages:
   '@ixo/typescript-config@1.0.0':
     resolution: {integrity: sha512-reavFCnQlEY3efgDMBJoUbHJUIhlpFgf/LS0Q1Vqz+y/mbXymItF82unAzcmRFjb5fE+ANgYpj0k22njWs/tzg==}
 
-  '@ixo/ucan@1.0.1':
-    resolution: {integrity: sha512-bN33H9dHnWt+LNMCD93PPCexnWLnb4KdTXNL4TcbKxDMRemHCDkjCwRhCNAYqSYtgLUq8gUx6nFhIjae2CEVDw==}
+  '@ixo/ucan@1.2.1':
+    resolution: {integrity: sha512-fPKBgSnxm7ypYRELsQE1b60WpZOBQ23er8tn7GkCxh2xfrcBaNPR5HdGzMiEHn2yGsN0lbP9x+BEY9h6LIP6Gg==}
     peerDependencies:
       '@cosmjs/crypto': '>=0.32.0'
       '@cosmjs/encoding': '>=0.32.0'
@@ -16026,7 +16026,7 @@ snapshots:
       '@dnd-kit/core': 6.3.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@ixo/matrix-crdt': 1.1.0(lib0@0.2.114)(matrix-js-sdk@37.13.0)(y-protocols@1.0.6(yjs@13.6.27))(yjs@13.6.27)
       '@ixo/surveys': 0.1.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@ixo/ucan': 1.0.1(@cosmjs/crypto@0.33.1)(@cosmjs/encoding@0.33.1)(typescript@5.9.3)
+      '@ixo/ucan': 1.2.1(@cosmjs/crypto@0.33.1)(@cosmjs/encoding@0.33.1)(typescript@5.9.3)
       '@mantine/core': 7.17.8(@mantine/hooks@7.17.8(react@18.3.1))(@types/react@18.3.27)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@mantine/hooks': 7.17.8(react@18.3.1)
       '@tabler/icons-react': 3.35.0(react@18.3.1)
@@ -16249,7 +16249,7 @@ snapshots:
 
   '@ixo/typescript-config@1.0.0': {}
 
-  '@ixo/ucan@1.0.1(@cosmjs/crypto@0.33.1)(@cosmjs/encoding@0.33.1)(typescript@5.9.3)':
+  '@ixo/ucan@1.2.1(@cosmjs/crypto@0.33.1)(@cosmjs/encoding@0.33.1)(typescript@5.9.3)':
     dependencies:
       '@ucanto/client': 9.0.2
       '@ucanto/core': 10.4.6
@@ -22636,7 +22636,7 @@ snapshots:
       isstream: 0.1.2
       jsonwebtoken: 9.0.2
       mime-types: 2.1.35
-      retry-axios: 2.6.0(axios@1.13.2(debug@4.4.3))
+      retry-axios: 2.6.0(axios@1.13.2)
       tough-cookie: 4.1.4
     transitivePeerDependencies:
       - supports-color
@@ -26190,7 +26190,7 @@ snapshots:
       onetime: 5.1.2
       signal-exit: 3.0.7
 
-  retry-axios@2.6.0(axios@1.13.2(debug@4.4.3)):
+  retry-axios@2.6.0(axios@1.13.2):
     dependencies:
       axios: 1.13.2(debug@4.4.3)
 
