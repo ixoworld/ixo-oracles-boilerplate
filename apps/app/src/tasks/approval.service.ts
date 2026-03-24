@@ -93,7 +93,7 @@ export class ApprovalService {
       `Stored work result in Redis: key=${redisKey}, TTL=${APPROVAL_RESULT_TTL_SECONDS}s`,
     );
 
-    // 2. Post approval request message to room
+    // 2. Post approval request message to room (with structured metadata for FE)
     const message = formatApprovalRequestMessage(taskId, workResult.result);
     const mxManager = MatrixManager.getInstance();
     const approvalEventId = await sendTaskNotification({
@@ -108,19 +108,17 @@ export class ApprovalService {
     });
 
     // 3. Post a custom approval event for tracking
-    if (approvalEventId) {
-      const approvalContent: ApprovalRequestEventContent = {
-        taskId,
-        status: 'pending',
-        preview: truncateText(workResult.result, 200),
-        requestedAt: new Date().toISOString(),
-      };
-      await mxManager.sendMatrixEvent(
-        roomId,
-        APPROVAL_REQUEST_EVENT_TYPE,
-        approvalContent,
-      );
-    }
+    const approvalContent: ApprovalRequestEventContent = {
+      taskId,
+      status: 'pending',
+      preview: truncateText(workResult.result, 500),
+      requestedAt: new Date().toISOString(),
+    };
+    await mxManager.sendMatrixEvent(
+      roomId,
+      APPROVAL_REQUEST_EVENT_TYPE,
+      approvalContent,
+    );
 
     // 4. Update TaskMeta with pending approval
     await this.tasksService.updateTask({

@@ -17,6 +17,7 @@ export {
   buildMentionMessage,
   escapeHtml,
   formatOutputDate,
+  classifyApprovalResponse,
   formatApprovalRequestMessage,
   handleJobFailure,
   isTaskRunnable,

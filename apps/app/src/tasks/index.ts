@@ -102,6 +102,7 @@ export {
   formatApprovalRequestMessage,
   handleJobFailure,
   isTaskRunnable,
+  classifyApprovalResponse,
   parseApprovalResponse,
   resolveMainRoomId,
   sendTaskNotification,

@@ -38,7 +38,10 @@ import { MainAgentGraph } from 'src/graph';
 import { cleanAdditionalKwargs } from 'src/graph/nodes/chat-node/utils';
 import { type TMainAgentGraphState } from 'src/graph/state';
 import { ApprovalService } from 'src/tasks/approval.service';
-import { parseApprovalResponse } from 'src/tasks/processors/processor-utils';
+import {
+  classifyApprovalResponse,
+  parseApprovalResponse,
+} from 'src/tasks/processors/processor-utils';
 import { TasksService } from 'src/tasks/task.service';
 import { type ENV } from 'src/types';
 import { UcanService } from 'src/ucan/ucan.service';
@@ -507,9 +510,9 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
    * If so, process the approval and return true to skip the normal message flow.
    *
    * Works for both Portal and Matrix paths:
-   * - Parses the message text for approval/rejection keywords
-   * - Looks up pending approvals for the user
-   * - Delegates to ApprovalService if a match is found
+   * 1. First checks if there's a pending approval in the room (cheap — no LLM call)
+   * 2. If pending approval found, uses LLM classifier to determine intent
+   * 3. Delegates to ApprovalService if the user is approving/rejecting
    */
   private async tryHandleApprovalResponse(
     messageText: string,
@@ -517,9 +520,6 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     roomId: string,
   ): Promise<boolean> {
     if (!this.approvalService) return false;
-
-    const decision = parseApprovalResponse(messageText);
-    if (!decision) return false;
 
     try {
       // Resolve the user's main room to look up their tasks
@@ -535,43 +535,47 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
 
       if (!mainRoomId) return false;
 
-      // Look for a task with a pending approval in this room
+      // First: find if there's a pending approval in this room (no LLM call yet)
       const { tasks } = await this.tasksService!.listTasks(mainRoomId, {
         page: 0,
         pageSize: 10_000,
       });
 
+      let pendingTaskId: string | null = null;
       for (const entry of tasks) {
         if (entry.status !== 'active') continue;
-
         try {
           const meta = await this.tasksService!.getTask({
             taskId: entry.taskId,
             mainRoomId,
           });
-
           if (!meta.pendingApprovalEventId) continue;
-
-          // Check if this task's room matches the room the message came from
           const taskRoomId = meta.customRoomId ?? mainRoomId;
           if (taskRoomId !== roomId) continue;
-
-          // Found a matching pending approval
-          Logger.log(
-            `[ApprovalGate] Message matches pending approval for task ${entry.taskId}: decision=${decision}`,
-          );
-
-          await this.approvalService.handleApprovalResponse({
-            taskId: entry.taskId,
-            approved: decision === 'approved',
-            mainRoomId,
-          });
-
-          return true;
+          pendingTaskId = entry.taskId;
+          break;
         } catch {
           // Skip tasks that can't be loaded
         }
       }
+
+      if (!pendingTaskId) return false;
+
+      // There IS a pending approval in this room — now classify the message
+      const decision = await classifyApprovalResponse(messageText);
+      if (!decision) return false;
+
+      Logger.log(
+        `[ApprovalGate] LLM classified message as ${decision} for task ${pendingTaskId}`,
+      );
+
+      await this.approvalService.handleApprovalResponse({
+        taskId: pendingTaskId,
+        approved: decision === 'approved',
+        mainRoomId,
+      });
+
+      return true;
     } catch (err) {
       Logger.error(
         `[ApprovalGate] Error checking for approval response: ${err instanceof Error ? err.message : String(err)}`,
@@ -721,13 +725,16 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
           Logger.log(
             `[ApprovalGate] Portal message handled as approval response`,
           );
+          // The LLM already classified the decision — we can use the fast
+          // regex to determine the response text (or fall back to generic).
+          const fastDecision = parseApprovalResponse(params.message);
           return {
             message: {
               type: 'ai',
               content:
-                parseApprovalResponse(params.message) === 'approved'
-                  ? 'Result approved and delivered.'
-                  : 'Result discarded.',
+                fastDecision === 'rejected'
+                  ? 'Result discarded.'
+                  : 'Result approved and delivered.',
               id: crypto.randomUUID(),
             },
             sessionId,

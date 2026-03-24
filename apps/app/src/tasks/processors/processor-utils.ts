@@ -454,48 +454,80 @@ export async function handleJobFailure(params: {
   }
 }
 
-// ── Approval NLP Helper ─────────────────────────────────────────────
+// ── Approval Classification ─────────────────────────────────────────
 
-/** Max length for a message to be considered an approval response. */
-const APPROVAL_RESPONSE_MAX_LENGTH = 50;
+import { getProviderChatModel } from 'src/graph/llm-provider';
+import { HumanMessage, SystemMessage } from 'langchain';
 
-/**
- * Patterns that match clear, unambiguous approval responses.
- * Only full-match patterns — no prefix matching — to avoid
- * intercepting normal conversation messages like "yes, that's what I meant".
- */
-const APPROVE_PATTERNS = [
-  /^(yes|yep|yeah|yup|sure|ok|okay|approve|approved|confirm|confirmed|go ahead|deliver|send it|lgtm|looks good|ship it|do it|proceed)\.?!?$/i,
-  /^(yes|yeah|yup|sure|ok|okay)[,.]?\s*(please|thanks|do it|go ahead|deliver it|send it)?\.?!?$/i,
-];
+/** Fast-path regex for obvious single-word responses (no LLM call needed). */
+const OBVIOUS_APPROVE = /^(yes|approve|confirmed|lgtm)\.?!?$/i;
+const OBVIOUS_REJECT = /^(no|reject|discard)\.?!?$/i;
 
-const REJECT_PATTERNS = [
-  /^(no|nope|nah|reject|rejected|discard|cancel|skip|don'?t|do not|stop)\.?!?$/i,
-  /^(no|nope|nah)[,.]?\s*(thanks|don'?t|discard it|skip it|cancel it)?\.?!?$/i,
-];
+const APPROVAL_CLASSIFIER_PROMPT = `You are a binary classifier. The user has a pending task result waiting for their approval.
+Given the user's message, determine if they are:
+- APPROVING the result (wanting it delivered) — reply exactly: APPROVE
+- REJECTING the result (wanting it discarded) — reply exactly: REJECT
+- Saying something UNRELATED to the approval — reply exactly: NEITHER
+
+Only reply with one word: APPROVE, REJECT, or NEITHER. Nothing else.`;
 
 /**
- * Parse a user's natural language response to an approval request.
- * Returns 'approved', 'rejected', or null if the text doesn't clearly
- * indicate an approval decision.
+ * Classify a user's message as an approval decision using a cheap LLM.
  *
- * Only matches short, unambiguous responses to avoid false positives
- * on normal conversation messages. Messages longer than 50 characters
- * are never treated as approval responses.
+ * Uses a two-tier approach:
+ * 1. Fast regex for obvious cases ("yes", "no", "approve", "reject")
+ * 2. LLM call (guard-tier model) for ambiguous messages
+ *
+ * Returns 'approved', 'rejected', or null if unrelated.
+ */
+export async function classifyApprovalResponse(
+  text: string,
+): Promise<'approved' | 'rejected' | null> {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+
+  // Fast path: obvious single-word responses
+  if (OBVIOUS_APPROVE.test(trimmed)) return 'approved';
+  if (OBVIOUS_REJECT.test(trimmed)) return 'rejected';
+
+  // Skip very long messages — unlikely to be approval responses
+  if (trimmed.length > 200) return null;
+
+  try {
+    const model = getProviderChatModel('guard', {
+      temperature: 0,
+      maxTokens: 5,
+    });
+
+    const response = await model.invoke([
+      new SystemMessage(APPROVAL_CLASSIFIER_PROMPT),
+      new HumanMessage(trimmed),
+    ]);
+
+    const answer = String(response.content).trim().toUpperCase();
+
+    if (answer.startsWith('APPROVE')) return 'approved';
+    if (answer.startsWith('REJECT')) return 'rejected';
+    return null;
+  } catch (err) {
+    logger.warn(
+      `Approval classifier failed, falling back to null: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return null;
+  }
+}
+
+/**
+ * Synchronous fast-path check for obvious approval responses.
+ * Used by the approval API endpoint where the FE already knows the decision.
  */
 export function parseApprovalResponse(
   text: string,
 ): 'approved' | 'rejected' | null {
   const trimmed = text.trim();
-  if (!trimmed || trimmed.length > APPROVAL_RESPONSE_MAX_LENGTH) return null;
-
-  for (const pattern of APPROVE_PATTERNS) {
-    if (pattern.test(trimmed)) return 'approved';
-  }
-  for (const pattern of REJECT_PATTERNS) {
-    if (pattern.test(trimmed)) return 'rejected';
-  }
-
+  if (!trimmed) return null;
+  if (OBVIOUS_APPROVE.test(trimmed)) return 'approved';
+  if (OBVIOUS_REJECT.test(trimmed)) return 'rejected';
   return null;
 }
 

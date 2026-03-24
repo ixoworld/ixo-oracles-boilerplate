@@ -353,5 +353,97 @@ export function createTaskManagerTools(
     },
   );
 
-  return [createTask, listTasks, getTaskStatus, setApprovalGate];
+  // ── pause_task ─────────────────────────────────────────────────
+
+  const pauseTask = tool(
+    async (input) => {
+      await tasksService.updateTask({
+        taskId: input.taskId,
+        mainRoomId,
+        updates: {
+          status: 'paused',
+          nextRunAt: null,
+          pendingApprovalEventId: null,
+        },
+      });
+
+      return JSON.stringify({ taskId: input.taskId, status: 'paused' });
+    },
+    {
+      name: 'pause_task',
+      description:
+        'Pauses a task — stops all scheduled runs. If a result is waiting for approval, it will be discarded. Use when the user says "pause my task", "stop running this for now", "hold off on that task".',
+      schema: z.object({
+        taskId: z.string().describe('The task ID to pause'),
+      }),
+    },
+  );
+
+  // ── resume_task ────────────────────────────────────────────────
+
+  const resumeTask = tool(
+    async (input) => {
+      await tasksService.updateTask({
+        taskId: input.taskId,
+        mainRoomId,
+        updates: { status: 'active' },
+      });
+
+      const meta = await tasksService.getTask({
+        taskId: input.taskId,
+        mainRoomId,
+      });
+
+      return JSON.stringify({
+        taskId: input.taskId,
+        status: 'active',
+        scheduleCron: meta.scheduleCron,
+        nextRunAt: meta.nextRunAt,
+      });
+    },
+    {
+      name: 'resume_task',
+      description:
+        'Resumes a paused task — reactivates it so scheduled runs continue. Use when the user says "resume my task", "start it again", "unpause that".',
+      schema: z.object({
+        taskId: z.string().describe('The task ID to resume'),
+      }),
+    },
+  );
+
+  // ── cancel_task ────────────────────────────────────────────────
+
+  const cancelTask = tool(
+    async (input) => {
+      await tasksService.updateTask({
+        taskId: input.taskId,
+        mainRoomId,
+        updates: {
+          status: 'cancelled',
+          nextRunAt: null,
+          pendingApprovalEventId: null,
+        },
+      });
+
+      return JSON.stringify({ taskId: input.taskId, status: 'cancelled' });
+    },
+    {
+      name: 'cancel_task',
+      description:
+        'Cancels a task permanently — stops all runs and marks it as cancelled. Use when the user says "cancel my task", "delete that task", "I don\'t need this anymore", "remove that scheduled task".',
+      schema: z.object({
+        taskId: z.string().describe('The task ID to cancel'),
+      }),
+    },
+  );
+
+  return [
+    createTask,
+    listTasks,
+    getTaskStatus,
+    setApprovalGate,
+    pauseTask,
+    resumeTask,
+    cancelTask,
+  ];
 }
