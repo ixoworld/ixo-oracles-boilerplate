@@ -128,10 +128,14 @@ export class SimpleProcessor extends WorkerHost {
       this.logger.debug(`Run event posted to room ${roomId}`);
 
       // 5. Update TaskMeta
+      const isOneShot = !meta.scheduleCron;
       const updates = {
         lastRunAt: now.toISOString(),
         totalRuns: meta.totalRuns + 1,
         consecutiveFailures: 0,
+        ...(isOneShot && meta.status !== 'dry_run'
+          ? { status: 'completed' as const }
+          : {}),
       };
       this.logger.debug(`Updating TaskMeta: ${JSON.stringify(updates)}`);
       await this.tasksService.updateTask({
@@ -141,7 +145,7 @@ export class SimpleProcessor extends WorkerHost {
       });
 
       this.logger.log(
-        `Simple job for task ${taskId} completed (run #${meta.totalRuns + 1})`,
+        `Simple job for task ${taskId} completed (run #${meta.totalRuns + 1})${isOneShot ? ' [one-shot → completed]' : ''}`,
       );
     } catch (error) {
       await handleJobFailure({

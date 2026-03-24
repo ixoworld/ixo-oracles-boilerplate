@@ -27,6 +27,12 @@ export interface SimpleJobData {
    */
   roomId: string;
   message: string;
+  /** Human-readable task title for dashboard visibility */
+  title?: string;
+  /** Agent-classified task type (e.g. 'reminder', 'report') */
+  taskType?: string;
+  /** Cron pattern for recurring tasks, e.g. '0 9 * * 1' */
+  scheduleCron?: string;
 }
 
 /** Data payload for Pattern B — Work child */
@@ -43,6 +49,12 @@ export interface WorkJobData {
   roomId: string;
   /** ISO 8601 timestamp of the delivery this work prepares for (recurring only) */
   forDeliveryAt?: string;
+  /** Human-readable task title for dashboard visibility */
+  title?: string;
+  /** Agent-classified task type (e.g. 'reminder', 'report') */
+  taskType?: string;
+  /** Cron pattern for recurring tasks, e.g. '0 9 * * 1' */
+  scheduleCron?: string;
 }
 
 /** Data payload for Pattern B — Deliver parent */
@@ -53,6 +65,12 @@ export interface DeliverJobData {
   /** Matrix user ID — used for mention pills in notifications */
   matrixUserId: string;
   roomId: string;
+  /** Human-readable task title for dashboard visibility */
+  title?: string;
+  /** Agent-classified task type (e.g. 'reminder', 'report') */
+  taskType?: string;
+  /** Cron pattern for recurring tasks, e.g. '0 9 * * 1' */
+  scheduleCron?: string;
 }
 
 /** Data payload for approval timeout/reminder jobs */

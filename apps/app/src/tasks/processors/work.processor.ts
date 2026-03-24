@@ -357,6 +357,9 @@ export class WorkProcessor extends WorkerHost {
         ? `$${meta.totalCostUsd.toFixed(2)} / $${meta.monthlyBudgetUsd.toFixed(2)}`
         : `$${meta.totalCostUsd.toFixed(2)}`;
 
+      // Calculate time budget for the agent
+      const timeBudgetMinutes = meta.bufferMinutes;
+
       // Build previous runs section from recentOutput
       let previousRuns: string;
       if (meta.recentOutput.length > 0) {
@@ -394,16 +397,19 @@ export class WorkProcessor extends WorkerHost {
         `- Schedule: ${schedule} | Timezone: ${meta.timezone}`,
         `- Run: #${runNumber} | Last run: ${lastRun}`,
         `- Budget: ${budgetStr}`,
+        `- ⏱️ Time budget: ~${timeBudgetMinutes} minutes — you MUST finish within this window. Be fast: use minimal tool calls, don't over-search.`,
         '',
         '### Previous Runs',
         previousRuns,
         '',
         '### Execution Rules',
-        '1. Execute immediately — use tools (Firecrawl for web data, Memory Agent for recall, skills for files)',
-        '2. Output ONLY the deliverable as described in the task page',
-        '3. Do not narrate, do not echo instructions, do not add preamble',
-        '4. If a tool fails, state the failure factually and continue with available data',
-        '5. Follow all constraints and output format specified in the task page',
+        '1. **The Task Page is your blueprint — follow it exactly.** It specifies what to do, which agents/tools to use, which URLs to scrape, which skills to load (by name and CID), step-by-step procedures, thresholds, and output format. Do NOT deviate, improvise, or substitute unless a step fails.',
+        '2. **Use the agents and tools named in the Task Page.** If the page says "Use Firecrawl Agent to scrape https://oilprice.com", use Firecrawl on that exact URL. If it says "Use the Sandbox with skill X (CID: Y)", load that skill. Do not pick different tools or sources unless the specified ones fail.',
+        '3. **Follow the step-by-step procedure** in the "What to Do" section in order. Do not skip steps, reorder them, or add extra steps.',
+        '4. Output ONLY the deliverable as described in "How to Report" — match the format, data points, and length exactly.',
+        '5. Do not narrate, do not echo instructions, do not add preamble.',
+        '6. If a tool or source fails, try any fallback listed in the "Notes" section. If no fallback exists, state the failure factually and continue with available data.',
+        '7. Respect all rules in the "Constraints" section — they override your defaults.',
         ...alertRule,
       ].join('\n');
     });

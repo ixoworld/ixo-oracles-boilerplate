@@ -1,5 +1,7 @@
 /**
- * TaskManager sub-agent tools — create_task, list_tasks, get_task_status.
+ * TaskManager sub-agent tools — create_task, list_tasks, get_task_status,
+ * pause_task, resume_task, cancel_task, update_task_schedule,
+ * update_notification_policy.
  *
  * Factory function closes over dependencies so tools can call TasksService
  * without the LLM needing direct access.
@@ -17,6 +19,7 @@ import {
   type TaskType,
 } from 'src/tasks/task-meta';
 import { resolveModelForTask } from 'src/tasks/processors/processor-utils';
+import { getTemplateDefaults } from 'src/tasks/utils/template-registry';
 
 export interface TaskManagerToolsDeps {
   tasksService: TasksService;
@@ -69,6 +72,9 @@ export function createTaskManagerTools(
       const channelType = input.channelType ?? 'main';
       const effectiveTimezone = input.timezone ?? timezone;
 
+      // Fall back to template defaults so pages are never blank
+      const templateDefaults = getTemplateDefaults(taskType);
+
       const result = await tasksService.createTask({
         title: input.title,
         userDid,
@@ -87,8 +93,9 @@ export function createTaskManagerTools(
           ? resolveModelForTask(input.modelTier as ModelTier, null).modelName
           : undefined,
         whatToDo: input.objective,
-        howToReport: input.outputFormat,
-        constraints: input.constraints,
+        howToReport: input.outputFormat ?? templateDefaults.defaultOutputFormat,
+        constraints: input.constraints ?? templateDefaults.defaultConstraints,
+        notes: input.notes,
         spaceId,
         requiresApproval: input.requiresApproval,
       });
@@ -152,6 +159,12 @@ export function createTaskManagerTools(
             .string()
             .optional()
             .describe('"Constraints" section content'),
+          notes: z
+            .string()
+            .optional()
+            .describe(
+              'Optional freeform notes written into the task page. Use this for anything that will help when the task runs: which approach to take, what steps to follow, which agents or tools to prefer, edge cases to handle, or any other execution context the running agent should know. Leave empty if nothing extra is needed.',
+            ),
           notificationPolicy: z
             .enum(NOTIFICATION_POLICIES)
             .optional()
@@ -353,70 +366,255 @@ export function createTaskManagerTools(
     },
   );
 
-  // ── pause_task ─────────────────────────────────────────────────
+  // ── pause_task ───────────────────────────────────────────────────
 
   const pauseTask = tool(
     async (input) => {
-      const meta = await tasksService.pauseTask({
-        taskId: input.taskId,
-        mainRoomId,
-      });
-
-      return JSON.stringify({ taskId: input.taskId, status: meta.status });
+      try {
+        const meta = await tasksService.pauseTask({
+          taskId: input.taskId,
+          mainRoomId,
+        });
+        const entry = await tasksService.getTaskIndexEntry(
+          mainRoomId,
+          input.taskId,
+        );
+        return JSON.stringify({
+          taskId: meta.taskId,
+          title: entry.title,
+          status: meta.status,
+        });
+      } catch (err) {
+        return JSON.stringify({
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     },
     {
       name: 'pause_task',
       description:
-        'Pauses a task — stops all scheduled runs. If a result is waiting for approval, it will be discarded. Use when the user says "pause my task", "stop running this for now", "hold off on that task".',
+        'Pauses an active task. Removes all pending BullMQ jobs and sets the status to paused. The task schedule and page are preserved — the task can be resumed later from the same schedule. Use when the user says "pause", "stop for now", "suspend", or "put on hold". Do NOT use for permanent stops — use cancel_task instead. Call list_tasks or get_task_status first if you need to confirm the taskId.',
       schema: z.object({
-        taskId: z.string().describe('The task ID to pause'),
+        taskId: z.string().describe('The task ID to pause, e.g. "task_abc123"'),
       }),
     },
   );
 
-  // ── resume_task ────────────────────────────────────────────────
+  // ── resume_task ──────────────────────────────────────────────────
 
   const resumeTask = tool(
     async (input) => {
-      const meta = await tasksService.resumeTask({
-        taskId: input.taskId,
-        mainRoomId,
-      });
-
-      return JSON.stringify({
-        taskId: input.taskId,
-        status: meta.status,
-        scheduleCron: meta.scheduleCron,
-        nextRunAt: meta.nextRunAt,
-      });
+      try {
+        const meta = await tasksService.resumeTask({
+          taskId: input.taskId,
+          mainRoomId,
+        });
+        const entry = await tasksService.getTaskIndexEntry(
+          mainRoomId,
+          input.taskId,
+        );
+        return JSON.stringify({
+          taskId: meta.taskId,
+          title: entry.title,
+          status: meta.status,
+          nextRunAt: meta.nextRunAt,
+        });
+      } catch (err) {
+        return JSON.stringify({
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     },
     {
       name: 'resume_task',
       description:
-        'Resumes a paused task — reactivates it so scheduled runs continue. Use when the user says "resume my task", "start it again", "unpause that".',
+        'Resumes a paused task. Re-creates BullMQ jobs from the task\'s existing schedule and sets status back to active. Use when the user says "resume", "restart", "turn it back on", or "unpause". Returns an error (do not retry silently) if the task is not paused, or if a one-shot task\'s deadline has already passed — in that case, tell the user the deadline passed and ask if they want to set a new one. Call list_tasks or get_task_status first if you need to confirm the taskId.',
       schema: z.object({
-        taskId: z.string().describe('The task ID to resume'),
+        taskId: z
+          .string()
+          .describe('The task ID to resume, e.g. "task_abc123"'),
       }),
     },
   );
 
-  // ── cancel_task ────────────────────────────────────────────────
+  // ── cancel_task ──────────────────────────────────────────────────
 
   const cancelTask = tool(
     async (input) => {
-      const meta = await tasksService.cancelTask({
-        taskId: input.taskId,
-        mainRoomId,
-      });
-
-      return JSON.stringify({ taskId: input.taskId, status: meta.status });
+      if (!input.confirmed) {
+        return JSON.stringify({
+          error:
+            'Confirmation required. Ask the user to confirm before cancelling.',
+        });
+      }
+      try {
+        const meta = await tasksService.cancelTask({
+          taskId: input.taskId,
+          mainRoomId,
+        });
+        const entry = await tasksService.getTaskIndexEntry(
+          mainRoomId,
+          input.taskId,
+        );
+        return JSON.stringify({
+          taskId: meta.taskId,
+          title: entry.title,
+          status: meta.status,
+        });
+      } catch (err) {
+        return JSON.stringify({
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     },
     {
       name: 'cancel_task',
       description:
-        'Cancels a task permanently — stops all runs and marks it as cancelled. Use when the user says "cancel my task", "delete that task", "I don\'t need this anymore", "remove that scheduled task".',
+        'Permanently cancels a task. Removes all BullMQ jobs and marks the task as cancelled. The task page and chat history are preserved (room archival happens separately). This cannot be undone — you MUST confirm with the user before calling this tool, and pass confirmed: true. Use when the user says "cancel", "delete", "remove", "stop permanently", or "I don\'t need this anymore". For temporary stops, use pause_task instead.',
       schema: z.object({
-        taskId: z.string().describe('The task ID to cancel'),
+        taskId: z
+          .string()
+          .describe('The task ID to cancel, e.g. "task_abc123"'),
+        confirmed: z
+          .boolean()
+          .describe(
+            'Must be true — only set this after the user has explicitly confirmed cancellation. Never call with false.',
+          ),
+      }),
+    },
+  );
+
+  // ── update_task_schedule ─────────────────────────────────────────
+
+  const updateTaskSchedule = tool(
+    async (input) => {
+      try {
+        const updateParams: Parameters<typeof tasksService.updateTask>[0] = {
+          taskId: input.taskId,
+          mainRoomId,
+          updates: {
+            ...(input.newScheduleCron !== undefined
+              ? { scheduleCron: input.newScheduleCron }
+              : {}),
+            ...(input.newDeadlineIso !== undefined
+              ? { deadlineIso: input.newDeadlineIso }
+              : {}),
+          },
+          newScheduleCron: input.newScheduleCron,
+          newDeadlineIso: input.newDeadlineIso,
+        };
+
+        const meta = await tasksService.updateTask(updateParams);
+        const entry = await tasksService.getTaskIndexEntry(
+          mainRoomId,
+          input.taskId,
+        );
+        return JSON.stringify({
+          taskId: meta.taskId,
+          title: entry.title,
+          scheduleDescription: input.scheduleDescription,
+          scheduleCron: meta.scheduleCron,
+          deadlineIso: meta.deadlineIso,
+          nextRunAt: meta.nextRunAt,
+          status: meta.status,
+        });
+      } catch (err) {
+        return JSON.stringify({
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
+    {
+      name: 'update_task_schedule',
+      description:
+        'Changes the schedule of an existing task. Cancels the current BullMQ jobs and creates new ones based on the new schedule. Works for both recurring tasks (new cron expression) and one-shot tasks (new deadline). Use when the user says "change it to every 2 hours", "reschedule to Tuesdays", "move the deadline to Friday", or gives any new timing. Parse the user\'s natural language into a cron expression or ISO timestamp before calling. Provide exactly one of newScheduleCron or newDeadlineIso — not both.',
+      schema: z
+        .object({
+          taskId: z
+            .string()
+            .describe('The task ID to reschedule, e.g. "task_abc123"'),
+          scheduleDescription: z
+            .string()
+            .describe(
+              'Human-readable new schedule to confirm with the user, e.g. "every 2 hours" or "this Friday at 3 PM"',
+            ),
+          newScheduleCron: z
+            .string()
+            .optional()
+            .describe(
+              'New cron expression for a recurring task, e.g. "0 */2 * * *". Provide this OR newDeadlineIso, not both.',
+            ),
+          newDeadlineIso: z
+            .string()
+            .optional()
+            .describe(
+              'New ISO 8601 deadline for a one-shot task, e.g. "2026-03-25T15:00:00+02:00". Provide this OR newScheduleCron, not both.',
+            ),
+        })
+        .refine(
+          (data) =>
+            data.newScheduleCron !== undefined ||
+            data.newDeadlineIso !== undefined,
+          { message: 'Provide either newScheduleCron or newDeadlineIso' },
+        )
+        .refine(
+          (data) =>
+            !(
+              data.newScheduleCron !== undefined &&
+              data.newDeadlineIso !== undefined
+            ),
+          { message: 'Provide newScheduleCron or newDeadlineIso, not both' },
+        ),
+    },
+  );
+
+  // ── update_notification_policy ──────────────────────────────────────
+
+  const updateNotificationPolicy = tool(
+    async (input) => {
+      try {
+        const meta = await tasksService.updateTask({
+          taskId: input.taskId,
+          mainRoomId,
+          updates: { notificationPolicy: input.policy },
+        });
+        const entry = await tasksService.getTaskIndexEntry(
+          mainRoomId,
+          input.taskId,
+        );
+
+        const policyDescriptions: Record<string, string> = {
+          channel_only: 'post results without push notification',
+          channel_and_mention: 'post results and send a push notification',
+          silent: 'save results to the task page only, no messages',
+          on_threshold: 'only post when a condition or threshold is met',
+        };
+
+        return JSON.stringify({
+          taskId: meta.taskId,
+          title: entry.title,
+          notificationPolicy: meta.notificationPolicy,
+          description: policyDescriptions[meta.notificationPolicy],
+        });
+      } catch (err) {
+        return JSON.stringify({
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
+    {
+      name: 'update_notification_policy',
+      description:
+        'Changes how the user gets notified about task results. Use when the user says "make it silent", "notify me with a push", "only alert me when the threshold is hit", "stop sending me notifications for this", or any change to notification behavior.',
+      schema: z.object({
+        taskId: z
+          .string()
+          .describe('The task ID to update, e.g. "task_abc123"'),
+        policy: z
+          .enum(NOTIFICATION_POLICIES)
+          .describe(
+            'New notification policy: "channel_only" (post, no push), "channel_and_mention" (post + push), "silent" (page only), "on_threshold" (post only when condition met)',
+          ),
       }),
     },
   );
@@ -429,5 +627,7 @@ export function createTaskManagerTools(
     pauseTask,
     resumeTask,
     cancelTask,
+    updateTaskSchedule,
+    updateNotificationPolicy,
   ];
 }
