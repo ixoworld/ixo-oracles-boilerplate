@@ -456,26 +456,38 @@ export async function handleJobFailure(params: {
 
 // ── Approval NLP Helper ─────────────────────────────────────────────
 
+/** Max length for a message to be considered an approval response. */
+const APPROVAL_RESPONSE_MAX_LENGTH = 50;
+
+/**
+ * Patterns that match clear, unambiguous approval responses.
+ * Only full-match patterns — no prefix matching — to avoid
+ * intercepting normal conversation messages like "yes, that's what I meant".
+ */
 const APPROVE_PATTERNS = [
-  /^(yes|yep|yeah|yup|sure|ok|okay|approve|approved|confirm|confirmed|go ahead|deliver|send it|lgtm|looks good|ship it|do it|proceed)$/i,
-  /^(yes|yep|yeah|yup|sure|ok|okay)\b/i,
+  /^(yes|yep|yeah|yup|sure|ok|okay|approve|approved|confirm|confirmed|go ahead|deliver|send it|lgtm|looks good|ship it|do it|proceed)\.?!?$/i,
+  /^(yes|yeah|yup|sure|ok|okay)[,.]?\s*(please|thanks|do it|go ahead|deliver it|send it)?\.?!?$/i,
 ];
 
 const REJECT_PATTERNS = [
-  /^(no|nope|nah|reject|rejected|discard|cancel|skip|don'?t|do not|stop)$/i,
-  /^(no|nope|nah)\b/i,
+  /^(no|nope|nah|reject|rejected|discard|cancel|skip|don'?t|do not|stop)\.?!?$/i,
+  /^(no|nope|nah)[,.]?\s*(thanks|don'?t|discard it|skip it|cancel it)?\.?!?$/i,
 ];
 
 /**
  * Parse a user's natural language response to an approval request.
  * Returns 'approved', 'rejected', or null if the text doesn't clearly
  * indicate an approval decision.
+ *
+ * Only matches short, unambiguous responses to avoid false positives
+ * on normal conversation messages. Messages longer than 50 characters
+ * are never treated as approval responses.
  */
 export function parseApprovalResponse(
   text: string,
 ): 'approved' | 'rejected' | null {
   const trimmed = text.trim();
-  if (!trimmed) return null;
+  if (!trimmed || trimmed.length > APPROVAL_RESPONSE_MAX_LENGTH) return null;
 
   for (const pattern of APPROVE_PATTERNS) {
     if (pattern.test(trimmed)) return 'approved';

@@ -164,60 +164,76 @@ export class ApprovalService {
       `Processing approval response for task ${taskId}: ${approved ? 'APPROVED' : 'REJECTED'}`,
     );
 
-    // 1. Load TaskMeta
-    const meta = await this.tasksService.getTask(
-      { taskId, mainRoomId },
-      { bypassCache: true },
-    );
-
-    if (!meta.pendingApprovalEventId) {
-      this.logger.warn(
-        `Task ${taskId} has no pending approval, ignoring response`,
-      );
-      return;
-    }
-
-    // 2. Load cached work result from Redis
     const client = await this.approvalQueue.client;
-    const redisKey = `${APPROVAL_RESULT_PREFIX}${taskId}`;
-    const rawResult = await client.get(redisKey);
 
-    if (!rawResult) {
+    // Atomicity guard: use Redis SETNX to prevent concurrent handling.
+    // Only one caller can acquire the lock — duplicates are silently dropped.
+    const lockKey = `task:approval-lock:${taskId}`;
+    const acquired = await client.set(lockKey, '1', 'EX', 60, 'NX');
+    if (!acquired) {
       this.logger.warn(
-        `No cached work result found for task ${taskId}, may have expired`,
+        `Task ${taskId} approval response already being processed, ignoring duplicate`,
       );
-      const mxManager = MatrixManager.getInstance();
-      const roomId = meta.customRoomId ?? mainRoomId;
-      await mxManager.sendMessage({
-        roomId,
-        message:
-          'The task result has expired and is no longer available. The next scheduled run will produce a new result for review.',
-        isOracleAdmin: true,
-      });
-      await this.clearApprovalState(taskId, mainRoomId);
       return;
     }
 
-    const workResult: WorkResult = JSON.parse(rawResult);
-    const roomId = meta.customRoomId ?? mainRoomId;
-    const now = new Date();
+    try {
+      // 1. Load TaskMeta (bypass cache to get fresh state)
+      const meta = await this.tasksService.getTask(
+        { taskId, mainRoomId },
+        { bypassCache: true },
+      );
 
-    if (approved) {
-      await this.deliverApprovedResult({
-        taskId,
-        meta,
-        workResult,
-        roomId,
-        mainRoomId,
-        now,
-      });
-    } else {
-      await this.handleRejection({ taskId, roomId, mainRoomId, meta });
+      if (!meta.pendingApprovalEventId) {
+        this.logger.warn(
+          `Task ${taskId} has no pending approval, ignoring response`,
+        );
+        return;
+      }
+
+      // 2. Load cached work result from Redis
+      const redisKey = `${APPROVAL_RESULT_PREFIX}${taskId}`;
+      const rawResult = await client.get(redisKey);
+
+      if (!rawResult) {
+        this.logger.warn(
+          `No cached work result found for task ${taskId}, may have expired`,
+        );
+        const mxManager = MatrixManager.getInstance();
+        const roomId = meta.customRoomId ?? mainRoomId;
+        await mxManager.sendMessage({
+          roomId,
+          message:
+            'The task result has expired and is no longer available. The next scheduled run will produce a new result for review.',
+          isOracleAdmin: true,
+        });
+        await this.clearApprovalState(taskId, mainRoomId);
+        return;
+      }
+
+      const workResult: WorkResult = JSON.parse(rawResult);
+      const roomId = meta.customRoomId ?? mainRoomId;
+      const now = new Date();
+
+      if (approved) {
+        await this.deliverApprovedResult({
+          taskId,
+          meta,
+          workResult,
+          roomId,
+          mainRoomId,
+          now,
+        });
+      } else {
+        await this.handleRejection({ taskId, roomId, mainRoomId, meta });
+      }
+
+      // Clean up approval state (clears Redis result, TaskMeta, and timeout jobs)
+      await this.clearApprovalState(taskId, mainRoomId);
+    } finally {
+      // Release the atomicity lock
+      await client.del(lockKey).catch(() => {});
     }
-
-    // Clean up Redis and approval state
-    await client.del(redisKey);
-    await this.clearApprovalState(taskId, mainRoomId);
   }
 
   /**
@@ -390,43 +406,20 @@ export class ApprovalService {
   }
 
   /**
-   * Check if a Matrix event ID corresponds to a pending approval for any task.
-   * Used by the message handler to intercept approval responses.
-   */
-  async findTaskByApprovalEventId(
-    mainRoomId: string,
-    eventId: string,
-  ): Promise<{ taskId: string; meta: TaskMeta } | null> {
-    // Read the task index to find tasks with pending approvals
-    const { tasks } = await this.tasksService.listTasks(mainRoomId, {
-      page: 0,
-      pageSize: 10_000,
-    });
-
-    for (const entry of tasks) {
-      try {
-        const meta = await this.tasksService.getTask({
-          taskId: entry.taskId,
-          mainRoomId,
-        });
-        if (meta.pendingApprovalEventId === eventId) {
-          return { taskId: entry.taskId, meta };
-        }
-      } catch {
-        // Skip tasks that can't be loaded
-      }
-    }
-
-    return null;
-  }
-
-  /**
    * Clear the approval state from TaskMeta and cancel timeout jobs.
+   * Also removes cached work result from Redis.
+   *
+   * Called when:
+   * - User approves/rejects a result
+   * - Approval times out
+   * - Task is cancelled/paused while approval is pending
    */
-  private async clearApprovalState(
-    taskId: string,
-    mainRoomId: string,
-  ): Promise<void> {
+  async clearApprovalState(taskId: string, mainRoomId: string): Promise<void> {
+    // Remove cached work result from Redis
+    const client = await this.approvalQueue.client;
+    const redisKey = `${APPROVAL_RESULT_PREFIX}${taskId}`;
+    await client.del(redisKey).catch(() => {});
+
     await this.tasksService.updateTask({
       taskId,
       mainRoomId,
