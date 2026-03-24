@@ -357,17 +357,12 @@ export function createTaskManagerTools(
 
   const pauseTask = tool(
     async (input) => {
-      await tasksService.updateTask({
+      const meta = await tasksService.pauseTask({
         taskId: input.taskId,
         mainRoomId,
-        updates: {
-          status: 'paused',
-          nextRunAt: null,
-          pendingApprovalEventId: null,
-        },
       });
 
-      return JSON.stringify({ taskId: input.taskId, status: 'paused' });
+      return JSON.stringify({ taskId: input.taskId, status: meta.status });
     },
     {
       name: 'pause_task',
@@ -383,20 +378,14 @@ export function createTaskManagerTools(
 
   const resumeTask = tool(
     async (input) => {
-      await tasksService.updateTask({
-        taskId: input.taskId,
-        mainRoomId,
-        updates: { status: 'active' },
-      });
-
-      const meta = await tasksService.getTask({
+      const meta = await tasksService.resumeTask({
         taskId: input.taskId,
         mainRoomId,
       });
 
       return JSON.stringify({
         taskId: input.taskId,
-        status: 'active',
+        status: meta.status,
         scheduleCron: meta.scheduleCron,
         nextRunAt: meta.nextRunAt,
       });
@@ -415,17 +404,12 @@ export function createTaskManagerTools(
 
   const cancelTask = tool(
     async (input) => {
-      await tasksService.updateTask({
+      const meta = await tasksService.cancelTask({
         taskId: input.taskId,
         mainRoomId,
-        updates: {
-          status: 'cancelled',
-          nextRunAt: null,
-          pendingApprovalEventId: null,
-        },
       });
 
-      return JSON.stringify({ taskId: input.taskId, status: 'cancelled' });
+      return JSON.stringify({ taskId: input.taskId, status: meta.status });
     },
     {
       name: 'cancel_task',

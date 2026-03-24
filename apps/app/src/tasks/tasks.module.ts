@@ -22,7 +22,6 @@ import { MatrixManager } from '@ixo/matrix';
 import { MainAgentGraph } from 'src/graph';
 import { CheckpointStorageSyncModule } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.module';
 import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
-import { ApprovalController } from './approval.controller';
 import { ApprovalService } from './approval.service';
 import { ApprovalProcessor } from './processors/approval.processor';
 import { DeliverProcessor } from './processors/deliver.processor';
@@ -33,7 +32,6 @@ import { TasksScheduler } from './scheduler/tasks-scheduler.service';
 import { TasksService } from './task.service';
 
 @Module({
-  controllers: [ApprovalController],
   imports: [
     // Register BullMQ with Redis connection from env
     BullModule.forRootAsync({

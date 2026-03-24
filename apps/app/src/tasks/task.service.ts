@@ -512,6 +512,119 @@ export class TasksService {
     return finalMeta;
   }
 
+  // ── Pause ───────────────────────────────────────────────────────
+
+  async pauseTask(params: {
+    taskId: string;
+    mainRoomId: string;
+  }): Promise<TaskMeta> {
+    const { taskId, mainRoomId } = params;
+    this.logger.log(`Pausing task ${taskId}`);
+
+    const meta = await this.getTask({ taskId, mainRoomId });
+
+    // Cancel all BullMQ jobs
+    await this.scheduler.cancelAllJobsForTask(
+      taskId,
+      meta.bullmqRepeatKey,
+      meta.currentWorkJobId,
+    );
+
+    // Update metadata
+    return this.updateTask({
+      taskId,
+      mainRoomId,
+      updates: {
+        status: 'paused',
+        nextRunAt: null,
+        bullmqJobId: null,
+        bullmqRepeatKey: null,
+        currentWorkJobId: null,
+        pendingApprovalEventId: null,
+      },
+    });
+  }
+
+  // ── Resume ──────────────────────────────────────────────────────
+
+  async resumeTask(params: {
+    taskId: string;
+    mainRoomId: string;
+  }): Promise<TaskMeta> {
+    const { taskId, mainRoomId } = params;
+    this.logger.log(`Resuming task ${taskId}`);
+
+    // Set active first
+    await this.updateTask({
+      taskId,
+      mainRoomId,
+      updates: { status: 'active' },
+    });
+
+    // Re-read fresh meta
+    const meta = await this.getTask(
+      { taskId, mainRoomId },
+      { bypassCache: true },
+    );
+
+    // Reschedule if the task has a cron or deadline
+    if (meta.scheduleCron || meta.deadlineIso) {
+      const scheduleResult = await this.scheduleTask(meta, {
+        mainRoomId,
+        message: undefined,
+        scheduleCron: meta.scheduleCron ?? undefined,
+        deadlineIso: meta.deadlineIso ?? undefined,
+        timezone: meta.timezone,
+      });
+
+      return this.updateTask({
+        taskId,
+        mainRoomId,
+        updates: {
+          bullmqJobId: scheduleResult.bullmqJobId,
+          bullmqRepeatKey: scheduleResult.bullmqRepeatKey,
+          nextRunAt: scheduleResult.nextRunAt,
+          currentWorkJobId: scheduleResult.currentWorkJobId,
+        },
+      });
+    }
+
+    return meta;
+  }
+
+  // ── Cancel ──────────────────────────────────────────────────────
+
+  async cancelTask(params: {
+    taskId: string;
+    mainRoomId: string;
+  }): Promise<TaskMeta> {
+    const { taskId, mainRoomId } = params;
+    this.logger.log(`Cancelling task ${taskId}`);
+
+    const meta = await this.getTask({ taskId, mainRoomId });
+
+    // Cancel all BullMQ jobs permanently
+    await this.scheduler.cancelAllJobsForTask(
+      taskId,
+      meta.bullmqRepeatKey,
+      meta.currentWorkJobId,
+    );
+
+    // Update metadata
+    return this.updateTask({
+      taskId,
+      mainRoomId,
+      updates: {
+        status: 'cancelled',
+        nextRunAt: null,
+        bullmqJobId: null,
+        bullmqRepeatKey: null,
+        currentWorkJobId: null,
+        pendingApprovalEventId: null,
+      },
+    });
+  }
+
   // ── Delete ──────────────────────────────────────────────────────
 
   async deleteTask(params: DeleteTaskParams): Promise<void> {
