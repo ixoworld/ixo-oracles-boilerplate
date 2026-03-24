@@ -928,25 +928,120 @@ User asks "how much is my oil monitor costing?" → TaskManager reads Y.Map → 
 
 ## 14. Approval Gates
 
-If `requiresApproval: true` in Y.Map:
+Approval gates let users review and approve task results before they are delivered to the channel. When `requiresApproval: true` on a task, results are held for user confirmation instead of being delivered immediately.
 
-1. Work phase completes normally
-2. Instead of delivering, posts a "pending approval" message:
+### 14.1 TaskMeta Fields
 
-```
-📋 Task result ready for review:
-
-[Preview — summary or first 500 chars]
-
-React with ✅ to deliver, or ❌ to discard.
+```typescript
+requiresApproval: boolean;          // Whether the gate is active
+pendingApprovalEventId: string | null; // Matrix event ID of the pending approval message
 ```
 
-3. Backend listens for Matrix reactions:
-   - ✅ → deliver the result to channel
-   - ❌ → discard, log as "rejected"
-   - No reaction in 24h → reminder; another 24h → auto-discard
+### 14.2 Enabling Approval
 
-The agent suggests approval gates for tasks with external-facing actions.
+Approval can be set at creation time or toggled on existing tasks:
+
+- **At creation:** User says "confirm with me first" / "check with me before sending" / "get my approval" → TaskManager sets `requiresApproval: true` on `create_task`.
+- **On existing tasks:** TaskManager calls `set_approval_gate` tool → updates `requiresApproval` in TaskMeta.
+- **Agent hint:** The agent should suggest approval for tasks with external-facing actions or high-stakes output.
+
+### 14.3 End-to-End Flow
+
+```
+Work Processor completes
+    → Deliver Processor checks meta.requiresApproval
+    → If true: calls ApprovalService.requestApproval()
+        1. Store WorkResult in Redis (key: task:approval:{taskId}, TTL: 49h)
+        2. Post approval request message to room:
+           "Task result ready for review\n\n[Preview — first 500 chars]\n\nReply with yes to deliver, or no to discard."
+        3. Post custom Matrix event (ixo.ora.task.approval) with status: 'pending'
+        4. Update TaskMeta: set pendingApprovalEventId
+        5. Schedule timeout jobs on task_approval queue:
+           - Reminder job at 24h
+           - Expiry job at 48h
+    → If false: deliver immediately (normal path)
+```
+
+### 14.4 User Response Handling
+
+Users reply in natural language from Portal or Matrix. Response classification uses a **two-tier approach**:
+
+1. **Fast regex** — instant match for obvious responses:
+   - Approve: `yes`, `approve`, `confirmed`, `lgtm`
+   - Reject: `no`, `reject`, `discard`
+2. **LLM classifier** — for ambiguous messages (guard-tier model, temperature 0, max 5 tokens). Classifies as `APPROVE`, `REJECT`, or `NEITHER`.
+3. Messages longer than 200 characters are assumed unrelated (skipped).
+
+**On approval:**
+- Load cached WorkResult from Redis
+- Deliver result to the task room/channel (mirrors DeliverProcessor logic)
+- Append output row to task page (if page exists)
+- Post `ixo.ora.task.run` event with run stats
+- Update TaskMeta: increment `totalRuns`, `totalTokensUsed`, `totalCostUsd`, set `lastRunAt`
+- Clear approval state (Redis result, `pendingApprovalEventId`, cancel timeout jobs)
+
+**On rejection:**
+- Post rejection message: "Result discarded. The next scheduled run will produce a new result."
+- Post `ixo.ora.task.approval` event with `status: 'rejected'`
+- Clear approval state
+
+### 14.5 Timeout Handling
+
+Two BullMQ jobs are scheduled on the `task_approval` queue when approval is requested:
+
+| Phase | Delay | Action |
+|-------|-------|--------|
+| **Reminder** | 24 hours | Send: "Reminder: A task result is still waiting for your review. Reply with **yes** to deliver, or **no** to discard." |
+| **Expiry** | 48 hours | Auto-discard the result, delete Redis cache, post: "The pending task result has expired after 48 hours and has been discarded." Post `ixo.ora.task.approval` event with `status: 'expired'`. Clear all approval state. |
+
+Both timeout jobs are cancelled when the user responds in time.
+
+### 14.6 Atomicity & Deduplication
+
+`handleApprovalResponse` uses a Redis `SETNX` lock (`task:approval-lock:{taskId}`, TTL 60s) to prevent concurrent handling. If a duplicate response arrives while one is being processed, it is silently dropped.
+
+### 14.7 Interaction with Lifecycle Operations
+
+- **Pause** while approval pending → `pendingApprovalEventId` is cleared, approval state cleaned up.
+- **Cancel** while approval pending → same cleanup.
+- **Result expiry** in Redis → if the user responds after the Redis TTL (49h), they get: "The task result has expired and is no longer available. The next scheduled run will produce a new result."
+
+### 14.8 Infrastructure
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| `ApprovalService` | `tasks/approval.service.ts` | Core logic: request approval, handle response, deliver/reject, timeout handling, clear state |
+| `ApprovalProcessor` | `tasks/processors/approval.processor.ts` | BullMQ worker for `task_approval` queue — processes reminder and expiry jobs |
+| `task_approval` queue | `tasks/scheduler/task-queues.ts` | BullMQ queue — 3 attempts, 10s fixed backoff, concurrency 10 |
+| Classifier | `tasks/processors/processor-utils.ts` | `classifyApprovalResponse()` (async, two-tier) + `parseApprovalResponse()` (sync fast-path) |
+| Constants | `tasks/processors/processor-utils.ts` | `APPROVAL_REMINDER_MS` (24h), `APPROVAL_EXPIRY_MS` (48h), `APPROVAL_RESULT_TTL_SECONDS` (49h), `APPROVAL_RESULT_PREFIX`, `APPROVAL_REQUEST_EVENT_TYPE` |
+| Types | `tasks/processors/processor-utils.ts` | `ApprovalStatus`, `ApprovalRequestEventContent`, `ApprovalJobData`, `WorkResult` |
+| Scheduler | `tasks/scheduler/tasks-scheduler.service.ts` | `scheduleApprovalTimeouts()`, `cancelApprovalTimeouts()`, `getApprovalQueue()` |
+| Deliver gate | `tasks/processors/deliver.processor.ts` | Checks `meta.requiresApproval` before delivery — routes to `ApprovalService.requestApproval()` |
+| Agent tool | `graph/agents/task-manager/task-manager-tools.ts` | `set_approval_gate` tool — toggles `requiresApproval` on existing tasks |
+
+### 14.9 Custom Matrix Events
+
+**`ixo.ora.task.approval`** — posted when approval state changes:
+
+```typescript
+interface ApprovalRequestEventContent {
+  taskId: string;
+  status: 'pending' | 'approved' | 'rejected' | 'expired';
+  preview: string;        // First 500 chars of the result (for UI display)
+  requestedAt: string;    // ISO timestamp
+  resolvedAt?: string;    // ISO timestamp (set on resolve/expire)
+}
+```
+
+### 14.10 Agent Prompt Integration
+
+The TaskManager sub-agent prompt includes an "Approval Gates" section that instructs the agent to:
+
+- Recognize approval-related language ("confirm with me first", "check with me before sending", etc.)
+- Set `requiresApproval: true` on `create_task` when appropriate
+- Use `set_approval_gate` to toggle approval on existing tasks
+- Communicate naturally: "I'll check with you before delivering each result" / "Got it — results will be delivered automatically from now on"
 
 ---
 
@@ -1216,27 +1311,28 @@ No channel question, no page question, no dry run. Simple tasks are simple.
 src/tasks/
 ├── task-meta.ts                       # TaskMeta interface, types, defaults
 ├── task-doc.ts                        # Y.Doc helpers (read/write/append)
+├── task-doc-helpers.ts                # withTaskDoc(), sharedServerEditor
 ├── task-page-template.ts              # Markdown page generation
+├── task-service.types.ts              # Service param/result types
 ├── index.ts                           # Barrel exports
 ├── tasks.module.ts                    # Registers services + queues
-├── tasks.service.ts                   # Core CRUD, task list state event updates
-├── tasks.scheduler.ts                 # BullMQ job creation & cancellation
-├── task-page-sync.service.ts          # Y.Doc observer for mutations
-├── task-channel.service.ts            # Matrix room creation & lifecycle
+├── task.service.ts                    # Core CRUD, lifecycle, task list state event updates
+├── approval.service.ts                # Approval gates: request, respond, timeout, deliver/reject
+│
+├── scheduler/
+│   ├── task-queues.ts                 # Queue names, default options, worker options
+│   ├── types.ts                       # Job data interfaces (Simple, Work, Deliver, Approval)
+│   └── tasks-scheduler.service.ts     # BullMQ job creation, cancellation, approval timeouts
 │
 ├── processors/
+│   ├── processor-utils.ts             # Shared types, constants, classifier, helpers
 │   ├── simple.processor.ts            # Pattern A
 │   ├── work.processor.ts              # Pattern B — work child
-│   └── deliver.processor.ts           # Pattern B — deliver parent
-│
-├── agents/
-│   └── task-manager.agent.ts          # LangGraph sub-agent
+│   ├── deliver.processor.ts           # Pattern B — deliver parent (+ approval gate check)
+│   └── approval.processor.ts          # Approval timeout/reminder worker
 │
 └── utils/
-    ├── buffer-calculator.ts
-    ├── cost-tracker.ts
-    ├── model-selector.ts
-    └── template-registry.ts
+    └── template-registry.ts           # Task type → template defaults
 ```
 
 ### 26.2 Service Dependency Graph
@@ -1247,14 +1343,22 @@ TaskManager Sub-Agent (LangGraph)
     ├── TaskChannelService → Matrix SDK
     └── CostTracker → Y.Map
 
-TaskPageSyncService (Y.Doc observer)
-    ├── Y.Map changes → TasksScheduler (reschedule)
-    └── Content changes → sets needsReplan
-
 SimpleProcessor → Matrix SDK (send message)
 
 WorkProcessor → Oracle Agent (LangGraph) + CostTracker + ModelSelector
-DeliverProcessor → Matrix SDK + Y.Doc provider (update output table) + TasksScheduler (schedule next work job for recurring)
+
+DeliverProcessor → Matrix SDK + Y.Doc provider + TasksScheduler
+    └── If requiresApproval → ApprovalService.requestApproval()
+
+ApprovalService
+    ├── TasksService (read/update TaskMeta)
+    ├── TasksScheduler (schedule/cancel timeout jobs)
+    ├── Redis (store/retrieve/delete cached WorkResult)
+    ├── Matrix SDK (send approval request, rejection, expiry messages)
+    └── SessionManagerService (notification delivery)
+
+ApprovalProcessor (BullMQ worker — task_approval queue)
+    └── ApprovalService.handleApprovalTimeout()
 ```
 
 ---
@@ -1265,41 +1369,50 @@ DeliverProcessor → Matrix SDK + Y.Doc provider (update output table) + TasksSc
 
 **Goal:** Simple reminders and one-shot research tasks work end-to-end.
 
-- [ ] Y.Map schema (`taskMeta` interface)
-- [ ] Task page template (Markdown)
-- [ ] TasksService: create task (with optional page), set Y.Map, update task list state event
-- [ ] TasksScheduler: delayed BullMQ jobs (one-shot)
-- [ ] SimpleProcessor: send message at time
-- [ ] WorkProcessor + DeliverProcessor: FlowProducer for one-shot
-- [ ] TaskManager sub-agent: `createTask`, `listTasks`, `getTaskStatus`
-- [ ] TaskChannelService: `[Task]`-prefixed room creation
-- [ ] Task list state event on main channel
-- [ ] Timezone from user profile
-- [ ] 3 templates: Simple Reminder, Research Task, Price Alert
+- [x] Y.Map schema (`taskMeta` interface)
+- [x] Task page template (Markdown)
+- [x] TasksService: create task (with optional page), set Y.Map, update task list state event
+- [x] TasksScheduler: delayed BullMQ jobs (one-shot)
+- [x] SimpleProcessor: send message at time
+- [x] WorkProcessor + DeliverProcessor: FlowProducer for one-shot
+- [x] TaskManager sub-agent: `createTask`, `listTasks`, `getTaskStatus`
+- [x] TaskChannelService: `[Task]`-prefixed room creation
+- [x] Task list state event on main channel
+- [x] Timezone from user profile
+- [x] 6 templates: Simple Reminder, Price Alert, Daily Digest, Weekly Report, Research Task, Recurring Check
 
-### Phase 2 — Recurring & Intelligence
+### Phase 2 — Recurring & Lifecycle
 
-**Goal:** Recurring tasks, self-tuning buffers, live editing.
+**Goal:** Recurring tasks, lifecycle management, live editing.
 
-- [ ] BullMQ `repeat` for recurring Simple Jobs
-- [ ] Repeatable deliver + one-shot work for recurring Flow Jobs
+- [x] BullMQ `repeat` for recurring Simple Jobs
+- [x] Repeatable deliver + one-shot work for recurring Flow Jobs
 - [ ] Buffer self-tuning from actual durations
 - [ ] TaskPageSyncService: Y.Doc observer → reschedule/pause/replan
-- [ ] Model tier selection per task
-- [ ] Remaining templates: Daily Digest, Weekly Report, Recurring Check
-- [ ] Sub-agent tools: `pauseTask`, `resumeTask`, `cancelTask`, `updateTaskSchedule`
+- [x] Model tier selection per task
+- [x] Sub-agent tools: `pauseTask`, `resumeTask`, `cancelTask`, `updateTaskSchedule`, `updateNotificationPolicy`
 
 ### Phase 3 — Safety & Control
 
 **Goal:** Trustworthy for production use.
 
-- [ ] Cost tracking (per-run + monthly budget + auto-pause)
-- [ ] Approval gates with Matrix reactions
+- [x] Cost tracking (per-run token/cost tracking in TaskMeta)
+- [x] **Approval gates** — full implementation:
+  - [x] `ApprovalService`: request approval, handle response (approve/reject), timeout handling
+  - [x] `ApprovalProcessor`: BullMQ worker for `task_approval` queue (reminder at 24h, expiry at 48h)
+  - [x] Redis-backed work result caching with TTL (49h)
+  - [x] Two-tier response classifier: fast regex + LLM guard-tier fallback
+  - [x] Atomicity via Redis `SETNX` lock to prevent duplicate processing
+  - [x] Custom Matrix event `ixo.ora.task.approval` for tracking approval state
+  - [x] DeliverProcessor gate: routes to `ApprovalService.requestApproval()` when `requiresApproval: true`
+  - [x] Sub-agent tool: `set_approval_gate` to toggle approval on existing tasks
+  - [x] Agent prompt: approval gates section with natural language triggers
+  - [x] Lifecycle interaction: pause/cancel clears pending approval state
 - [ ] Dry run mode
-- [ ] Consecutive failure auto-pause (5 failures)
+- [x] Consecutive failure auto-pause (5 failures)
 - [ ] Boot-time job reconciliation
 - [ ] Room lifecycle (archival, cleanup)
-- [ ] Sub-agent tools: `setApprovalGate`, `checkBudget`, `setNotificationPolicy`
+- [ ] Monthly budget with auto-pause
 
 ### Phase 4 — Advanced
 
