@@ -933,8 +933,10 @@ Approval gates let users review and approve task results before they are deliver
 ### 14.1 TaskMeta Fields
 
 ```typescript
-requiresApproval: boolean;          // Whether the gate is active
+requiresApproval: boolean; // Whether the gate is active
 pendingApprovalEventId: string | null; // Matrix event ID of the pending approval message
+lastRejectionReason: string | null; // Reason from last rejection — included in agent prompt on retry
+lastRejectionAt: string | null; // ISO 8601 timestamp of last rejection
 ```
 
 ### 14.2 Enabling Approval
@@ -973,6 +975,7 @@ Users reply in natural language from Portal or Matrix. Response classification u
 3. Messages longer than 200 characters are assumed unrelated (skipped).
 
 **On approval:**
+
 - Load cached WorkResult from Redis
 - Deliver result to the task room/channel (mirrors DeliverProcessor logic)
 - Append output row to task page (if page exists)
@@ -981,18 +984,25 @@ Users reply in natural language from Portal or Matrix. Response classification u
 - Clear approval state (Redis result, `pendingApprovalEventId`, cancel timeout jobs)
 
 **On rejection:**
-- Post rejection message: "Result discarded. The next scheduled run will produce a new result."
+
+- Persist rejection reason and timestamp in TaskMeta (`lastRejectionReason`, `lastRejectionAt`)
+- Post rejection message: "Result rejected. Re-running the task with your feedback…"
 - Post `ixo.ora.task.approval` event with `status: 'rejected'`
-- Clear approval state
+- Clear approval state (Redis result, `pendingApprovalEventId`, cancel timeout jobs)
+- Schedule immediate retry flow (work→deliver) via `scheduleRetryFlow()` with UUID-suffixed job IDs
+- Store retry `workJobId` in TaskMeta as `currentWorkJobId`
+- On retry, WorkProcessor includes rejection feedback in the agent prompt ("### Rejection Feedback" section)
+- Retry result goes through the approval gate again
+- On successful delivery (approved), `lastRejectionReason` and `lastRejectionAt` are cleared
 
 ### 14.5 Timeout Handling
 
 Two BullMQ jobs are scheduled on the `task_approval` queue when approval is requested:
 
-| Phase | Delay | Action |
-|-------|-------|--------|
-| **Reminder** | 24 hours | Send: "Reminder: A task result is still waiting for your review. Reply with **yes** to deliver, or **no** to discard." |
-| **Expiry** | 48 hours | Auto-discard the result, delete Redis cache, post: "The pending task result has expired after 48 hours and has been discarded." Post `ixo.ora.task.approval` event with `status: 'expired'`. Clear all approval state. |
+| Phase        | Delay    | Action                                                                                                                                                                                                                 |
+| ------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Reminder** | 24 hours | Send: "Reminder: A task result is still waiting for your review. Reply with **yes** to deliver, or **no** to discard."                                                                                                 |
+| **Expiry**   | 48 hours | Auto-discard the result, delete Redis cache, post: "The pending task result has expired after 48 hours and has been discarded." Post `ixo.ora.task.approval` event with `status: 'expired'`. Clear all approval state. |
 
 Both timeout jobs are cancelled when the user responds in time.
 
@@ -1008,17 +1018,17 @@ Both timeout jobs are cancelled when the user responds in time.
 
 ### 14.8 Infrastructure
 
-| Component | File | Purpose |
-|-----------|------|---------|
-| `ApprovalService` | `tasks/approval.service.ts` | Core logic: request approval, handle response, deliver/reject, timeout handling, clear state |
-| `ApprovalProcessor` | `tasks/processors/approval.processor.ts` | BullMQ worker for `task_approval` queue — processes reminder and expiry jobs |
-| `task_approval` queue | `tasks/scheduler/task-queues.ts` | BullMQ queue — 3 attempts, 10s fixed backoff, concurrency 10 |
-| Classifier | `tasks/processors/processor-utils.ts` | `classifyApprovalResponse()` (async, two-tier) + `parseApprovalResponse()` (sync fast-path) |
-| Constants | `tasks/processors/processor-utils.ts` | `APPROVAL_REMINDER_MS` (24h), `APPROVAL_EXPIRY_MS` (48h), `APPROVAL_RESULT_TTL_SECONDS` (49h), `APPROVAL_RESULT_PREFIX`, `APPROVAL_REQUEST_EVENT_TYPE` |
-| Types | `tasks/processors/processor-utils.ts` | `ApprovalStatus`, `ApprovalRequestEventContent`, `ApprovalJobData`, `WorkResult` |
-| Scheduler | `tasks/scheduler/tasks-scheduler.service.ts` | `scheduleApprovalTimeouts()`, `cancelApprovalTimeouts()`, `getApprovalQueue()` |
-| Deliver gate | `tasks/processors/deliver.processor.ts` | Checks `meta.requiresApproval` before delivery — routes to `ApprovalService.requestApproval()` |
-| Agent tool | `graph/agents/task-manager/task-manager-tools.ts` | `set_approval_gate` tool — toggles `requiresApproval` on existing tasks |
+| Component             | File                                              | Purpose                                                                                                                                                |
+| --------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ApprovalService`     | `tasks/approval.service.ts`                       | Core logic: request approval, handle response, deliver/reject, timeout handling, clear state                                                           |
+| `ApprovalProcessor`   | `tasks/processors/approval.processor.ts`          | BullMQ worker for `task_approval` queue — processes reminder and expiry jobs                                                                           |
+| `task_approval` queue | `tasks/scheduler/task-queues.ts`                  | BullMQ queue — 3 attempts, 10s fixed backoff, concurrency 10                                                                                           |
+| Classifier            | `tasks/processors/processor-utils.ts`             | `classifyApprovalResponse()` (async, two-tier) + `parseApprovalResponse()` (sync fast-path)                                                            |
+| Constants             | `tasks/processors/processor-utils.ts`             | `APPROVAL_REMINDER_MS` (24h), `APPROVAL_EXPIRY_MS` (48h), `APPROVAL_RESULT_TTL_SECONDS` (49h), `APPROVAL_RESULT_PREFIX`, `APPROVAL_REQUEST_EVENT_TYPE` |
+| Types                 | `tasks/processors/processor-utils.ts`             | `ApprovalStatus`, `ApprovalRequestEventContent`, `ApprovalJobData`, `WorkResult`                                                                       |
+| Scheduler             | `tasks/scheduler/tasks-scheduler.service.ts`      | `scheduleApprovalTimeouts()`, `cancelApprovalTimeouts()`, `getApprovalQueue()`                                                                         |
+| Deliver gate          | `tasks/processors/deliver.processor.ts`           | Checks `meta.requiresApproval` before delivery — routes to `ApprovalService.requestApproval()`                                                         |
+| Agent tool            | `graph/agents/task-manager/task-manager-tools.ts` | `set_approval_gate` tool — toggles `requiresApproval` on existing tasks                                                                                |
 
 ### 14.9 Custom Matrix Events
 
@@ -1028,9 +1038,9 @@ Both timeout jobs are cancelled when the user responds in time.
 interface ApprovalRequestEventContent {
   taskId: string;
   status: 'pending' | 'approved' | 'rejected' | 'expired';
-  preview: string;        // First 500 chars of the result (for UI display)
-  requestedAt: string;    // ISO timestamp
-  resolvedAt?: string;    // ISO timestamp (set on resolve/expire)
+  preview: string; // First 500 chars of the result (for UI display)
+  requestedAt: string; // ISO timestamp
+  resolvedAt?: string; // ISO timestamp (set on resolve/expire)
 }
 ```
 

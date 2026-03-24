@@ -15,6 +15,7 @@ import type { Job } from 'bullmq';
 import { ApprovalService } from '../approval.service';
 import { QUEUE_NAMES, WORKER_OPTIONS } from '../scheduler/task-queues';
 import type { ApprovalTimeoutJobData } from '../scheduler/types';
+import { ApprovalTimeoutJobDataSchema } from './processor-utils';
 
 @Processor(QUEUE_NAMES.APPROVAL, WORKER_OPTIONS[QUEUE_NAMES.APPROVAL])
 export class ApprovalProcessor extends WorkerHost {
@@ -25,7 +26,8 @@ export class ApprovalProcessor extends WorkerHost {
   }
 
   async process(job: Job<ApprovalTimeoutJobData>): Promise<void> {
-    const { taskId, roomId, mainRoomId, matrixUserId, phase } = job.data;
+    ApprovalTimeoutJobDataSchema.parse(job.data);
+    const { taskId, roomId, mainRoomId, phase } = job.data;
     this.logger.log(
       `Processing approval ${phase} for task ${taskId} [jobId=${job.id}]`,
     );
@@ -34,7 +36,6 @@ export class ApprovalProcessor extends WorkerHost {
       taskId,
       mainRoomId,
       roomId,
-      matrixUserId,
       phase,
     });
 

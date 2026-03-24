@@ -91,7 +91,7 @@ ${buildTemplatePromptSection()}
       - The full objective (what to do)
       - Any sources, constraints, or format preferences the user specified
       - The output format they want
-      - A note: "This is a trial run for a scheduled task. Execute the work and show the user the result. Do NOT create a task yet."
+      - A note: "This is a trial run for a scheduled task. Execute the work and show the user the result. Do NOT create a task yet. After completing the work, also report your execution trace: which agents you used, which URLs you visited, which APIs you called, which search terms worked, and the exact step-by-step procedure you followed. This trace will be documented in the task page."
    c. The main Oracle executes the work (web search, research, data fetching, etc.) and shows the user the result.
    d. The user reviews and either:
       - **Approves**: "Looks good" / "Perfect" → You then create the task with the validated instructions
@@ -102,6 +102,24 @@ ${buildTemplatePromptSection()}
    - After negotiation, your response should describe what you'll do and hand off to the main Oracle for the trial
    - When the user approves the trial output, you get called again — NOW call \`create_task\` with the finalized, user-validated instructions
    - **Capture everything from the trial**: When creating the task, your \`whatToDo\`, \`howToReport\`, \`constraints\`, and \`notes\` fields must include every detail that made the trial run succeed: which agents were used, which URLs were scraped, which skills were loaded (name + CID), which APIs were called, what step-by-step procedure was followed, what fallbacks exist. See "Writing Bulletproof Task Pages" below for the full checklist.
+
+   **Documenting the Trial (CRITICAL):**
+   The trial run is your ONE chance to observe exactly what works. Pay close attention to:
+   - Which agents the Oracle used (Firecrawl, Sandbox, Domain Indexer, etc.)
+   - Which URLs it visited or scraped — capture the exact URLs
+   - Which APIs it called and what endpoints/parameters worked
+   - Which search queries or terms produced good results
+   - Which skills it loaded (name + CID)
+   - The exact order of steps it followed
+   - Any retries, failures, or fallbacks that happened
+
+   When you create the task via \`create_task\`, your task page MUST read like a detailed recipe that any agent can follow blindly:
+   - "Step 1: Use Firecrawl Agent to scrape https://example.com/prices"
+   - "Step 2: If step 1 fails, try https://backup-source.com instead"
+   - "Step 3: Use Sandbox to call CoinGecko API at GET /api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
+   - Include the exact search queries that worked: "Search for 'WTI crude oil spot price today'"
+
+   If the trial involved web search, code execution, API calls, or any multi-step process — the task page must document ALL of it. A task page that just says "research oil prices" will fail. A task page that says "Use Firecrawl Agent to scrape https://oilprice.com, extract WTI and Brent prices from the commodities table, if oilprice.com is down try https://marketwatch.com/investing/future/crude%20oil" will succeed every time.
 
    **Exception — Simple jobs (reminders, quick lookups):** No trial needed. Confirm and create immediately:
    "Done — I'll remind you at 5:00 PM."
@@ -159,6 +177,40 @@ The task page is the **sole instruction set** the autonomous agent reads when th
 
 **The test: Could a brand new agent, with zero context, read this page and produce the exact same output as the trial run?** If yes, the page is good. If not, add more detail.
 
+**Examples of BAD vs GOOD task pages:**
+
+BAD: "Research the latest AI news and summarize"
+GOOD:
+"What to Do:
+1. Use Firecrawl Agent to search 'latest AI news this week' — focus on results from techcrunch.com, theverge.com, and arstechnica.com
+2. Scrape the top 3 relevant articles using Firecrawl Agent
+3. For each article, extract: title, date, key points, and source URL
+4. Synthesize into a digest
+
+Notes:
+- If Firecrawl fails on a site, skip it and note which source was unavailable
+- Prefer articles from the last 7 days only"
+
+BAD: "Check the Bitcoin price"
+GOOD:
+"What to Do:
+1. Use Sandbox to call CoinGecko API: GET https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true
+2. Extract: current price (USD), 24h change (%)
+3. If CoinGecko API fails, use Firecrawl Agent to scrape https://coinmarketcap.com/currencies/bitcoin/ as fallback"
+
+BAD: "Run code to check server status"
+GOOD:
+"What to Do:
+1. Use Sandbox to execute a health-check script:
+   - Call GET https://api.example.com/health with timeout 10s
+   - Parse the JSON response for 'status', 'uptime', and 'latency_ms' fields
+2. If the API returns a non-200 status or latency > 500ms, flag as degraded
+3. If the API is unreachable, report 'DOWN' with the error message
+
+Notes:
+- The API requires no auth for the /health endpoint
+- Previous runs show the API sometimes returns 503 during deployments — wait 30s and retry once before reporting DOWN"
+
 ## Rate Limits
 
 - Max 50 active tasks per user. If at limit, tell the user to pause or cancel some first.
@@ -186,16 +238,18 @@ Some tasks benefit from having the user review results before they're delivered.
 - When you're unsure about the quality of output and want the user to validate
 
 **How it works:**
-- When a task result is ready, the user gets a preview with a prompt: "Reply **yes** to deliver, or **no** to discard."
+- When a task result is ready, the user gets a preview: "Reply **yes** to deliver, or **no** to reject and re-run with your feedback."
 - The user replies in natural language (yes/no/approve/reject/etc.) — from either Portal or Matrix
 - If approved: result is delivered to the channel
-- If rejected: result is discarded, next run produces a new one
+- If rejected: the agent immediately re-runs with the user's feedback to produce an improved result. The rejection is logged on the task page.
+- If rejected 3 times in a row: the task is auto-paused. Tell the user to update the task page with clearer instructions and resume when ready.
 - If no response in 24h: a reminder is sent
-- If no response in 48h: the result is auto-discarded
+- If no response in 48h: the result is auto-discarded and the task continues on its normal schedule — the next run will produce a new result
 
 **Communication:**
 - When setting up a task with approval: "I'll check with you before delivering each result."
 - When the user asks to disable it: "Got it — results will be delivered automatically from now on."
+- If a task was auto-paused after repeated rejections: "The task was paused because it couldn't produce a result you were happy with. Want to update the instructions and try again?"
 - Use \`set_approval_gate\` to toggle approval on existing tasks.
 
 ## Lifecycle Management
@@ -291,7 +345,7 @@ export const createTaskManagerAgent = async (params: {
     systemPrompt: TASK_MANAGER_PROMPT,
     model: llm,
     description:
-      'Manages the full lifecycle of scheduled tasks. Tools: create_task, list_tasks, get_task_status, pause_task, resume_task, cancel_task, update_task_schedule, update_notification_policy. Handles negotiation (collecting what/when/where from the user), template matching, dedicated chat creation, task pages, and schedule parsing. Supports reminders, recurring lookups, research, reports, monitors, and scheduled actions with simple (fire-and-send) and flow (work-then-deliver) job patterns.',
+      'Manages the full lifecycle of scheduled tasks. Tools: create_task, list_tasks, get_task_status, pause_task, resume_task, cancel_task, update_task_schedule, update_notification_policy, set_approval_gate. Handles negotiation (collecting what/when/where from the user), template matching, dedicated chat creation, task pages, schedule parsing, and approval gates. Supports reminders, recurring lookups, research, reports, monitors, and scheduled actions.',
     middleware: [],
     userDid: params.userDid,
     sessionId: params.sessionId,

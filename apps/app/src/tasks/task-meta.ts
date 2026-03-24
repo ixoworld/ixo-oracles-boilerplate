@@ -123,6 +123,12 @@ export interface TaskMeta {
   requiresApproval: boolean;
   /** Matrix event ID of the pending approval message. Null if not pending. */
   pendingApprovalEventId: string | null;
+  /** Reason the user gave when rejecting the last result. Null if never rejected or after successful delivery. */
+  lastRejectionReason: string | null;
+  /** ISO 8601 timestamp of the last rejection. Null if never rejected. */
+  lastRejectionAt: string | null;
+  /** Number of consecutive rejections for this approval cycle. Reset on successful delivery. */
+  rejectionCount: number;
 
   // ── Dependencies (§12) ────────────────────────────────────────────
   /** Task IDs this task depends on (linear chain, max depth 5) */

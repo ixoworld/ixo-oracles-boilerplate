@@ -103,7 +103,6 @@ export {
   handleJobFailure,
   isTaskRunnable,
   classifyApprovalResponse,
-  parseApprovalResponse,
   resolveMainRoomId,
   sendTaskNotification,
   truncateText,
@@ -112,6 +111,7 @@ export {
   DeliverJobDataSchema,
 } from './processors';
 export type {
+  ApprovalClassification,
   ApprovalStatus,
   ApprovalRequestEventContent,
   TaskRunEventContent,

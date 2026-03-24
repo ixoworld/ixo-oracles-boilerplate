@@ -40,7 +40,7 @@ import { type TMainAgentGraphState } from 'src/graph/state';
 import { ApprovalService } from 'src/tasks/approval.service';
 import {
   classifyApprovalResponse,
-  parseApprovalResponse,
+  type ApprovalClassification,
 } from 'src/tasks/processors/processor-utils';
 import { TasksService } from 'src/tasks/task.service';
 import { type ENV } from 'src/types';
@@ -274,14 +274,26 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     // If this is a text reply and we have an ApprovalService, check
     // if it's a response to a pending approval request.
     if (isText && this.approvalService) {
+      Logger.log(
+        `[Matrix][handleMessage] isText=${isText} and approvalService exists, attempting approval response classification check`,
+      );
       const body = 'body' in event.content ? String(event.content.body) : '';
-      const handled = await this.tryHandleApprovalResponse(body, did, roomId);
-      if (handled) {
+      const classification = await this.tryHandleApprovalResponse(
+        body,
+        did,
+        roomId,
+      );
+      if (classification) {
         Logger.log(
-          `[Matrix][handleMessage] Handled as approval response, skipping normal flow`,
+          `[Matrix][handleMessage] Handled as approval response (${classification.decision}), skipping normal flow`,
         );
         return;
       }
+    } else {
+      Logger.log('[Matrix][handleMessage] bypass approvalService ', {
+        approvalService: !!this.approvalService,
+        isText,
+      });
     }
 
     Logger.log(
@@ -332,6 +344,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
             homeServer: userHomeServer,
             oracleHomeServer,
             userHomeServer,
+            roomId, // Store the actual room (may be a task room, not main room)
           },
           event.eventId,
         );
@@ -507,22 +520,52 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Check if a message is a response to a pending approval request.
-   * If so, process the approval and return true to skip the normal message flow.
+   * Uses a single Redis GET for fast lookup — no Y.Doc or task scanning.
    *
    * Works for both Portal and Matrix paths:
    * 1. First checks if there's a pending approval in the room (cheap — no LLM call)
    * 2. If pending approval found, uses LLM classifier to determine intent
    * 3. Delegates to ApprovalService if the user is approving/rejecting
+   *
+   * Returns the classification if handled, null otherwise.
    */
   private async tryHandleApprovalResponse(
     messageText: string,
     userDid: string,
     roomId: string,
-  ): Promise<boolean> {
-    if (!this.approvalService) return false;
+  ): Promise<ApprovalClassification | null> {
+    if (!this.approvalService) {
+      Logger.log(
+        '[ApprovalGate] No approvalService instance, skipping approval response check.',
+      );
+      return null;
+    }
 
     try {
-      // Resolve the user's main room to look up their tasks
+      // Fast path: single Redis GET to check if this room has a pending approval
+      const pendingTaskId =
+        await this.approvalService.getPendingTaskForRoom(roomId);
+      if (!pendingTaskId) {
+        Logger.log(
+          `[ApprovalGate] No pending approval for roomId=${roomId}, returning null.`,
+        );
+        return null;
+      }
+
+      // There IS a pending approval — classify the message with a cheap LLM
+      const classification = await classifyApprovalResponse(messageText);
+      if (!classification) {
+        Logger.log(
+          `[ApprovalGate] LLM classification returned null for messageText="${messageText}", skipping approval handling.`,
+        );
+        return null;
+      }
+
+      Logger.log(
+        `[ApprovalGate] LLM classified message as ${classification.decision}${classification.reason ? ` (reason: ${classification.reason})` : ''} for task ${pendingTaskId}`,
+      );
+
+      // Resolve main room for the task update
       const userHomeServer = await getMatrixHomeServerCroppedForDid(userDid);
       const { roomId: mainRoomId } =
         await this.sessionManagerService.matrixManger.getOracleRoomIdWithHomeServer(
@@ -533,56 +576,32 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
           },
         );
 
-      if (!mainRoomId) return false;
-
-      // First: find if there's a pending approval in this room (no LLM call yet)
-      const { tasks } = await this.tasksService!.listTasks(mainRoomId, {
-        page: 0,
-        pageSize: 10_000,
-      });
-
-      let pendingTaskId: string | null = null;
-      for (const entry of tasks) {
-        if (entry.status !== 'active') continue;
-        try {
-          const meta = await this.tasksService!.getTask({
-            taskId: entry.taskId,
-            mainRoomId,
-          });
-          if (!meta.pendingApprovalEventId) continue;
-          const taskRoomId = meta.customRoomId ?? mainRoomId;
-          if (taskRoomId !== roomId) continue;
-          pendingTaskId = entry.taskId;
-          break;
-        } catch {
-          // Skip tasks that can't be loaded
-        }
+      if (!mainRoomId) {
+        Logger.log(
+          `[ApprovalGate] Could not resolve mainRoomId for userDid=${userDid}, oracleEntityDid=${this.config.getOrThrow('ORACLE_ENTITY_DID')}, userHomeServer=${userHomeServer}; skipping approval handling.`,
+        );
+        return null;
       }
-
-      if (!pendingTaskId) return false;
-
-      // There IS a pending approval in this room — now classify the message
-      const decision = await classifyApprovalResponse(messageText);
-      if (!decision) return false;
-
-      Logger.log(
-        `[ApprovalGate] LLM classified message as ${decision} for task ${pendingTaskId}`,
-      );
 
       await this.approvalService.handleApprovalResponse({
         taskId: pendingTaskId,
-        approved: decision === 'approved',
+        approved: classification.decision === 'approved',
         mainRoomId,
+        rejectionReason: classification.reason,
       });
 
-      return true;
+      return classification;
     } catch (err) {
       Logger.error(
-        `[ApprovalGate] Error checking for approval response: ${err instanceof Error ? err.message : String(err)}`,
+        `[ApprovalGate] Error handling approval response: ${err instanceof Error ? err.message : String(err)}`,
       );
+      // Rethrow so the error propagates — silently falling through to
+      // normal chat processing would send "yes"/"no" to the LLM agent
+      // and leave approval state inconsistent.
+      throw err;
     }
 
-    return false;
+    return null;
   }
 
   public async onModuleInit(): Promise<void> {
@@ -716,24 +735,21 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       // Check if this message is a response to a pending approval.
       // Only check for portal clients (Matrix is handled in handleMessage).
       if (!params.msgFromMatrixRoom && roomId && this.approvalService) {
-        const handled = await this.tryHandleApprovalResponse(
+        const classification = await this.tryHandleApprovalResponse(
           params.message,
           params.did,
           roomId,
         );
-        if (handled) {
+        if (classification) {
           Logger.log(
-            `[ApprovalGate] Portal message handled as approval response`,
+            `[ApprovalGate] Portal message handled as approval response (${classification.decision})`,
           );
-          // The LLM already classified the decision — we can use the fast
-          // regex to determine the response text (or fall back to generic).
-          const fastDecision = parseApprovalResponse(params.message);
           return {
             message: {
               type: 'ai',
               content:
-                fastDecision === 'rejected'
-                  ? 'Result discarded.'
+                classification.decision === 'rejected'
+                  ? 'Result rejected. Re-running the task with your feedback…'
                   : 'Result approved and delivered.',
               id: crypto.randomUUID(),
             },
@@ -1229,7 +1245,10 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
                       .catch((err) => {
                         Logger.error(
                           'Failed to replay API AI response message to matrix room',
-                          err,
+                          {
+                            err,
+                            sessionId,
+                          },
                         );
                       });
                   } else {
@@ -1361,7 +1380,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
           .catch((err) => {
             Logger.error(
               'Failed to replay API AI response message to matrix room',
-              err,
+              { err, sessionId },
             );
           });
       }

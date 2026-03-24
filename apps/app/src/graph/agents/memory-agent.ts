@@ -41,6 +41,7 @@ Workflow guidelines:
 2. When new user-specific context should be preserved, add it as a personal memory that references the latest conversation or event.
 3. Keep responses concise and cite the memory IDs you touched when possible.
 4. When users ask about organizations or entities, prioritize searching organization knowledge rather than personal memories so you reflect the canonical view.
+5. You also have Firecrawl tools for web scraping. Use them when you need to fetch content from a URL to enrich a memory (e.g., scraping a doc page to store as org knowledge).
 `.trim();
 
 export const orgOwnerKnowledgeAgentPrompt = `

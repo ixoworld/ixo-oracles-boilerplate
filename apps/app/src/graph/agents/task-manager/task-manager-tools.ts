@@ -113,7 +113,7 @@ export function createTaskManagerTools(
     {
       name: 'create_task',
       description:
-        'Creates a new scheduled task. Handles the full creation flow: generates a task ID, creates a Y.Doc with the taskMeta Y.Map (and optional Markdown page), creates a [Task]-prefixed Matrix room if the user chose a custom channel, schedules the BullMQ job (Simple Job for Pattern A, FlowProducer for Pattern B one-shot, repeatable deliver + one-shot work for Pattern B recurring), and updates the task index state event on the main channel. Call this once when you have all required details after negotiation.',
+        'Creates a new scheduled task. Handles the full creation flow: generates a task ID, creates the task page (if applicable), creates a dedicated chat room if the user chose a custom channel, schedules the job, and registers the task in the index. Call this once when you have all required details after negotiation.',
       schema: z
         .object({
           title: z
@@ -149,7 +149,7 @@ export function createTaskManagerTools(
             .boolean()
             .optional()
             .describe(
-              'Whether to create a task page (Y.Doc). Default: false for reminders/quick_lookup, true for research/report/monitor/scheduled_action.',
+              'Whether to create a task page. Default: false for reminders/quick_lookup, true for research/report/monitor/scheduled_action.',
             ),
           outputFormat: z
             .string()
@@ -273,7 +273,7 @@ export function createTaskManagerTools(
     {
       name: 'list_tasks',
       description:
-        'Returns all tasks for the current user by reading the task index state event from the main agent channel. Returns an array of task summaries with status, type, channel info, next run time, and whether a page exists. Use when the user asks "what tasks do I have?", "show my tasks", "list my scheduled tasks", or to check if a task exists before modifying it.',
+        'Returns all tasks for the current user. Returns an array of task summaries with status, type, channel info, next run time, and whether a page exists. Use when the user asks "what tasks do I have?", "show my tasks", "list my scheduled tasks", or to check if a task exists before modifying it.',
       schema: z.object({
         statusFilter: z
           .enum(TASK_STATUS_FILTER)
@@ -329,7 +329,7 @@ export function createTaskManagerTools(
     {
       name: 'get_task_status',
       description:
-        'Returns detailed status for a single task including scheduling info, execution history, and cost. For tasks with a Y.Map (page-based tasks), reads from the Y.Map. For page-less tasks, reads from the task list state event and BullMQ job metadata. Use when the user asks about a specific task: "how\'s my oil monitor doing?", "when does my digest run next?", "how much has my research task cost?". Also use before pause/resume/cancel to confirm the right task.',
+        'Returns detailed status for a single task including scheduling info, execution history, and cost. Use when the user asks about a specific task: "how\'s my oil monitor doing?", "when does my digest run next?", "how much has my research task cost?". Also use before pause/resume/cancel to confirm the right task.',
       schema: z.object({
         taskId: z.string().describe('The task ID, e.g. "task_abc123"'),
       }),
@@ -393,7 +393,7 @@ export function createTaskManagerTools(
     {
       name: 'pause_task',
       description:
-        'Pauses an active task. Removes all pending BullMQ jobs and sets the status to paused. The task schedule and page are preserved — the task can be resumed later from the same schedule. Use when the user says "pause", "stop for now", "suspend", or "put on hold". Do NOT use for permanent stops — use cancel_task instead. Call list_tasks or get_task_status first if you need to confirm the taskId.',
+        'Pauses an active task. Removes all pending scheduled jobs and sets the status to paused. The task schedule and page are preserved — the task can be resumed later from the same schedule. Use when the user says "pause", "stop for now", "suspend", or "put on hold". Do NOT use for permanent stops — use cancel_task instead. Call list_tasks or get_task_status first if you need to confirm the taskId.',
       schema: z.object({
         taskId: z.string().describe('The task ID to pause, e.g. "task_abc123"'),
       }),
@@ -428,7 +428,7 @@ export function createTaskManagerTools(
     {
       name: 'resume_task',
       description:
-        'Resumes a paused task. Re-creates BullMQ jobs from the task\'s existing schedule and sets status back to active. Use when the user says "resume", "restart", "turn it back on", or "unpause". Returns an error (do not retry silently) if the task is not paused, or if a one-shot task\'s deadline has already passed — in that case, tell the user the deadline passed and ask if they want to set a new one. Call list_tasks or get_task_status first if you need to confirm the taskId.',
+        'Resumes a paused task. Re-creates scheduled jobs from the task\'s existing schedule and sets status back to active. Use when the user says "resume", "restart", "turn it back on", or "unpause". Returns an error (do not retry silently) if the task is not paused, or if a one-shot task\'s deadline has already passed — in that case, tell the user the deadline passed and ask if they want to set a new one. Call list_tasks or get_task_status first if you need to confirm the taskId.',
       schema: z.object({
         taskId: z
           .string()
@@ -470,7 +470,7 @@ export function createTaskManagerTools(
     {
       name: 'cancel_task',
       description:
-        'Permanently cancels a task. Removes all BullMQ jobs and marks the task as cancelled. The task page and chat history are preserved (room archival happens separately). This cannot be undone — you MUST confirm with the user before calling this tool, and pass confirmed: true. Use when the user says "cancel", "delete", "remove", "stop permanently", or "I don\'t need this anymore". For temporary stops, use pause_task instead.',
+        'Permanently cancels a task. Removes all scheduled jobs and marks the task as cancelled. The task page and chat history are preserved. This cannot be undone — you MUST confirm with the user before calling this tool, and pass confirmed: true. Use when the user says "cancel", "delete", "remove", "stop permanently", or "I don\'t need this anymore". For temporary stops, use pause_task instead.',
       schema: z.object({
         taskId: z
           .string()
@@ -527,7 +527,7 @@ export function createTaskManagerTools(
     {
       name: 'update_task_schedule',
       description:
-        'Changes the schedule of an existing task. Cancels the current BullMQ jobs and creates new ones based on the new schedule. Works for both recurring tasks (new cron expression) and one-shot tasks (new deadline). Use when the user says "change it to every 2 hours", "reschedule to Tuesdays", "move the deadline to Friday", or gives any new timing. Parse the user\'s natural language into a cron expression or ISO timestamp before calling. Provide exactly one of newScheduleCron or newDeadlineIso — not both.',
+        'Changes the schedule of an existing task. Cancels the current scheduled jobs and creates new ones based on the new schedule. Works for both recurring tasks (new cron expression) and one-shot tasks (new deadline). Use when the user says "change it to every 2 hours", "reschedule to Tuesdays", "move the deadline to Friday", or gives any new timing. Parse the user\'s natural language into a cron expression or ISO timestamp before calling. Provide exactly one of newScheduleCron or newDeadlineIso — not both.',
       schema: z
         .object({
           taskId: z

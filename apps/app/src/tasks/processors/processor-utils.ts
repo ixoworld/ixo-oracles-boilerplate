@@ -70,6 +70,12 @@ export const APPROVAL_EXPIRY_MS = 48 * 60 * 60 * 1000;
 /** Redis key prefix for storing pending work results awaiting approval */
 export const APPROVAL_RESULT_PREFIX = 'task:approval:';
 
+/** Redis key prefix: roomId → taskId for fast pending-approval lookup */
+export const APPROVAL_ROOM_PREFIX = 'task:approval-room:';
+
+/** Redis key prefix: taskId → roomId reverse lookup for cleanup */
+export const APPROVAL_ROOMREF_PREFIX = 'task:approval-roomref:';
+
 /** TTL for approval results in Redis (48h + 1h buffer) */
 export const APPROVAL_RESULT_TTL_SECONDS = 49 * 60 * 60;
 
@@ -100,6 +106,8 @@ export interface TaskExecutionContext {
   monthlyBudgetUsd: number | null;
   consecutiveFailures: number;
   channelType: ChannelType;
+  /** Room ID of the task page, for documenting execution learnings via editor. */
+  taskPageRoomId?: string;
 }
 
 /** Return value from the Work processor */
@@ -124,6 +132,8 @@ export interface ApprovalRequestEventContent {
   preview: string;
   requestedAt: string;
   resolvedAt?: string;
+  /** Reason the user gave when rejecting (only present on 'rejected' status) */
+  rejectionReason?: string;
 }
 
 /** Data payload for the approval timeout queue */
@@ -168,6 +178,15 @@ export const DeliverJobDataSchema = z.object({
   title: z.string().optional(),
   taskType: z.string().optional(),
   scheduleCron: z.string().optional(),
+});
+
+export const ApprovalTimeoutJobDataSchema = z.object({
+  taskId: z.string().min(1),
+  userDid: z.string().min(1),
+  matrixUserId: z.string().min(1),
+  roomId: z.string().min(1),
+  mainRoomId: z.string().min(1),
+  phase: z.enum(['reminder', 'expiry']),
 });
 
 const logger = new Logger('ProcessorUtils');
@@ -469,58 +488,75 @@ export async function handleJobFailure(params: {
 
 // ── Approval Classification ─────────────────────────────────────────
 
-import { getProviderChatModel } from 'src/graph/llm-provider';
 import { HumanMessage, SystemMessage } from 'langchain';
+import { getProviderChatModel } from 'src/graph/llm-provider';
 
-/** Fast-path regex for obvious single-word responses (no LLM call needed). */
-const OBVIOUS_APPROVE = /^(yes|approve|confirmed|lgtm)\.?!?$/i;
-const OBVIOUS_REJECT = /^(no|reject|discard)\.?!?$/i;
+/** Result of classifying a user message as an approval response. */
+export interface ApprovalClassification {
+  decision: 'approved' | 'rejected';
+  reason?: string;
+}
 
-const APPROVAL_CLASSIFIER_PROMPT = `You are a binary classifier. The user has a pending task result waiting for their approval.
+const APPROVAL_CLASSIFIER_PROMPT = `You are a classifier. The user has a pending task result waiting for their approval.
 Given the user's message, determine if they are:
-- APPROVING the result (wanting it delivered) — reply exactly: APPROVE
-- REJECTING the result (wanting it discarded) — reply exactly: REJECT
-- Saying something UNRELATED to the approval — reply exactly: NEITHER
+- APPROVING the result (wanting it delivered) — reply exactly: APPROVED
+- REJECTING the result (wanting it discarded) — reply exactly: REJECTED::reason
+  where "reason" is a brief summary of why they rejected (extract from their message)
+- Saying something UNRELATED to the approval — reply exactly: NONE
 
-Only reply with one word: APPROVE, REJECT, or NEITHER. Nothing else.`;
+Rules:
+- Reply with ONLY one of: APPROVED, REJECTED::reason, or NONE
+- Do not add any other text or explanation
+- For rejections, always include a reason after ::`;
 
 /**
  * Classify a user's message as an approval decision using a cheap LLM.
  *
- * Uses a two-tier approach:
- * 1. Fast regex for obvious cases ("yes", "no", "approve", "reject")
- * 2. LLM call (guard-tier model) for ambiguous messages
+ * Uses the guard-tier model with a structured string format:
+ * - APPROVED
+ * - REJECTED::reason
+ * - NONE (not an approval response)
  *
- * Returns 'approved', 'rejected', or null if unrelated.
+ * Returns an ApprovalClassification or null if unrelated.
  */
 export async function classifyApprovalResponse(
   text: string,
-): Promise<'approved' | 'rejected' | null> {
+): Promise<ApprovalClassification | null> {
   const trimmed = text.trim();
   if (!trimmed) return null;
 
-  // Fast path: obvious single-word responses
-  if (OBVIOUS_APPROVE.test(trimmed)) return 'approved';
-  if (OBVIOUS_REJECT.test(trimmed)) return 'rejected';
-
   // Skip very long messages — unlikely to be approval responses
-  if (trimmed.length > 200) return null;
+  if (trimmed.length > 500) return null;
+
+  // Fast regex tier — instant match for obvious responses (avoids LLM call)
+  const fastResult = parseApprovalResponseFast(trimmed);
+  if (fastResult) return fastResult;
 
   try {
-    const model = getProviderChatModel('guard', {
-      temperature: 0,
-      maxTokens: 5,
-    });
+    const model = getProviderChatModel('guard');
 
     const response = await model.invoke([
       new SystemMessage(APPROVAL_CLASSIFIER_PROMPT),
-      new HumanMessage(trimmed),
+      new HumanMessage(`
+        Here is the message to classify:
+        __
+        ${trimmed}
+        `),
     ]);
 
-    const answer = String(response.content).trim().toUpperCase();
+    const answer = String(response.content).trim();
 
-    if (answer.startsWith('APPROVE')) return 'approved';
-    if (answer.startsWith('REJECT')) return 'rejected';
+    Logger.debug(`[ApprovalClassifier] Raw answer: "${answer}"`);
+    if (answer.toUpperCase().startsWith('APPROVED')) {
+      return { decision: 'approved' };
+    }
+
+    if (answer.toUpperCase().startsWith('REJECTED')) {
+      const parts = answer.split('::');
+      const reason = parts.slice(1).join('::').trim() || undefined;
+      return { decision: 'rejected', reason };
+    }
+
     return null;
   } catch (err) {
     logger.warn(
@@ -531,16 +567,34 @@ export async function classifyApprovalResponse(
 }
 
 /**
- * Synchronous fast-path check for obvious approval responses.
- * Used by the approval API endpoint where the FE already knows the decision.
+ * Fast regex-based approval classification for obvious responses.
+ * Avoids an LLM call for clear-cut "yes"/"no" messages.
+ *
+ * @see spec §14.4 — Two-tier classifier (fast regex + LLM)
  */
-export function parseApprovalResponse(
+function parseApprovalResponseFast(
   text: string,
-): 'approved' | 'rejected' | null {
-  const trimmed = text.trim();
-  if (!trimmed) return null;
-  if (OBVIOUS_APPROVE.test(trimmed)) return 'approved';
-  if (OBVIOUS_REJECT.test(trimmed)) return 'rejected';
+): ApprovalClassification | null {
+  const lower = text.toLowerCase();
+
+  // Obvious approvals (exact or near-exact matches)
+  if (
+    /^(yes|yep|yeah|yup|approve|approved|ok|okay|sure|go ahead|deliver it|lgtm|looks good|ship it|send it)\.?!?$/i.test(
+      lower,
+    )
+  ) {
+    return { decision: 'approved' };
+  }
+
+  // Obvious rejections — extract reason after the keyword
+  const rejectMatch = lower.match(
+    /^(no|nope|nah|reject|rejected|discard|redo|try again|redo it|not good|wrong)[\s,.!:—-]*(.*)/s,
+  );
+  if (rejectMatch) {
+    const reason = rejectMatch[2].trim() || undefined;
+    return { decision: 'rejected', reason };
+  }
+
   return null;
 }
 
@@ -548,7 +602,7 @@ export function parseApprovalResponse(
  * Format the approval request message sent to the user.
  */
 export function formatApprovalRequestMessage(
-  taskId: string,
+  _taskId: string,
   preview: string,
 ): string {
   const truncatedPreview = truncateText(preview, 500);
@@ -557,6 +611,6 @@ export function formatApprovalRequestMessage(
     '',
     truncatedPreview,
     '',
-    'Reply with **yes** to deliver, or **no** to discard.',
+    'Reply **yes** to deliver, or **no** to reject and re-run with your feedback.',
   ].join('\n');
 }

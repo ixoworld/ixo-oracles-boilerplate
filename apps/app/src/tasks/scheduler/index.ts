@@ -9,6 +9,7 @@ export type {
   ScheduleFlowJobParams,
   ScheduleRecurringFlowParams,
   ScheduleNextWorkJobParams,
+  ScheduleRetryFlowParams,
 } from './types';
 
 // Queue constants

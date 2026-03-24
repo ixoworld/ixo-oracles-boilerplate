@@ -13,6 +13,8 @@ export {
   APPROVAL_REMINDER_MS,
   APPROVAL_EXPIRY_MS,
   APPROVAL_RESULT_PREFIX,
+  APPROVAL_ROOM_PREFIX,
+  APPROVAL_ROOMREF_PREFIX,
   APPROVAL_RESULT_TTL_SECONDS,
   buildMentionMessage,
   escapeHtml,
@@ -21,7 +23,6 @@ export {
   formatApprovalRequestMessage,
   handleJobFailure,
   isTaskRunnable,
-  parseApprovalResponse,
   resolveMainRoomId,
   resolveModelForTask,
   sendTaskNotification,
@@ -29,8 +30,10 @@ export {
   SimpleJobDataSchema,
   WorkJobDataSchema,
   DeliverJobDataSchema,
+  ApprovalTimeoutJobDataSchema,
 } from './processor-utils';
 export type {
+  ApprovalClassification,
   ApprovalJobData,
   ApprovalRequestEventContent,
   ApprovalStatus,

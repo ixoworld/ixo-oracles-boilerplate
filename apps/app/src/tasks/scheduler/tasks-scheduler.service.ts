@@ -11,6 +11,7 @@
 import { InjectFlowProducer, InjectQueue } from '@nestjs/bullmq';
 import { Injectable, Logger } from '@nestjs/common';
 import { FlowProducer, Queue } from 'bullmq';
+import crypto from 'node:crypto';
 
 import { QUEUE_NAMES } from './task-queues';
 import type {
@@ -20,6 +21,7 @@ import type {
   ScheduleFlowJobParams,
   ScheduleNextWorkJobParams,
   ScheduleRecurringFlowParams,
+  ScheduleRetryFlowParams,
   ScheduleSimpleJobParams,
   SimpleJobData,
   WorkJobData,
@@ -189,6 +191,46 @@ export class TasksScheduler {
     return { jobId };
   }
 
+  // ── Retry Flow (after rejection) ──────────────────────────────────
+
+  /**
+   * Schedule an immediate work→deliver flow for retrying after rejection.
+   * Uses UUID-suffixed job IDs to avoid collisions with existing recurring jobs.
+   * The deliver parent waits for the work child via FlowProducer dependency.
+   */
+  async scheduleRetryFlow(
+    params: ScheduleRetryFlowParams,
+  ): Promise<{ deliverJobId: string; workJobId: string }> {
+    const suffix = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+    const deliverJobId = `${params.taskId}-retry-deliver-${suffix}`;
+    const workJobId = `${params.taskId}-retry-work-${suffix}`;
+
+    this.logger.debug(
+      `scheduleRetryFlow: taskId=${params.taskId}, deliverJobId=${deliverJobId}, workJobId=${workJobId}`,
+    );
+
+    await this.flowProducer.add({
+      name: QUEUE_NAMES.DELIVER,
+      queueName: QUEUE_NAMES.DELIVER,
+      data: params.deliverData,
+      opts: { jobId: deliverJobId },
+      children: [
+        {
+          name: QUEUE_NAMES.WORK,
+          queueName: QUEUE_NAMES.WORK,
+          data: params.workData,
+          opts: { jobId: workJobId },
+        },
+      ],
+    });
+
+    this.logger.log(
+      `Scheduled retry flow: work=${workJobId}, deliver=${deliverJobId}`,
+    );
+
+    return { deliverJobId, workJobId };
+  }
+
   // ── Cancellation ─────────────────────────────────────────────────
 
   /**
@@ -279,6 +321,13 @@ export class TasksScheduler {
         ),
       );
     }
+
+    // Cancel any pending approval timeout jobs
+    await this.cancelApprovalTimeouts(taskId).catch((e) =>
+      errors.push(
+        `approval-timeouts: ${e instanceof Error ? e.message : String(e)}`,
+      ),
+    );
 
     if (errors.length > 0) {
       this.logger.warn(

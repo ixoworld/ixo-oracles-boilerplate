@@ -3,6 +3,7 @@ import {
   type ListChatSessionsResponseDto,
   SessionManagerService,
 } from '@ixo/common';
+import { getMatrixHomeServerCroppedForDid } from '@ixo/oracles-chain-client';
 import { OpenIdTokenProvider } from '@ixo/oracles-chain-client';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -130,11 +131,24 @@ export class SessionsService {
   ): Promise<ListChatSessionsResponseDto> {
     this.syncService.markUserActive(data.did);
     try {
+      // Resolve the user's main room so we only return main-room sessions.
+      // Task-room sessions (created via Matrix in dedicated task channels)
+      // are filtered out — the portal only shows main conversations.
+      const userHomeServer =
+        data.homeServer || (await getMatrixHomeServerCroppedForDid(data.did));
+      const { roomId: mainRoomId } =
+        await this.sessionManager.matrixManger.getOracleRoomIdWithHomeServer({
+          userDid: data.did,
+          oracleEntityDid: this.configService.getOrThrow('ORACLE_ENTITY_DID'),
+          userHomeServer,
+        });
+
       const sessionsResult = await this.sessionManager.listSessions({
         did: data.did,
         oracleEntityDid: this.configService.getOrThrow('ORACLE_ENTITY_DID'),
         limit: data.limit ?? 20,
         offset: data.offset ?? 0,
+        roomId: mainRoomId ?? undefined,
       });
 
       return {

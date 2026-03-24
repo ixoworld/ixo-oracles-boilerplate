@@ -122,3 +122,10 @@ export interface ScheduleNextWorkJobParams {
   data: WorkJobData;
   delay: number;
 }
+
+/** Params for scheduling an immediate retry flow (work→deliver) after rejection */
+export interface ScheduleRetryFlowParams {
+  taskId: string;
+  workData: WorkJobData;
+  deliverData: DeliverJobData;
+}
