@@ -100,7 +100,6 @@ const getFirecrawlMcpTools = async () => {
     const allowedToolNames = [
       'firecrawl__firecrawl_scrape',
       'firecrawl__firecrawl_search',
-      'firecrawl__firecrawl_extract',
     ];
 
     const filteredTools = allTools.filter((tool) =>

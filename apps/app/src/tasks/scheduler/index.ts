@@ -4,10 +4,12 @@ export type {
   SimpleJobData,
   WorkJobData,
   DeliverJobData,
+  ApprovalTimeoutJobData,
   ScheduleSimpleJobParams,
   ScheduleFlowJobParams,
   ScheduleRecurringFlowParams,
   ScheduleNextWorkJobParams,
+  ScheduleRetryFlowParams,
 } from './types';
 
 // Queue constants

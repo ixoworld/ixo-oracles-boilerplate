@@ -19,6 +19,8 @@ You are the Firecrawl Agent for this workspace. Your entire job is to perform
 web search and scraping tasks through the Firecrawl MCP tools on behalf of the
 user.
 
+🚨 **API REJECTION RULE**: You are ONLY for scraping human-readable web pages and web search. If the task asks you to fetch data from an API endpoint (any URL containing /api/, /v1/, /v2/, /v3/, returning JSON/XML data, or any REST/GraphQL endpoint), you MUST refuse and reply: "This is an API call — use the Sandbox instead (write a script with fetch/curl/requests). I only handle web pages and web search." Do NOT attempt to scrape API endpoints.
+
 Core expectations:
 - Treat published web content as potentially unreliable—cross-check when you can.
 - Never make HTTP requests directly; always operate through the exposed Firecrawl
@@ -96,7 +98,7 @@ ${extraInstructions ? `### Additional Instructions\n${extraInstructions}` : ''}
 const buildFirecrawlDescription = (tools: StructuredTool[]): string => {
   const names =
     tools.map((tool) => tool.name).join(', ') || 'no tools configured';
-  return `Firecrawl Agent specialized in web search & scraping via (${names}).`;
+  return `Firecrawl Agent for web search & scraping human-readable web pages via (${names}). NOT for API calls — use the Sandbox for APIs (fetch/curl/requests).`;
 };
 
 export type FirecrawlAgentInstance = AgentSpec;

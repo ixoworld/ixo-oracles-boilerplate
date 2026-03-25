@@ -1,4 +1,4 @@
-import { jsonToYaml, parserActionTool, parserBrowserTool } from '@ixo/common';
+import { parserActionTool, parserBrowserTool } from '@ixo/common';
 import { type IRunnableConfigWithRequiredFields } from '@ixo/matrix';
 import { OpenIdTokenProvider } from '@ixo/oracles-chain-client';
 import { SqliteSaver } from '@ixo/sqlite-saver';
@@ -74,6 +74,47 @@ function buildOracleContext(oc: typeof oracleConfig): string {
   if (oc.location) lines.push(`**Location:** ${oc.location}`);
   return lines.join('\n');
 }
+
+/**
+ * Convert a memory engine SearchEnhancedResponse into clean markdown.
+ * Extracts only the meaningful content (facts + entity names) and drops
+ * internal metadata (strategy_used, query, UUIDs, total_results).
+ *
+ * Accepts unknown to avoid coupling to the SearchEnhancedResponse type
+ * while safely extracting the fields that exist at runtime.
+ */
+function formatUserContext(data: unknown): string {
+  if (!data || typeof data !== 'object') return '_No information available._';
+
+  const obj = data as Record<string, unknown>;
+  if (Object.keys(obj).length === 0) return '_No information available._';
+
+  const lines: string[] = [];
+
+  // Extract facts — array of { fact: string, ... }
+  const facts = Array.isArray(obj.facts) ? obj.facts : [];
+  for (const f of facts) {
+    const fact =
+      typeof f === 'object' && f !== null && 'fact' in f
+        ? String(f.fact)
+        : null;
+    if (fact) lines.push(`- ${fact}`);
+  }
+
+  // Extract entity names — array of { name: string, ... }
+  const entities = Array.isArray(obj.entities) ? obj.entities : [];
+  const names = entities
+    .map((e) =>
+      typeof e === 'object' && e !== null && 'name' in e
+        ? String(e.name)
+        : null,
+    )
+    .filter(Boolean);
+  if (names.length > 0) lines.push(`- **Related:** ${names.join(', ')}`);
+
+  return lines.length > 0 ? lines.join('\n') : '_No information available._';
+}
+
 interface InvokeMainAgentParams {
   state: Partial<TMainAgentGraphState>;
   config: IRunnableConfigWithRequiredFields;
@@ -317,13 +358,62 @@ Promise<ReactAgent<any>> => {
   const taskExecCtx = (configurable as Record<string, unknown>)
     .taskExecutionContext as TaskExecutionContext | undefined;
 
-  const operationalMode = editorPrompts
-    ? editorPrompts.operationalMode
-    : state.currentEntityDid
-      ? `**Entity Context Active**\n\nYou are currently viewing an entity (DID: ${state.currentEntityDid}). The entity is the default context for this conversation. Use the Domain Indexer Agent tool for entity discovery/overviews/FAQs, the Portal Agent tool for navigation or UI actions (e.g., \`showEntity\`), and the Memory Agent tool for historical knowledge. For entities like ecs, supamoto, ixo, QI, use both Domain Indexer and Memory Agent tools together for best results.\n\n**Important:** Pages (BlockNote documents) are NOT entities. If the user asks about pages, use \`list_workspace_pages\` and \`call_editor_agent\` — never the Domain Indexer.`
-      : taskExecCtx
-        ? `**Autonomous Task Execution Mode**\n\nYou are running a scheduled task autonomously — no human is in the loop. The user message contains a Task Page that is your **complete blueprint**. Follow it like a bible:\n- Execute the exact steps described in "What to Do", using the specific agents, tools, URLs, skills, and procedures it names.\n- Format output exactly as "How to Report" specifies.\n- Obey every rule in "Constraints".\n- If a step fails, check "Notes" for fallbacks before improvising.\n- Do not ask questions, seek clarification, or narrate what you are doing. Deliver only the requested output.`
-        : `**General Conversation Mode**\n\nDefault to conversation mode, using the Memory Agent tool for recall and the Firecrawl Agent tool for any external research or fresh data.`;
+  const operationalMode = taskExecCtx
+    ? [
+        `**Autonomous Task Execution Mode**`,
+        ``,
+        `You are running a scheduled task autonomously — no human is in the loop. The user message contains a Task Page that is your **complete blueprint**. You MUST follow this exact 2-step sequence:`,
+        ``,
+        `## Step 1: Execute the Task`,
+        `- Follow the Task Page exactly — execute "What to Do", format per "How to Report", obey "Constraints".`,
+        `- If a step fails, check "Notes" for fallbacks before improvising. If the page is missing critical sections, report failure instead of guessing.`,
+        `- Do not ask questions or narrate. Deliver only the requested output.`,
+        ``,
+        `### Tool Preferences`,
+        `- **API calls / JSON data**: ALWAYS use the Sandbox (write a fetch/curl/requests script). NEVER use Firecrawl for API endpoints (/api/, /v1/, /v2/, /v3/, JSON responses).`,
+        `- **Web scraping (human-readable pages)**: Use the Firecrawl Agent for scraping articles, blogs, news pages.`,
+        `- **Web search**: Use the Firecrawl Agent's search tool for quick web searches.`,
+        `- **Memory**: Use the Memory Agent to recall prior knowledge before external lookups.`,
+        ``,
+        `## Step 2: Execution Report (REQUIRED)`,
+        `After producing your output, you MUST review your execution before finishing:`,
+        ``,
+        `1. **Task Page Notes** — Use the editor to append to "Notes" under "### Run #${taskExecCtx.runNumber} Learnings":`,
+        `   - If issues occurred (API failures, retries, fallbacks, unexpected data): document each one concisely.`,
+        `   - If everything was smooth: write "No issues encountered."`,
+        `   Do NOT overwrite existing notes.`,
+        `2. **Memory Engine** — Use the Memory Agent to store any cross-task learnings that could benefit future tasks (e.g., "API X rate-limits at 10 req/min", "Website Y needs JS rendering").`,
+      ].join('\n')
+    : editorPrompts
+      ? editorPrompts.operationalMode
+      : state.currentEntityDid
+        ? [
+            `**Entity Context Active**`,
+            ``,
+            `You are currently viewing an entity (DID: ${state.currentEntityDid}). Use:`,
+            `- **Domain Indexer Agent** for entity discovery, overviews, and FAQs`,
+            `- **Portal Agent** for navigation or UI actions (e.g., \`showEntity\`)`,
+            `- **Memory Agent** for historical knowledge`,
+            `For entities like ecs, supamoto, ixo, QI, use both Domain Indexer and Memory Agent together.`,
+            ``,
+            `**Important:** Pages (BlockNote documents) are NOT entities. For pages, use \`list_workspace_pages\` and \`call_editor_agent\` — never the Domain Indexer.`,
+          ].join('\n')
+        : [
+            `**General Conversation Mode**`,
+            ``,
+            `Default to conversation mode, using the Memory Agent for recall and the Firecrawl Agent for external research or fresh data.`,
+            ``,
+            `### Tool Preferences`,
+            `- **API calls / JSON data**: ALWAYS use the Sandbox (write a fetch/curl/requests script). NEVER use Firecrawl for API endpoints.`,
+            `- **Web scraping (human-readable pages)**: Use the Firecrawl Agent for articles, blogs, news.`,
+            `- **Web search**: Use the Firecrawl Agent's search tool.`,
+            ``,
+            `### Task Trial Runs`,
+            `When the Task Manager asks you to do a trial run for a scheduled task, you are testing the work so the user can approve it. After completing the work:`,
+            `1. Show the user the result as requested.`,
+            `2. **Report your execution trace** — list every agent, URL, API endpoint (with params), search query, skill (name + CID), and the step-by-step order. Mention any failures or fallbacks.`,
+            `This trace is critical — the Task Manager uses it to write a detailed task page for autonomous runs.`,
+          ].join('\n');
 
   const editorSection = editorPrompts?.editorSection ?? '';
 
@@ -332,12 +422,12 @@ Promise<ReactAgent<any>> => {
     APP_NAME:
       oracleConfig.oracleName || configService.get('ORACLE_NAME') || 'Oracle',
     ORACLE_CONTEXT: buildOracleContext(oracleConfig),
-    IDENTITY_CONTEXT: jsonToYaml(state?.userContext?.identity ?? {}),
-    WORK_CONTEXT: jsonToYaml(state?.userContext?.work ?? {}),
-    GOALS_CONTEXT: jsonToYaml(state?.userContext?.goals ?? {}),
-    INTERESTS_CONTEXT: jsonToYaml(state?.userContext?.interests ?? {}),
-    RELATIONSHIPS_CONTEXT: jsonToYaml(state?.userContext?.relationships ?? {}),
-    RECENT_CONTEXT: jsonToYaml(state?.userContext?.recent ?? {}),
+    IDENTITY_CONTEXT: formatUserContext(state?.userContext?.identity),
+    WORK_CONTEXT: formatUserContext(state?.userContext?.work),
+    GOALS_CONTEXT: formatUserContext(state?.userContext?.goals),
+    INTERESTS_CONTEXT: formatUserContext(state?.userContext?.interests),
+    RELATIONSHIPS_CONTEXT: formatUserContext(state?.userContext?.relationships),
+    RECENT_CONTEXT: formatUserContext(state?.userContext?.recent),
     TIME_CONTEXT: timeContext,
     CURRENT_ENTITY_DID: state.currentEntityDid ?? '',
     OPERATIONAL_MODE: operationalMode,
@@ -625,7 +715,16 @@ Promise<ReactAgent<any>> => {
     : null;
   const callTaskManagerAgentTool = taskManagerAgent
     ? createSubagentAsTool(withTimeContext(taskManagerAgent), {
-        forwardTools: ['create_task', 'list_tasks', 'get_task_status'],
+        forwardTools: [
+          'create_task',
+          'list_tasks',
+          'get_task_status',
+          'set_approval_gate',
+          'pause_task',
+          'resume_task',
+          'cancel_task',
+          'update_task_schedule',
+        ],
       })
     : null;
 

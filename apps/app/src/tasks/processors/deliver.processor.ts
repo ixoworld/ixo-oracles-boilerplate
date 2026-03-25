@@ -19,23 +19,20 @@ import type { ENV } from 'src/types';
 import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 
 import { SessionManagerService } from '@ixo/common';
+import { ApprovalService } from '../approval.service';
 import { QUEUE_NAMES, WORKER_OPTIONS } from '../scheduler/task-queues';
 import { TasksScheduler } from '../scheduler/tasks-scheduler.service';
 import type { DeliverJobData } from '../scheduler/types';
-import { appendOutputRow, readTaskMeta } from '../task-doc';
-import { sharedServerEditor, withTaskDoc } from '../task-doc-helpers';
+import { appendOutputToPage } from '../task-doc-helpers';
 import type { TaskMeta } from '../task-meta';
-import { formatOutputSection } from '../task-page-template';
 import { TasksService } from '../task.service';
 import {
   DeliverJobDataSchema,
   TASK_RUN_EVENT_TYPE,
-  formatOutputDate,
   handleJobFailure,
   isTaskRunnable,
   resolveMainRoomId,
   resolveWorkDelay,
-  sanitizeSummary,
   sendTaskNotification,
   truncateText,
   type TaskRunEventContent,
@@ -52,6 +49,7 @@ export class DeliverProcessor extends WorkerHost {
     private readonly config: ConfigService<ENV>,
     private readonly sessionManagerService: SessionManagerService,
     private readonly syncService: UserMatrixSqliteSyncService,
+    private readonly approvalService: ApprovalService,
   ) {
     super();
   }
@@ -105,6 +103,25 @@ export class DeliverProcessor extends WorkerHost {
     try {
       if (!workResult || workResult.skipped) {
         this.logger.log(`No work result for task ${taskId}, skipping delivery`);
+      } else if (meta.requiresApproval && meta.status !== 'dry_run') {
+        // ── Approval Gate ─────────────────────────────────────────
+        // Instead of delivering immediately, request user approval.
+        // The ApprovalService stores the result in Redis and posts
+        // an approval request message. Delivery happens when the
+        // user responds (via Portal or Matrix).
+        this.logger.log(
+          `Task ${taskId} requires approval — requesting user confirmation`,
+        );
+        await this.approvalService.requestApproval({
+          taskId,
+          userDid,
+          matrixUserId,
+          roomId,
+          mainRoomId,
+          workResult,
+          meta,
+          title: job.data.title,
+        });
       } else {
         // Post formatted result to room (respecting dry_run and notificationPolicy)
         // Guard: skip if already sent on a previous attempt (idempotent retry)
@@ -156,7 +173,7 @@ export class DeliverProcessor extends WorkerHost {
         // If hasPage: append output row via Y.Doc
         if (meta.hasPage) {
           this.logger.debug(`Appending output to task page Y.Doc...`);
-          await this.appendOutputToPage(
+          await appendOutputToPage(
             meta,
             mainRoomId,
             workResult,
@@ -185,13 +202,16 @@ export class DeliverProcessor extends WorkerHost {
         );
         this.logger.debug(`Run event posted to room ${roomId}`);
 
-        // Update TaskMeta
+        // Update TaskMeta (clear rejection fields on successful delivery)
         const updates = {
           lastRunAt: now.toISOString(),
           totalRuns: meta.totalRuns + 1,
           consecutiveFailures: 0,
           totalTokensUsed: meta.totalTokensUsed + workResult.tokensUsed,
           totalCostUsd: meta.totalCostUsd + workResult.costUsd,
+          lastRejectionReason: null,
+          lastRejectionAt: null,
+          rejectionCount: 0,
         };
         this.logger.debug(`Updating TaskMeta: ${JSON.stringify(updates)}`);
         await this.tasksService.updateTask({
@@ -214,8 +234,12 @@ export class DeliverProcessor extends WorkerHost {
         this.logger.debug(
           `Fresh status for task ${taskId}: ${freshMeta.status}`,
         );
-        if (isTaskRunnable(freshMeta)) {
+        if (isTaskRunnable(freshMeta) && !freshMeta.pendingApprovalEventId) {
           await this.scheduleNextWork(freshMeta, mainRoomId, job.data.title);
+        } else if (freshMeta.pendingApprovalEventId) {
+          this.logger.log(
+            `Task ${taskId} has pending approval, deferring next work schedule`,
+          );
         } else {
           this.logger.log(
             `Task ${taskId} no longer runnable (status=${freshMeta.status}), skipping next work schedule`,
@@ -354,80 +378,6 @@ export class DeliverProcessor extends WorkerHost {
   private formatDeliveryMessage(result: WorkResult, title?: string): string {
     const header = title ? `📋 **${title}**` : '📋 **Task Result**';
     return `${header}\n\n${result.result}`;
-  }
-
-  /**
-   * Append an output row to the task page Y.Doc and regenerate the
-   * "Recent Output" table in the BlockNote document content.
-   */
-  private async appendOutputToPage(
-    meta: TaskMeta,
-    mainRoomId: string,
-    workResult: WorkResult,
-    messageEventId?: string,
-  ): Promise<void> {
-    const docRoomId = meta.customRoomId ?? mainRoomId;
-
-    await withTaskDoc(docRoomId, async (doc) => {
-      // 1. Append the new row to the Y.Map sidecar
-      appendOutputRow(doc, {
-        when: formatOutputDate(new Date(), meta.timezone),
-        summary: truncateText(sanitizeSummary(workResult.result), 200),
-        link: messageEventId ? `#msg-${messageEventId}` : '',
-      });
-
-      // 2. Regenerate the "Recent Output" table in the document
-      const updatedMeta = readTaskMeta(doc);
-      const tableMd = formatOutputSection(updatedMeta);
-      const tableBlocks =
-        await sharedServerEditor.tryParseMarkdownToBlocks(tableMd);
-
-      const fragment = doc.getXmlFragment('document');
-      const blocks = sharedServerEditor.yXmlFragmentToBlocks(fragment);
-
-      // Find the "Recent Output" heading
-      const headingIdx = blocks.findIndex(
-        (b) =>
-          b.type === 'heading' &&
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ((b.content as any)?.[0]?.text as string | undefined)
-            ?.trim()
-            .toLowerCase() === 'recent output',
-      );
-
-      if (headingIdx === -1) {
-        this.logger.warn(
-          `"Recent Output" heading not found in task page, skipping table update`,
-        );
-        return;
-      }
-
-      // Find the range after the heading until the next heading or end of doc
-      const afterHeading = headingIdx + 1;
-      let endIdx = blocks.length;
-      for (let i = afterHeading; i < blocks.length; i++) {
-        if (blocks[i].type === 'heading') {
-          endIdx = i;
-          break;
-        }
-      }
-
-      // Rebuild: everything before table section + heading + new table blocks + rest
-      const rebuilt = [
-        ...blocks.slice(0, afterHeading),
-        ...tableBlocks,
-        ...blocks.slice(endIdx),
-      ];
-
-      // Replace document content
-      doc.transact(() => {
-        while (fragment.length > 0) {
-          fragment.delete(0, 1);
-        }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        sharedServerEditor.blocksToYXmlFragment(rebuilt as any, fragment);
-      });
-    });
   }
 
   /**

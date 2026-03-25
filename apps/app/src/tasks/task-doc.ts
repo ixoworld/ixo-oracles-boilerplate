@@ -82,6 +82,9 @@ function buildDefaultTaskMeta(): TaskMeta {
     notificationPolicy: 'channel_only',
     requiresApproval: false,
     pendingApprovalEventId: null,
+    lastRejectionReason: null,
+    lastRejectionAt: null,
+    rejectionCount: 0,
     dependsOn: [],
     triggeredBy: null,
     spaceId: null,
@@ -203,6 +206,9 @@ export function buildTaskMeta(params: CreateTaskMetaParams): TaskMeta {
     // Approval gate
     requiresApproval: params.requiresApproval ?? false,
     pendingApprovalEventId: null,
+    lastRejectionReason: null,
+    lastRejectionAt: null,
+    rejectionCount: 0,
 
     // Dependencies
     dependsOn: params.dependsOn ?? [],

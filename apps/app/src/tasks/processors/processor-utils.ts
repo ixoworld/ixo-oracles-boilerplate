@@ -55,8 +55,29 @@ export function resolveModelForTask(
 /** Custom Matrix event type posted after each task run */
 export const TASK_RUN_EVENT_TYPE = 'ixo.ora.task.run';
 
+/** Custom Matrix event type for approval requests */
+export const APPROVAL_REQUEST_EVENT_TYPE = 'ixo.ora.task.approval';
+
 /** Maximum consecutive failures before auto-pausing */
 export const MAX_CONSECUTIVE_FAILURES = 5;
+
+/** How long to wait before sending a reminder for pending approvals (24h) */
+export const APPROVAL_REMINDER_MS = 24 * 60 * 60 * 1000;
+
+/** How long to wait before auto-discarding a pending approval (48h) */
+export const APPROVAL_EXPIRY_MS = 48 * 60 * 60 * 1000;
+
+/** Redis key prefix for storing pending work results awaiting approval */
+export const APPROVAL_RESULT_PREFIX = 'task:approval:';
+
+/** Redis key prefix: roomId → taskId for fast pending-approval lookup */
+export const APPROVAL_ROOM_PREFIX = 'task:approval-room:';
+
+/** Redis key prefix: taskId → roomId reverse lookup for cleanup */
+export const APPROVAL_ROOMREF_PREFIX = 'task:approval-roomref:';
+
+/** TTL for approval results in Redis (48h + 1h buffer) */
+export const APPROVAL_RESULT_TTL_SECONDS = 49 * 60 * 60;
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -85,6 +106,8 @@ export interface TaskExecutionContext {
   monthlyBudgetUsd: number | null;
   consecutiveFailures: number;
   channelType: ChannelType;
+  /** Room ID of the task page, for documenting execution learnings via editor. */
+  taskPageRoomId?: string;
 }
 
 /** Return value from the Work processor */
@@ -96,6 +119,32 @@ export interface WorkResult {
   modelUsed: string;
   startedAt: string;
   completedAt: string;
+}
+
+// ── Approval Gate Types ─────────────────────────────────────────────
+
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'expired';
+
+/** Content of the `ixo.ora.task.approval` custom event */
+export interface ApprovalRequestEventContent {
+  taskId: string;
+  status: ApprovalStatus;
+  preview: string;
+  requestedAt: string;
+  resolvedAt?: string;
+  /** Reason the user gave when rejecting (only present on 'rejected' status) */
+  rejectionReason?: string;
+}
+
+/** Data payload for the approval timeout queue */
+export interface ApprovalJobData {
+  taskId: string;
+  userDid: string;
+  matrixUserId: string;
+  roomId: string;
+  mainRoomId: string;
+  /** Whether this is a reminder (24h) or final expiry (48h) */
+  phase: 'reminder' | 'expiry';
 }
 
 // ── Job Data Validation Schemas ─────────────────────────────────────
@@ -129,6 +178,15 @@ export const DeliverJobDataSchema = z.object({
   title: z.string().optional(),
   taskType: z.string().optional(),
   scheduleCron: z.string().optional(),
+});
+
+export const ApprovalTimeoutJobDataSchema = z.object({
+  taskId: z.string().min(1),
+  userDid: z.string().min(1),
+  matrixUserId: z.string().min(1),
+  roomId: z.string().min(1),
+  mainRoomId: z.string().min(1),
+  phase: z.enum(['reminder', 'expiry']),
 });
 
 const logger = new Logger('ProcessorUtils');
@@ -426,4 +484,133 @@ export async function handleJobFailure(params: {
       params.logger.debug(`Inner error stack: ${innerError.stack}`);
     }
   }
+}
+
+// ── Approval Classification ─────────────────────────────────────────
+
+import { HumanMessage, SystemMessage } from 'langchain';
+import { getProviderChatModel } from 'src/graph/llm-provider';
+
+/** Result of classifying a user message as an approval response. */
+export interface ApprovalClassification {
+  decision: 'approved' | 'rejected';
+  reason?: string;
+}
+
+const APPROVAL_CLASSIFIER_PROMPT = `You are a classifier. The user has a pending task result waiting for their approval.
+Given the user's message, determine if they are:
+- APPROVING the result (wanting it delivered) — reply exactly: APPROVED
+- REJECTING the result (wanting it discarded) — reply exactly: REJECTED::reason
+  where "reason" is a brief summary of why they rejected (extract from their message)
+- Saying something UNRELATED to the approval — reply exactly: NONE
+
+Rules:
+- Reply with ONLY one of: APPROVED, REJECTED::reason, or NONE
+- Do not add any other text or explanation
+- For rejections, always include a reason after ::`;
+
+/**
+ * Classify a user's message as an approval decision using a cheap LLM.
+ *
+ * Uses the guard-tier model with a structured string format:
+ * - APPROVED
+ * - REJECTED::reason
+ * - NONE (not an approval response)
+ *
+ * Returns an ApprovalClassification or null if unrelated.
+ */
+export async function classifyApprovalResponse(
+  text: string,
+): Promise<ApprovalClassification | null> {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+
+  // Skip very long messages — unlikely to be approval responses
+  if (trimmed.length > 500) return null;
+
+  // Fast regex tier — instant match for obvious responses (avoids LLM call)
+  const fastResult = parseApprovalResponseFast(trimmed);
+  if (fastResult) return fastResult;
+
+  try {
+    const model = getProviderChatModel('guard');
+
+    const response = await model.invoke([
+      new SystemMessage(APPROVAL_CLASSIFIER_PROMPT),
+      new HumanMessage(`
+        Here is the message to classify:
+        __
+        ${trimmed}
+        `),
+    ]);
+
+    const answer = String(response.content).trim();
+
+    Logger.debug(`[ApprovalClassifier] Raw answer: "${answer}"`);
+    if (answer.toUpperCase().startsWith('APPROVED')) {
+      return { decision: 'approved' };
+    }
+
+    if (answer.toUpperCase().startsWith('REJECTED')) {
+      const parts = answer.split('::');
+      const reason = parts.slice(1).join('::').trim() || undefined;
+      return { decision: 'rejected', reason };
+    }
+
+    return null;
+  } catch (err) {
+    logger.warn(
+      `Approval classifier failed, falling back to null: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return null;
+  }
+}
+
+/**
+ * Fast regex-based approval classification for obvious responses.
+ * Avoids an LLM call for clear-cut "yes"/"no" messages.
+ *
+ * @see spec §14.4 — Two-tier classifier (fast regex + LLM)
+ */
+function parseApprovalResponseFast(
+  text: string,
+): ApprovalClassification | null {
+  const lower = text.toLowerCase();
+
+  // Obvious approvals (exact or near-exact matches)
+  if (
+    /^(yes|yep|yeah|yup|approve|approved|ok|okay|sure|go ahead|deliver it|lgtm|looks good|ship it|send it)\.?!?$/i.test(
+      lower,
+    )
+  ) {
+    return { decision: 'approved' };
+  }
+
+  // Obvious rejections — extract reason after the keyword
+  const rejectMatch = lower.match(
+    /^(no|nope|nah|reject|rejected|discard|redo|try again|redo it|not good|wrong)[\s,.!:—-]*(.*)/s,
+  );
+  if (rejectMatch) {
+    const reason = rejectMatch[2].trim() || undefined;
+    return { decision: 'rejected', reason };
+  }
+
+  return null;
+}
+
+/**
+ * Format the approval request message sent to the user.
+ */
+export function formatApprovalRequestMessage(
+  _taskId: string,
+  preview: string,
+): string {
+  const truncatedPreview = truncateText(preview, 500);
+  return [
+    `**Task result ready for review**`,
+    '',
+    truncatedPreview,
+    '',
+    'Reply **yes** to deliver, or **no** to reject and re-run with your feedback.',
+  ].join('\n');
 }

@@ -326,19 +326,32 @@ ___________________________________________________________
     const limit = listSessionsDto.limit ?? 20;
     const offset = listSessionsDto.offset ?? 0;
 
-    // Get paginated sessions with total count
-    const rows = db
-      .prepare(
-        `SELECT
+    // Get paginated sessions with total count, optionally filtered by roomId
+    const hasRoomFilter = !!listSessionsDto.roomId;
+    const sql = hasRoomFilter
+      ? `SELECT
+          session_id, title, last_updated_at, created_at, oracle_name,
+          oracle_did, oracle_entity_did, last_processed_count,
+          user_context, room_id, slack_thread_ts,
+          COUNT(*) OVER() as total
+         FROM sessions
+         WHERE room_id = ?
+         ORDER BY last_updated_at DESC
+         LIMIT ? OFFSET ?`
+      : `SELECT
           session_id, title, last_updated_at, created_at, oracle_name,
           oracle_did, oracle_entity_did, last_processed_count,
           user_context, room_id, slack_thread_ts,
           COUNT(*) OVER() as total
          FROM sessions
          ORDER BY last_updated_at DESC
-         LIMIT ? OFFSET ?`,
-      )
-      .all(limit, offset) as Array<{
+         LIMIT ? OFFSET ?`;
+
+    const params = hasRoomFilter
+      ? [listSessionsDto.roomId, limit, offset]
+      : [limit, offset];
+
+    const rows = db.prepare(sql).all(...params) as Array<{
       session_id: string;
       title: string | null;
       last_updated_at: string;
@@ -380,11 +393,18 @@ ___________________________________________________________
     const userHomeServer =
       createSessionDto.homeServer ||
       (await getMatrixHomeServerCroppedForDid(createSessionDto.did));
-    const { roomId } = await this.matrixManger.getOracleRoomIdWithHomeServer({
-      userDid: createSessionDto.did,
-      oracleEntityDid: createSessionDto.oracleEntityDid,
-      userHomeServer,
-    });
+
+    // Use the provided roomId override (e.g. task-specific room),
+    // or fall back to resolving the user's main oracle room.
+    let roomId = createSessionDto.roomId;
+    if (!roomId) {
+      const resolved = await this.matrixManger.getOracleRoomIdWithHomeServer({
+        userDid: createSessionDto.did,
+        oracleEntityDid: createSessionDto.oracleEntityDid,
+        userHomeServer,
+      });
+      roomId = resolved.roomId;
+    }
 
     if (!roomId) {
       throw new Error('Room ID not found');

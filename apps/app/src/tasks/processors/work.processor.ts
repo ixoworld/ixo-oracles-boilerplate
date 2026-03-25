@@ -173,6 +173,7 @@ export class WorkProcessor extends WorkerHost {
       monthlyBudgetUsd: meta.monthlyBudgetUsd,
       consecutiveFailures: meta.consecutiveFailures,
       channelType: meta.channelType,
+      taskPageRoomId: meta.hasPage ? roomId : undefined,
     };
 
     const sessionId = crypto.randomUUID();
@@ -216,6 +217,7 @@ export class WorkProcessor extends WorkerHost {
         browserTools: [],
         msgFromMatrixRoom: true,
         spaceId: meta.spaceId ?? undefined,
+        editorRoomId: meta.hasPage ? roomId : undefined,
         tasksService: this.tasksService,
       });
       const agentDuration = Date.now() - agentStartTime;
@@ -381,11 +383,24 @@ export class WorkProcessor extends WorkerHost {
             ]
           : [];
 
+      // Build rejection feedback section if the last run was rejected
+      const rejectionFeedback: string[] = meta.lastRejectionReason
+        ? [
+            '',
+            '### Rejection Feedback',
+            'Your previous output was REJECTED by the user.',
+            `Reason: ${meta.lastRejectionReason}`,
+            ...(meta.lastRejectionAt
+              ? [
+                  `Rejected at: ${formatOutputDate(new Date(meta.lastRejectionAt), meta.timezone)}`,
+                ]
+              : []),
+            'You MUST address this feedback. Re-examine your approach: consider different data sources, different analysis methods, or different output structure. Do NOT simply rephrase the previous output — produce a genuinely improved result.',
+          ]
+        : [];
+
       return [
         `## ${taskName} — Run #${runNumber}`,
-        '',
-        'You are running autonomously. No human is in the loop — do NOT ask questions or seek clarification.',
-        'If the user configured actions that require approval, pause and wait for it; otherwise execute fully.',
         '',
         '### Task Page',
         '---',
@@ -397,19 +412,11 @@ export class WorkProcessor extends WorkerHost {
         `- Schedule: ${schedule} | Timezone: ${meta.timezone}`,
         `- Run: #${runNumber} | Last run: ${lastRun}`,
         `- Budget: ${budgetStr}`,
-        `- ⏱️ Time budget: ~${timeBudgetMinutes} minutes — you MUST finish within this window. Be fast: use minimal tool calls, don't over-search.`,
+        `- ⏱️ Time budget: ~${timeBudgetMinutes} minutes — be fast, use minimal tool calls.`,
         '',
         '### Previous Runs',
         previousRuns,
-        '',
-        '### Execution Rules',
-        '1. **The Task Page is your blueprint — follow it exactly.** It specifies what to do, which agents/tools to use, which URLs to scrape, which skills to load (by name and CID), step-by-step procedures, thresholds, and output format. Do NOT deviate, improvise, or substitute unless a step fails.',
-        '2. **Use the agents and tools named in the Task Page.** If the page says "Use Firecrawl Agent to scrape https://oilprice.com", use Firecrawl on that exact URL. If it says "Use the Sandbox with skill X (CID: Y)", load that skill. Do not pick different tools or sources unless the specified ones fail.',
-        '3. **Follow the step-by-step procedure** in the "What to Do" section in order. Do not skip steps, reorder them, or add extra steps.',
-        '4. Output ONLY the deliverable as described in "How to Report" — match the format, data points, and length exactly.',
-        '5. Do not narrate, do not echo instructions, do not add preamble.',
-        '6. If a tool or source fails, try any fallback listed in the "Notes" section. If no fallback exists, state the failure factually and continue with available data.',
-        '7. Respect all rules in the "Constraints" section — they override your defaults.',
+        ...rejectionFeedback,
         ...alertRule,
       ].join('\n');
     });

@@ -22,6 +22,8 @@ import { MatrixManager } from '@ixo/matrix';
 import { MainAgentGraph } from 'src/graph';
 import { CheckpointStorageSyncModule } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.module';
 import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
+import { ApprovalService } from './approval.service';
+import { ApprovalProcessor } from './processors/approval.processor';
 import { DeliverProcessor } from './processors/deliver.processor';
 import { SimpleProcessor } from './processors/simple.processor';
 import { WorkProcessor } from './processors/work.processor';
@@ -56,6 +58,10 @@ import { TasksService } from './task.service';
       name: QUEUE_NAMES.DELIVER,
       defaultJobOptions: QUEUE_DEFAULT_OPTIONS[QUEUE_NAMES.DELIVER],
     }),
+    BullModule.registerQueue({
+      name: QUEUE_NAMES.APPROVAL,
+      defaultJobOptions: QUEUE_DEFAULT_OPTIONS[QUEUE_NAMES.APPROVAL],
+    }),
 
     // Register FlowProducer for one-shot Pattern B jobs
     BullModule.registerFlowProducer({ name: 'task-flow' }),
@@ -66,9 +72,11 @@ import { TasksService } from './task.service';
   providers: [
     TasksScheduler,
     TasksService,
+    ApprovalService,
     SimpleProcessor,
     WorkProcessor,
     DeliverProcessor,
+    ApprovalProcessor,
     {
       // MainAgentGraph is a stateless wrapper — all dependencies (services,
       // config) are passed per-call via the SendMessageOptions object, so no
@@ -101,6 +109,6 @@ import { TasksService } from './task.service';
       inject: [UserMatrixSqliteSyncService, MemoryEngineService],
     },
   ],
-  exports: [TasksScheduler, TasksService],
+  exports: [TasksScheduler, TasksService, ApprovalService],
 })
 export class TasksModule {}

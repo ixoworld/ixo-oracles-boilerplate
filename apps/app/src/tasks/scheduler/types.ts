@@ -73,6 +73,17 @@ export interface DeliverJobData {
   scheduleCron?: string;
 }
 
+/** Data payload for approval timeout/reminder jobs */
+export interface ApprovalTimeoutJobData {
+  taskId: string;
+  userDid: string;
+  matrixUserId: string;
+  roomId: string;
+  mainRoomId: string;
+  /** Whether this is a reminder (24h) or final expiry (48h) */
+  phase: 'reminder' | 'expiry';
+}
+
 // ── Scheduling Param Types ───────────────────────────────────────────
 
 export interface ScheduleSimpleJobParams {
@@ -110,4 +121,11 @@ export interface ScheduleNextWorkJobParams {
   taskId: string;
   data: WorkJobData;
   delay: number;
+}
+
+/** Params for scheduling an immediate retry flow (work→deliver) after rejection */
+export interface ScheduleRetryFlowParams {
+  taskId: string;
+  workData: WorkJobData;
+  deliverData: DeliverJobData;
 }

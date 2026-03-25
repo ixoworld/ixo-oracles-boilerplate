@@ -15,6 +15,7 @@ export const QUEUE_NAMES = {
   SIMPLE: 'task_simple',
   WORK: 'task_work',
   DELIVER: 'task_deliver',
+  APPROVAL: 'task_approval',
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -43,6 +44,12 @@ export const QUEUE_DEFAULT_OPTIONS: Record<QueueName, DefaultJobOptions> = {
     removeOnComplete: { age: SEVEN_DAYS_SECONDS },
     removeOnFail: { age: THIRTY_DAYS_SECONDS },
   },
+  [QUEUE_NAMES.APPROVAL]: {
+    attempts: 3,
+    backoff: { type: 'fixed', delay: 10_000 },
+    removeOnComplete: { age: SEVEN_DAYS_SECONDS },
+    removeOnFail: { age: THIRTY_DAYS_SECONDS },
+  },
 };
 
 // ── Worker Concurrency ───────────────────────────────────────────────
@@ -59,6 +66,10 @@ export const WORKER_OPTIONS = {
   },
   [QUEUE_NAMES.DELIVER]: {
     concurrency: 20,
+    lockDuration: 60_000,
+  },
+  [QUEUE_NAMES.APPROVAL]: {
+    concurrency: 10,
     lockDuration: 60_000,
   },
 } as const;

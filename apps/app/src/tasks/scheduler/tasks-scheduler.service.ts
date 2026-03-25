@@ -11,14 +11,17 @@
 import { InjectFlowProducer, InjectQueue } from '@nestjs/bullmq';
 import { Injectable, Logger } from '@nestjs/common';
 import { FlowProducer, Queue } from 'bullmq';
+import crypto from 'node:crypto';
 
 import { QUEUE_NAMES } from './task-queues';
 import type {
+  ApprovalTimeoutJobData,
   DeliverJobData,
   QueueName,
   ScheduleFlowJobParams,
   ScheduleNextWorkJobParams,
   ScheduleRecurringFlowParams,
+  ScheduleRetryFlowParams,
   ScheduleSimpleJobParams,
   SimpleJobData,
   WorkJobData,
@@ -35,6 +38,8 @@ export class TasksScheduler {
     private readonly workQueue: Queue<WorkJobData>,
     @InjectQueue(QUEUE_NAMES.DELIVER)
     private readonly deliverQueue: Queue<DeliverJobData>,
+    @InjectQueue(QUEUE_NAMES.APPROVAL)
+    private readonly approvalQueue: Queue<ApprovalTimeoutJobData>,
     @InjectFlowProducer('task-flow')
     private readonly flowProducer: FlowProducer,
   ) {}
@@ -186,6 +191,46 @@ export class TasksScheduler {
     return { jobId };
   }
 
+  // ── Retry Flow (after rejection) ──────────────────────────────────
+
+  /**
+   * Schedule an immediate work→deliver flow for retrying after rejection.
+   * Uses UUID-suffixed job IDs to avoid collisions with existing recurring jobs.
+   * The deliver parent waits for the work child via FlowProducer dependency.
+   */
+  async scheduleRetryFlow(
+    params: ScheduleRetryFlowParams,
+  ): Promise<{ deliverJobId: string; workJobId: string }> {
+    const suffix = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+    const deliverJobId = `${params.taskId}-retry-deliver-${suffix}`;
+    const workJobId = `${params.taskId}-retry-work-${suffix}`;
+
+    this.logger.debug(
+      `scheduleRetryFlow: taskId=${params.taskId}, deliverJobId=${deliverJobId}, workJobId=${workJobId}`,
+    );
+
+    await this.flowProducer.add({
+      name: QUEUE_NAMES.DELIVER,
+      queueName: QUEUE_NAMES.DELIVER,
+      data: params.deliverData,
+      opts: { jobId: deliverJobId },
+      children: [
+        {
+          name: QUEUE_NAMES.WORK,
+          queueName: QUEUE_NAMES.WORK,
+          data: params.workData,
+          opts: { jobId: workJobId },
+        },
+      ],
+    });
+
+    this.logger.log(
+      `Scheduled retry flow: work=${workJobId}, deliver=${deliverJobId}`,
+    );
+
+    return { deliverJobId, workJobId };
+  }
+
   // ── Cancellation ─────────────────────────────────────────────────
 
   /**
@@ -277,6 +322,13 @@ export class TasksScheduler {
       );
     }
 
+    // Cancel any pending approval timeout jobs
+    await this.cancelApprovalTimeouts(taskId).catch((e) =>
+      errors.push(
+        `approval-timeouts: ${e instanceof Error ? e.message : String(e)}`,
+      ),
+    );
+
     if (errors.length > 0) {
       this.logger.warn(
         `Some cancellations failed for task ${taskId}: ${errors.join(', ')}`,
@@ -284,6 +336,61 @@ export class TasksScheduler {
     }
 
     this.logger.log(`Cancelled all jobs for task ${taskId}`);
+  }
+
+  // ── Approval Timeout Jobs ───────────────────────────────────────
+
+  /**
+   * Schedule reminder (24h) and expiry (48h) timeout jobs for an approval gate.
+   * Returns the job IDs so they can be cancelled if the user responds in time.
+   */
+  async scheduleApprovalTimeouts(params: {
+    taskId: string;
+    data: ApprovalTimeoutJobData;
+    reminderDelayMs: number;
+    expiryDelayMs: number;
+  }): Promise<{ reminderJobId: string; expiryJobId: string }> {
+    const reminderJobId = `${params.taskId}-approval-reminder`;
+    const expiryJobId = `${params.taskId}-approval-expiry`;
+
+    await this.approvalQueue.add(
+      QUEUE_NAMES.APPROVAL,
+      { ...params.data, phase: 'reminder' },
+      { delay: params.reminderDelayMs, jobId: reminderJobId },
+    );
+
+    await this.approvalQueue.add(
+      QUEUE_NAMES.APPROVAL,
+      { ...params.data, phase: 'expiry' },
+      { delay: params.expiryDelayMs, jobId: expiryJobId },
+    );
+
+    this.logger.log(
+      `Scheduled approval timeouts for task ${params.taskId}: reminder=${reminderJobId} (${params.reminderDelayMs}ms), expiry=${expiryJobId} (${params.expiryDelayMs}ms)`,
+    );
+
+    return { reminderJobId, expiryJobId };
+  }
+
+  /**
+   * Cancel pending approval timeout jobs for a task.
+   * Called when the user responds to an approval request.
+   */
+  async cancelApprovalTimeouts(taskId: string): Promise<void> {
+    await this.cancelJob(
+      QUEUE_NAMES.APPROVAL,
+      `${taskId}-approval-reminder`,
+    ).catch(() => {});
+    await this.cancelJob(
+      QUEUE_NAMES.APPROVAL,
+      `${taskId}-approval-expiry`,
+    ).catch(() => {});
+    this.logger.log(`Cancelled approval timeouts for task ${taskId}`);
+  }
+
+  /** Get a typed reference to the approval queue. */
+  getApprovalQueue(): Queue<ApprovalTimeoutJobData> {
+    return this.approvalQueue;
   }
 
   // ── Queue Access (for processors) ────────────────────────────────
@@ -297,6 +404,8 @@ export class TasksScheduler {
         return this.workQueue;
       case QUEUE_NAMES.DELIVER:
         return this.deliverQueue;
+      case QUEUE_NAMES.APPROVAL:
+        return this.approvalQueue;
       default:
         throw new Error(`Unknown queue: ${queueName}`);
     }
