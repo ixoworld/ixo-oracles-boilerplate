@@ -343,7 +343,7 @@ export async function createUCANValidator(
    * For each delegation: resolve issuer DID → did:key, verify signature,
    * then check proof chain consistency and recurse into proofs.
    */
-   
+
   async function verifyDelegationChain(
     delegation: any,
   ): Promise<ValidateResult> {
@@ -395,7 +395,6 @@ export async function createUCANValidator(
         ),
     };
 
-     
     const sigValid = await UCAN.verifySignature(
       ucanView,
       wrappedVerifier as any,

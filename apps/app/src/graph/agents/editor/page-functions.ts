@@ -399,7 +399,7 @@ export async function updatePage(
       const newBlocks = serverEditor.yXmlFragmentToBlocks(
         doc.getXmlFragment('document'),
       );
-       
+
       const newContentMd = await serverEditor.blocksToMarkdownLossy(
         newBlocks as any,
       );
