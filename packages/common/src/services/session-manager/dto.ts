@@ -75,7 +75,7 @@ export class CreateChatSessionDto extends UserAuthDto {
   @IsString()
   @IsOptional()
   ucanInvocation?: string;
-  
+
   /** Override the roomId stored on the session (e.g. task-specific room). */
   @IsString()
   @IsOptional()

@@ -19,9 +19,6 @@ import { getAuthHeaders, normalizeDid } from '../utils/header.utils';
 /** Cache key for the encrypted user openId token, keyed by DID. */
 export const OPENID_CACHE_PREFIX = 'openid:';
 
-/** TTL for the cached encrypted openId token (10 minutes). */
-const OPENID_CACHE_TTL = 10 * 60 * 1000;
-
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace -- Required for declaration merging
   namespace Express {
