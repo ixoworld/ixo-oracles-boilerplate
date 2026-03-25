@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import { type DefaultEventsMap, type Server } from 'socket.io';
 import { rootEventEmitter } from '../../root-event-emitter/root-event-emitter';
 

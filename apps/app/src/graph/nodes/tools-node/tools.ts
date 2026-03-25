@@ -78,7 +78,7 @@ const getFirecrawlMcpTools = async () => {
   try {
     const client = new MultiServerMCPClient({
       useStandardContentBlocks: true,
-      defaultToolTimeout: 60_000, // 1 minute
+      defaultToolTimeout: 120_000, // 2 minutes
 
       prefixToolNameWithServerName: true,
       mcpServers: {
@@ -100,7 +100,6 @@ const getFirecrawlMcpTools = async () => {
     const allowedToolNames = [
       'firecrawl__firecrawl_scrape',
       'firecrawl__firecrawl_search',
-      'firecrawl__firecrawl_extract',
     ];
 
     const filteredTools = allTools.filter((tool) =>

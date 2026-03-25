@@ -399,7 +399,7 @@ export async function updatePage(
       const newBlocks = serverEditor.yXmlFragmentToBlocks(
         doc.getXmlFragment('document'),
       );
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       const newContentMd = await serverEditor.blocksToMarkdownLossy(
         newBlocks as any,
       );

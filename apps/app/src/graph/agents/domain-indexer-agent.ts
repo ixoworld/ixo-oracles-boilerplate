@@ -49,7 +49,7 @@ Workflow:
 1. Decide if you need search (find relevant entities) or a card lookup (get summary/overview/FAQ for a known DID).
 2. Provide detailed, structured tool inputs (query text, limits, filters, or DID).
 3. Parse the response—highlight summary, overview, FAQ, URLs, and keywords.
-4. Surface gaps or follow-ups (e.g., “Need more info from memory engine or portal to proceed”).
+4. Surface gaps or follow-ups — if more context is needed (from memory, portal, etc.), say so and the main agent will use the appropriate tools.
 `.trim();
 
 const buildDescription = (tools: StructuredTool[]) => {

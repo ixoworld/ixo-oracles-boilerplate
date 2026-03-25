@@ -16,6 +16,9 @@ import { ENV } from 'src/config';
 import { UcanService } from 'src/ucan/ucan.service';
 import { getAuthHeaders, normalizeDid } from '../utils/header.utils';
 
+/** Cache key for the encrypted user openId token, keyed by DID. */
+export const OPENID_CACHE_PREFIX = 'openid:';
+
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace -- Required for declaration merging
   namespace Express {

@@ -5,15 +5,16 @@ import { MainAgentGraph } from 'src/graph';
 import { type ENV } from 'src/types';
 // SseService is provided globally by SseModule, no need to import or provide here.
 import { MatrixManager } from '@ixo/matrix';
+import { TasksModule } from 'src/tasks/tasks.module';
+import { UcanModule } from 'src/ucan/ucan.module';
 import { CheckpointStorageSyncModule } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.module';
 import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
-import { UcanModule } from 'src/ucan/ucan.module';
-import { MessagesController } from './messages.controller';
 import { FileProcessingService } from './file-processing.service';
+import { MessagesController } from './messages.controller';
 import { MessagesService } from './messages.service';
 
 @Module({
-  imports: [CheckpointStorageSyncModule, UcanModule],
+  imports: [CheckpointStorageSyncModule, TasksModule, UcanModule],
   controllers: [MessagesController],
   providers: [
     MessagesService,

@@ -37,11 +37,9 @@ Task discipline:
 const workflowGuidelines = `
 ### Workflow
 1. Clarify the user's goal and map it to one (or more) portal tools.
-2. Call \`help\` or consult the tool description if you are unsure how it works.
-3. Pass parameters exactly as documented; never guess IDs or omit required
-   fields.
-4. Summarize results back to the user, highlighting any outstanding actions or
-   follow-ups.
+2. Consult each tool's description before invoking it — verify required inputs.
+3. Pass parameters exactly as documented; never guess IDs or omit required fields.
+4. Summarize results back to the user, highlighting any outstanding actions or follow-ups.
 5. If no tool can satisfy the request, explain why and suggest alternatives.
 `.trim();
 
@@ -80,7 +78,7 @@ ${extraInstructions ? `### Additional Instructions\n${extraInstructions}` : ''}
 const buildPortalDescription = (tools: StructuredTool[]): string => {
   const names =
     tools.map((tool) => tool.name).join(', ') || 'no configured tools';
-  return `Specialized Portal Agent that executes user-facing portal/UI supported actions are (${names}).`;
+  return `Specialized Portal Agent that executes user-facing portal/UI actions. Supported actions: (${names}).`;
 };
 
 export type PortalAgentInstance = AgentSpec;

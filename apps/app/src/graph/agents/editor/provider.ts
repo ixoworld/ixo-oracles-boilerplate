@@ -4,6 +4,9 @@ import * as Y from 'yjs';
 
 import { Logger } from '@nestjs/common';
 
+// Shared file-level logger instance with file prefix
+const logger = new Logger('MatrixProviderManager');
+
 const wait = (ms: number) =>
   new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
@@ -117,9 +120,9 @@ export class MatrixProviderManager {
         // Wait for document to become available
         await this.waitForAvailability(this.cfg.matrix.initialSyncTimeoutMs);
 
-        Logger.log('Matrix provider initialized', { attempt });
-        Logger.log(`📄 Y.Doc GUID: ${this.doc.guid}`);
-        Logger.log(`📄 Room ID: ${JSON.stringify(this.cfg.matrix.room)}`);
+        logger.log('Matrix provider initialized', { attempt });
+        logger.log(`📄 Y.Doc GUID: ${this.doc.guid}`);
+        logger.log(`📄 Room ID: ${JSON.stringify(this.cfg.matrix.room)}`);
 
         return {
           doc: this.doc,
@@ -127,7 +130,7 @@ export class MatrixProviderManager {
           provider: this.ensureProvider(),
         };
       } catch (error) {
-        Logger.warn(
+        logger.warn(
           `Matrix provider init attempt ${attempt} failed`,
           error as Error,
         );
@@ -138,7 +141,7 @@ export class MatrixProviderManager {
         }
 
         const backoff = delayMs * attempt;
-        Logger.log(`Retrying provider initialization in ${backoff}ms`);
+        logger.log(`Retrying provider initialization in ${backoff}ms`);
         await wait(backoff);
       }
     }
@@ -154,19 +157,20 @@ export class MatrixProviderManager {
     const room = this.matrixClient.getRoom(roomId);
 
     if (!room) {
-      Logger.warn(
+      logger.warn(
         `Room ${roomId} not in client store, attempting to join/peek...`,
       );
 
       try {
         // Try joining first — peek fails when room previews are disabled
         await this.matrixClient.joinRoom(roomId);
-        Logger.log(`Successfully joined room ${roomId}`);
+        logger.log(`Successfully joined room ${roomId}`);
       } catch (joinError) {
+        logger.warn(joinError);
         // Fall back to peek if join fails (e.g. already joined but not synced)
         try {
           await this.matrixClient.peekInRoom(roomId);
-          Logger.log(`Successfully peeked into room ${roomId}`);
+          logger.log(`Successfully peeked into room ${roomId}`);
         } catch (peekError) {
           const errorMsg =
             peekError instanceof Error ? peekError.message : String(peekError);
@@ -176,7 +180,7 @@ export class MatrixProviderManager {
         }
       }
     } else {
-      Logger.debug(`Room ${roomId} found in client store`);
+      logger.debug(`Room ${roomId} found in client store`);
     }
   }
 
@@ -201,7 +205,7 @@ export class MatrixProviderManager {
     // This is critical for MatrixProvider to fetch room history correctly
     await this.ensureRoomAvailable(roomId);
 
-    Logger.log('Creating MatrixProvider', roomDescriptor);
+    logger.log('Creating MatrixProvider', roomDescriptor);
 
     this.provider = new MatrixProvider(
       this.doc,
@@ -253,13 +257,13 @@ export class MatrixProviderManager {
   private registerProviderListeners(provider: MatrixProvider) {
     this.disposables.push(
       provider.onDocumentAvailable(() => {
-        Logger.log('Matrix document available');
+        logger.log('Matrix document available');
 
         // Wait briefly for Y.Doc to apply initial sync
         // Can't rely on onReceivedEvents - it only fires for NEW events,
         // not when connecting to an already-synced client
         setTimeout(() => {
-          Logger.log('Marking document as available after sync delay');
+          logger.log('Marking document as available after sync delay');
           this.documentAvailable = true;
           const resolvers = [...this.availabilityResolvers];
           this.availabilityResolvers = [];
@@ -270,14 +274,14 @@ export class MatrixProviderManager {
 
     this.disposables.push(
       provider.onDocumentUnavailable(() => {
-        Logger.warn('Matrix document unavailable');
+        logger.warn('Matrix document unavailable');
         this.documentAvailable = false;
       }),
     );
 
     this.disposables.push(
       provider.onReceivedEvents(() => {
-        Logger.debug('Received Matrix events - Y.Doc syncing content');
+        logger.debug('Received Matrix events - Y.Doc syncing content');
       }),
     );
   }
@@ -288,7 +292,7 @@ export class MatrixProviderManager {
       try {
         disposable?.dispose();
       } catch (error) {
-        Logger.warn('Failed to dispose provider listener', error as Error);
+        logger.warn('Failed to dispose provider listener', error as Error);
       }
     }
   }
@@ -323,7 +327,7 @@ export class MatrixProviderManager {
       return;
     }
 
-    Logger.log('Disposing Matrix provider manager');
+    logger.log('Disposing Matrix provider manager');
 
     // Clean up provider and Y.Doc
     await this.cleanupProvider();
@@ -345,7 +349,7 @@ export class MatrixProviderManager {
         await this.provider.waitForFlush();
         this.provider.dispose();
       } catch (error) {
-        Logger.warn('Error while disposing MatrixProvider', error as Error);
+        logger.warn('Error while disposing MatrixProvider', error as Error);
       } finally {
         this.provider = undefined;
       }
