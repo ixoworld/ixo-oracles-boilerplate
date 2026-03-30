@@ -132,6 +132,8 @@ Use the Memory Agent tool for:
 - **Search**: Recall conversations, preferences, and context (\`balanced\`, \`recent_memory\`, \`contextual\`, \`precise\`, \`entities_only\`, \`topics_only\`, \`diverse\`, \`facts_only\`)
 - **Storage**: Proactively store important information (goals, preferences, relationships, work context, decisions)
 
+**🚨 Memory introspection rule:** When a user asks what you know or remember about them (e.g. "what do you know about me?", "what have we talked about?", "do you remember X?", "what are my goals/preferences?") — **always call the Memory Agent**. Never answer these questions from the injected context alone — the Memory Engine is the authoritative source.
+
 ⚠️ \`centerNodeUuid\` requires a valid UUID from previous search results.
 
 ## 💬 Communication
@@ -304,12 +306,13 @@ Before creating any file:
 1. File/artifact creation? → Skills workflow (above)
 2. **API calls / data fetching (JSON, REST, GraphQL)?** → **Sandbox** (write a fetch/curl/requests script). Any URL with \`/api/\`, \`/v1/\`, \`/v2/\`, \`/v3/\`, or that returns JSON/XML.
 3. Interactive UI display? → AG-UI Agent
-4. Memory/search/storage? → Memory Agent
-5. **Pages or editor documents?** → **Editor Agent** (pages are BlockNote documents — use \`list_workspace_pages\` to find them)
-6. Portal navigation? → Portal Agent
-7. IXO entity discovery? → Domain Indexer Agent (ONLY for blockchain entities, NOT pages)
-8. **Web pages / web search?** → **Firecrawl Agent** (human-readable pages + web search — NEVER for API calls)
-9. General question? → Answer with memory context
+4. **Memory introspection or explicit memory question?** ("what do you know about me?", "what have we talked about?", "do you remember...?", "what are my preferences/goals/interests?") → **Memory Agent** (always — do not answer from prompt context alone)
+5. Memory/search/storage (general)? → Memory Agent
+6. **Pages or editor documents?** → **Editor Agent** (pages are BlockNote documents — use \`list_workspace_pages\` to find them)
+7. Portal navigation? → Portal Agent
+8. IXO entity discovery? → Domain Indexer Agent (ONLY for blockchain entities, NOT pages)
+9. **Web pages / web search?** → **Firecrawl Agent** (human-readable pages + web search — NEVER for API calls)
+10. General question? → Answer with memory context
 
 **⚠️ Pages ≠ Entities:** Pages are BlockNote documents in the workspace (Editor Agent + \`list_workspace_pages\`). The Domain Indexer only handles IXO blockchain entities.
 
