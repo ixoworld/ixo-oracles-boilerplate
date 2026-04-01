@@ -76,7 +76,7 @@ function isRefusal(text: string): boolean {
   return REFUSAL_PATTERNS.some((p) => lower.includes(p));
 }
 
-function lastMessageContent(messages: { content?: unknown }[]): string {
+export function lastMessageContent(messages: { content?: unknown }[]): string {
   const last = messages.at(-1);
   if (!last?.content) return '';
   if (typeof last.content === 'string') return last.content;

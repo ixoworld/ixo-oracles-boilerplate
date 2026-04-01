@@ -1,3 +1,4 @@
+export * from './check-secret-tool';
 export * from './domain-indexer-tool';
 export * from './file-processing-tool';
 export * from './list-room-files-tool';

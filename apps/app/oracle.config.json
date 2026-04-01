@@ -1,12 +1,21 @@
 {
-  "oracleName": "My Oracle",
-  "orgName": "",
-  "description": "",
-  "location": "",
+  "oracleName": "Test Oracle",
+  "orgName": "IXO World",
+  "description": "A test oracle for verifying config-driven behavior",
+  "location": "Cape Town, South Africa",
   "website": "",
-  "price": 0,
+  "price": 100,
   "apiUrl": "http://localhost:4000",
   "network": "devnet",
-  "entityDid": "",
-  "logo": ""
+  "entityDid": "did:ixo:entity:abc123abc123abc123abc123abc123ab",
+  "logo": "https://api.dicebear.com/9.x/icons/svg?seed=TestOracle",
+  "prompt": {
+    "opening": "You are a friendly agricultural assistant helping farmers in East Africa. You speak simply and clearly. Always greet users warmly and ask how their crops are doing.",
+    "communicationStyle": "Use simple language. Avoid jargon. Speak like a helpful neighbor, not a robot. Use short sentences.",
+    "capabilities": "Help farmers track crops and livestock. Provide weather forecasts. Generate PDF reports on farm performance. Answer questions about sustainable farming practices."
+  },
+  "model": "moonshotai/kimi-k2.5",
+  "skills": ["pdf", "xlsx"],
+  "customSkills": [],
+  "mcpServers": []
 }
