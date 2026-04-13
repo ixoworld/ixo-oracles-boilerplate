@@ -13,7 +13,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CallsModule } from './calls/calls.module';
-import { type ENV, EnvSchema, getConfig } from './config';
+import { type ENV, EnvSchema, getConfig, isRedisEnabled } from './config';
 import { MessagesModule } from './messages/messages.module';
 import { AuthHeaderMiddleware } from './middleware/auth-header.middleware';
 import { SubscriptionMiddleware } from './middleware/subscription.middleware';
@@ -60,7 +60,8 @@ import { WsModule } from './ws/ws.module';
     SessionsModule,
     MessagesModule,
     UcanModule,
-    TasksModule,
+    // TasksModule requires Redis for BullMQ job queues
+    ...(isRedisEnabled() ? [TasksModule] : []),
     // KnowledgeModule,
     ScheduleModule.forRoot(),
     SlackModule,
@@ -73,6 +74,10 @@ import { WsModule } from './ws/ws.module';
       provide: RedisService,
       useFactory: (configService: ConfigService<ENV>) => {
         const config = getConfig(configService);
+        if (!isRedisEnabled()) {
+          Logger.log('RedisService disabled (REDIS_URL not configured)');
+          return null;
+        }
         if (config.get('DISABLE_CREDITS')) {
           Logger.log('RedisService disabled (DISABLE_CREDITS=true)');
           return null;
@@ -85,6 +90,12 @@ import { WsModule } from './ws/ws.module';
       provide: ClaimProcessingService,
       useFactory: (configService: ConfigService<ENV>) => {
         const config = getConfig(configService);
+        if (!isRedisEnabled()) {
+          Logger.log(
+            'ClaimProcessingService disabled (REDIS_URL not configured)',
+          );
+          return null;
+        }
         if (config.get('DISABLE_CREDITS')) {
           Logger.log('ClaimProcessingService disabled (DISABLE_CREDITS=true)');
           return null;
@@ -104,9 +115,13 @@ export class AppModule implements NestModule {
   constructor(private readonly configService: ConfigService<ENV>) {}
   configure(consumer: MiddlewareConsumer) {
     const disableCredits = this.configService.get('DISABLE_CREDITS', false);
+    const skipSubscription = disableCredits || !isRedisEnabled();
 
-    if (disableCredits) {
-      Logger.log('Subscription middleware disabled (DISABLE_CREDITS=true)');
+    if (skipSubscription) {
+      const reason = !isRedisEnabled()
+        ? 'REDIS_URL not configured'
+        : 'DISABLE_CREDITS=true';
+      Logger.log(`Subscription middleware disabled (${reason})`);
       consumer
         .apply(AuthHeaderMiddleware)
         .exclude(

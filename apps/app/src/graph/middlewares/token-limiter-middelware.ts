@@ -5,7 +5,7 @@ import {
   AIMessageChunk,
   createMiddleware,
 } from 'langchain';
-import { getConfig } from 'src/config';
+import { getConfig, isRedisEnabled } from 'src/config';
 import { TokenLimiter, TokenLimiterError } from 'src/utils/token-limit-handler';
 import { getModelPricing } from '../llm-provider';
 import { contextSchema, type TChatNodeContext } from '../types';
@@ -17,8 +17,8 @@ const createTokenLimiterMiddleware = (): AgentMiddleware => {
     contextSchema: contextSchema as unknown as InteropZodObject,
     beforeModel: async (state, runtime) => {
       const disableCredits = config.get('DISABLE_CREDITS');
-      if (disableCredits) {
-        Logger.debug('Token limiting skipped (DISABLE_CREDITS=true)');
+      if (disableCredits || !isRedisEnabled()) {
+        Logger.debug('Token limiting skipped (credits disabled or no Redis)');
         return state;
       }
       if (!runtime.context) {
@@ -57,8 +57,8 @@ const createTokenLimiterMiddleware = (): AgentMiddleware => {
           throw new Error('Runtime context required for token limiting');
         }
         const disableCredits = config.get('DISABLE_CREDITS');
-        if (disableCredits) {
-          Logger.debug('Token limiting skipped (DISABLE_CREDITS=true)');
+        if (disableCredits || !isRedisEnabled()) {
+          Logger.debug('Token limiting skipped (credits disabled or no Redis)');
           return state;
         }
 

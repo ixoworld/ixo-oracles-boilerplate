@@ -59,7 +59,7 @@ export const EnvSchema = z.object({
   SUBSCRIPTION_URL: z.string().optional(),
   FIRECRAWL_MCP_URL: z.url(),
   DOMAIN_INDEXER_URL: z.url(),
-  REDIS_URL: z.string(),
+  REDIS_URL: z.string().optional(),
   SECP_MNEMONIC: z.string(),
   RPC_URL: z.string(),
   MATRIX_VALUE_PIN: z.string(),
@@ -116,6 +116,15 @@ export function getConfig(configService?: ConfigService<ENV>) {
       return svc.getOrThrow(key as any);
     },
   };
+}
+
+/**
+ * Returns true when a REDIS_URL is configured.
+ * Used to conditionally enable Redis-dependent features
+ * (BullMQ task queues, token/credit limiting, etc.).
+ */
+export function isRedisEnabled(): boolean {
+  return !!process.env.REDIS_URL;
 }
 
 let _singleton: ConfigService<ENV> | undefined;

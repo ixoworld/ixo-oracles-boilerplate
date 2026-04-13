@@ -9,7 +9,7 @@ import {
   type ReactAgent,
   type StructuredTool,
 } from 'langchain';
-import { getConfig } from 'src/config';
+import { getConfig, isRedisEnabled } from 'src/config';
 import { type UcanService } from 'src/ucan/ucan.service';
 
 import { createPageContextMiddleware } from '../middlewares/page-context-middleware';
@@ -756,7 +756,7 @@ Promise<ReactAgent<any>> => {
     createPageContextMiddleware(),
   ];
 
-  if (!disableCredits) {
+  if (!disableCredits && isRedisEnabled()) {
     middleware.push(createTokenLimiterMiddleware());
   }
 

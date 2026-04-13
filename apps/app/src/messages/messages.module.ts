@@ -5,6 +5,7 @@ import { MainAgentGraph } from 'src/graph';
 import { type ENV } from 'src/types';
 // SseService is provided globally by SseModule, no need to import or provide here.
 import { MatrixManager } from '@ixo/matrix';
+import { isRedisEnabled } from 'src/config';
 import { TasksModule } from 'src/tasks/tasks.module';
 import { UcanModule } from 'src/ucan/ucan.module';
 import { CheckpointStorageSyncModule } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.module';
@@ -14,7 +15,12 @@ import { MessagesController } from './messages.controller';
 import { MessagesService } from './messages.service';
 
 @Module({
-  imports: [CheckpointStorageSyncModule, TasksModule, UcanModule],
+  imports: [
+    CheckpointStorageSyncModule,
+    // TasksModule requires Redis for BullMQ job queues
+    ...(isRedisEnabled() ? [TasksModule] : []),
+    UcanModule,
+  ],
   controllers: [MessagesController],
   providers: [
     MessagesService,
