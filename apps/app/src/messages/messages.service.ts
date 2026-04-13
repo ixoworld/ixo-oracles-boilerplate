@@ -49,6 +49,7 @@ import {
   type ApprovalClassification,
 } from 'src/tasks/processors/processor-utils';
 import { TasksService } from 'src/tasks/task.service';
+import { isRedisEnabled } from 'src/config';
 import { type ENV } from 'src/types';
 import { UcanService } from 'src/ucan/ucan.service';
 import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
@@ -781,7 +782,11 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
           );
 
         // Deduct credits for file processing API calls
-        if (totalUsage && !this.config.get('DISABLE_CREDITS')) {
+        if (
+          totalUsage &&
+          !this.config.get('DISABLE_CREDITS') &&
+          isRedisEnabled()
+        ) {
           try {
             const credits =
               totalUsage.cost > 0

@@ -12,7 +12,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { Cache } from 'cache-manager';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
-import { type ENV } from './config';
+import { type ENV, isRedisEnabled } from './config';
 import { UcanService } from './ucan/ucan.service';
 import { EditorMatrixClient } from './graph/agents/editor/editor-mx';
 import { initModelPricingCache } from './graph/llm-provider';
@@ -188,6 +188,16 @@ async function bootstrap(): Promise<void> {
   Logger.log(
     `Credits disabled: ${configService.get('DISABLE_CREDITS')}. type: ${typeof configService.get('DISABLE_CREDITS')}`,
   );
+
+  if (!isRedisEnabled()) {
+    Logger.warn('--- Redis is NOT configured (REDIS_URL not set) ---');
+    Logger.warn('The following features are disabled:');
+    Logger.warn('  • TasksModule (BullMQ job queues / scheduled tasks)');
+    Logger.warn('  • TokenLimiter (credit/token tracking)');
+    Logger.warn('  • ClaimProcessingService (on-chain credit claims)');
+    Logger.warn('  • RedisService (direct Redis client)');
+    Logger.warn('Set REDIS_URL to enable these features.');
+  }
 }
 
 function registerGracefulShutdown({
