@@ -143,6 +143,10 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
   private isUserActive(userDid: string): boolean {
     return (this.activeUsers.get(userDid) ?? 0) > 0;
   }
+  static sanitizeDidForPath(did: string): string {
+    return did.replace(/:/g, '_');
+  }
+
   static createUserStorageKey(userDid: string): string {
     const key = `checkpoint_${userDid}_${config.getOrThrow('ORACLE_DID')}`;
     return createHash('sha256').update(key).digest('hex').substring(0, 17);
@@ -151,7 +155,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
   static getUserCheckpointDbPath(userDid: string): string {
     const dbPath = path.join(
       UserMatrixSqliteSyncService.checkpointsFolder,
-      userDid,
+      UserMatrixSqliteSyncService.sanitizeDidForPath(userDid),
       `${UserMatrixSqliteSyncService.createUserStorageKey(userDid)}.db`,
     );
     return dbPath;
@@ -202,14 +206,60 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
       this.lastUploadedChecksum.set(row.storage_key, row.content_checksum);
     }
 
+    // Migrate legacy colon-containing DID folders to sanitized names
+    // (backwards compat for Linux/macOS where colon folders already exist).
+    // Build a mapping so the seed loop below can recover the raw DID.
+    const migratedDidMap = new Map<string, string>(); // sanitized → raw DID
+    try {
+      const existingFolders = await fs.readdir(
+        UserMatrixSqliteSyncService.checkpointsFolder,
+      );
+      for (const folder of existingFolders) {
+        if (folder.includes(':')) {
+          const sanitized =
+            UserMatrixSqliteSyncService.sanitizeDidForPath(folder);
+          const oldPath = path.join(
+            UserMatrixSqliteSyncService.checkpointsFolder,
+            folder,
+          );
+          const newPath = path.join(
+            UserMatrixSqliteSyncService.checkpointsFolder,
+            sanitized,
+          );
+          try {
+            await fs.rename(oldPath, newPath);
+            migratedDidMap.set(sanitized, folder);
+            Logger.log(
+              `Migrated checkpoint folder: ${folder} → ${sanitized}`,
+            );
+          } catch (err) {
+            Logger.error(
+              `Failed to migrate checkpoint folder ${folder}: ${err instanceof Error ? err.message : err}`,
+            );
+          }
+        }
+      }
+    } catch {
+      // checkpointsFolder may not exist yet or be empty — safe to ignore
+    }
+
     // Seed filePathCache from disk so the upload cron can find checkpoint
     // files that survived a restart (hybrid approach: scan once on startup,
     // then use the cache for subsequent cron ticks).
+    // Note: after migration, folder names are sanitized (colons → underscores).
+    // We can't reverse that to recover the raw DID, so seeded entries for
+    // migrated folders will use the sanitized name as the cache key. This means
+    // the cron won't upload them until the user reconnects (which populates the
+    // cache with the correct raw DID via getUserDatabase).
     try {
       const userFolders = await fs.readdir(
         UserMatrixSqliteSyncService.checkpointsFolder,
       );
-      for (const userDid of userFolders) {
+      for (const folderName of userFolders) {
+        // Use the migration mapping if available, otherwise fall back to
+        // the folder name (which is the raw DID on pre-migration installs,
+        // or a sanitized name that getUserDatabase will correct on reconnect).
+        const userDid = migratedDidMap.get(folderName) ?? folderName;
         const dbPath =
           UserMatrixSqliteSyncService.getUserCheckpointDbPath(userDid);
         const fileExists = await fs
@@ -537,7 +587,7 @@ export class UserMatrixSqliteSyncService implements OnModuleInit {
           // sync successful, delete local cache
           const userFolder = path.join(
             UserMatrixSqliteSyncService.checkpointsFolder,
-            userDid,
+            UserMatrixSqliteSyncService.sanitizeDidForPath(userDid),
           );
           const storageKey =
             UserMatrixSqliteSyncService.createUserStorageKey(userDid);

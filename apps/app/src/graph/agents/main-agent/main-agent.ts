@@ -481,7 +481,9 @@ Promise<ReactAgent<any>> => {
   // Ensure checkpointer DB folder exists
   const dbFolder = path.join(
     UserMatrixSqliteSyncService.checkpointsFolder,
-    configurable?.configs?.user?.did,
+    UserMatrixSqliteSyncService.sanitizeDidForPath(
+      configurable?.configs?.user?.did,
+    ),
   );
   if (!fs.existsSync(dbFolder)) {
     fs.mkdirSync(dbFolder, { recursive: true });
