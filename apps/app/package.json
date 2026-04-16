@@ -26,6 +26,8 @@
   },
   "dependencies": {
     "@blocknote/server-util": "0.29.1",
+    "@composio/core": "^0.6.10",
+    "@composio/langchain": "^0.6.10",
     "@ixo/common": "1.1.36",
     "@ixo/editor": "3.0.0-beta.11",
     "@ixo/matrix": "1.2.3",

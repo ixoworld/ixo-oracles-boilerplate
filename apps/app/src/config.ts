@@ -41,6 +41,9 @@ export const EnvSchema = z.object({
   // OpenAI - used by @ixo/common package
   OPENAI_API_KEY: z.string().optional(),
 
+  // Composio — external SaaS tools (enabled when COMPOSIO_API_KEY is set)
+  COMPOSIO_API_KEY: z.string().optional(),
+
   // OpenRouter
   OPEN_ROUTER_API_KEY: z.string().optional(),
 

@@ -1,3 +1,5 @@
+import { Composio } from '@composio/core';
+import { LangchainProvider } from '@composio/langchain';
 import { MultiServerMCPClient } from '@langchain/mcp-adapters';
 import { Logger } from '@nestjs/common';
 import 'dotenv/config';
@@ -112,6 +114,28 @@ const getFirecrawlMcpTools = async () => {
   }
 };
 
+const getComposioTools = async (userId: string): Promise<StructuredTool[]> => {
+  const apiKey = config.get('COMPOSIO_API_KEY');
+  if (!apiKey) return [];
+
+  try {
+    const composio = new Composio({
+      apiKey,
+      provider: new LangchainProvider(),
+    });
+    const session = await composio.create(userId);
+    return session.tools();
+  } catch (error) {
+    logger.error('Error getting Composio tools:', error);
+    return [];
+  }
+};
+
 const tools: StructuredTool[] = [domainIndexerSearchTool, getDomainCardTool];
 
-export { getFirecrawlMcpTools, getMemoryEngineMcpTools, tools };
+export {
+  getComposioTools,
+  getFirecrawlMcpTools,
+  getMemoryEngineMcpTools,
+  tools,
+};

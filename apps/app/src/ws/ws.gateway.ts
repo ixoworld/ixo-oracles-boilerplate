@@ -1,5 +1,5 @@
 import { GraphEventEmitter, rootEventEmitter } from '@ixo/oracles-events';
-import { Logger } from '@nestjs/common';
+import { Logger, Optional } from '@nestjs/common';
 
 import {
   ConnectedSocket,
@@ -14,6 +14,7 @@ import {
 import { Server, Socket } from 'socket.io';
 
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { UcanService } from '../ucan/ucan.service';
 import { WsService } from './ws.service';
 
 @WebSocketGateway({
@@ -30,7 +31,10 @@ export class WsGateway
 
   private readonly logger = new Logger(WsGateway.name);
 
-  constructor(private readonly wsService: WsService) {}
+  constructor(
+    private readonly wsService: WsService,
+    @Optional() private readonly ucanService?: UcanService,
+  ) {}
 
   afterInit(): void {
     this.logger.log('WebSocket gateway initialized');
@@ -53,6 +57,14 @@ export class WsGateway
     this.logger.log(
       `WebSocket connection established for session: ${sessionId}, client: ${client.id}`,
     );
+
+    // Cache UCAN delegation from the client for use on disconnect (memory engine auth)
+    const ucanDelegation = client.handshake.auth?.ucanDelegation as
+      | string
+      | undefined;
+    if (ucanDelegation && this.ucanService) {
+      await this.ucanService.cacheDelegation(userDid as string, ucanDelegation);
+    }
 
     // Join the sessionId room (channel) - this is the key integration!
     await client.join(sessionId);

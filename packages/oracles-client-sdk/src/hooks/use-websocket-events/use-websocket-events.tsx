@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { useOraclesContext } from '../../providers/oracles-provider/oracles-context.js';
 import { useOraclesConfig } from '../use-oracles-config.js';
+import { getCachedDelegation } from '../../utils/delegation-cache.js';
 import {
   type ConnectionStatus,
   type IUseWebSocketEventsReturn,
@@ -56,9 +57,13 @@ export function useWebSocketEvents(
     setConnectionStatus('connecting');
     setError(null);
 
+    // Get cached UCAN delegation for this oracle (sync — already in localStorage)
+    const delegation = getCachedDelegation(wallet.did, props.oracleDid);
+
     // Create WebSocket connection
     const newSocket = io(apiUrl, {
       query: { sessionId, userDid: wallet.did },
+      auth: { ucanDelegation: delegation ?? undefined },
       transports: ['websocket'],
     });
 

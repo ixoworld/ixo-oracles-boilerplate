@@ -65,6 +65,31 @@ import {
   listSkillsTool,
   searchSkillsTool,
 } from '../nodes/tools-node/skills-tools';
+import { getComposioTools } from '../nodes/tools-node/tools';
+
+const COMPOSIO_CONTEXT = `## 🔌 External App Tools (Composio)
+
+You can interact with third-party SaaS apps on behalf of the user — Gmail, GitHub, Linear, Notion, Slack, Google Calendar, Sheets, Drive, Jira, HubSpot, and hundreds more.
+
+### When to use Composio
+- User asks to **send/read/search emails** → Composio (Gmail, Outlook)
+- User asks to **create issues, PRs, stars** → Composio (GitHub, Linear, Jira)
+- User asks to **manage calendar events** → Composio (Google Calendar)
+- User asks to **interact with any external SaaS app** → Composio
+- **Skill not found?** → Before giving up, try \`COMPOSIO_SEARCH_TOOLS\` — the capability might exist as an external app tool
+- **Normal conversation / general questions** → Just chat, no tools needed
+
+### How it works (internal — never explain this to the user)
+1. Call \`COMPOSIO_SEARCH_TOOLS\` with what you need (e.g. "send email", "create github issue")
+2. If the toolkit has no active connection → call \`COMPOSIO_MANAGE_CONNECTIONS\`. The authorization UI will appear automatically in the user's interface. Just tell the user: "I need you to connect your [app]. You should see an authorization prompt — once you're done, send me a message and I'll continue." Do NOT paste URLs or links in chat.
+3. Once the user confirms → execute the tool and report results.
+
+### Rules
+- **Never expose internals**: tool counts, toolkit names, connection statuses, schema details — keep all of this in your reasoning. The user sees only results and auth links.
+- **Never invent tool slugs or arguments.** If unclear, call \`COMPOSIO_GET_TOOL_SCHEMAS\`.
+- **Warn before destructive actions** (delete, bulk send, overwrite, revoke) — get user confirmation first.
+- **Handle pagination** until complete when the user asks for "all" results.
+- **Never claim you did something you didn't actually execute.**`;
 
 function buildOracleContext(oc: typeof oracleConfig): string {
   const lines: string[] = [];
@@ -417,29 +442,6 @@ Promise<ReactAgent<any>> => {
 
   const editorSection = editorPrompts?.editorSection ?? '';
 
-  // System prompt is critical — failure here is a code bug, not a transient issue
-  const systemPrompt = await AI_ASSISTANT_PROMPT.format({
-    APP_NAME:
-      oracleConfig.oracleName || configService.get('ORACLE_NAME') || 'Oracle',
-    ORACLE_CONTEXT: buildOracleContext(oracleConfig),
-    IDENTITY_CONTEXT: formatUserContext(state?.userContext?.identity),
-    WORK_CONTEXT: formatUserContext(state?.userContext?.work),
-    GOALS_CONTEXT: formatUserContext(state?.userContext?.goals),
-    INTERESTS_CONTEXT: formatUserContext(state?.userContext?.interests),
-    RELATIONSHIPS_CONTEXT: formatUserContext(state?.userContext?.relationships),
-    RECENT_CONTEXT: formatUserContext(state?.userContext?.recent),
-    TIME_CONTEXT: timeContext,
-    CURRENT_ENTITY_DID: state.currentEntityDid ?? '',
-    OPERATIONAL_MODE: operationalMode,
-    EDITOR_SECTION: editorSection,
-    SLACK_FORMATTING_CONSTRAINTS:
-      state.client === 'slack' ? SLACK_FORMATTING_CONSTRAINTS_CONTENT : '',
-    USER_SECRETS_CONTEXT:
-      secretIndex.length > 0
-        ? secretIndex.map((s) => `- _USER_SECRET_${s.name}`).join('\n')
-        : '',
-  });
-
   // Track MCP/agent failures so the agent knows which capabilities are degraded
   const unavailableServices: string[] = [];
 
@@ -465,6 +467,7 @@ Promise<ReactAgent<any>> => {
     mcpToolsResult,
     sandboxResult,
     taskManagerResult,
+    composioResult,
   ] = await Promise.allSettled([
     createPortalAgent({
       tools:
@@ -505,6 +508,7 @@ Promise<ReactAgent<any>> => {
           spaceId: state.spaceId,
         })
       : Promise.resolve(null),
+    getComposioTools(configurable.configs.user.did),
   ]);
 
   const portalAgent = settled(portalResult, null, 'Portal Agent');
@@ -530,6 +534,32 @@ Promise<ReactAgent<any>> => {
     null,
     'Task Manager Agent',
   );
+  const composioTools = settled(composioResult, [], 'Composio tools');
+
+  // System prompt — built after Promise.allSettled so COMPOSIO_CONTEXT
+  // is populated only when Composio tools actually loaded.
+  const systemPrompt = await AI_ASSISTANT_PROMPT.format({
+    APP_NAME:
+      oracleConfig.oracleName || configService.get('ORACLE_NAME') || 'Oracle',
+    ORACLE_CONTEXT: buildOracleContext(oracleConfig),
+    IDENTITY_CONTEXT: formatUserContext(state?.userContext?.identity),
+    WORK_CONTEXT: formatUserContext(state?.userContext?.work),
+    GOALS_CONTEXT: formatUserContext(state?.userContext?.goals),
+    INTERESTS_CONTEXT: formatUserContext(state?.userContext?.interests),
+    RELATIONSHIPS_CONTEXT: formatUserContext(state?.userContext?.relationships),
+    RECENT_CONTEXT: formatUserContext(state?.userContext?.recent),
+    TIME_CONTEXT: timeContext,
+    CURRENT_ENTITY_DID: state.currentEntityDid ?? '',
+    OPERATIONAL_MODE: operationalMode,
+    EDITOR_SECTION: editorSection,
+    SLACK_FORMATTING_CONSTRAINTS:
+      state.client === 'slack' ? SLACK_FORMATTING_CONSTRAINTS_CONTENT : '',
+    USER_SECRETS_CONTEXT:
+      secretIndex.length > 0
+        ? secretIndex.map((s) => `- _USER_SECRET_${s.name}`).join('\n')
+        : '',
+    COMPOSIO_CONTEXT: composioTools.length > 0 ? COMPOSIO_CONTEXT : '',
+  });
 
   // Wrap sandbox_run for lazy secret injection (both oracle and user secrets).
   // MCP adapters snapshot headers at construction time, so we create a new
@@ -728,7 +758,6 @@ Promise<ReactAgent<any>> => {
       })
     : null;
 
-  // Build degraded-services notice for the system prompt
   let finalSystemPrompt = systemPrompt;
   if (unavailableServices.length > 0) {
     const serviceList = unavailableServices.map((s) => `- ${s}`).join('\n');
@@ -770,6 +799,7 @@ Promise<ReactAgent<any>> => {
     contextSchema: contextSchema as any,
     tools: [
       ...mcpTools,
+      ...composioTools,
       ...wrappedSandboxTools,
       ...(callAguiAgentTool ? [callAguiAgentTool] : []),
       listSkillsTool,
