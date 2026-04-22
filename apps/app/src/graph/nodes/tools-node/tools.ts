@@ -114,14 +114,29 @@ const getFirecrawlMcpTools = async () => {
   }
 };
 
-const getComposioTools = async (userId: string): Promise<StructuredTool[]> => {
+const getComposioTools = async (
+  userId: string,
+  ucan?: string,
+): Promise<StructuredTool[]> => {
   const apiKey = config.get('COMPOSIO_API_KEY');
-  if (!apiKey) return [];
+  if (!apiKey || !ucan) {
+    logger.error('Failed to getComposioTools ', {
+      apiKey: !!apiKey,
+      ucan: !!ucan,
+    });
+
+    return [];
+  }
 
   try {
     const composio = new Composio({
       apiKey,
       provider: new LangchainProvider(),
+      baseURL: config.getOrThrow('COMPOSIO_BASE_URL'),
+      defaultHeaders: {
+        'x-ixo-network': config.getOrThrow('NETWORK'),
+        'x-ucan-invocation': ucan,
+      },
     });
     const session = await composio.create(userId);
     return session.tools();

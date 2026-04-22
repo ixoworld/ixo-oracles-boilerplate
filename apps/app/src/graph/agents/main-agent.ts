@@ -1,4 +1,7 @@
-import { parserActionTool, parserBrowserTool } from '@ixo/common';
+import {
+  parserActionTool,
+  parserBrowserTool,
+} from '@ixo/common';
 import { type IRunnableConfigWithRequiredFields } from '@ixo/matrix';
 import { OpenIdTokenProvider } from '@ixo/oracles-chain-client';
 import { SqliteSaver } from '@ixo/sqlite-saver';
@@ -21,6 +24,7 @@ import {
 } from '../nodes/chat-node/prompt';
 import { type TMainAgentGraphState } from '../state';
 import { contextSchema } from '../types';
+import { createAguiAgent } from './agui-agent';
 import { createDomainIndexerAgent } from './domain-indexer-agent';
 import { createApplySandboxOutputToBlockTool } from './editor/apply-sandbox-output-to-block';
 import { createEditorAgent } from './editor/editor-agent';
@@ -35,7 +39,6 @@ import {
 import { createStandaloneEditorTool } from './editor/standalone-editor-tool';
 import { createFirecrawlAgent } from './firecrawl-agent';
 import { createMemoryAgent } from './memory-agent';
-import { createAguiAgent } from './agui-agent';
 import { createPortalAgent } from './portal-agent';
 import { createSubagentAsTool, type AgentSpec } from './subagent-as-tool';
 import { createTaskManagerAgent } from './task-manager';
@@ -54,11 +57,7 @@ import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service
 import z from 'zod';
 import oracleConfig from '../../../oracle.config.json';
 import { getProviderChatModel } from '../llm-provider';
-import {
-  createMCPClient,
-  createMCPClientAndGetTools,
-  createMCPClientAndGetToolsWithUCAN,
-} from '../mcp';
+import { createMCPClient, createMCPClientAndGetTools } from '../mcp';
 import { createFileProcessingTool } from '../nodes/tools-node/file-processing-tool';
 import { createListRoomFilesTool } from '../nodes/tools-node/list-room-files-tool';
 import {
@@ -314,6 +313,33 @@ Promise<ReactAgent<any>> => {
     );
   }
 
+  // Build Composio UCAN invocation token.
+  // Audience = composio-worker DID (resolved from COMPOSIO_BASE_URL/.well-known/did.json).
+  // Proofs = [user→oracle delegation]. The worker extracts userDid + oracleDid
+  // from the invocation and builds a composite session user_id.
+  let composioUcan: string | undefined;
+
+  if (ucanService?.hasSigningKey() && configurable.configs?.user?.did) {
+    try {
+      const composioBaseUrl =
+        configService.getOrThrow('COMPOSIO_BASE_URL') 
+
+      const invocation = await ucanService.createServiceInvocation(
+        composioBaseUrl,
+        configurable.configs.user.did,
+        'ixo:sandbox',
+      );
+      if (invocation) {
+        composioUcan = invocation;
+        Logger.log('[UCAN] Using UCAN invocation for Composio auth');
+      }
+    } catch (err) {
+      Logger.warn(
+        `[UCAN] Failed to create Composio invocation: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   // Build sandbox upload config for file processing (HTTP upload, no MCP needed)
   // Upload still uses Matrix OpenID tokens (UCAN upload support TODO)
   const sandboxUploadConfig: SandboxUploadConfig | undefined =
@@ -508,7 +534,7 @@ Promise<ReactAgent<any>> => {
           spaceId: state.spaceId,
         })
       : Promise.resolve(null),
-    getComposioTools(configurable.configs.user.did),
+    getComposioTools(configurable.configs.user.did, composioUcan),
   ]);
 
   const portalAgent = settled(portalResult, null, 'Portal Agent');

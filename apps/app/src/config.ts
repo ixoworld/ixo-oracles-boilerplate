@@ -10,7 +10,8 @@ export const EnvSchema = z.object({
 
   // CORS
   CORS_ORIGIN: z.string().default('*'),
-
+  COMPOSIO_BASE_URL: z.url().default(''),
+  COMPOSIO_API_KEY: z.string().optional(),
   // Langfuse
   LANGFUSE_SECRET_KEY: z.string().optional(),
   LANGFUSE_PUBLIC_KEY: z.string().optional(),
@@ -40,9 +41,6 @@ export const EnvSchema = z.object({
 
   // OpenAI - used by @ixo/common package
   OPENAI_API_KEY: z.string().optional(),
-
-  // Composio — external SaaS tools (enabled when COMPOSIO_API_KEY is set)
-  COMPOSIO_API_KEY: z.string().optional(),
 
   // OpenRouter
   OPEN_ROUTER_API_KEY: z.string().optional(),
