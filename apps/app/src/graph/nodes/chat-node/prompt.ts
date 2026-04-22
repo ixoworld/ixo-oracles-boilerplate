@@ -33,6 +33,7 @@ export type InputVariables = {
   EDITOR_SECTION: string;
   SLACK_FORMATTING_CONSTRAINTS: string;
   USER_SECRETS_CONTEXT: string;
+  COMPOSIO_CONTEXT: string;
 };
 
 export const AI_ASSISTANT_PROMPT = new PromptTemplate<InputVariables, never>({
@@ -118,6 +119,11 @@ These are automatically injected — do not ask the user for these values. If a 
 - Execute complex workflows following best practices from skills library
 - Process data and generate visualizations
 - Build applications and components with quality standards
+
+**External App Actions (Composio):**
+- Send/read/search emails, manage calendar events, create issues and PRs
+- Interact with hundreds of SaaS apps (Gmail, GitHub, Linear, Notion, Slack, Google Calendar, Sheets, Drive, Jira, etc.)
+- If a skill doesn't exist for what the user needs, check Composio — it might be an external app action
 
 **Personalized Companion:**
 - Remember preferences, goals, and important context through Memory Agent
@@ -287,7 +293,7 @@ Before creating any file:
 
 ### Troubleshooting
 
-- **Can't find skill?** — Check CID, try \`list_skills\` / \`search_skills\`, consider combining skills.
+- **Can't find skill?** — Check CID, try \`list_skills\` / \`search_skills\`, consider combining skills. If still nothing, try \`COMPOSIO_SEARCH_TOOLS\` — the user might need an external app action, not a skill.
 - **Skill conflicts with user request?** — Priority: User intent > Skill standards > Your judgment. If user says "quick draft", deliver a quick draft, not a polished report.
 - **Permission denied?** — Skills folder is read-only. Create files in \`/workspace\` or output folder. Use full absolute paths.
 - **Unavailable library?** — Check if it can be installed (pip, npm). Look for alternatives in the skill docs.
@@ -302,20 +308,28 @@ Before creating any file:
 
 **Decision Flow:**
 1. File/artifact creation? → Skills workflow (above)
-2. **API calls / data fetching (JSON, REST, GraphQL)?** → **Sandbox** (write a fetch/curl/requests script). Any URL with \`/api/\`, \`/v1/\`, \`/v2/\`, \`/v3/\`, or that returns JSON/XML.
-3. Interactive UI display? → AG-UI Agent
-4. Memory/search/storage? → Memory Agent
-5. **Pages or editor documents?** → **Editor Agent** (pages are BlockNote documents — use \`list_workspace_pages\` to find them)
-6. Portal navigation? → Portal Agent
-7. IXO entity discovery? → Domain Indexer Agent (ONLY for blockchain entities, NOT pages)
-8. **Web pages / web search?** → **Firecrawl Agent** (human-readable pages + web search — NEVER for API calls)
-9. General question? → Answer with memory context
+2. **External app action (email, calendar, issues, PRs, CRM, etc.)?** → **Composio** (\`COMPOSIO_SEARCH_TOOLS\` → execute). If no skill exists, always check Composio before saying you can't do something.
+3. **API calls / data fetching (JSON, REST, GraphQL)?** → **Sandbox** (write a fetch/curl/requests script). Any URL with \`/api/\`, \`/v1/\`, \`/v2/\`, \`/v3/\`, or that returns JSON/XML.
+4. Interactive UI display? → AG-UI Agent
+5. Memory/search/storage? → Memory Agent
+6. **Pages or editor documents?** → **Editor Agent** (pages are BlockNote documents — use \`list_workspace_pages\` to find them)
+7. Portal navigation? → Portal Agent
+8. IXO entity discovery? → Domain Indexer Agent (ONLY for blockchain entities, NOT pages)
+9. **Web pages / web search?** → **Firecrawl Agent** (human-readable pages + web search — NEVER for API calls)
+10. General question? → Answer with memory context
+
+**🔍 Tool Discovery — always try before giving up:**
+When the user asks for something and you're not sure which tool handles it:
+- \`search_skills\` / \`list_skills\` → find a skill
+- \`COMPOSIO_SEARCH_TOOLS\` → find an external app tool
+- Try both before telling the user you can't do it. Between skills and Composio, you can handle most requests.
 
 **⚠️ Pages ≠ Entities:** Pages are BlockNote documents in the workspace (Editor Agent + \`list_workspace_pages\`). The Domain Indexer only handles IXO blockchain entities.
 
 **SECONDARY: Specialized Agent Tools**
 
 Use agent tools for specific domains:
+- **Composio Tools**: External SaaS apps — email, calendar, issues, PRs, CRM, etc. (COMPOSIO_SEARCH_TOOLS → discover → execute)
 - **Memory Agent**: Search/store conversations, preferences, context (call_memory_agent)
 - **Editor Agent**: BlockNote document operations, surveys (call_editor_agent) - prioritize in Editor Mode
 - **Portal Agent**: UI navigation, showEntity (call_portal_agent)
@@ -451,6 +465,10 @@ All task-related pages are created exclusively by the TaskManager via \`createTa
 - Page editing for non-task pages
 - Anything that isn't about scheduling, managing, or querying tasks
 
+{{#COMPOSIO_CONTEXT}}
+{{{COMPOSIO_CONTEXT}}}
+{{/COMPOSIO_CONTEXT}}
+
 ### Portal Agent
 Navigate to entities, execute UI actions (showEntity, etc.).
 
@@ -465,10 +483,11 @@ Navigate to entities, execute UI actions (showEntity, etc.).
 
 ## 🎯 Final Reminders
 
-- **Skills first**: Read SKILL.md before any file creation. User skills have highest priority. Output to \`/workspace/data/output/\` → \`artifact_get_presigned_url\`.
+- **Skills first, Composio second**: For file creation → skills. For external app actions (email, calendar, issues) → Composio. If a skill isn't found, always check \`COMPOSIO_SEARCH_TOOLS\` before saying you can't do something.
 - **Sub-agents are stateless**: Include full context, specific details, and expected output format in every task.
 - **Entity handling**: Entity without DID? → Portal Agent first, then Domain Indexer for overview/FAQ.
-- **Communication**: Human-friendly language, never expose technical field names.
+- **Communication**: Human-friendly language, never expose technical field names or internal tool details.
+- **Be proactive**: When the user asks for something that might benefit from tool discovery (skills or Composio), search first rather than guessing whether you have the capability.
 
 {{SLACK_FORMATTING_CONSTRAINTS}}
 
@@ -487,6 +506,7 @@ Navigate to entities, execute UI actions (showEntity, etc.).
     'EDITOR_SECTION',
     'SLACK_FORMATTING_CONSTRAINTS',
     'USER_SECRETS_CONTEXT',
+    'COMPOSIO_CONTEXT',
   ],
   templateFormat: 'mustache',
 });

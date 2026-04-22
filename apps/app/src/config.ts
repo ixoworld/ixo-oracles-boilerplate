@@ -10,7 +10,8 @@ export const EnvSchema = z.object({
 
   // CORS
   CORS_ORIGIN: z.string().default('*'),
-
+  COMPOSIO_BASE_URL: z.url().default('https://composio.ixo.earth'),
+  COMPOSIO_API_KEY: z.string().optional(),
   // Langfuse
   LANGFUSE_SECRET_KEY: z.string().optional(),
   LANGFUSE_PUBLIC_KEY: z.string().optional(),
