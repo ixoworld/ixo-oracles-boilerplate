@@ -1,7 +1,4 @@
-import {
-  parserActionTool,
-  parserBrowserTool,
-} from '@ixo/common';
+import { parserActionTool, parserBrowserTool } from '@ixo/common';
 import { type IRunnableConfigWithRequiredFields } from '@ixo/matrix';
 import { OpenIdTokenProvider } from '@ixo/oracles-chain-client';
 import { SqliteSaver } from '@ixo/sqlite-saver';
@@ -321,8 +318,7 @@ Promise<ReactAgent<any>> => {
 
   if (ucanService?.hasSigningKey() && configurable.configs?.user?.did) {
     try {
-      const composioBaseUrl =
-        configService.getOrThrow('COMPOSIO_BASE_URL') 
+      const composioBaseUrl = configService.getOrThrow('COMPOSIO_BASE_URL');
 
       const invocation = await ucanService.createServiceInvocation(
         composioBaseUrl,
