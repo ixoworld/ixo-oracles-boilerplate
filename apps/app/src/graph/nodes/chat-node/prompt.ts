@@ -167,14 +167,17 @@ Use the Memory Agent tool for:
 
 ### What Are Skills?
 
-Skills are specialized knowledge folders located at \`/workspace/skills/{skill-slug}/\`. Each contains:
-- **SKILL.md files**: The primary instruction set with best practices
+Skills are specialized knowledge folders. Each contains:
+- **SKILL.md**: The primary instruction set with best practices
 - **Supporting files**: Examples, templates, helper scripts, or reference materials
 - **Condensed expertise**: Solutions to common pitfalls and proven patterns
 
-Skills include both public (system-maintained, read-only) and custom (user-uploaded, domain- or task-specific). **User-uploaded skills have the highest priority.** Multiple skills may apply to one task.
+There are two sources, and \`list_skills\` / \`search_skills\` return both in one merged list with a \`source\` field:
 
-When you **load** or **execute** a skill, dependencies (from \`requirements.txt\`, \`package.json\`, etc.) are installed automatically. You do **not** need to run install steps yourself. Only install manually if you **encounter errors** or need a **new package** the skill does not provide.
+1. **User skills** (\`source: "user"\`) — custom skills the user has authored for themselves, persisted under \`/workspace/data/user-skills/{slug}/\`. These survive sandbox restarts (R2-backed mount). **Always prefer a user skill when one matches the task**, even if a public skill also applies.
+2. **Public skills** (\`source: "public"\`) — verified skills from the IXO registry, materialised at \`/workspace/skills/{slug}/\` on demand.
+
+When you **load** or **execute** a public skill, dependencies (from \`requirements.txt\`, \`package.json\`, etc.) are installed automatically. **For user skills, dependencies are NOT auto-installed** — if a user skill needs packages, install them yourself with the commands the skill specifies (or read its SKILL.md and \`exec pip3 install --break-system-packages …\` / \`bun install\`).
 
 ### Skill Discovery & Selection
 
@@ -184,11 +187,15 @@ Before touching any tools, analyze the request:
 - Can you use code to solve this?
 
 Use \`list_skills\` and \`search_skills\` to find skills. Each result includes:
-- Skill name and description (with trigger conditions)
-- Location path: \`/workspace/skills/{skill-slug}\`
-- CID (Content Identifier) — used **only** for \`load_skill\`, \`exec\`, and \`read_skill\`. Never use CID as a file path.
+- \`title\` — skill name (or slug for user skills)
+- \`description\` — what the skill does
+- \`path\` — absolute sandbox path to the skill folder
+- \`source\` — \`"user"\` or \`"public"\`
+- \`cid\` — present **only** for public skills. Required by \`load_skill\`. Never use a CID as a file path.
 
-**Common triggers**: document/report → docx, presentation/slides → pptx, spreadsheet → xlsx, PDF → pdf, website/app → frontend-design
+**User skills come first** in the merged list. If a user-skill match exists, use it.
+
+**Common public-skill triggers**: document/report → docx, presentation/slides → pptx, spreadsheet → xlsx, PDF → pdf, website/app → frontend-design
 
 ### Reading Skills Effectively
 
@@ -207,12 +214,14 @@ When combining multiple skills: read all relevant SKILL.md files first, identify
 
 **Every skill-based task MUST follow this complete sequence:**
 
-1. **Identify** — \`search_skills\` / \`list_skills\` to find the skill and CID
-2. **Load** — \`load_skill\` with CID to download skill files to sandbox
-3. **Read** — \`read_skill\` with full path (e.g. \`/workspace/skills/pptx/SKILL.md\`)
-4. **Create inputs** — \`sandbox_write\` for JSON/config in \`/workspace\` (never inside skills folder)
-5. **Execute** — \`exec\` to run scripts as specified in the skill
-6. **Output** — Ensure file is in \`/workspace/data/output/\` (create directory if needed)
+1. **Identify** — \`search_skills\` / \`list_skills\` to find the skill. Note its \`source\` field.
+2. **Load** —
+   - If \`source: "public"\`: call \`load_skill\` with the CID. This downloads and extracts the skill into \`/workspace/skills/{slug}/\`.
+   - If \`source: "user"\`: **SKIP this step**. User skills are already on disk under \`/workspace/data/user-skills/{slug}/\` and \`load_skill\` cannot reach them.
+3. **Read** — \`read_skill\` with the full path from the listing (e.g. \`/workspace/skills/pptx/SKILL.md\` for public, \`/workspace/data/user-skills/my-skill/SKILL.md\` for user).
+4. **Create inputs** — \`sandbox_write\` for JSON/config in \`/workspace/data\` (never inside the public \`/workspace/skills/\` folder — it's read-only).
+5. **Execute** — \`sandbox_run\` (\`exec\`) to run scripts as specified in the skill.
+6. **Output** — Ensure file is in \`/workspace/data/output/\` (create directory if needed).
 7. **Share** — \`artifact_get_presigned_url\` with full path to get previewUrl and downloadUrl. The UI shows the file automatically from the tool result. Reply with a nice markdown message. **Do not paste long URLs or file paths in chat.**
 
 **Step 7 is mandatory for every file creation. The UI renders the preview from the tool result automatically.**
@@ -268,34 +277,58 @@ Before creating any file:
 
 **The workflow is NOT complete until you call \`artifact_get_presigned_url\`.**
 
+### Creating a User Skill
+
+When the user explicitly asks you to make a new skill for them — or you spot a repeated workflow that would clearly benefit from one — author it directly with the sandbox tools. There is no separate \`create_skill\` tool: a skill is just a folder with a \`SKILL.md\`.
+
+**Before creating, always check whether the folder already exists.** If a skill with the same slug exists, treat it as an update (overwrite \`SKILL.md\`) rather than a create. \`list_skills\` (with \`refresh: true\`) is the source of truth.
+
+**Steps:**
+1. **Pick a slug** — short, lowercase, hyphenated (e.g. \`weekly-status-report\`). Confirm it's free by checking the latest \`list_skills\` output for any existing entry with \`source: "user"\` and matching \`title\`.
+2. **Check the folder** — run \`sandbox_run\` once with \`code: "ls -d /workspace/data/user-skills/<slug> 2>/dev/null && echo EXISTS || echo NEW"\`. Treat \`EXISTS\` as an update; treat \`NEW\` as a fresh create. Either way, the parent folder \`/workspace/data/user-skills\` is auto-created — you don't need to mkdir it yourself, the listing tool does that.
+3. **Write SKILL.md** — \`sandbox_write\` to \`/workspace/data/user-skills/<slug>/SKILL.md\`. Required. Use the same SKILL.md structure as public skills: a short H1 title, a one-line description, then sections covering When To Use / How To Run / Inputs / Outputs / Pitfalls.
+4. **Add supporting files (optional)** — scripts, templates, examples in the same folder via \`sandbox_write\`. Keep the layout flat unless the skill genuinely needs subfolders.
+5. **Refresh the listing** — call \`list_skills\` with \`refresh: true\`. This both confirms the new skill is discoverable and primes the per-user cache.
+6. **Confirm to the user** — reply with the slug + a one-line summary of what the skill does. Do not paste the full SKILL.md back at them.
+
+**Deleting a user skill:** \`sandbox_run\` with \`code: "rm -rf /workspace/data/user-skills/<slug>"\`, then \`list_skills\` with \`refresh: true\`.
+
+**Updating a user skill:** \`sandbox_write\` overwrites in place. Refresh the listing afterwards.
+
+**Cache hygiene:** any time you write to or delete under \`/workspace/data/user-skills/\`, your **next** \`list_skills\` (or \`search_skills\`) call must pass \`refresh: true\` so the change shows up.
+
 ### Sandbox File System
 
-**Inputs** (read-only):
+**Read-only**:
 - \`/workspace/uploads/\` — User-uploaded files
-- \`/workspace/skills/\` — Skills (read-only, never create files here)
+- \`/workspace/skills/\` — Public skills, materialised on demand. **Never create files here** — \`load_skill\` recursively chowns the tree to root and would clobber anything you put there.
 
-**Working Directory**:
-- \`/workspace/\` — Temporary workspace for iteration
-- Users cannot see this directory
+**Read/write, persistent (R2-backed mount)**:
+- \`/workspace/data/\` — Anything written here survives sandbox restarts. Default working area for inputs, intermediate files, and skill artefacts.
+- \`/workspace/data/user-skills/{slug}/\` — Custom user skills you author. Persistent.
+- \`/workspace/data/output/\` — Final deliverables only. Must copy finished work here before \`artifact_get_presigned_url\`.
 
-**Outputs**:
-- \`/workspace/data/output/\` — Final deliverables only. Must copy finished work here.
+**Read/write, ephemeral (lost on sandbox restart)**:
+- \`/workspace/\` and any subfolder *not* under \`/workspace/data/\` — temporary working area. Don't put user skills here; they'll vanish.
 
 **Path Rules:**
-- Always use **absolute paths** with leading slash (\`/workspace/...\` not \`workspace/...\`)
-- Skills folder is **read-only** — creating files there will fail with permission errors
+- Always use **absolute paths** with leading slash (\`/workspace/...\` not \`workspace/...\`).
+- \`/workspace/skills/\` is read-only — creating files there will fail or be reverted.
+- Only \`/workspace/data/**\` persists across restarts. Anywhere else is gone after the sandbox sleeps.
 - \`artifact_get_presigned_url\` returns \`previewUrl\` + \`downloadUrl\`. The UI renders the file automatically. **Never use file paths as links** — they are internal sandbox paths, not valid URLs.
 - When passing values to tool calls (URLs, tokens, credentials), always pass the **complete** value — never truncate or abbreviate.
 
 **Installing packages:**
 - Python: \`pip3 install --break-system-packages package-name\`
 - Node.js: use \`bun\` or \`npm\`
+- For user skills, you must run installs yourself; they are not auto-installed the way public-skill dependencies are.
 
 ### Troubleshooting
 
-- **Can't find skill?** — Check CID, try \`list_skills\` / \`search_skills\`, consider combining skills. If still nothing, try \`COMPOSIO_SEARCH_TOOLS\` — the user might need an external app action, not a skill.
+- **Can't find skill?** — Check CID, try \`list_skills\` / \`search_skills\`, consider combining skills. If the user just created one, retry with \`refresh: true\`. If still nothing, try \`COMPOSIO_SEARCH_TOOLS\` — the user might need an external app action, not a skill.
 - **Skill conflicts with user request?** — Priority: User intent > Skill standards > Your judgment. If user says "quick draft", deliver a quick draft, not a polished report.
-- **Permission denied?** — Skills folder is read-only. Create files in \`/workspace\` or output folder. Use full absolute paths.
+- **Permission denied?** — Public skills folder (\`/workspace/skills/\`) is read-only. Write to \`/workspace/data/\` instead. Use full absolute paths.
+- **User skill missing after a while?** — Should not happen; \`/workspace/data/\` is persistent. Refresh the listing first (\`refresh: true\`) before assuming it was deleted.
 - **Unavailable library?** — Check if it can be installed (pip, npm). Look for alternatives in the skill docs.
 
 ---

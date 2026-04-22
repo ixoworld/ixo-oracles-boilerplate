@@ -34,7 +34,7 @@ That's it. **No new tools** for create/delete — the agent already has `sandbox
 
 **Extend the main agent. No new sub-agent. No new authoring tool. Wrap the existing `list_skills` / `search_skills`.**
 
-- Custom skills are a *source* of skills, not a new *capability*. The main agent already runs the `find → load → read → exec → output` workflow (`prompt.ts:200-226`) — splitting it would just duplicate that.
+- Custom skills are a _source_ of skills, not a new _capability_. The main agent already runs the `find → load → read → exec → output` workflow (`prompt.ts:200-226`) — splitting it would just duplicate that.
 - The existing prompt already has a slot for "user-uploaded skills, highest priority" (`prompt.ts:169`). We just have to make the discovery tools actually return them.
 - Authoring belongs to the agent: it has the sandbox tools, and a SKILL.md is just a markdown file.
 
@@ -146,12 +146,12 @@ Existing shape, with one new field:
 
 ```ts
 type SkillEntry = {
-  title: string;          // existing
-  description: string;    // existing
-  path: string;           // existing — for user skills: /workspace/user-skills/<slug>
-  cid?: string;           // optional — only set for public skills
+  title: string; // existing
+  description: string; // existing
+  path: string; // existing — for user skills: /workspace/user-skills/<slug>
+  cid?: string; // optional — only set for public skills
   source: 'user' | 'public'; // NEW
-  createdAt?: string;     // existing
+  createdAt?: string; // existing
 };
 ```
 
@@ -192,6 +192,7 @@ A skill is a folder with a SKILL.md and optional supporting files. The agent can
 > **Creating a skill for the user**
 >
 > When the user asks to create a new skill (or you decide one would help future tasks):
+>
 > 1. Pick a slug: lowercase, hyphenated, unique under `user-skills/`. Check with `list_skills` first.
 > 2. `sandbox_write` to `user-skills/<slug>/SKILL.md` (resolves to `/workspace/data/user-skills/<slug>/SKILL.md`) — required. Follow the same SKILL.md format as public skills.
 > 3. Add supporting files (scripts, templates) under the same folder as needed.
@@ -239,15 +240,15 @@ In `apps/app/src/graph/nodes/chat-node/prompt.ts`:
 
 ## 9. Implementation plan (ordered, no work begins until approved)
 
-| # | Step | Files touched |
-| - | ---- | ------------- |
-| 1 | Convert `listSkillsTool` / `searchSkillsTool` to factories that take `{ sandboxMCP, cache, userDid }`. Keep the public-registry path identical. | `apps/app/src/graph/nodes/tools-node/skills-tools.ts` |
-| 2 | Add sandbox-side listing helper (single `exec` call, parser, error-tolerant when `/workspace/user-skills/` is missing). | same file |
-| 3 | Add cache read/write keyed on user DID; add `refresh` param to both tools. | same file |
-| 4 | Wire factories into `createMainAgent` — pass `sandboxMCP`, the existing `cacheManager`, and `configurable.configs.user.did`. | `apps/app/src/graph/agents/main-agent.ts` (around tool list ~line 792) |
-| 5 | Update agent prompt: two-source model, branch on `source`, `/workspace/user-skills/` in filesystem section, new "Creating skills" subsection, refresh-after-write rule. | `apps/app/src/graph/nodes/chat-node/prompt.ts` (lines 160–280) |
-| 6 | Tests: tool returns merged result, cache hits/misses, `refresh: true` busts cache, missing folder yields empty. Mock the sandbox MCP `exec` response. | `apps/app/src/graph/nodes/tools-node/skills-tools.spec.ts` |
-| 7 | Docs: update `docs/playbook/04-working-with-skills.md` "Building Your First Skill" section to describe the in-chat flow. Update `specs/playbook-progress.md`. | docs only |
+| #   | Step                                                                                                                                                                    | Files touched                                                          |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| 1   | Convert `listSkillsTool` / `searchSkillsTool` to factories that take `{ sandboxMCP, cache, userDid }`. Keep the public-registry path identical.                         | `apps/app/src/graph/nodes/tools-node/skills-tools.ts`                  |
+| 2   | Add sandbox-side listing helper (single `exec` call, parser, error-tolerant when `/workspace/user-skills/` is missing).                                                 | same file                                                              |
+| 3   | Add cache read/write keyed on user DID; add `refresh` param to both tools.                                                                                              | same file                                                              |
+| 4   | Wire factories into `createMainAgent` — pass `sandboxMCP`, the existing `cacheManager`, and `configurable.configs.user.did`.                                            | `apps/app/src/graph/agents/main-agent.ts` (around tool list ~line 792) |
+| 5   | Update agent prompt: two-source model, branch on `source`, `/workspace/user-skills/` in filesystem section, new "Creating skills" subsection, refresh-after-write rule. | `apps/app/src/graph/nodes/chat-node/prompt.ts` (lines 160–280)         |
+| 6   | Tests: tool returns merged result, cache hits/misses, `refresh: true` busts cache, missing folder yields empty. Mock the sandbox MCP `exec` response.                   | `apps/app/src/graph/nodes/tools-node/skills-tools.spec.ts`             |
+| 7   | Docs: update `docs/playbook/04-working-with-skills.md` "Building Your First Skill" section to describe the in-chat flow. Update `specs/playbook-progress.md`.           | docs only                                                              |
 
 All of this ships as one small PR. No new module, no new service, no new controller, no DB migration.
 
