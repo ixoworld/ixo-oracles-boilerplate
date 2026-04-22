@@ -88,14 +88,18 @@ export class UserSkillsService {
     sandboxRunTool: StructuredTool,
   ): Promise<UserSkillEntry[]> {
     // One round-trip:
-    //   1. mkdir -p the user-skills folder so first-time use is idempotent.
+    //   1. mkdir -p the user-skills folder so the listing is idempotent
+    //      on first use. `mkdir -p` is a no-op when the directory already
+    //      exists — it does NOT delete, replace, or modify an existing
+    //      directory or its contents. Safe to call on every invocation.
     //   2. List subdirectories that contain a SKILL.md.
-    //   3. Print up to 20 lines of each SKILL.md so we can derive a description.
+    //   3. Print up to 20 lines of each SKILL.md so we can derive a
+    //      description.
     // The cwd is /workspace/data, but we use absolute paths for clarity.
     const code = [
       'set -e',
       'DIR=/workspace/data/user-skills',
-      'mkdir -p "$DIR"',
+      'mkdir -p "$DIR"', // idempotent: no-op if $DIR already exists
       'shopt -s nullglob 2>/dev/null || true',
       'for d in "$DIR"/*/; do',
       '  [ -f "$d/SKILL.md" ] || continue',
