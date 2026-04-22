@@ -1,7 +1,4 @@
-import {
-  parserActionTool,
-  parserBrowserTool,
-} from '@ixo/common';
+import { parserActionTool, parserBrowserTool } from '@ixo/common';
 import { type IRunnableConfigWithRequiredFields } from '@ixo/matrix';
 import { OpenIdTokenProvider } from '@ixo/oracles-chain-client';
 import { SqliteSaver } from '@ixo/sqlite-saver';
@@ -61,8 +58,8 @@ import { createMCPClient, createMCPClientAndGetTools } from '../mcp';
 import { createFileProcessingTool } from '../nodes/tools-node/file-processing-tool';
 import { createListRoomFilesTool } from '../nodes/tools-node/list-room-files-tool';
 import {
-  listSkillsTool,
-  searchSkillsTool,
+  createListSkillsTool,
+  createSearchSkillsTool,
 } from '../nodes/tools-node/skills-tools';
 import { getComposioTools } from '../nodes/tools-node/tools';
 
@@ -321,8 +318,7 @@ Promise<ReactAgent<any>> => {
 
   if (ucanService?.hasSigningKey() && configurable.configs?.user?.did) {
     try {
-      const composioBaseUrl =
-        configService.getOrThrow('COMPOSIO_BASE_URL') 
+      const composioBaseUrl = configService.getOrThrow('COMPOSIO_BASE_URL');
 
       const invocation = await ucanService.createServiceInvocation(
         composioBaseUrl,
@@ -658,6 +654,22 @@ Promise<ReactAgent<any>> => {
         return t.invoke(input);
       },
     });
+  });
+
+  // Build the skills tools — they merge public registry results with the
+  // user's custom skills under /workspace/data/user-skills/. The factories
+  // need the wrapped sandbox_run tool to ls the folder, and the user DID
+  // to scope the per-user listing cache.
+  const skillsSandboxRunTool = wrappedSandboxTools.find(
+    (t) => t.name === 'sandbox_run',
+  );
+  const listSkillsTool = createListSkillsTool({
+    sandboxRunTool: skillsSandboxRunTool,
+    userDid,
+  });
+  const searchSkillsTool = createSearchSkillsTool({
+    sandboxRunTool: skillsSandboxRunTool,
+    userDid,
   });
 
   // Conditionally create BlockNote (editor) agent tool if editorRoomId is provided
