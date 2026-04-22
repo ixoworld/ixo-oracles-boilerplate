@@ -1,35 +1,34 @@
 # Custom Skills — Design Plan
 
-> **Status:** Draft — planning only, no code yet.
-> **Scope:** Allow a user to create, store, and run their own **private** skills alongside the verified public skills, scoped to a single user ↔ oracle room.
+> **Status:** Draft v2 — planning only, no code yet.
+> **Scope:** Allow a user (and the agent acting on their behalf) to create their own **private** skills alongside the verified public skills, scoped per-user.
+> **Change vs v1:** dropped Matrix-based storage, dropped the create-tool / REST-endpoint debate, dropped a separate materialiser. Storage is just a sandbox folder; discovery wraps the existing `list_skills` tool; creation is "agent writes files with the tools it already has."
 
 ---
 
-## 1. Problem & Constraints
+## 1. The Insight That Simplifies Everything
 
-Today the agent consumes skills from one source only:
+The sandbox **already persists `/workspace/`** across restarts. The *only* directory that gets blown away each session is `/workspace/skills/` (because the sandbox repopulates it from the public capsule registry).
 
-- Public registry at `SKILLS_CAPSULES_BASE_URL` (defaults to `https://capsules.skills.ixo.earth`).
-- The sandbox service materialises them into `/workspace/skills/<slug>/` on demand via `load_skill(cid)`.
-- `/workspace/skills/` is **read-only** and is reconstructed by the sandbox on every session. Writing there is forbidden (`prompt.ts:269`, `prompt.ts:207`).
+Any other folder — for example `/workspace/user-skills/` — survives. So **the sandbox itself is the store**. No Matrix events, no encryption layer, no REST endpoint, no materialiser — the per-user sandbox is a per-user filesystem, and that's exactly what we need.
 
-Requirements for custom skills:
+This collapses the whole feature down to three small changes:
 
-1. **Private & isolated** — a custom skill belongs to **one user ↔ one oracle** pair. No cross-leak.
-2. **Persistent across sandbox restarts** — the sandbox workspace is ephemeral, so storage must live outside the sandbox.
-3. **Indistinguishable to the agent at call time** — from the LLM's point of view, a custom skill should feel like any other skill: discoverable, loadable, readable, executable.
-4. **Priority over public skills** — the existing prompt already promises this (`prompt.ts:169`: "User-uploaded skills have the highest priority"). We need to actually deliver it.
-5. **Safe** — user-supplied code runs in the per-user sandbox only; no escalation beyond what public skills already enjoy.
+1. Teach `list_skills` to also `ls /workspace/user-skills/` and merge the result.
+2. Make `load_skill` a no-op for user skills (they're already on disk).
+3. Tell the agent in the prompt: "to create a skill for the user, write files into `/workspace/user-skills/<slug>/`."
+
+That's it. **No new tools** for create/delete — the agent already has `sandbox_write` and `exec` from the sandbox MCP, and it already knows what a skill looks like (SKILL.md + supporting files).
 
 ---
 
 ## 2. Recommendation (Decision)
 
-**Do NOT create a new "Custom Skill Agent".** Extend the **main agent** with four new LangChain tools and one storage-service module. Reasoning:
+**Extend the main agent. No new sub-agent. No new authoring tool. Wrap the existing `list_skills` / `search_skills`.**
 
-- Custom skills are a *source* of skills, not a new *capability*. Splitting them into a sub-agent would duplicate the `load → read → exec → output` workflow the main agent already knows (`prompt.ts:200-226`). Two code paths, two prompts to keep in sync, no upside.
-- The existing prompt already has a slot for "user-uploaded skills"; the easiest win is to make `list_skills` / `search_skills` actually return them.
-- The work breaks down cleanly into **storage + materialisation + discovery**, all horizontal additions to the existing pipeline — no graph-topology change.
+- Custom skills are a *source* of skills, not a new *capability*. The main agent already runs the `find → load → read → exec → output` workflow (`prompt.ts:200-226`) — splitting it would just duplicate that.
+- The existing prompt already has a slot for "user-uploaded skills, highest priority" (`prompt.ts:169`). We just have to make the discovery tools actually return them.
+- Authoring belongs to the agent: it has the sandbox tools, and a SKILL.md is just a markdown file.
 
 ---
 
@@ -37,177 +36,226 @@ Requirements for custom skills:
 
 ```mermaid
 graph LR
-    U[User] -- "create skill" --> API[Oracle API<br/>NestJS]
-    API --> SS[UserSkillsService]
-    SS -- "encrypted state +<br/>timeline events" --> M[Matrix Room<br/>user↔oracle]
-    LG[LangGraph Agent] -- "list_user_skills<br/>search_user_skills<br/>load_user_skill" --> SS
-    SS -- "fetch + decrypt" --> M
-    SS -- "sandbox_write files" --> SB[/workspace/user-skills/]
+    LG[LangGraph Agent] -- "list_skills" --> ST[skills-tools.ts]
+    ST -- "fetch capsules" --> R[Public registry<br/>capsules.skills.ixo.earth]
+    ST -- "exec ls + cat" --> SB[Sandbox MCP]
+    SB --> US[/workspace/user-skills/]
+    ST -- "cache by user DID" --> C[(NestJS cache-manager)]
+    LG -- "sandbox_write to<br/>/workspace/user-skills/" --> SB
     LG -- "read_skill / exec" --> SB
 ```
 
-**Three moving parts:**
+**Two moving parts only:**
 
-1. **Storage layer** — Matrix room state + timeline events (re-use the `SecretsService` pattern almost verbatim).
-2. **Materialisation layer** — on-demand "install" of a stored skill into the sandbox at `/workspace/user-skills/<slug>/`.
-3. **Discovery layer** — new LangChain tools that merge user skills into the agent's view of the skill world, with user skills first.
-
----
-
-## 4. Storage: re-use the `SecretsService` pattern
-
-The existing `SecretsService` (`apps/app/src/secrets/secrets.service.ts`) already solves exactly this shape of problem: per-room, encrypted, indexed, lazily fetched, cached. We mirror it.
-
-### Matrix event schema
-
-| Event type                     | Purpose                       | `state_key` | Content                                                                                                                                  |
-| ------------------------------ | ----------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `ixo.room.user_skill.index`    | One per skill — index entry   | `<slug>`    | `{ manifestEventId, archiveEventId, version, publicKeyId, updatedAt }`                                                                   |
-| `ixo.room.user_skill.manifest` | Timeline event — skill meta   | —           | JWE-encrypted: `{ name, slug, description, triggers: string[], version, entrypoint, files: Array<{ path, sha256, size, eventId }> }` |
-| `ixo.room.user_skill.file`     | Timeline event — one per file | —           | JWE-encrypted payload: either inline (`{ content: "<base64>" }`) or MXC reference (`{ mxcUri }`) for files > 64 KB                    |
-
-**Why split index / manifest / files:**
-
-- Listing (`list_user_skills`) needs the index only → cheap (one `getRoomState` call, same as secrets today).
-- Reading a SKILL.md needs the manifest + one file → two timeline lookups, cached.
-- Full install only happens on `load_user_skill` — we don't pull all files unless invoked.
-
-**Deletion:** write an empty-content state event at the same `state_key` — matches how `SecretsService.getSecretIndex` filters deleted entries (`secrets.service.ts:65`).
-
-### New service
-
-Create `apps/app/src/user-skills/user-skills.service.ts` — copy the shape of `SecretsService`:
-
-- `getSkillIndex(roomId): Promise<UserSkillIndexEntry[]>`
-- `getSkillManifest(roomId, slug): Promise<UserSkillManifest>`
-- `getSkillFile(roomId, slug, path): Promise<Buffer>`
-- `putSkill(roomId, manifest, files): Promise<void>` (single high-level create/update)
-- `deleteSkill(roomId, slug): Promise<void>`
-
-Reuse the same JWE encryption key the `SecretsService` holds (`SecretsService.setEncryptionKey`), so we do not introduce new key-management surface. Key rotation TODO already tracked there; this feature inherits it.
+1. **Discovery** — `list_skills` / `search_skills` get extended to query the sandbox folder in parallel with the public registry, then merge with a `source` discriminator. Sandbox-side results are cached per-user.
+2. **Convention** — `/workspace/user-skills/<slug>/` is the agreed location. Documented in the prompt; the agent treats it as a write target for new skills and a read source for existing ones.
 
 ---
 
-## 5. Materialisation: getting the skill into the sandbox
-
-The constraint from the brief — "the skills folder gets recreated on each sandbox start" — means we cannot rely on the sandbox's own `load_skill(cid)` (which is wired to the public capsule registry). We need a parallel path that writes to a **different** directory.
-
-### Sandbox layout (new)
+## 4. Storage: just a sandbox folder
 
 ```
 /workspace/
-  uploads/       # read-only, existing
-  skills/        # read-only, existing (public skills, via load_skill cid)
-  user-skills/   # NEW — read-only conceptually, populated by us per-session
-  data/output/   # existing
+  uploads/         # read-only, existing  (user uploads)
+  skills/          # read-only, existing  (public skills, repopulated each session)
+  user-skills/     # NEW                  (custom skills, persists across sessions)
+    <slug>/
+      SKILL.md     # required
+      ...other files (scripts, templates, examples)
+  data/output/     # existing
 ```
 
-### How it gets populated
+Properties we get for free:
 
-On **first** `load_user_skill(slug)` call in a session:
+- **Per-user isolation** — already enforced by the sandbox service (each user ↔ oracle pair has its own sandbox instance).
+- **Persistence** — the sandbox already keeps `/workspace/` between sessions. We do nothing extra.
+- **No new keys / encryption surface** — sandbox-level encryption-at-rest already covers it (whatever the sandbox provides; same posture as `/workspace/uploads/`).
 
-1. `UserSkillsService.getSkillManifest(roomId, slug)` → manifest (cached after first hit).
-2. For each file in `manifest.files`, call `sandbox_write('/workspace/user-skills/<slug>/<path>', content)` via the existing sandbox MCP client.
-3. If `manifest.entrypoint` has `requirements.txt` / `package.json`, invoke `exec` with the same auto-install convention the public skills already use (the prompt at `prompt.ts:171` documents this is handled automatically — verify with the sandbox team; if not, the skill's SKILL.md can instruct a manual install).
-4. Cache "already materialised in this session" in-memory per-`threadId` to avoid re-writing on every tool call.
-
-Note: the sandbox never learns about "custom skills" as a first-class concept — we just write files to a known path using tools it already exposes. This keeps the change fully in `apps/app` and avoids a dependency on the `ai-sandbox` repo.
-
-### Why not pre-materialise at sandbox startup?
-
-Two reasons:
-
-- Sandbox startup currently happens inside `createMainAgent` (`main-agent.ts:234-246`) and adding a potentially-large synchronous copy there would slow every conversation — even ones that don't use skills.
-- Lazy materialisation matches the existing `load_skill(cid)` contract for public skills, so agent behaviour stays symmetric.
+The agent reads, writes, and deletes through the same sandbox MCP tools it already has access to (`sandbox_write`, `exec`, `read_skill`).
 
 ---
 
-## 6. Discovery: how the agent sees user skills
+## 5. Discovery: extend `list_skills` and `search_skills`
 
-Add four LangChain tools next to `listSkillsTool` / `searchSkillsTool` in `apps/app/src/graph/nodes/tools-node/skills-tools.ts`. Keep them as separate tools rather than merging — clearer intent for the LLM, easier to audit which calls hit which storage.
+These two tools live in `apps/app/src/graph/nodes/tools-node/skills-tools.ts`. Today they're standalone async functions wrapped in `tool(...)`. We need them to:
 
-| Tool                | Purpose                                                                                        |
-| ------------------- | ---------------------------------------------------------------------------------------------- |
-| `list_user_skills`  | Returns `[{ slug, description, triggers, path: '/workspace/user-skills/<slug>', source: 'user' }]` from the index only. No manifest fetch. |
-| `search_user_skills`| Substring match on name/description/triggers inside the index. Purely local — no Matrix roundtrip beyond `getSkillIndex`. |
-| `load_user_skill`   | Takes `slug` (not CID — CIDs are a public-registry concept). Materialises files under `/workspace/user-skills/<slug>/`.          |
-| `delete_user_skill` | Lets the agent remove a skill on the user's request (writes tombstone state event).             |
+1. Continue calling the public capsule registry (existing behaviour).
+2. **Also** query the per-user sandbox for `/workspace/user-skills/*`.
+3. Merge results, with user skills first.
+4. Cache the sandbox query per user so repeated calls don't hammer the sandbox.
 
-**Creation tool — design choice:** three options here, with a clear preference.
+### Tool factory change
 
-- **A. Tool-driven (`create_user_skill`).** The LLM authors SKILL.md + files and calls the tool. Pro: conversational UX. Con: LLM-written skills are usually mediocre; blast radius is an entire new tool on the main agent.
-- **B. REST/SSE endpoint on the oracle API + a CLI/Portal flow.** Pro: skills get authored by humans (or by the Skill Builder sub-agent in `qiforge-cli`). Con: no in-chat creation.
-- **C. Both — creation endpoint + an optional tool that wraps it.**
+The tools currently have no access to the sandbox MCP client or cache manager. We convert them to factories built inside `createMainAgent`, where both are already in scope:
 
-**Recommended: B first, add A later.** Rationale: rushing A means shipping a tool that lets the LLM mint code in the user's sandbox based on fuzzy intent. A REST endpoint with a typed payload (tested, reviewable, auditable) is the right v1. The agent still *lists, loads, and runs* in chat — only *authoring* moves out.
+```ts
+// skills-tools.ts
+export function createListSkillsTool(deps: {
+  sandboxMCP?: MCPClient;
+  cache: Cache;
+  userDid: string;
+}) { return tool(async (params) => { /* merged listing */ }, { name: 'list_skills', ... }); }
 
-### Agent prompt changes
+export function createSearchSkillsTool(deps: { /* same */ }) { ... }
+```
+
+`main-agent.ts` (around lines 230–246 where `sandboxMCP` is built, and 792 where tools are added) constructs them once per agent invocation.
+
+### Sandbox-side listing
+
+The sandbox MCP's `exec` tool gives us shell access. One call is enough:
+
+```bash
+# Returns slug + first 5 lines of each SKILL.md (description usually lives there)
+for d in /workspace/user-skills/*/; do
+  if [ -f "$d/SKILL.md" ]; then
+    slug=$(basename "$d")
+    echo "::SLUG::$slug"
+    head -20 "$d/SKILL.md"
+    echo "::END::"
+  fi
+done 2>/dev/null
+```
+
+Parse the output server-side, derive `{ slug, description, path }` per entry. If the directory doesn't exist, the loop produces nothing — empty list, not an error.
+
+### Cache
+
+Use the existing NestJS `cache-manager` instance (already wired for `SecretsService`).
+
+- **Key:** `user-skills:list:<userDid>`
+- **TTL:** 5 minutes — short enough to feel fresh, long enough to absorb tight `list_skills` loops.
+- **Invalidation:**
+  - Explicit `refresh: boolean` parameter on `list_skills` / `search_skills` — the agent passes `refresh: true` immediately after creating or deleting a user skill (taught via prompt).
+  - On TTL expiry. We don't try to detect agent-side `sandbox_write` calls; the prompt rule is simpler and more reliable.
+
+### Return shape
+
+Existing shape, with one new field:
+
+```ts
+type SkillEntry = {
+  title: string;          // existing
+  description: string;    // existing
+  path: string;           // existing — for user skills: /workspace/user-skills/<slug>
+  cid?: string;           // optional — only set for public skills
+  source: 'user' | 'public'; // NEW
+  createdAt?: string;     // existing
+};
+```
+
+Public skills always have `cid`; user skills never do. The prompt teaches the agent that user skills are loaded by path, not CID.
+
+### Ordering
+
+User skills come first in the merged array. Combined with the prompt's "user skills have highest priority" rule (`prompt.ts:169`), this gives the agent a strong default without us having to add ranking logic.
+
+---
+
+## 6. Loading: `load_skill` becomes a no-op for user skills
+
+`load_skill` today is a sandbox MCP tool that takes a CID, downloads the public capsule, and unpacks it into `/workspace/skills/`. For user skills there's nothing to download — the files are already on disk.
+
+Two options:
+
+- **A. Wrap `load_skill` server-side** so that if the agent passes a user-skill identifier, we short-circuit and return success.
+- **B. Don't wrap. Tell the agent in the prompt: "user skills are pre-loaded — skip `load_skill` and go straight to `read_skill`."**
+
+**Recommended: B.** Wrapping `load_skill` means intercepting an MCP tool we don't own (it lives in the sandbox MCP server, exposed by name). Cleaner to not interpose. The agent already follows prompt-level rules; one more line ("for `source: 'user'`, skip step 2 of the canonical workflow") is enough.
+
+If we later find the agent reflexively calling `load_skill` on a path/slug and getting confusing errors, we can revisit and add a thin wrapper that intercepts.
+
+---
+
+## 7. Creation & deletion: no new tools
+
+### Creating a skill
+
+The agent already has, via the sandbox MCP:
+
+- `sandbox_write(path, content)` — write any file
+- `exec(command)` — run shell commands (mkdir, chmod, etc.)
+
+A skill is a folder with a SKILL.md and optional supporting files. The agent can author all of that with the tools above. We add prompt instructions:
+
+> **Creating a skill for the user**
+>
+> When the user asks to create a new skill (or you decide one would help future tasks):
+> 1. Pick a slug: lowercase, hyphenated, unique under `/workspace/user-skills/`. Check with `list_skills` first.
+> 2. `sandbox_write` to `/workspace/user-skills/<slug>/SKILL.md` — required. Follow the same SKILL.md format as public skills.
+> 3. Add supporting files (scripts, templates) under the same folder as needed.
+> 4. Call `list_skills` with `refresh: true` so the new skill shows up in subsequent listings.
+> 5. Confirm to the user with the slug + a one-line summary.
+
+### Deleting a skill
+
+Agent uses `exec('rm -rf /workspace/user-skills/<slug>')`, then `list_skills` with `refresh: true`. Documented in the same prompt section.
+
+### Updating
+
+Same as creating — overwrite SKILL.md or replace files via `sandbox_write`. No version tracking in v1.
+
+### Why no `create_user_skill` tool
+
+- Zero new server code to maintain.
+- The agent already has the right primitives, and the SKILL.md format is markdown the LLM is good at.
+- A typed `create` tool would either (a) duplicate `sandbox_write` (pointless) or (b) try to be opinionated about structure, which constrains what kinds of skills users can build.
+
+---
+
+## 8. Agent prompt changes
 
 In `apps/app/src/graph/nodes/chat-node/prompt.ts`:
 
-- Update the skills section (~line 160) to spell out the two-tier system: "First try `list_user_skills` / `search_user_skills`; fall back to `list_skills` / `search_skills`."
-- Update the canonical workflow (line 200) to branch on source: `load_skill(cid)` for public, `load_user_skill(slug)` for user.
-- Tighten the existing promise at line 169 ("User-uploaded skills have the highest priority") by making it a hard rule: *if a user skill matches the request, the agent must prefer it, even when a public skill also matches.*
+1. **Skills section (~line 160–198):**
+   - Replace the description of skills as "from the registry" with a two-source model: public (from registry) and user (from `/workspace/user-skills/`).
+   - Spell out that `list_skills` / `search_skills` returns both, with `source: 'user' | 'public'`, and that user skills come first.
+   - Make line 169's "highest priority" promise concrete: "If a user skill matches the request, prefer it over a public skill, even if both apply."
+
+2. **Canonical workflow (lines 200–226):**
+   - Branch step 2 (Load): for `source: 'public'`, call `load_skill(cid)`. For `source: 'user'`, skip — the skill is already on disk.
+   - Step 3 (Read): same `read_skill` call works for both, just use the path from the listing.
+
+3. **Sandbox file system (lines 265–280):**
+   - Add `/workspace/user-skills/` to the list. Mark it as **read/write** (unlike `/workspace/skills/` which is read-only).
+   - Note: "User skills persist across sessions — anything you write here stays for next time."
+
+4. **New "Creating skills" subsection** as described in §7.
+
+5. **Cache hygiene rule:** "After `sandbox_write` or `exec rm` under `/workspace/user-skills/`, your next `list_skills` call must include `refresh: true`."
 
 ---
 
-## 7. API surface (NestJS)
+## 9. Implementation plan (ordered, no work begins until approved)
 
-One new controller under `apps/app/src/user-skills/`:
+| # | Step | Files touched |
+| - | ---- | ------------- |
+| 1 | Convert `listSkillsTool` / `searchSkillsTool` to factories that take `{ sandboxMCP, cache, userDid }`. Keep the public-registry path identical. | `apps/app/src/graph/nodes/tools-node/skills-tools.ts` |
+| 2 | Add sandbox-side listing helper (single `exec` call, parser, error-tolerant when `/workspace/user-skills/` is missing). | same file |
+| 3 | Add cache read/write keyed on user DID; add `refresh` param to both tools. | same file |
+| 4 | Wire factories into `createMainAgent` — pass `sandboxMCP`, the existing `cacheManager`, and `configurable.configs.user.did`. | `apps/app/src/graph/agents/main-agent.ts` (around tool list ~line 792) |
+| 5 | Update agent prompt: two-source model, branch on `source`, `/workspace/user-skills/` in filesystem section, new "Creating skills" subsection, refresh-after-write rule. | `apps/app/src/graph/nodes/chat-node/prompt.ts` (lines 160–280) |
+| 6 | Tests: tool returns merged result, cache hits/misses, `refresh: true` busts cache, missing folder yields empty. Mock the sandbox MCP `exec` response. | `apps/app/src/graph/nodes/tools-node/skills-tools.spec.ts` |
+| 7 | Docs: update `docs/playbook/04-working-with-skills.md` "Building Your First Skill" section to describe the in-chat flow. Update `specs/playbook-progress.md`. | docs only |
 
-```
-POST   /user-skills                 # create or update
-GET    /user-skills                 # list (index only)
-GET    /user-skills/:slug           # full manifest + file list
-GET    /user-skills/:slug/files/*   # single file download
-DELETE /user-skills/:slug
-```
-
-**Auth:** reuse the existing Matrix access-token + DID middleware (already gates `/messages`, `/sessions`). No new auth primitive.
-
-**Upload format:** `multipart/form-data` with one `manifest.json` field + N file parts; or a single `.zip` that the server unpacks. Zip keeps the UX aligned with how public capsules ship today.
-
-**Validation rules** (server-side, non-negotiable):
-
-- Slug: `[a-z0-9][a-z0-9-]{0,62}` — not already in use in this room.
-- Total archive size: configurable cap (default 5 MB) — keeps Matrix events healthy.
-- File count cap (default 50) — prevents pathological layouts.
-- SKILL.md **required**; must be ≤ 64 KB (so it fits inline in one timeline event).
-- File extension allowlist or an explicit denylist (`.exe`, `.so`, …) — TBD, lean denylist since the sandbox itself is the security boundary.
+All of this ships as one small PR. No new module, no new service, no new controller, no DB migration.
 
 ---
 
-## 8. Implementation plan (ordered, no work begins until approved)
+## 10. Open questions (flag before build)
 
-| # | Step                                                                                  | Files touched                                                                                            |
-| - | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| 1 | **Storage service** — `UserSkillsService` with `getSkillIndex`/`get*`/`put`/`delete`  | `apps/app/src/user-skills/user-skills.service.ts` (new), `apps/app/src/app.module.ts`                    |
-| 2 | **Materialiser** — helper that writes manifest files into the sandbox                 | `apps/app/src/user-skills/user-skill-materialiser.ts` (new)                                              |
-| 3 | **LangChain tools** — `list_user_skills`, `search_user_skills`, `load_user_skill`, `delete_user_skill` | `apps/app/src/graph/nodes/tools-node/skills-tools.ts`                                   |
-| 4 | **Wire tools into main agent**                                                        | `apps/app/src/graph/agents/main-agent.ts` (tool list around line 792)                                    |
-| 5 | **Prompt updates** — two-tier discovery, priority rule, branch on source              | `apps/app/src/graph/nodes/chat-node/prompt.ts` (lines 160-226, 268-280)                                  |
-| 6 | **REST controller + DTOs**                                                            | `apps/app/src/user-skills/user-skills.controller.ts` (new)                                               |
-| 7 | **Tests** — storage round-trip (mock Matrix), tool invocation snapshot, materialiser integration | `apps/app/src/user-skills/*.spec.ts`, `apps/app/src/graph/nodes/tools-node/skills-tools.spec.ts` |
-| 8 | **Docs** — new `docs/playbook/04a-custom-skills.md`, update `04-working-with-skills.md`, update `specs/playbook-progress.md` | docs only |
-| 9 | **(Deferred)** Tool-driven creation (option A above) — only once B has shipped and we understand the failure modes | same files as step 3 |
-
-Ship 1–5 as one PR (engine changes), 6–8 as a second PR (API + docs), 9 as a later follow-up.
+1. **Sandbox-folder persistence — confirm.** I'm taking it on the user's word that `/workspace/` (everything except `/workspace/skills/`) survives sandbox restarts. Quick smoke test against the actual ai-sandbox service before merging step 1: write a marker file, restart, look for it. If persistence is per-session-only, the whole plan collapses.
+2. **Sandbox-side listing performance.** A `find` / shell loop over `/workspace/user-skills/` is fine for tens of skills. If a user accumulates hundreds, parsing becomes the bottleneck, not the FS. We're well below that ceiling for v1.
+3. **Cross-oracle sharing.** A user with two different oracles has two different sandboxes — so user skills don't cross. Probably fine (each oracle is its own context); flag if product wants a cross-oracle "skill library."
+4. **Validation.** The agent is the only writer, so SKILL.md schema, slug uniqueness, and file-size limits aren't enforced anywhere. v1 trusts the LLM. If we see garbage skills accumulating, add a server-side `list_skills`-time validator that hides malformed entries (instead of blocking writes).
+5. **Public-vs-user collisions.** What if a user creates a skill named `pptx` and a public skill `pptx` also exists? Our merged list shows both with `source` flags; the agent prefers the user one per the priority rule. No collision logic needed — the `source` field is the tie-breaker.
 
 ---
 
-## 9. Open questions (flag before build)
+## 11. Non-goals (v1)
 
-1. **Sandbox cooperation.** Does the sandbox reset `/workspace/user-skills/` between sessions the same way it does `/workspace/skills/`? If yes, lazy materialisation is fine. If it *doesn't* reset, we need a cache-invalidation step on manifest `version` change. Confirm with the ai-sandbox team.
-2. **Dependency auto-install.** The prompt at `prompt.ts:171` claims deps install automatically when a skill is loaded. That claim almost certainly only holds for skills loaded via `load_skill(cid)` (the sandbox knows the capsule shape). For `user-skills/` files we wrote manually, the agent likely needs to `exec pip install -r requirements.txt` itself. Worth verifying before updating the prompt, or we lie to the LLM.
-3. **Size ceiling.** 5 MB / 50 files is a finger-in-the-air default. Gut-check with how big real-world skills in the public registry get (a quick `du -sh` per skill in `ai-skills` would tell us).
-4. **Skill Builder sub-agent overlap.** `qiforge-cli` is scoped to contain a "Skill Builder" flow (per `CLAUDE.md`). Creation endpoint (§7) should be the thing the CLI calls — avoid shipping two authoring paths.
-5. **Secret injection.** Should user skills get access to the same `x-os-*` oracle secrets that public skills do (`main-agent.ts:553-562`), or should they be sandboxed from them? Default: **no secrets for user skills** unless the user explicitly grants per-skill. Prevents a custom skill from exfiltrating oracle-operator credentials.
-
----
-
-## 10. Non-goals (v1)
-
-- No public sharing of user skills — nothing is published to `capsules.skills.ixo.earth`. If a user wants to share, they go through the public registry's PR flow manually.
-- No skill versioning beyond "the latest manifest wins." Old versions are retained as timeline events but not surfaced.
-- No skill-to-skill dependencies (user skill requires another user skill). Flat namespace per room.
-- No UI. API-only; the Portal team handles the front-end separately.
+- No publishing user skills back to the public registry.
+- No versioning — overwrite-in-place semantics.
+- No cross-oracle/cross-user sharing.
+- No UI in the Portal for managing skills (Portal team handles separately if desired).
+- No server-side authoring API. The agent does it in chat.
