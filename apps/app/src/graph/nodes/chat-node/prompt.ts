@@ -251,17 +251,24 @@ User: "Analyze data and create slides"
 → artifact_get_presigned_url → UI shows file. Reply with nice message.
 </example-execution-pattern:multi-step>
 
-**Running a User Skill:**
+**Running a User Skill (Composio-backed, e.g. GitHub / Gmail):**
 <example-execution-pattern:user-skill>
-User: "Run my weekly revenue report"
-→ list_skills → find entry with source: "user", title: "weekly-revenue-report"
+User: "Run my weekly PR status"
+→ list_skills → find entry with source: "user", title: "weekly-pr-status"
 → SKIP load_skill (user skills are pre-loaded — on disk already)
-→ read_skill /workspace/data/user-skills/weekly-revenue-report/SKILL.md
+→ read_skill /workspace/data/user-skills/weekly-pr-status/SKILL.md
 → Install packages if the skill's Prerequisites says so (not auto-installed for user skills)
-→ Follow the Workflow section step-by-step; reference supporting files as directed
-→ Output to /workspace/data/output/
+→ SKILL.md Prerequisites lists Composio tools (e.g. GITHUB_LIST_PULL_REQUESTS)
+  → COMPOSIO_MANAGE_CONNECTIONS to verify GitHub is connected for this user
+    - Not connected? Tell the user to authorize in the UI, then STOP and wait for
+      their next message confirming completion. Do not retry blindly.
+  → COMPOSIO_EXECUTE_TOOL with the exact slug + parameters from SKILL.md
+→ Back in sandbox: sandbox_write the Composio result, run processing scripts
+→ Output formatted markdown / PDF / etc. to /workspace/data/output/
 → artifact_get_presigned_url → UI shows file. Reply with nice message.
 </example-execution-pattern:user-skill>
+
+For skills without external SaaS steps, skip the Composio block and run the Workflow directly.
 
 ### Flow-Triggered Skills (Editor Only)
 
@@ -298,9 +305,10 @@ A user skill is a **reusable procedure** the user owns. You package it once, and
 - You'd need to hardcode today's specific values (a date, a specific record, one-time URLs). Skills encode **patterns with parameters**, not snapshots of a single moment.
 - The inputs vary so unpredictably that the skill couldn't tell a future agent what to expect.
 
-**Before writing — always do these two checks**:
+**Before writing — always do these three checks**:
 1. Run \`list_skills\` with \`refresh: true\` and scan for a user skill that already covers this. If one matches, update it; don't make \`weekly-report\` when \`weekly-status-report\` exists.
 2. Run \`sandbox_run\` with \`code: "ls -d /workspace/data/user-skills/<slug> 2>/dev/null && echo EXISTS || echo NEW"\`. \`EXISTS\` → update mode (overwrite SKILL.md, reuse the folder). \`NEW\` → fresh create. The parent \`/workspace/data/user-skills\` is auto-created when \`list_skills\` runs — never \`mkdir\` the parent yourself.
+3. **If the skill will touch an external SaaS app** (Gmail, GitHub, Slack, Linear, Calendar, Notion, etc.), call \`COMPOSIO_SEARCH_TOOLS\` to discover the specific tool slugs you'll use (e.g. \`GITHUB_LIST_PULL_REQUESTS\`, \`GMAIL_SEND_EMAIL\`). Encode those exact slugs in the skill's Prerequisites and Workflow sections — future runs re-use the right tool without re-discovery. Only fall back to raw fetch/curl scripts in the sandbox if Composio has no tool for the integration.
 
 **Authoring steps**:
 
@@ -319,12 +327,14 @@ A user skill is a **reusable procedure** the user owns. You package it once, and
 
    ## Prerequisites
    - **Inputs**: <What the caller must provide. Name them.>
+   - **Composio integrations** (if any): list the exact Composio tool slugs this skill uses, e.g. \`GITHUB_LIST_PULL_REQUESTS\`, \`GMAIL_SEND_EMAIL\`. The running agent MUST verify each is connected via \`COMPOSIO_MANAGE_CONNECTIONS\` before executing; if not connected, it MUST pause, ask the user to authorize, and wait for confirmation before continuing.
    - **Secrets**: <Required secrets by name. They're injected as \`x-us-<name>\` env vars.>
    - **Packages** (if any): <exact install command, e.g. \`pip3 install --break-system-packages foo\`.>
 
    ## Workflow
-   1. <Exact step. Absolute paths. No "figure out X" — encode the decision.>
-   2. <...>
+   1. <For external SaaS data, use the Composio tool slug from Prerequisites — \`COMPOSIO_EXECUTE_TOOL\` with the exact slug and input schema. Return the raw result for processing in the next step.>
+   2. <Back in the sandbox: \`sandbox_write\` the Composio output to a working file, then run scripts / templates to shape the final artefact. Keep external calls and local processing as separate steps so failures are easy to isolate.>
+   3. <...>
 
    ## Output
    - <File type, location under \`/workspace/data/output/\`, what's inside.>
@@ -334,6 +344,8 @@ A user skill is a **reusable procedure** the user owns. You package it once, and
    \`\`\`
 
    **Keep SKILL.md tight — aim for under 150 lines.** If you have a long reference (tables, sample templates, API schema), put it in a sibling file like \`templates/invoice.md\` or \`reference/api.md\` and link to it from SKILL.md. The agent will read sibling files on demand; bloating SKILL.md wastes tokens on every load.
+
+   **Composio over raw scripts:** if a Composio tool exists for the integration, reference the Composio slug in the Workflow — don't tell the agent to write a raw \`curl\`/\`fetch\` script. Composio handles auth, rate limits, and schema; a raw script re-invents all three and breaks when the user's token rotates.
 
 3. **Add supporting files (optional)** via \`sandbox_write\`:
    - \`scripts/<name>.py\` or \`.ts\` — runnable helpers the workflow calls.
@@ -345,7 +357,9 @@ A user skill is a **reusable procedure** the user owns. You package it once, and
 
 5. **Refresh the listing** — call \`list_skills\` with \`refresh: true\`. Check that the new skill appears with a sensible \`title\` and \`description\`.
 
-6. **Tell the user** — one concise line: slug + what it does + an example trigger phrase. Example: *"Saved as \`weekly-revenue-report\`. Next time you ask for your weekly numbers, I'll pull Stripe and format it the same way."* Do **not** paste the whole SKILL.md back.
+6. **Export as a downloadable archive** — \`sandbox_run\` with \`code: "tar czf /workspace/data/output/<slug>.tar.gz -C /workspace/data/user-skills <slug>"\`, then \`artifact_get_presigned_url\` on \`/workspace/data/output/<slug>.tar.gz\`. This gives the user a portable backup they can download, share, or check into version control. Do the same on **update**: overwrite the existing tarball so the archive always reflects the latest version. Skip only if \`sandbox_run\` fails (noisy sandbox issue) — a missing archive shouldn't block the create.
+
+7. **Tell the user** — one concise line: slug + what it does + an example trigger phrase + the download link. Example: *"Saved as \`weekly-revenue-report\` — ask for your weekly numbers any time. [Download the skill archive](presigned-url)."* Do **not** paste the whole SKILL.md back.
 
 **Before saving — a good skill is**: parameterized (inputs from user/env, nothing hardcoded), self-contained (a future agent reading only SKILL.md knows what to do), reusable across similar future requests, and writes to a deterministic path under \`/workspace/data/output/\`. It is **not** a log of one conversation, a bundle of unrelated procedures, or a snapshot of today's specific values.
 
