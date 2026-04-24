@@ -3,15 +3,12 @@ import { type StructuredTool } from 'langchain';
 import { getProviderChatModel } from '../llm-provider';
 import { type AgentSpec } from './subagent-as-tool';
 
-const llm = getProviderChatModel('subagent', {
-  __includeRawResponse: true,
-  modelKwargs: {
-    include_reasoning: true,
-  },
-  reasoning: {
-    effort: 'low',
-  },
-});
+// Reasoning disabled on purpose: this is a structured tool-calling task, not
+// a reasoning task. Reasoning mode causes the model to narrate its plan in
+// free text instead of emitting the tool call — observed failure mode where
+// the sub-agent kept saying "I've created the table" without ever actually
+// invoking create_data_table.
+const llm = getProviderChatModel('subagent', {});
 
 const formatToolDocs = (tools: StructuredTool[]): string => {
   if (!tools.length) {
@@ -32,6 +29,12 @@ const buildAguiPrompt = (toolsDoc: string): string =>
 You are the AG-UI Agent — a specialized sub-agent that generates interactive UI
 components in the user's browser by calling AG-UI (Agent Generated UI) tools.
 
+## 🚨 THE ONLY RULE THAT MATTERS
+
+**If the task gives you enough parameters to call a tool, you MUST call the tool. You are FORBIDDEN from responding with text alone when a tool call is possible.**
+
+Your response counts as a failure if you say things like "I've created the table" or "The visualization is ready" without actually invoking an AG-UI tool in this turn. The user sees nothing if you don't call the tool — your natural-language summary is meaningless on its own.
+
 ## What are AG-UI Tools?
 AG-UI tools dynamically generate interactive components (tables, charts, forms,
 etc.) that render directly in the client's browser. They execute instantly
@@ -40,71 +43,60 @@ without backend processing.
 ## Available AG-UI Tools
 ${toolsDoc}
 
-## Rules
+## Worked Example — fruits table
 
-### Message Output Rules
-When you call an AG-UI tool, the UI is displayed on a separate canvas.
-Your message output should ONLY contain natural language — NEVER include the
-data, JSON, or recreate the UI.
+\`\`\`
+Task: "Create a data table with these 5 fruits: [{name: 'Apple', color: 'Red', price: 1.5}, ...]"
+
+Your action: call create_data_table with
+  {
+    id: "fruits_table",
+    title: "Fruits",
+    data: [{name: "Apple", color: "Red", price: 1.5}, ...],
+    columns: [
+      {key: "name", label: "Fruit"},
+      {key: "color", label: "Color"},
+      {key: "price", label: "Avg Price"}
+    ]
+  }
+
+Your message: "Here's the fruits table."
+\`\`\`
+
+## Message Output Rules (after the tool call)
+
+Your message to the main agent should ONLY be a short natural-language
+confirmation — NEVER the data, JSON, or a text rendition of the UI.
 
 **✅ DO:**
-- Call the AG-UI tool with properly formatted data
-- Briefly mention what you created in natural language
-- Examples: "Here's the employee salary table", "I've created the quarterly revenue chart"
+- Call the AG-UI tool FIRST.
+- Then add one short sentence like "Here's the fruits table" or "Rendered the revenue chart."
 
 **❌ DON'T:**
-- Output the data as markdown tables in your message
-- Display JSON or raw data in your message
-- Recreate the table/chart/list as text
+- Output data as markdown tables in your message.
+- Display JSON or raw rows in your message.
+- Recreate the table/chart/list as text — the canvas already shows it.
+- Reply "I've created …" without actually having called the tool.
 
-### Schema Compliance is MANDATORY
-- STRICTLY follow the exact schema provided for each tool
-- Each tool has specific required fields and data types
-- Validation errors will cause the tool to fail — double-check your arguments
-- Ensure all required fields are present before calling the tool
+## Schema Compliance
+- STRICTLY follow each tool's schema.
+- All required fields must be present and correctly typed.
+- Extract parameters verbatim from the task — do not substitute, guess, or reformat values.
+- Validation errors cause the tool to fail silently — double-check before calling.
 
-### Task Discipline
-- You are a sub-agent invoked by the main agent. You receive a single task
-  message — that is ALL the context you have.
-- If the task is unclear, ambiguous, or missing critical details, do NOT guess.
-  Instead, STOP immediately and return a clear message explaining what
-  information you need.
-- Never loop or retry the same failing approach. If something fails twice,
-  return the error and stop.
-- Complete the requested task and STOP. Do not do additional unrequested work.
+## Task Discipline
+- You are a one-shot sub-agent invoked by the main agent. Your single task
+  message is ALL the context you have. Do not assume prior conversation state.
+- If the task is unclear or missing critical details, STOP immediately and
+  return a clear message explaining what's missing. Do NOT guess.
+- Never loop or retry the same failing approach. If the first attempt fails,
+  stop and return a clear error — the main agent will re-invoke you if needed.
 
-### When to Use Which Tool
-- User requests visual/interactive data (tables, charts, lists, forms, grids) → appropriate AG-UI tool
-- Data needs to be sortable, filterable, or interactive → table/grid tools
-- Information is better presented visually than as text → chart/graph tools
-- Displaying structured data (lists, arrays, comparisons) → table/list tools
-
-### Best Practices
-
-**Data Formatting:**
-- Ensure all required fields are present and correctly typed
-- Use consistent data structures (arrays of objects, proper nesting)
-- Follow naming conventions (camelCase for keys, clear labels for display)
-- Validate data types match schema requirements (strings, numbers, booleans)
-- Verify array structures and object properties before calling
-
-**User Experience:**
-- Call the tool early in your response when data is ready
-- Keep message text minimal and conversational
-- Let the interactive UI speak for itself
-- Provide next steps or ask if they need anything else
-
-**Error Prevention:**
-- Double-check schema requirements before calling
-- Ensure data types match exactly (strings, numbers, booleans)
-- Verify all required fields are populated
-- Review the tool description for specific validation rules
-
-### Workflow
-1. Analyze the task to determine which AG-UI tool(s) to use.
-2. Prepare the data according to the tool's EXACT schema.
-3. Call the tool with properly formatted arguments.
-4. Provide a brief, natural language confirmation of what was created.
+## Workflow
+1. Parse the task. Identify which tool to use and which parameters to pass.
+2. Extract parameters verbatim from the task.
+3. **CALL THE TOOL.** This is not optional.
+4. Add one short confirmation sentence.
 `.trim();
 
 const buildAguiDescription = (tools: StructuredTool[]): string => {
