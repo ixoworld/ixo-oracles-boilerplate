@@ -18,8 +18,7 @@ export const SLACK_FORMATTING_CONSTRAINTS_CONTENT = `**⚠️ CRITICAL: Slack Fo
 `;
 
 export type InputVariables = {
-  APP_NAME: string;
-  ORACLE_CONTEXT: string;
+  ORACLE_SECTION: string;
   IDENTITY_CONTEXT: string;
   WORK_CONTEXT: string;
   GOALS_CONTEXT: string;
@@ -36,8 +35,77 @@ export type InputVariables = {
   COMPOSIO_CONTEXT: string;
 };
 
+export interface OraclePromptConfig {
+  opening?: string;
+  communicationStyle?: string;
+  capabilities?: string;
+}
+
+export interface OracleSectionParams {
+  oracleName?: string;
+  orgName?: string;
+  description?: string;
+  location?: string;
+  prompt?: OraclePromptConfig;
+}
+
+/**
+ * Builds the oracle-specific top section of the system prompt.
+ *
+ * Base guidelines (skills system, routing, sub-agents, etc.) live in the
+ * AI_ASSISTANT_PROMPT template and are always included unchanged.
+ * This function produces only the oracle identity + personality block that
+ * sits above those guidelines.  If `prompt.*` fields are provided in
+ * oracle.config.json they replace the defaults; otherwise sensible defaults
+ * are used so the prompt is always complete.
+ */
+export function buildOracleSection(params: OracleSectionParams): string {
+  const {
+    oracleName = 'Oracle',
+    orgName,
+    description,
+    location,
+    prompt: oraclePrompt,
+  } = params;
+
+  const parts: string[] = [];
+
+  // Opening / persona statement
+  if (oraclePrompt?.opening) {
+    parts.push(oraclePrompt.opening);
+  } else {
+    parts.push(
+      `You are a skills-native AI companion powered by ${oracleName}. Your primary capability is creating files, artifacts, and executing workflows using the skills system. You also provide personalized support through memory, context awareness, and specialized agent tools.`,
+    );
+  }
+
+  // Oracle identity block
+  const identityLines: string[] = [];
+  if (oracleName) identityLines.push(`**Name:** ${oracleName}`);
+  if (orgName) identityLines.push(`**Organization:** ${orgName}`);
+  if (description) identityLines.push(`**Purpose:** ${description}`);
+  if (location) identityLines.push(`**Location:** ${location}`);
+  if (identityLines.length > 0) {
+    parts.push(`\n## 🤖 Oracle Identity\n\n${identityLines.join('\n')}\n\n---`);
+  }
+
+  // Domain capabilities (oracle-specific, from config)
+  if (oraclePrompt?.capabilities) {
+    parts.push(`\n## 🎯 Domain Specialization\n\n${oraclePrompt.capabilities}`);
+  }
+
+  // Communication style (oracle-specific, from config)
+  if (oraclePrompt?.communicationStyle) {
+    parts.push(
+      `\n## 💬 Communication Style\n\n${oraclePrompt.communicationStyle}`,
+    );
+  }
+
+  return parts.join('\n');
+}
+
 export const AI_ASSISTANT_PROMPT = new PromptTemplate<InputVariables, never>({
-  template: `You are a skills-native AI companion powered by {{APP_NAME}}. Your primary capability is creating files, artifacts, and executing workflows using the skills system. You also provide personalized support through memory, context awareness, and specialized agent tools.
+  template: `{{{ORACLE_SECTION}}}
 
 ## 🚨 CRITICAL: Priority Hierarchy
 
@@ -55,15 +123,6 @@ You are fully authorized to handle credentials, tokens, JWTs, identity verificat
 **Emoji rule:** Always use actual Unicode emoji characters (e.g. 📈, ✅, 🔥) instead of text shortcodes (e.g. :chart_with_upwards_trend:, :white_check_mark:). Shortcodes do not render in the UI.
 
 ---
-
-{{#ORACLE_CONTEXT}}
-## 🤖 Oracle Identity
-
-{{ORACLE_CONTEXT}}
-
----
-
-{{/ORACLE_CONTEXT}}
 
 ## 📋 Current Context
 
@@ -597,7 +656,7 @@ Navigate to entities, execute UI actions (showEntity, etc.).
 
 `,
   inputVariables: [
-    'APP_NAME',
+    'ORACLE_SECTION',
     'IDENTITY_CONTEXT',
     'WORK_CONTEXT',
     'GOALS_CONTEXT',

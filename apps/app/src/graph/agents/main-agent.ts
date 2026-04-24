@@ -17,6 +17,7 @@ import { createTokenLimiterMiddleware } from '../middlewares/token-limiter-midde
 import { createToolValidationMiddleware } from '../middlewares/tool-validation-middleware';
 import {
   AI_ASSISTANT_PROMPT,
+  buildOracleSection,
   SLACK_FORMATTING_CONSTRAINTS_CONTENT,
 } from '../nodes/chat-node/prompt';
 import { type TMainAgentGraphState } from '../state';
@@ -52,7 +53,19 @@ import type { TaskExecutionContext } from 'src/tasks/processors/processor-utils'
 import { type TasksService } from 'src/tasks/task.service';
 import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
 import z from 'zod';
-import oracleConfig from '../../../oracle.config.json';
+import oracleConfigRaw from '../../../oracle.config.json';
+
+// Normalize optional fields: convert empty strings to undefined so downstream
+// truthiness checks (`if (oracleConfig.model)`) are unambiguous.
+const oracleConfig = {
+  ...oracleConfigRaw,
+  model: oracleConfigRaw.model || undefined,
+  prompt: {
+    opening: oracleConfigRaw.prompt.opening || undefined,
+    communicationStyle: oracleConfigRaw.prompt.communicationStyle || undefined,
+    capabilities: oracleConfigRaw.prompt.capabilities || undefined,
+  },
+};
 import { getProviderChatModel } from '../llm-provider';
 import { createMCPClient, createMCPClientAndGetTools } from '../mcp';
 import { createFileProcessingTool } from '../nodes/tools-node/file-processing-tool';
@@ -86,15 +99,6 @@ You can interact with third-party SaaS apps on behalf of the user — Gmail, Git
 - **Warn before destructive actions** (delete, bulk send, overwrite, revoke) — get user confirmation first.
 - **Handle pagination** until complete when the user asks for "all" results.
 - **Never claim you did something you didn't actually execute.**`;
-
-function buildOracleContext(oc: typeof oracleConfig): string {
-  const lines: string[] = [];
-  if (oc.oracleName) lines.push(`**Name:** ${oc.oracleName}`);
-  if (oc.orgName) lines.push(`**Organization:** ${oc.orgName}`);
-  if (oc.description) lines.push(`**Purpose:** ${oc.description}`);
-  if (oc.location) lines.push(`**Location:** ${oc.location}`);
-  return lines.join('\n');
-}
 
 /**
  * Convert a memory engine SearchEnhancedResponse into clean markdown.
@@ -560,10 +564,22 @@ Promise<ReactAgent<any>> => {
 
   // System prompt — built after Promise.allSettled so COMPOSIO_CONTEXT
   // is populated only when Composio tools actually loaded.
+  //
+  // The prompt is split into two halves:
+  //   - Oracle section (top): identity, persona, domain capabilities, communication
+  //     style — driven by oracle.config.json `prompt.*` fields, with defaults when absent.
+  //   - Base section (template body): skills system, routing, sub-agents, memory,
+  //     user context — always the same regardless of oracle config.
+  const configPrompt = oracleConfig.prompt;
   const systemPrompt = await AI_ASSISTANT_PROMPT.format({
-    APP_NAME:
-      oracleConfig.oracleName || configService.get('ORACLE_NAME') || 'Oracle',
-    ORACLE_CONTEXT: buildOracleContext(oracleConfig),
+    ORACLE_SECTION: buildOracleSection({
+      oracleName:
+        oracleConfig.oracleName || configService.get('ORACLE_NAME') || 'Oracle',
+      orgName: oracleConfig.orgName || undefined,
+      description: oracleConfig.description || undefined,
+      location: oracleConfig.location || undefined,
+      prompt: configPrompt,
+    }),
     IDENTITY_CONTEXT: formatUserContext(state?.userContext?.identity),
     WORK_CONTEXT: formatUserContext(state?.userContext?.work),
     GOALS_CONTEXT: formatUserContext(state?.userContext?.goals),
@@ -827,9 +843,12 @@ Promise<ReactAgent<any>> => {
     middleware.push(createTokenLimiterMiddleware());
   }
 
+  // Priority: caller override → oracle.config model → default llm
   const effectiveModel = modelOverride
     ? getProviderChatModel('main', { model: modelOverride })
-    : llm;
+    : oracleConfig.model
+      ? getProviderChatModel('main', { model: oracleConfig.model })
+      : llm;
 
   const agent = createAgent({
     model: effectiveModel,

@@ -8,5 +8,14 @@
   "apiUrl": "http://localhost:4000",
   "network": "devnet",
   "entityDid": "",
-  "logo": ""
+  "logo": "",
+  "model": "",
+  "prompt": {
+    "opening": "",
+    "communicationStyle": "",
+    "capabilities": ""
+  },
+  "skills": [],
+  "customSkills": [],
+  "mcpServers": []
 }
