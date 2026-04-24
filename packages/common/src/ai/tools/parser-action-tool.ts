@@ -21,9 +21,8 @@ export function parserActionTool(action: IParseAgActionParams) {
       // user WS session so routing works from nested contexts. Fall back to
       // `thread_id` for direct invocations from the main agent (where
       // thread_id IS the user's session).
-      const sessionIdField = (
-        configurable as { sessionId?: unknown }
-      ).sessionId;
+      const sessionIdField = (configurable as { sessionId?: unknown })
+        .sessionId;
       const sessionId =
         typeof sessionIdField === 'string' && sessionIdField.length > 0
           ? sessionIdField
