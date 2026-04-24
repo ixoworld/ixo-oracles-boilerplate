@@ -60,7 +60,13 @@ export interface OracleSectionParams {
  * are used so the prompt is always complete.
  */
 export function buildOracleSection(params: OracleSectionParams): string {
-  const { oracleName = 'Oracle', orgName, description, location, prompt: oraclePrompt } = params;
+  const {
+    oracleName = 'Oracle',
+    orgName,
+    description,
+    location,
+    prompt: oraclePrompt,
+  } = params;
 
   const parts: string[] = [];
 
@@ -90,7 +96,9 @@ export function buildOracleSection(params: OracleSectionParams): string {
 
   // Communication style (oracle-specific, from config)
   if (oraclePrompt?.communicationStyle) {
-    parts.push(`\n## 💬 Communication Style\n\n${oraclePrompt.communicationStyle}`);
+    parts.push(
+      `\n## 💬 Communication Style\n\n${oraclePrompt.communicationStyle}`,
+    );
   }
 
   return parts.join('\n');
