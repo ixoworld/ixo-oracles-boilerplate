@@ -156,6 +156,57 @@ interface InvokeMainAgentParams {
 const configService = getConfig();
 const llm = getProviderChatModel('main', {});
 
+/**
+ * Mint a UCAN service invocation and return it as a header pair.
+ *
+ * Encapsulates the common pattern of:
+ *   1. calling `ucanService.createServiceInvocation`,
+ *   2. wrapping the resulting token in a single-key header object,
+ *   3. degrading silently on null / thrown errors.
+ *
+ * Returns `{}` (empty header set) on null result or thrown error so the
+ * caller can spread it unconditionally. When `bearer` is true, the token
+ * is prefixed with `Bearer ` to form a valid `Authorization` header value.
+ */
+async function mintInvocationHeader(args: {
+  ucanService: UcanService;
+  serviceUrl: string;
+  userDid: string;
+  resource: 'ixo:sandbox' | 'ixo:skills';
+  headerName: string;
+  bearer?: boolean;
+  successLogContext: string;
+  failureLogContext: string;
+}): Promise<Record<string, string>> {
+  const {
+    ucanService,
+    serviceUrl,
+    userDid,
+    resource,
+    headerName,
+    bearer = false,
+    successLogContext,
+    failureLogContext,
+  } = args;
+  try {
+    const invocation = await ucanService.createServiceInvocation(
+      serviceUrl,
+      userDid,
+      resource,
+    );
+    if (invocation) {
+      Logger.debug(successLogContext);
+      return { [headerName]: bearer ? `Bearer ${invocation}` : invocation };
+    }
+    return {};
+  } catch (err) {
+    const detail =
+      err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    Logger.warn(`${failureLogContext}: ${detail}`);
+    return {};
+  }
+}
+
 const oracleMatrixBaseUrl = configService
   .getOrThrow('MATRIX_BASE_URL')
   .replace(/\/$/, '');
@@ -233,23 +284,46 @@ Promise<ReactAgent<any>> => {
   let sandboxHeaders: Record<string, string> = matrixFallbackHeaders;
 
   if (ucanService?.hasSigningKey() && configurable.configs?.user?.did) {
-    try {
-      const invocation = await ucanService.createServiceInvocation(
-        configService.getOrThrow('SANDBOX_MCP_URL'),
-        configurable.configs.user.did,
-      );
-      if (invocation) {
-        sandboxHeaders = {
-          Authorization: `Bearer ${invocation}`,
-          'X-Auth-Type': 'ucan',
-        };
-        Logger.log('[UCAN] Using UCAN invocation for sandbox auth');
-      }
-    } catch (err) {
-      Logger.warn(
-        `[UCAN] Failed to create sandbox invocation, falling back to Matrix auth: ${err instanceof Error ? err.message : String(err)}`,
-      );
+    const sandboxAuthHeader = await mintInvocationHeader({
+      ucanService,
+      serviceUrl: configService.getOrThrow('SANDBOX_MCP_URL'),
+      userDid: configurable.configs.user.did,
+      resource: 'ixo:sandbox',
+      headerName: 'Authorization',
+      bearer: true,
+      successLogContext: '[UCAN] Using UCAN invocation for sandbox auth',
+      failureLogContext:
+        '[UCAN] Failed to create sandbox invocation, falling back to Matrix auth',
+    });
+    if (sandboxAuthHeader.Authorization) {
+      sandboxHeaders = {
+        ...sandboxAuthHeader,
+        'X-Auth-Type': 'ucan',
+      };
     }
+
+    // Always mint a parallel ai-skills invocation. Sandbox forwards this to the
+    // ai-skills service when tools (e.g. publish/delete capsules) need it.
+    // Mint unconditionally for every authenticated MCP call — the per-(user,service)
+    // cache inside createServiceInvocation makes repeat calls cheap. If minting
+    // fails (no signing key, no cached delegation, did:web unresolved), we just
+    // skip the header; sandbox tools that need it will surface a clean error.
+    // SKILLS_CAPSULES_BASE_URL has a default in the env Zod schema, so a plain
+    // get() is safe and avoids silently swallowing a misconfiguration throw.
+    const skillsHeader = await mintInvocationHeader({
+      ucanService,
+      serviceUrl:
+        configService.get('SKILLS_CAPSULES_BASE_URL') ??
+        'https://capsules.skills.ixo.earth',
+      userDid: configurable.configs.user.did,
+      resource: 'ixo:skills',
+      headerName: 'X-Skills-Invocation',
+      successLogContext:
+        '[UCAN] Attached X-Skills-Invocation header for sandbox',
+      failureLogContext:
+        '[UCAN] Failed to create skills invocation, omitting X-Skills-Invocation header',
+    });
+    sandboxHeaders = { ...sandboxHeaders, ...skillsHeader };
   }
 
   // Create sandbox MCP with auth headers (for tool schema discovery)
@@ -672,21 +746,15 @@ Promise<ReactAgent<any>> => {
     });
   });
 
-  // Build the skills tools — they merge public registry results with the
-  // user's custom skills under /workspace/data/user-skills/. The factories
-  // need the wrapped sandbox_run tool to ls the folder, and the user DID
-  // to scope the per-user listing cache.
-  const skillsSandboxRunTool = wrappedSandboxTools.find(
-    (t) => t.name === 'sandbox_run',
-  );
-  const listSkillsTool = createListSkillsTool({
-    sandboxRunTool: skillsSandboxRunTool,
-    userDid,
-  });
-  const searchSkillsTool = createSearchSkillsTool({
-    sandboxRunTool: skillsSandboxRunTool,
-    userDid,
-  });
+  // Reuse the ixo:skills invocation already minted for sandbox forwarding.
+  // Listing/search tools forward this directly to ai-skills so the user's
+  // own private (published) skills surface alongside the public registry.
+  // Undefined when UCAN is unavailable — the listing tools degrade to
+  // public-only.
+  const skillsUcan: string | undefined = sandboxHeaders['X-Skills-Invocation'];
+
+  const listSkillsTool = createListSkillsTool({ skillsUcan });
+  const searchSkillsTool = createSearchSkillsTool({ skillsUcan });
 
   // Conditionally create BlockNote (editor) agent tool if editorRoomId is provided
   let blockNoteAgentSpec:
@@ -835,7 +903,7 @@ Promise<ReactAgent<any>> => {
 
   const middleware = [
     createToolValidationMiddleware(),
-    toolRetryMiddleware(),
+    toolRetryMiddleware({ onFailure: (error) => error.message }),
     createPageContextMiddleware(),
   ];
 
