@@ -1,11 +1,6 @@
 /* eslint-disable no-console */
-import { tool, type StructuredTool } from '@langchain/core/tools';
-import { Logger } from '@nestjs/common';
+import { tool } from '@langchain/core/tools';
 import { getConfig } from 'src/config';
-import {
-  UserSkillsService,
-  type UserSkillEntry,
-} from 'src/user-skills/user-skills.service';
 import z from 'zod';
 
 const configService = getConfig();
@@ -23,24 +18,29 @@ type Capsule = {
   metadata?: Record<string, string> | null;
   archiveSize?: number;
   createdAt?: string;
+  // Set by ai-skills when the response row is private (i.e. owned by the
+  // caller). Absent for public rows.
+  visibility?: 'public' | 'private';
+  ownerDid?: string | null;
+  oracleDid?: string | null;
 };
 
 interface MergedSkill {
   title: string;
   description: string;
   path: string;
-  source: 'user' | 'public';
-  /** Only present for public skills. User skills don't have a CID. */
+  /** `public` — registry skill visible to everyone; `private` — owned by the current (oracle, user) pair. */
+  source: 'public' | 'private';
   cid?: string;
   createdAt?: string;
 }
 
-function normalizePublicCapsule(capsule: Capsule): MergedSkill {
+function normalizeRegistryCapsule(capsule: Capsule): MergedSkill {
   return {
     title: capsule.name,
     description: capsule.description ?? '',
     path: `/workspace/skills/${capsule.name}`,
-    source: 'public',
+    source: capsule.visibility === 'private' ? 'private' : 'public',
     cid: capsule.cid,
     createdAt: capsule.createdAt
       ? new Date(capsule.createdAt).toISOString()
@@ -48,95 +48,55 @@ function normalizePublicCapsule(capsule: Capsule): MergedSkill {
   };
 }
 
-function normalizeUserSkill(entry: UserSkillEntry): MergedSkill {
-  return {
-    title: entry.slug,
-    description: entry.description,
-    path: entry.path,
-    source: 'user',
-  };
-}
-
 interface SkillsToolDeps {
-  /** The wrapped sandbox_run tool. Without it, only public skills are returned. */
-  sandboxRunTool?: StructuredTool;
-  /** The user's DID. Used as the cache key for the per-user skill listing. */
-  userDid?: string;
-}
-
-/**
- * Fetch the user's custom skills from the sandbox. Returns an empty list if
- * the dependencies aren't available or the sandbox call fails — never throws.
- */
-async function getUserSkills(
-  deps: SkillsToolDeps,
-  refresh: boolean,
-): Promise<MergedSkill[]> {
-  if (!deps.sandboxRunTool || !deps.userDid) return [];
-  try {
-    const entries = await UserSkillsService.getInstance().list({
-      userDid: deps.userDid,
-      sandboxRunTool: deps.sandboxRunTool,
-      refresh,
-    });
-    return entries.map(normalizeUserSkill);
-  } catch (error) {
-    Logger.warn(
-      `[skills-tools] user-skills listing failed: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
-    return [];
-  }
+  /**
+   * Raw `ixo:skills` UCAN invocation token. When present, listing/search calls
+   * to ai-skills forward it as `Authorization: Bearer` + `X-Auth-Type: ucan`,
+   * which makes the user's own published private skills surface in the
+   * results alongside public registry skills. When omitted, only public skills
+   * are returned.
+   */
+  skillsUcan?: string;
 }
 
 export function createListSkillsTool(deps: SkillsToolDeps) {
   return tool(
-    async (params: { limit?: number; offset?: number; refresh?: boolean }) => {
+    async (params: { limit?: number; offset?: number }) => {
       const limit = params.limit ?? 20;
       const offset = params.offset ?? 0;
-      const refresh = params.refresh ?? false;
 
-      // Public skills + user skills in parallel.
-      const [publicResult, userSkills] = await Promise.all([
-        fetchPublicCapsules(limit, offset),
-        getUserSkills(deps, refresh),
-      ]);
+      const registryResult = await fetchRegistryCapsules(
+        limit,
+        offset,
+        deps.skillsUcan,
+      );
 
-      // User skills always come first — the prompt promises "highest priority".
-      const skills: MergedSkill[] = [
-        ...userSkills,
-        ...publicResult.capsules.map(normalizePublicCapsule),
-      ];
+      const registry = registryResult.capsules.map(normalizeRegistryCapsule);
+      const privateRegistry = registry.filter((s) => s.source === 'private');
+      const publicRegistry = registry.filter((s) => s.source === 'public');
+      const skills: MergedSkill[] = [...privateRegistry, ...publicRegistry];
 
       const output = {
         skills,
-        pagination: publicResult.pagination,
-        userSkillCount: userSkills.length,
+        pagination: registryResult.pagination,
+        privateSkillCount: privateRegistry.length,
       };
       console.log('listSkills output', {
-        userSkills: userSkills.length,
-        publicSkills: publicResult.capsules.length,
-        refresh,
+        privateSkills: privateRegistry.length,
+        publicSkills: publicRegistry.length,
       });
       return output;
     },
     {
       name: 'list_skills',
-      description: `List available skills — both **user** (custom, in /workspace/data/user-skills/) and **public** (from the IXO skills registry).
-
-User skills are returned first and have priority. Use this to discover what skills exist before delegating to the Skills Agent.
+      description: `List available skills from the IXO skills registry — the caller's **published** private skills first, then public registry skills.
 
 Each entry includes:
-- title: skill name (or slug for user skills)
+- title: skill name
 - description: skill description
 - path: absolute sandbox path to the skill folder
-- source: "user" or "public"
-- cid: only set for public skills — required by load_skill, exec, read_skill. Never use a CID as a file path.
-
-User skills are pre-loaded — DO NOT call load_skill for them. Read them directly with read_skill using the path field.
-
-After creating, updating, or deleting a user skill (via sandbox_write or sandbox_run rm under user-skills/), call this tool again with refresh: true so the new state is reflected.`,
+- source: "private" (your published skill) or "public" (registry)
+- cid: required by load_skill, exec, read_skill. Never use a CID as a file path.`,
       schema: z.object({
         limit: z
           .number()
@@ -144,21 +104,13 @@ After creating, updating, or deleting a user skill (via sandbox_write or sandbox
           .max(100)
           .optional()
           .describe(
-            'Optional: number of public skills to return (1-100, default: 20). Does not limit user skills.',
+            'Optional: number of skills to return (1-100, default: 20).',
           ),
         offset: z
           .number()
           .min(0)
           .optional()
-          .describe(
-            'Optional: pagination offset for public skills (default: 0).',
-          ),
-        refresh: z
-          .boolean()
-          .optional()
-          .describe(
-            'Optional: bypass the per-user cache for the user-skills listing. Set to true immediately after creating, updating, or deleting a user skill.',
-          ),
+          .describe('Optional: pagination offset (default: 0).'),
       }),
     },
   );
@@ -166,47 +118,39 @@ After creating, updating, or deleting a user skill (via sandbox_write or sandbox
 
 export function createSearchSkillsTool(deps: SkillsToolDeps) {
   return tool(
-    async (params: { q: string; limit?: number; refresh?: boolean }) => {
+    async (params: { q: string; limit?: number }) => {
       const limit = params.limit ?? 10;
-      const refresh = params.refresh ?? false;
-      const queryLower = params.q.toLowerCase();
 
-      const [publicCapsules, userSkills] = await Promise.all([
-        searchPublicCapsules(params.q, limit),
-        getUserSkills(deps, refresh),
-      ]);
-
-      const userMatches = userSkills.filter(
-        (s) =>
-          s.title.toLowerCase().includes(queryLower) ||
-          s.description.toLowerCase().includes(queryLower),
+      const registryCapsules = await searchRegistryCapsules(
+        params.q,
+        limit,
+        deps.skillsUcan,
       );
 
-      const skills: MergedSkill[] = [
-        ...userMatches,
-        ...publicCapsules.map(normalizePublicCapsule),
-      ];
+      const registry = registryCapsules.map(normalizeRegistryCapsule);
+      const privateRegistry = registry.filter((s) => s.source === 'private');
+      const publicRegistry = registry.filter((s) => s.source === 'public');
+
+      const skills: MergedSkill[] = [...privateRegistry, ...publicRegistry];
 
       const output = {
         query: params.q,
         count: skills.length,
-        userSkillCount: userMatches.length,
+        privateSkillCount: privateRegistry.length,
         skills,
       };
       console.log('searchSkills output', {
         query: params.q,
-        userMatches: userMatches.length,
-        publicMatches: publicCapsules.length,
+        privateMatches: privateRegistry.length,
+        publicMatches: publicRegistry.length,
       });
       return output;
     },
     {
       name: 'search_skills',
-      description: `Search both **user** and **public** skills by query. Use this to find skills relevant to the user's task before delegating to the Skills Agent.
+      description: `Search the caller's published skills and the public IXO registry by query.
 
-User-skill matches come first. Each entry includes title, description, path, source ("user" | "public"), and cid (public skills only).
-
-After creating, updating, or deleting a user skill, call again with refresh: true.`,
+Matching published (private) skills come first, then public registry results. Each entry includes title, description, path, source ("private" | "public"), and cid.`,
       schema: z.object({
         q: z
           .string()
@@ -219,27 +163,40 @@ After creating, updating, or deleting a user skill, call again with refresh: tru
           .min(1)
           .max(50)
           .optional()
-          .describe(
-            'Optional: max public-skill results to return (1-50, default: 10). User skills are always fully searched.',
-          ),
-        refresh: z
-          .boolean()
-          .optional()
-          .describe(
-            'Optional: bypass the per-user cache for user-skills. Set to true immediately after creating, updating, or deleting a user skill.',
-          ),
+          .describe('Optional: max results to return (1-50, default: 10).'),
       }),
     },
   );
 }
 
 // ---------------------------------------------------------------------------
-// Public registry calls
+// Registry calls (ai-skills)
 // ---------------------------------------------------------------------------
 
-async function fetchPublicCapsules(
+/**
+ * Build the auth/network header set for outbound ai-skills requests. When a
+ * UCAN invocation is available, ai-skills returns the caller's private skills
+ * alongside the public ones; without it, only public rows come back.
+ *
+ * `X-IXO-Network` is a routing hint for ai-skills' did:ixo resolver, not a
+ * capsule-storage axis. Defaults to mainnet — override via the optional
+ * `SKILLS_REGISTRY_NETWORK` env var if needed.
+ */
+function buildRegistryHeaders(skillsUcan: string | undefined): HeadersInit {
+  const headers: Record<string, string> = {
+    'X-IXO-Network': configService.get('NETWORK') ?? 'mainnet',
+  };
+  if (skillsUcan) {
+    headers['Authorization'] = `Bearer ${skillsUcan}`;
+    headers['X-Auth-Type'] = 'ucan';
+  }
+  return headers;
+}
+
+async function fetchRegistryCapsules(
   limit: number,
   offset: number,
+  skillsUcan: string | undefined,
 ): Promise<{
   capsules: Capsule[];
   pagination: {
@@ -253,7 +210,9 @@ async function fetchPublicCapsules(
   url.searchParams.set('limit', limit.toString());
   url.searchParams.set('offset', offset.toString());
 
-  const response = await fetch(url.toString());
+  const response = await fetch(url.toString(), {
+    headers: buildRegistryHeaders(skillsUcan),
+  });
   if (!response.ok) {
     throw new Error(`List skills failed: ${response.statusText}`);
   }
@@ -268,15 +227,18 @@ async function fetchPublicCapsules(
   };
 }
 
-async function searchPublicCapsules(
+async function searchRegistryCapsules(
   q: string,
   limit: number,
+  skillsUcan: string | undefined,
 ): Promise<Capsule[]> {
   const url = new URL('/capsules/search', SKILLS_CAPSULES_BASE_URL);
   url.searchParams.set('q', q);
   url.searchParams.set('limit', limit.toString());
 
-  const response = await fetch(url.toString());
+  const response = await fetch(url.toString(), {
+    headers: buildRegistryHeaders(skillsUcan),
+  });
   if (!response.ok) {
     throw new Error(`Search skills failed: ${response.statusText}`);
   }
@@ -287,15 +249,31 @@ async function searchPublicCapsules(
     capsules: Capsule[];
   };
 
-  // Same dedup-by-name-keep-newest logic the original tool used.
+  // Dedup by name. When a private (caller-owned) and a public row share a
+  // name, prefer the private one — the user's own skill always wins. Among
+  // entries of the same source, keep the newest by createdAt.
   const skillsMap = new Map<string, Capsule>();
   for (const capsule of data.capsules) {
     const existing = skillsMap.get(capsule.name);
+    if (!existing) {
+      skillsMap.set(capsule.name, capsule);
+      continue;
+    }
+    const incomingPrivate = capsule.visibility === 'private';
+    const existingPrivate = existing.visibility === 'private';
+    if (incomingPrivate && !existingPrivate) {
+      skillsMap.set(capsule.name, capsule);
+      continue;
+    }
+    if (!incomingPrivate && existingPrivate) {
+      continue;
+    }
+    // Same visibility tier — keep the newer one.
     const isNewer =
-      capsule.createdAt && existing?.createdAt
+      capsule.createdAt && existing.createdAt
         ? new Date(capsule.createdAt).getTime() >
           new Date(existing.createdAt).getTime()
-        : !existing;
+        : false;
     if (isNewer) skillsMap.set(capsule.name, capsule);
   }
   return Array.from(skillsMap.values());
