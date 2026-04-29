@@ -28,7 +28,7 @@
     "@blocknote/server-util": "0.29.1",
     "@composio/core": "^0.8.0",
     "@composio/langchain": "^0.8.0",
-    "@ixo/common": "workspace:*",
+    "@ixo/common": "^1.1.38",
     "@ixo/editor": "3.0.0-beta.11",
     "@ixo/matrix": "1.2.3",
     "@ixo/matrix-crdt": "^1.1.0",
