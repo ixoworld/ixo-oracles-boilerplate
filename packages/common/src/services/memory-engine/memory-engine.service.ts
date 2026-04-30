@@ -180,10 +180,7 @@ export class MemoryEngineService {
     const body: SearchEnhancedBatchRequest = { queries };
 
     const controller = new AbortController();
-    const timer = setTimeout(
-      () => controller.abort(),
-      this.BATCH_TIMEOUT_MS,
-    );
+    const timer = setTimeout(() => controller.abort(), this.BATCH_TIMEOUT_MS);
 
     try {
       const response = await fetch(
@@ -474,5 +471,4 @@ export class MemoryEngineService {
       return { success: false };
     }
   }
-
 }
