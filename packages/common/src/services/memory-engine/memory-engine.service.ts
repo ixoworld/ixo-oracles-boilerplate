@@ -1,8 +1,11 @@
 import { Logger } from '@ixo/logger';
-import type {
-  SearchEnhancedRequest,
-  SearchEnhancedResponse,
-  UserContextData,
+import {
+  isBatchErrorSlot,
+  type SearchEnhancedBatchRequest,
+  type SearchEnhancedBatchResponse,
+  type SearchEnhancedRequest,
+  type SearchEnhancedResponse,
+  type UserContextData,
 } from './types.js';
 
 interface MemoryEngineAuthHeaders {
@@ -15,7 +18,9 @@ interface MemoryEngineAuthHeaders {
 }
 
 export class MemoryEngineService {
-  private readonly QUERY_TIMEOUT_MS = 2500; // 2.5 seconds per query
+  // Batch covers 6 queries running in parallel server-side. Bound by the
+  // slowest query, not 6× — but we leave headroom for cold caches.
+  private readonly BATCH_TIMEOUT_MS = 15000;
 
   constructor(private readonly memoryEngineUrl: string) {}
 
@@ -45,22 +50,6 @@ export class MemoryEngineService {
   }
 
   /**
-   * Wraps a promise with a timeout, returning fallback value if timeout is exceeded
-   */
-  private async withTimeout<T>(
-    promise: Promise<T>,
-    timeoutMs: number,
-    fallback: T,
-  ): Promise<T> {
-    return Promise.race([
-      promise,
-      new Promise<T>((resolve) =>
-        setTimeout(() => resolve(fallback), timeoutMs),
-      ),
-    ]);
-  }
-
-  /**
    * Gather user context from Memory Engine by executing 6 parallel queries
    */
   async gatherUserContext(params: {
@@ -87,100 +76,153 @@ export class MemoryEngineService {
       `[MemoryEngineService] Gathering user context for oracle: ${oracleDid}, room: ${roomId}`,
     );
 
-    try {
-      // Execute all 6 queries in parallel with timeouts using Promise.allSettled
-      const authHeaders: MemoryEngineAuthHeaders = {
-        oracleToken,
-        userToken,
-        oracleHomeServer,
-        userHomeServer,
-        ucanInvocation,
-      };
+    const authHeaders: MemoryEngineAuthHeaders = {
+      oracleToken,
+      userToken,
+      oracleHomeServer,
+      userHomeServer,
+      ucanInvocation,
+    };
 
-      const results = await Promise.allSettled([
-        this.withTimeout(
-          this.queryIdentity(oracleDid, roomId, authHeaders),
-          this.QUERY_TIMEOUT_MS,
-          undefined,
-        ),
-        this.withTimeout(
-          this.queryWork(oracleDid, roomId, authHeaders),
-          this.QUERY_TIMEOUT_MS,
-          undefined,
-        ),
-        this.withTimeout(
-          this.queryGoals(oracleDid, roomId, authHeaders),
-          this.QUERY_TIMEOUT_MS,
-          undefined,
-        ),
-        this.withTimeout(
-          this.queryInterests(oracleDid, roomId, authHeaders),
-          this.QUERY_TIMEOUT_MS,
-          undefined,
-        ),
-        this.withTimeout(
-          this.queryRelationships(oracleDid, roomId, authHeaders),
-          this.QUERY_TIMEOUT_MS,
-          undefined,
-        ),
-        this.withTimeout(
-          this.queryRecent(oracleDid, roomId, authHeaders),
-          this.QUERY_TIMEOUT_MS,
-          undefined,
-        ),
-      ]);
+    // The 6 queries that make up userContext. Order matters: it determines
+    // how we map batch result slots back to UserContextData fields.
+    const labels = [
+      'identity',
+      'work',
+      'goals',
+      'interests',
+      'relationships',
+      'recent',
+    ] as const;
+    const requests: SearchEnhancedRequest[] = [
+      this.buildIdentityRequest(oracleDid),
+      this.buildWorkRequest(oracleDid),
+      this.buildGoalsRequest(oracleDid),
+      this.buildInterestsRequest(oracleDid),
+      this.buildRelationshipsRequest(oracleDid),
+      this.buildRecentRequest(oracleDid),
+    ];
 
-      // Extract results from Promise.allSettled outcomes
-      const identity =
-        results[0].status === 'fulfilled' ? results[0].value : undefined;
-      const work =
-        results[1].status === 'fulfilled' ? results[1].value : undefined;
-      const goals =
-        results[2].status === 'fulfilled' ? results[2].value : undefined;
-      const interests =
-        results[3].status === 'fulfilled' ? results[3].value : undefined;
-      const relationships =
-        results[4].status === 'fulfilled' ? results[4].value : undefined;
-      const recent =
-        results[5].status === 'fulfilled' ? results[5].value : undefined;
+    const gatherStart = Date.now();
+    const batch = await this.executeBatch(requests, roomId, authHeaders);
+    const gatherElapsed = Date.now() - gatherStart;
 
-      // Log any failures
-      results.forEach((result, index) => {
-        if (result.status === 'rejected') {
-          Logger.warn(
-            `[MemoryEngineService] Query ${index} failed:`,
-            result.reason,
-          );
-        }
-      });
-
-      return {
-        identity,
-        work,
-        goals,
-        interests,
-        relationships,
-        recent,
-      };
-    } catch (error) {
+    if (!batch) {
       Logger.error(
-        '[MemoryEngineService] Failed to gather user context:',
-        error,
+        `[MemoryEngineService] gatherUserContext failed after ${gatherElapsed}ms — returning empty context`,
       );
-      // Return empty context on error
       return {};
     }
+
+    // Map each slot back to the labelled field. Error slots become undefined.
+    const fields: (SearchEnhancedResponse | undefined)[] = batch.results.map(
+      (slot, index) => {
+        const label = labels[index];
+        if (isBatchErrorSlot(slot)) {
+          Logger.warn(
+            `[MemoryEngineService] Batch slot "${label}" failed (${slot.error.status_code}): ${slot.error.detail}`,
+          );
+          return undefined;
+        }
+        return slot;
+      },
+    );
+
+    if (batch.results.length !== labels.length) {
+      Logger.warn(
+        `[MemoryEngineService] Batch length mismatch: expected ${labels.length}, got ${batch.results.length}`,
+      );
+    }
+
+    const summary = labels.map((label, index) => {
+      const value = fields[index];
+      if (value === undefined) return `${label}=missing`;
+      return `${label}=ok(f${value.total_results.facts}/e${value.total_results.entities})`;
+    });
+    Logger.info(
+      `[MemoryEngineService] gatherUserContext completed in ${gatherElapsed}ms (batch) — ${summary.join(', ')}`,
+    );
+
+    return {
+      identity: fields[0],
+      work: fields[1],
+      goals: fields[2],
+      interests: fields[3],
+      relationships: fields[4],
+      recent: fields[5],
+    };
   }
 
   /**
-   * Query 1: User Identity & Attributes
+   * POST /search-enhanced-batch — single round-trip for N parallel queries.
+   * Returns undefined on transport/HTTP failure; a partially-failed batch
+   * still resolves with per-slot error markers (handled by caller via
+   * `isBatchErrorSlot`).
    */
-  private async queryIdentity(
-    oracleDid: string,
+  private async executeBatch(
+    queries: SearchEnhancedRequest[],
     roomId: string,
     auth: MemoryEngineAuthHeaders,
-  ): Promise<SearchEnhancedResponse | undefined> {
-    const request: SearchEnhancedRequest = {
+  ): Promise<SearchEnhancedBatchResponse | undefined> {
+    if (!roomId) {
+      Logger.warn(
+        `[MemoryEngineService] No room id provided, skipping batch search`,
+      );
+      return undefined;
+    }
+    if (!auth.ucanInvocation && (!auth.oracleToken || !auth.userToken)) {
+      Logger.warn(
+        `[MemoryEngineService] Missing auth (no UCAN and no Matrix tokens), skipping batch search`,
+      );
+      return undefined;
+    }
+
+    const body: SearchEnhancedBatchRequest = { queries };
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.BATCH_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(
+        `${this.memoryEngineUrl}/search-enhanced-batch`,
+        {
+          method: 'POST',
+          headers: this.buildHeaders(auth, roomId),
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        },
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        Logger.warn(
+          `[MemoryEngineService] Batch search failed (${response.status}): ${errorText}`,
+        );
+        return undefined;
+      }
+
+      return (await response.json()) as SearchEnhancedBatchResponse;
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') {
+        Logger.warn(
+          `[MemoryEngineService] Batch search aborted after ${this.BATCH_TIMEOUT_MS}ms`,
+        );
+      } else {
+        Logger.error(`[MemoryEngineService] Batch search threw:`, error);
+      }
+      return undefined;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // ── Per-query request builders ────────────────────────────────────────────
+  // These produce SearchEnhancedRequest payloads consumed by gatherUserContext
+  // via the batch endpoint. Order matches the labels array in
+  // gatherUserContext — keep the two in sync.
+
+  private buildIdentityRequest(oracleDid: string): SearchEnhancedRequest {
+    return {
       oracle_dids: [oracleDid],
       query:
         'username and nickname and age user identity traits values personality characteristics communication style beliefs preferences',
@@ -204,19 +246,10 @@ export class MemoryEngineService {
         invalid_at: [[{ date: null, comparison_operator: 'IS NULL' }]],
       },
     };
-
-    return this.executeQuery(request, roomId, auth);
   }
 
-  /**
-   * Query 2: Work Context
-   */
-  private async queryWork(
-    oracleDid: string,
-    roomId: string,
-    auth: MemoryEngineAuthHeaders,
-  ): Promise<SearchEnhancedResponse | undefined> {
-    const request: SearchEnhancedRequest = {
+  private buildWorkRequest(oracleDid: string): SearchEnhancedRequest {
+    return {
       oracle_dids: [oracleDid],
       query:
         'work job career projects skills organization employment role responsibilities expertise',
@@ -247,19 +280,10 @@ export class MemoryEngineService {
         invalid_at: [[{ date: null, comparison_operator: 'IS NULL' }]],
       },
     };
-
-    return this.executeQuery(request, roomId, auth);
   }
 
-  /**
-   * Query 3: Goals & Habits
-   */
-  private async queryGoals(
-    oracleDid: string,
-    roomId: string,
-    auth: MemoryEngineAuthHeaders,
-  ): Promise<SearchEnhancedResponse | undefined> {
-    const request: SearchEnhancedRequest = {
+  private buildGoalsRequest(oracleDid: string): SearchEnhancedRequest {
+    return {
       oracle_dids: [oracleDid],
       query:
         'goals aspirations objectives milestones habits routines patterns achievements progress',
@@ -282,19 +306,10 @@ export class MemoryEngineService {
         invalid_at: [[{ date: null, comparison_operator: 'IS NULL' }]],
       },
     };
-
-    return this.executeQuery(request, roomId, auth);
   }
 
-  /**
-   * Query 4: Interests & Preferences
-   */
-  private async queryInterests(
-    oracleDid: string,
-    roomId: string,
-    auth: MemoryEngineAuthHeaders,
-  ): Promise<SearchEnhancedResponse | undefined> {
-    const request: SearchEnhancedRequest = {
+  private buildInterestsRequest(oracleDid: string): SearchEnhancedRequest {
+    return {
       oracle_dids: [oracleDid],
       query:
         'interests hobbies passions preferences likes dislikes expertise topics content',
@@ -324,19 +339,10 @@ export class MemoryEngineService {
         invalid_at: [[{ date: null, comparison_operator: 'IS NULL' }]],
       },
     };
-
-    return this.executeQuery(request, roomId, auth);
   }
 
-  /**
-   * Query 5: Relationships
-   */
-  private async queryRelationships(
-    oracleDid: string,
-    roomId: string,
-    auth: MemoryEngineAuthHeaders,
-  ): Promise<SearchEnhancedResponse | undefined> {
-    const request: SearchEnhancedRequest = {
+  private buildRelationshipsRequest(oracleDid: string): SearchEnhancedRequest {
+    return {
       oracle_dids: [oracleDid],
       query:
         'relationships people connections social network colleagues friends family contacts',
@@ -359,24 +365,17 @@ export class MemoryEngineService {
         invalid_at: [[{ date: null, comparison_operator: 'IS NULL' }]],
       },
     };
-
-    return this.executeQuery(request, roomId, auth);
   }
 
-  /**
-   * Query 6: Recent Context
-   */
-  private async queryRecent(
-    oracleDid: string,
-    roomId: string,
-    auth: MemoryEngineAuthHeaders,
-  ): Promise<SearchEnhancedResponse | undefined> {
-    // Calculate date 90 days ago for recent context
+  private buildRecentRequest(oracleDid: string): SearchEnhancedRequest {
+    // Server-side `recent_memory` strategy auto-injects a created_at >= now-90d
+    // filter. We still pass it explicitly as defense-in-depth — the server's
+    // merge logic respects an existing lower bound and won't double-apply.
     const ninetyDaysAgo = new Date();
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
     const dateString = ninetyDaysAgo.toISOString();
 
-    const request: SearchEnhancedRequest = {
+    return {
       oracle_dids: [oracleDid],
       query:
         'recent conversations messages discussions activities updates interactions',
@@ -390,8 +389,6 @@ export class MemoryEngineService {
         created_at: [[{ date: dateString, comparison_operator: '>=' }]],
       },
     };
-
-    return this.executeQuery(request, roomId, auth);
   }
 
   /**
@@ -472,56 +469,6 @@ export class MemoryEngineService {
         error,
       );
       return { success: false };
-    }
-  }
-
-  /**
-   * Execute a search query against the Memory Engine API
-   */
-  private async executeQuery(
-    request: SearchEnhancedRequest,
-    roomId: string,
-    auth: MemoryEngineAuthHeaders,
-  ): Promise<SearchEnhancedResponse | undefined> {
-    if (!roomId) {
-      Logger.warn(
-        `[MemoryEngineService] No room id provided, skipping query "${request.query}"`,
-      );
-      return undefined;
-    }
-    if (!auth.ucanInvocation && (!auth.oracleToken || !auth.userToken)) {
-      Logger.warn(
-        `[MemoryEngineService] Missing auth (no UCAN and no Matrix tokens), skipping query "${request.query}"`,
-      );
-      return undefined;
-    }
-
-    try {
-      const response = await fetch(`${this.memoryEngineUrl}/search-enhanced`, {
-        method: 'POST',
-        headers: this.buildHeaders(auth, roomId),
-        body: JSON.stringify(request),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        Logger.warn(
-          `[MemoryEngineService] Memory Engine query failed (${response.status}): ${errorText}`,
-        );
-        return undefined;
-      }
-
-      const result = (await response.json()) as SearchEnhancedResponse;
-      Logger.info(
-        `[MemoryEngineService] Query "${request.query}" returned ${result.total_results.facts} facts, ${result.total_results.entities} entities`,
-      );
-      return result;
-    } catch (error) {
-      Logger.error(
-        `[MemoryEngineService] Failed to execute query "${request.query}":`,
-        error,
-      );
-      return undefined;
     }
   }
 }
