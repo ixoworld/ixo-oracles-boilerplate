@@ -48,7 +48,10 @@ import {
   type FileProcessingService,
   type SandboxUploadConfig,
 } from 'src/messages/file-processing.service';
-import { SecretsService } from 'src/secrets/secrets.service';
+import {
+  SecretsService,
+  type SecretIndexEntry,
+} from 'src/secrets/secrets.service';
 import type { TaskExecutionContext } from 'src/tasks/processors/processor-utils';
 import { type TasksService } from 'src/tasks/task.service';
 import { UserMatrixSqliteSyncService } from 'src/user-matrix-sqlite-sync-service/user-matrix-sqlite-sync-service.service';
@@ -75,6 +78,11 @@ import {
   createSearchSkillsTool,
 } from '../nodes/tools-node/skills-tools';
 import { getComposioTools } from '../nodes/tools-node/tools';
+import { createSetUserPreferencesTool } from '../nodes/tools-node/user-preferences-tool';
+import {
+  UserPreferencesService,
+  type UserPreferences,
+} from 'src/user-preferences/user-preferences.service';
 
 const COMPOSIO_CONTEXT = `## 🔌 External App Tools (Composio)
 
@@ -138,6 +146,26 @@ function formatUserContext(data: unknown): string {
   if (names.length > 0) lines.push(`- **Related:** ${names.join(', ')}`);
 
   return lines.length > 0 ? lines.join('\n') : '_No information available._';
+}
+
+/**
+ * Render the user's stored preferences as a markdown bullet list for injection
+ * into the system prompt. Returns an empty string when no prefs are set so the
+ * mustache `{{#USER_PREFERENCES_CONTEXT}}` block is omitted entirely.
+ */
+function formatUserPreferences(prefs?: UserPreferences): string {
+  if (!prefs) return '';
+
+  const lines: string[] = [];
+  if (prefs.agentName)
+    lines.push(`- **Preferred agent name:** ${prefs.agentName}`);
+  if (prefs.language) lines.push(`- **Preferred language:** ${prefs.language}`);
+  if (prefs.tone) lines.push(`- **Tone:** ${prefs.tone}`);
+  if (prefs.formality) lines.push(`- **Formality:** ${prefs.formality}`);
+  if (prefs.customInstructions)
+    lines.push(`- **Custom instructions:** ${prefs.customInstructions}`);
+
+  return lines.join('\n');
 }
 
 interface InvokeMainAgentParams {
@@ -266,11 +294,33 @@ Promise<ReactAgent<any>> => {
     `[createMainAgent] PageMemory auth ${pageMemoryAuth ? 'available' : 'unavailable (missing tokens or roomId)'}`,
   );
 
-  // Load secret index (cheap — one state query per message)
+  // Load secret index + user preferences in parallel (cheap — one state query each).
+  // Both are wrapped so a failure in either never blocks oracle startup.
   const roomId = configurable.configs?.matrix.roomId;
-  const secretIndex = roomId
-    ? await SecretsService.getInstance().getSecretIndex(roomId)
-    : [];
+  const [secretIndex, userPreferences] = await Promise.all<
+    [Promise<SecretIndexEntry[]>, Promise<UserPreferences | undefined>]
+  >([
+    roomId
+      ? SecretsService.getInstance()
+          .getSecretIndex(roomId)
+          .catch((err: unknown) => {
+            Logger.warn(
+              `[createMainAgent] Failed to load secret index: ${err instanceof Error ? err.message : String(err)}`,
+            );
+            return [];
+          })
+      : Promise.resolve([]),
+    roomId
+      ? UserPreferencesService.getInstance()
+          .get(roomId)
+          .catch((err: unknown) => {
+            Logger.warn(
+              `[createMainAgent] Failed to load user preferences: ${err instanceof Error ? err.message : String(err)}`,
+            );
+            return undefined;
+          })
+      : Promise.resolve(undefined),
+  ]);
 
   // Build base headers for sandbox MCP (auth only — secrets added lazily)
   // Try UCAN invocation first, fall back to Matrix OpenID tokens
@@ -647,8 +697,13 @@ Promise<ReactAgent<any>> => {
   const configPrompt = oracleConfig.prompt;
   const systemPrompt = await AI_ASSISTANT_PROMPT.format({
     ORACLE_SECTION: buildOracleSection({
+      // Prefer the user's chosen agent name when set, otherwise fall back to
+      // the configured oracle name.
       oracleName:
-        oracleConfig.oracleName || configService.get('ORACLE_NAME') || 'Oracle',
+        userPreferences?.agentName ??
+        oracleConfig.oracleName ??
+        configService.get('ORACLE_NAME') ??
+        'Oracle',
       orgName: oracleConfig.orgName || undefined,
       description: oracleConfig.description || undefined,
       location: oracleConfig.location || undefined,
@@ -671,6 +726,7 @@ Promise<ReactAgent<any>> => {
         ? secretIndex.map((s) => `- _USER_SECRET_${s.name}`).join('\n')
         : '',
     COMPOSIO_CONTEXT: composioTools.length > 0 ? COMPOSIO_CONTEXT : '',
+    USER_PREFERENCES_CONTEXT: formatUserPreferences(userPreferences),
   });
 
   // Wrap sandbox_run for lazy secret injection (both oracle and user secrets).
@@ -944,7 +1000,12 @@ Promise<ReactAgent<any>> => {
             ),
           ]
         : []),
-      ...(matrix?.roomId ? [createListRoomFilesTool(matrix.roomId)] : []),
+      ...(matrix?.roomId
+        ? [
+            createListRoomFilesTool(matrix.roomId),
+            createSetUserPreferencesTool(matrix.roomId),
+          ]
+        : []),
       ...(applySandboxOutputToBlockTool ? [applySandboxOutputToBlockTool] : []),
       ...(standaloneEditorTool ? [standaloneEditorTool] : []),
     ],

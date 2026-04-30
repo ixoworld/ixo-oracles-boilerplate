@@ -5,6 +5,7 @@ import {
   type AgActionDto,
   type BrowserToolCallDto,
 } from 'src/messages/dto/send-message.dto';
+import { type UserPreferences } from 'src/user-preferences/user-preferences.service';
 import { type MCPUCANContext } from './mcp';
 
 export const MainAgentGraphState = Annotation.Root({
@@ -72,6 +73,16 @@ export const MainAgentGraphState = Annotation.Root({
    * Contains invocations for protected MCP tools
    */
   mcpUcanContext: Annotation<MCPUCANContext | undefined>({
+    default: () => undefined,
+    reducer: (_, curr) => curr,
+  }),
+
+  /**
+   * Per-user preferences (agent name, language, tone, formality, custom
+   * instructions). Loaded from Matrix room state at the start of a turn and
+   * injected into the system prompt. Updates take effect on the next turn.
+   */
+  userPreferences: Annotation<UserPreferences | undefined>({
     default: () => undefined,
     reducer: (_, curr) => curr,
   }),

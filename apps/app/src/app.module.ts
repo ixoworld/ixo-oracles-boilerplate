@@ -24,6 +24,7 @@ import { UcanModule } from './ucan/ucan.module';
 import { normalizeDid } from './utils/header.utils';
 import { RedisService } from './utils/redis.service';
 import { TasksModule } from './tasks/tasks.module';
+import { UserPreferencesModule } from './user-preferences/user-preferences.module';
 import { WsModule } from './ws/ws.module';
 
 @Module({
@@ -66,6 +67,7 @@ import { WsModule } from './ws/ws.module';
     ScheduleModule.forRoot(),
     SlackModule,
     CallsModule,
+    UserPreferencesModule,
   ],
   controllers: [AppController],
   providers: [

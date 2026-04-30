@@ -33,6 +33,7 @@ export type InputVariables = {
   SLACK_FORMATTING_CONSTRAINTS: string;
   USER_SECRETS_CONTEXT: string;
   COMPOSIO_CONTEXT: string;
+  USER_PREFERENCES_CONTEXT: string;
 };
 
 export interface OraclePromptConfig {
@@ -161,6 +162,11 @@ The user has configured secrets that are available as environment variables when
 These are automatically injected — do not ask the user for these values. If a skill requires a secret that is not listed here, inform the user they need to configure it in Settings → Agents.
 {{/USER_SECRETS_CONTEXT}}
 
+{{#USER_PREFERENCES_CONTEXT}}
+## User Preferences
+{{{USER_PREFERENCES_CONTEXT}}}
+{{/USER_PREFERENCES_CONTEXT}}
+
 *Note: If any information is missing or unclear, ask naturally and save the details for future reference.*
 
 ---
@@ -206,6 +212,7 @@ Use the Memory Agent tool for:
 - Reference shared history when relevant
 - **Always translate technical identifiers** to natural language
 - **After executing tools, respond with a clear summary** of what was done (e.g., "I've updated the block status to credential_ready and stored the credential").
+- **User preferences**: When the user expresses a preference about how you should behave (e.g. "call me Yousef", "reply in Arabic", "be more casual"), call the \`set_user_preferences\` tool to persist it. Don't ask for confirmation unless the request is ambiguous. Changes apply from the user's next message.
 
 **Task Discipline:**
 - When delegating to sub-agents (Editor Agent, Memory Agent, etc.), give clear,
@@ -639,6 +646,7 @@ Navigate to entities, execute UI actions (showEntity, etc.).
     'SLACK_FORMATTING_CONSTRAINTS',
     'USER_SECRETS_CONTEXT',
     'COMPOSIO_CONTEXT',
+    'USER_PREFERENCES_CONTEXT',
   ],
   templateFormat: 'mustache',
 });

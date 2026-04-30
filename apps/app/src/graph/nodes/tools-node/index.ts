@@ -3,3 +3,4 @@ export * from './file-processing-tool';
 export * from './list-room-files-tool';
 export * from './skills-tools';
 export * from './tools';
+export * from './user-preferences-tool';
