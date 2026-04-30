@@ -206,3 +206,37 @@ export interface UserContextData {
   relationships?: SearchEnhancedResponse;
   recent?: SearchEnhancedResponse;
 }
+
+// Batch search types — backend endpoint POST /search-enhanced-batch
+export interface SearchEnhancedBatchRequest {
+  queries: SearchEnhancedRequest[];
+}
+
+// A failed slot in the batch response. The server returns this in place of
+// SearchEnhancedResponse when a single query fails — the rest of the batch
+// still completes.
+export interface SearchEnhancedBatchErrorSlot {
+  error: {
+    status_code: number;
+    detail: string;
+  };
+  query: string;
+  strategy_used: string;
+}
+
+export type SearchEnhancedBatchSlot =
+  | SearchEnhancedResponse
+  | SearchEnhancedBatchErrorSlot;
+
+export interface SearchEnhancedBatchResponse {
+  results: SearchEnhancedBatchSlot[];
+}
+
+export function isBatchErrorSlot(
+  slot: SearchEnhancedBatchSlot,
+): slot is SearchEnhancedBatchErrorSlot {
+  return (
+    typeof (slot as SearchEnhancedBatchErrorSlot).error === 'object' &&
+    (slot as SearchEnhancedBatchErrorSlot).error !== null
+  );
+}

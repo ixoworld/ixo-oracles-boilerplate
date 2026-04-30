@@ -83,8 +83,8 @@ importers:
         specifier: ^0.8.0
         version: 0.8.0(@composio/core@0.8.0(ws@8.18.2)(zod@4.3.6))(@langchain/core@1.1.42(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.215.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.0))(openai@6.34.0(ws@8.18.2)(zod@4.3.6))(ws@8.18.2))
       '@ixo/common':
-        specifier: ^1.1.38
-        version: 1.1.38(@browserbasehq/sdk@2.6.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.56.1)(deepmerge@4.3.1)(dotenv@16.6.1)(openai@6.34.0(ws@8.18.2)(zod@4.3.6))(zod@4.3.6))(@ibm-cloud/watsonx-ai@1.7.3)(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.215.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.0))(@upstash/ratelimit@2.0.7(@upstash/redis@1.35.6))(@upstash/redis@1.35.6)(better-sqlite3@12.9.0)(chromadb@1.10.5(openai@6.34.0(ws@8.18.2)(zod@4.3.6)))(fast-xml-parser@4.5.3)(ibm-cloud-sdk-core@5.4.4)(ignore@7.0.5)(ioredis@5.8.2)(jsdom@28.1.0(@noble/hashes@1.8.0))(lodash@4.18.1)(neo4j-driver@5.28.2)(pg@8.16.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(ws@8.18.2)(zod-to-json-schema@3.25.2(zod@4.3.6))
+        specifier: workspace:*
+        version: link:../../packages/common
       '@ixo/editor':
         specifier: 3.0.0-beta.11
         version: 3.0.0-beta.11(@cosmjs/crypto@0.33.1)(@cosmjs/encoding@0.33.1)(@ixo/matrix-crdt@1.1.0(lib0@0.2.114)(matrix-js-sdk@37.13.0)(y-protocols@1.0.6(yjs@13.6.27))(yjs@13.6.27))(@ixo/surveys@0.1.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@mantine/core@7.17.8(@mantine/hooks@7.17.8(react@18.3.1))(@types/react@18.3.27)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@mantine/hooks@7.17.8(react@18.3.1))(@types/hast@3.0.4)(@types/react@18.3.27)(matrix-js-sdk@37.13.0)(react-dom@18.3.1(react@18.3.1))(react-jazzicon@1.0.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)(typescript@5.9.3)(use-sync-external-store@1.6.0(react@18.3.1))
@@ -3177,9 +3177,6 @@ packages:
     resolution: {integrity: sha512-ZXRY4jNvVgSVQ8DL3LTcakaAtXwTVUxE81hslsyD2AtoXW/wVob10HkOJ1X/pAlcI7D+2YoZKg5do8G/w6RYgA==}
     engines: {node: '>=8'}
 
-  '@ixo/common@1.1.38':
-    resolution: {integrity: sha512-No2two7xq0hXdv5/3EgMNslVgQg3ukCp2kiqwggsJsTD4lrCYSB9kp7WSmSJf0Du9ClFXlUR5POCYIiqt6IMkw==}
-
   '@ixo/did-provider-x@0.0.2':
     resolution: {integrity: sha512-QOZH3i68pGfRZSyU+OSu3OkplfB5UIj6nRrm0ieD827/OyAQXu+uTyz+POoD9Icrn9OVFP3gl7b3b0sgpaeavg==}
 
@@ -3237,9 +3234,6 @@ packages:
 
   '@ixo/oracles-chain-client@1.2.1':
     resolution: {integrity: sha512-Pea3qD+kH1LtwD5lWEh5rWvKcaNHFmOGAZOOzkkTFFtv6gK4fWfeJaulm+2nmaUjjhAIa4EKd8035zyW5zXwjA==}
-
-  '@ixo/oracles-chain-client@1.2.2':
-    resolution: {integrity: sha512-HBbFwWYbistI9e2AqHtq17zA0AonnAStvNICw85NqOj8pt79GD/SUnl8Q9YiDpPDQxw01C8/6Qniwjnc7Eq1yw==}
 
   '@ixo/oracles-events@1.0.4':
     resolution: {integrity: sha512-fCl0My0v3Oba94DzmoIanU+zfrU04lilwTPHhqBKpQf4NH++oFXIwoIgFlLOa03vFGxfYD3VbzJNb+vgtcEd/g==}
@@ -12644,6 +12638,7 @@ packages:
 
   uuid@7.0.3:
     resolution: {integrity: sha512-DPSke0pXhTZgoF/d+WSt2QaKMCFSfx7QegxEWT+JOuHF5aWrKEn0G+ztjuJg/gG8/ItK+rbPCD/yNv8yyih6Cg==}
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
     hasBin: true
 
   uuid@8.3.2:
@@ -16331,178 +16326,6 @@ snapshots:
 
   '@istanbuljs/schema@0.1.3': {}
 
-  '@ixo/common@1.1.38(@browserbasehq/sdk@2.6.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.56.1)(deepmerge@4.3.1)(dotenv@16.6.1)(openai@6.34.0(ws@8.18.2)(zod@4.3.6))(zod@4.3.6))(@ibm-cloud/watsonx-ai@1.7.3)(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.215.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.0))(@upstash/ratelimit@2.0.7(@upstash/redis@1.35.6))(@upstash/redis@1.35.6)(better-sqlite3@12.9.0)(chromadb@1.10.5(openai@6.34.0(ws@8.18.2)(zod@4.3.6)))(fast-xml-parser@4.5.3)(ibm-cloud-sdk-core@5.4.4)(ignore@7.0.5)(ioredis@5.8.2)(jsdom@28.1.0(@noble/hashes@1.8.0))(lodash@4.18.1)(neo4j-driver@5.28.2)(pg@8.16.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(ws@8.18.2)(zod-to-json-schema@3.25.2(zod@4.3.6))':
-    dependencies:
-      '@cosmjs/proto-signing': 0.33.1
-      '@cosmjs/stargate': 0.33.1
-      '@ixo/impactxclient-sdk': 2.4.1
-      '@ixo/logger': 0.0.2
-      '@ixo/matrix': 1.2.3(@langchain/core@1.1.42(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.215.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.0))(openai@6.34.0(ws@8.18.2)(zod@4.3.6))(ws@8.18.2))
-      '@ixo/oracles-chain-client': 1.2.2
-      '@langchain/community': 1.1.27(8ec1bea159d308e660084c4e1aea3d0c)
-      '@langchain/core': 1.1.42(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.215.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.0))(openai@6.34.0(ws@8.18.2)(zod@4.3.6))(ws@8.18.2)
-      '@langchain/langgraph': 1.2.9(@langchain/core@1.1.42(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.215.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.0))(openai@6.34.0(ws@8.18.2)(zod@4.3.6))(ws@8.18.2))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(zod-to-json-schema@3.25.2(zod@4.3.6))(zod@4.3.6)
-      '@langchain/langgraph-checkpoint': 1.0.1(@langchain/core@1.1.42(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.215.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.0))(openai@6.34.0(ws@8.18.2)(zod@4.3.6))(ws@8.18.2))
-      '@langchain/langgraph-checkpoint-sqlite': 1.0.1(@langchain/core@1.1.42(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.215.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.0))(openai@6.34.0(ws@8.18.2)(zod@4.3.6))(ws@8.18.2))(@langchain/langgraph-checkpoint@1.0.1(@langchain/core@1.1.42(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.215.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.0))(openai@6.34.0(ws@8.18.2)(zod@4.3.6))(ws@8.18.2)))
-      '@langchain/openai': 1.4.5(@langchain/core@1.1.42(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.215.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.0))(openai@6.34.0(ws@8.18.2)(zod@4.3.6))(ws@8.18.2))(ws@8.18.2)
-      '@langchain/textsplitters': 1.0.1(@langchain/core@1.1.42(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.215.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.0))(openai@6.34.0(ws@8.18.2)(zod@4.3.6))(ws@8.18.2))
-      '@tavily/core': 0.7.2
-      axios: 1.13.2(debug@4.4.3)
-      axios-retry: 4.5.0(axios@1.13.2)
-      class-transformer: 0.5.1
-      class-validator: 0.14.2
-      dotenv: 16.6.1
-      duck-duck-scrape: 2.2.7
-      html-to-text: 9.0.5
-      langchain: 1.3.5(@langchain/core@1.1.42(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.215.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.0))(openai@6.34.0(ws@8.18.2)(zod@4.3.6))(ws@8.18.2))(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.215.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.0))(openai@6.34.0(ws@8.18.2)(zod@4.3.6))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(ws@8.18.2)(zod-to-json-schema@3.25.2(zod@4.3.6))
-      langsmith: 0.5.25(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.215.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.0))(openai@6.34.0(ws@8.18.2)(zod@4.3.6))(ws@8.18.2)
-      mammoth: 1.12.0
-      node-emoji: 2.2.0
-      openai: 6.34.0(ws@8.18.2)(zod@4.3.6)
-      pdf-parse: 2.4.5
-      playwright: 1.59.1
-      store: 2.0.12
-      zod: 4.3.6
-    transitivePeerDependencies:
-      - '@arcjet/redact'
-      - '@aws-crypto/sha256-js'
-      - '@aws-sdk/client-dynamodb'
-      - '@aws-sdk/client-lambda'
-      - '@aws-sdk/client-s3'
-      - '@aws-sdk/client-sagemaker-runtime'
-      - '@aws-sdk/client-sfn'
-      - '@aws-sdk/credential-provider-node'
-      - '@aws-sdk/dsql-signer'
-      - '@azure/search-documents'
-      - '@azure/storage-blob'
-      - '@browserbasehq/sdk'
-      - '@browserbasehq/stagehand'
-      - '@clickhouse/client'
-      - '@datastax/astra-db-ts'
-      - '@elastic/elasticsearch'
-      - '@getmetal/metal-sdk'
-      - '@getzep/zep-cloud'
-      - '@getzep/zep-js'
-      - '@gomomento/sdk-core'
-      - '@google-cloud/storage'
-      - '@gradientai/nodejs-sdk'
-      - '@huggingface/inference'
-      - '@huggingface/transformers'
-      - '@ibm-cloud/watsonx-ai'
-      - '@lancedb/lancedb'
-      - '@layerup/layerup-security'
-      - '@libsql/client'
-      - '@mendable/firecrawl-js'
-      - '@mlc-ai/web-llm'
-      - '@mozilla/readability'
-      - '@neondatabase/serverless'
-      - '@notionhq/client'
-      - '@opensearch-project/opensearch'
-      - '@opentelemetry/api'
-      - '@opentelemetry/exporter-trace-otlp-proto'
-      - '@opentelemetry/sdk-trace-base'
-      - '@pinecone-database/pinecone'
-      - '@planetscale/database'
-      - '@premai/prem-sdk'
-      - '@qdrant/js-client-rest'
-      - '@raycast/api'
-      - '@rockset/client'
-      - '@smithy/eventstream-codec'
-      - '@smithy/protocol-http'
-      - '@smithy/signature-v4'
-      - '@smithy/util-utf8'
-      - '@spider-cloud/spider-client'
-      - '@supabase/supabase-js'
-      - '@tensorflow-models/universal-sentence-encoder'
-      - '@tensorflow/tfjs-core'
-      - '@upstash/ratelimit'
-      - '@upstash/redis'
-      - '@upstash/vector'
-      - '@vercel/kv'
-      - '@vercel/postgres'
-      - '@writerai/writer-sdk'
-      - '@xata.io/client'
-      - '@xenova/transformers'
-      - '@zilliz/milvus2-sdk-node'
-      - apify-client
-      - assemblyai
-      - azion
-      - better-sqlite3
-      - bufferutil
-      - cassandra-driver
-      - cborg
-      - cheerio
-      - chromadb
-      - closevector-common
-      - closevector-node
-      - closevector-web
-      - cohere-ai
-      - convex
-      - couchbase
-      - crypto-js
-      - d3-dsv
-      - debug
-      - discord.js
-      - domexception
-      - encoding
-      - epub2
-      - expo
-      - expo-crypto
-      - faiss-node
-      - fast-xml-parser
-      - firebase-admin
-      - google-auth-library
-      - googleapis
-      - hnswlib-node
-      - ibm-cloud-sdk-core
-      - ignore
-      - interface-datastore
-      - ioredis
-      - it-all
-      - jsdom
-      - jsonwebtoken
-      - lodash
-      - lunary
-      - mariadb
-      - mem0ai
-      - mongodb
-      - msrcrypt
-      - msrcrypto
-      - mysql2
-      - neo4j-driver
-      - node-llama-cpp
-      - notion-to-md
-      - officeparser
-      - peggy
-      - pg
-      - pg-copy-streams
-      - pickleparser
-      - portkey-ai
-      - puppeteer
-      - pyodide
-      - react
-      - react-dom
-      - react-native
-      - react-native-securerandom
-      - redis
-      - replicate
-      - sonix-speech-recognition
-      - srt-parser-2
-      - supports-color
-      - svelte
-      - typeorm
-      - typesense
-      - usearch
-      - utf-8-validate
-      - voy-search
-      - vue
-      - weaviate-client
-      - web-streams-polyfill
-      - word-extractor
-      - ws
-      - youtubei.js
-      - zod-to-json-schema
-
   '@ixo/did-provider-x@0.0.2':
     dependencies:
       '@cosmjs/crypto': 0.29.5
@@ -16681,54 +16504,6 @@ snapshots:
       graphql-request: 7.1.2(graphql@16.12.0)
       graphql-tag: 2.12.6(graphql@16.12.0)
       jose: 6.1.2
-      limiter: 2.1.0
-      store: 2.0.12
-      zod: 4.3.6
-    transitivePeerDependencies:
-      - bufferutil
-      - debug
-      - domexception
-      - encoding
-      - expo
-      - expo-crypto
-      - msrcrypt
-      - msrcrypto
-      - react-native
-      - react-native-securerandom
-      - supports-color
-      - utf-8-validate
-      - web-streams-polyfill
-
-  '@ixo/oracles-chain-client@1.2.2':
-    dependencies:
-      '@cosmjs/crypto': 0.32.4
-      '@cosmjs/encoding': 0.32.4
-      '@cosmjs/proto-signing': 0.32.4
-      '@cosmjs/stargate': 0.32.4
-      '@ixo/did-provider-x': 0.0.2
-      '@ixo/impactxclient-sdk': 2.4.1
-      '@ixo/logger': 0.0.2
-      '@ixo/matrixclient-sdk': 1.0.0
-      '@veramo/core': 6.0.0
-      '@veramo/credential-ld': 6.0.0(patch_hash=e114fa24a6a69a75a8d20f63634eb0407cceb1bb95508703271e00865798c1ad)(expo@54.0.25(@babel/core@7.28.5)(@modelcontextprotocol/sdk@1.27.1(@cfworker/json-schema@4.1.1)(zod@4.3.6))(graphql@16.12.0)(react-native@0.82.1(@babel/core@7.28.5)(react@18.3.1))(react@18.3.1))(msrcrypto@1.5.8)(react-native@0.82.1(@babel/core@7.28.5)(react@18.3.1))(web-streams-polyfill@3.3.3)
-      '@veramo/credential-w3c': 6.0.0(expo@54.0.25(@babel/core@7.28.5)(@modelcontextprotocol/sdk@1.27.1(@cfworker/json-schema@4.1.1)(zod@4.3.6))(graphql@16.12.0)(react-native@0.82.1(@babel/core@7.28.5)(react@18.3.1))(react@18.3.1))(msrcrypto@1.5.8)(react-native@0.82.1(@babel/core@7.28.5)(react@18.3.1))(web-streams-polyfill@3.3.3)
-      '@veramo/did-manager': 6.0.0
-      '@veramo/did-provider-key': 6.0.0
-      '@veramo/did-resolver': 6.0.0
-      '@veramo/key-manager': 6.0.0
-      '@veramo/kms-local': 6.0.0
-      ajv: 8.17.1
-      ajv-formats: 3.0.1(ajv@8.17.1)
-      axios: 1.7.8
-      axios-retry: 4.5.0(axios@1.7.8)
-      bs58: 6.0.0
-      did-resolver: 4.1.0
-      dotenv: 17.4.1
-      eciesjs: 0.4.16
-      graphql: 16.12.0
-      graphql-request: 7.1.2(graphql@16.12.0)
-      graphql-tag: 2.12.6(graphql@16.12.0)
-      jose: 6.2.1
       limiter: 2.1.0
       store: 2.0.12
       zod: 4.3.6
