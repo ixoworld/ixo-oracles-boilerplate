@@ -943,7 +943,8 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       // If we're in a group room, build a one-shot context block from channel
       // memory + recent room messages and stash it on runnableConfig. The
       // graph layer (createMainAgent) will append it to the system prompt and
-      // register channel-memory tools.
+      // register channel-memory tools. The roomId itself already lives on
+      // runnableConfig.configurable.configs.matrix.roomId — don't duplicate.
       if (params.groupChat) {
         try {
           const contextBlock =
@@ -954,12 +955,6 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
           (
             runnableConfig.configurable as Record<string, unknown>
           ).groupChatContext = contextBlock;
-          (
-            runnableConfig.configurable as Record<string, unknown>
-          ).groupChatRoomMemberCount = params.groupChat.memberCount;
-          (
-            runnableConfig.configurable as Record<string, unknown>
-          ).groupChatRoomId = params.groupChat.roomId;
         } catch (err) {
           Logger.warn(
             `[MessagesService] Failed to build group-chat context: ${err instanceof Error ? err.message : String(err)}`,

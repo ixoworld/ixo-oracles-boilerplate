@@ -3,6 +3,7 @@ import { tool } from '@langchain/core/tools';
 import { Logger } from '@nestjs/common';
 import z from 'zod';
 import { type ChannelMemoryService } from '../../../channel-memory/channel-memory.service';
+import { type ChannelMemoryChunk } from '../../../channel-memory/channel-memory.types';
 
 const logger = new Logger('ChannelMemoryTools');
 
@@ -14,7 +15,7 @@ const logger = new Logger('ChannelMemoryTools');
  * accidentally read another room's memory.
  *
  * These tools should only be registered when the current session is in a
- * group room (members > 2). DMs don't see them.
+ * group room. DMs don't see them.
  */
 export interface ChannelMemoryToolDeps {
   channelMemory: ChannelMemoryService;
@@ -23,9 +24,7 @@ export interface ChannelMemoryToolDeps {
   pinnedByDid: string;
 }
 
-const formatChunk = (
-  chunk: ReturnType<ChannelMemoryService['recentChunks']>[number],
-) => ({
+const formatChunk = (chunk: ChannelMemoryChunk) => ({
   id: chunk.id,
   fromTimestamp: new Date(chunk.fromTimestamp).toISOString(),
   toTimestamp: new Date(chunk.toTimestamp).toISOString(),
@@ -40,9 +39,11 @@ export function createRecallChannelMemoryTool(deps: ChannelMemoryToolDeps) {
     async ({ limit }) => {
       const cap = Math.min(Math.max(limit ?? 10, 1), 30);
       try {
-        const chunks = deps.channelMemory.recentChunks(deps.roomId, cap);
-        const facts = deps.channelMemory.listPinnedFacts(deps.roomId);
-        const members = deps.channelMemory.getMembers(deps.roomId);
+        const [chunks, facts, members] = await Promise.all([
+          deps.channelMemory.recentChunks(deps.roomId, cap),
+          deps.channelMemory.listPinnedFacts(deps.roomId),
+          deps.channelMemory.getMembers(deps.roomId),
+        ]);
         return JSON.stringify(
           {
             chunks: chunks.map(formatChunk),
@@ -82,7 +83,7 @@ export function createSearchChannelMemoryTool(deps: ChannelMemoryToolDeps) {
     async ({ query, limit }) => {
       const cap = Math.min(Math.max(limit ?? 10, 1), 30);
       try {
-        const chunks = deps.channelMemory.search(deps.roomId, query, cap);
+        const chunks = await deps.channelMemory.search(deps.roomId, query, cap);
         if (chunks.length === 0) {
           return JSON.stringify({ chunks: [], note: 'No matching chunks.' });
         }
@@ -122,7 +123,7 @@ export function createPinRoomFactTool(deps: ChannelMemoryToolDeps) {
       try {
         const trimmed = fact.trim();
         if (!trimmed) return '[Error: fact is empty]';
-        const pinned = deps.channelMemory.pinFact({
+        const pinned = await deps.channelMemory.pinFact({
           roomId: deps.roomId,
           fact: trimmed.slice(0, 500),
           pinnedByDid: deps.pinnedByDid,
@@ -158,7 +159,7 @@ export function createUnpinRoomFactTool(deps: ChannelMemoryToolDeps) {
   return tool(
     async ({ factId }) => {
       try {
-        const ok = deps.channelMemory.unpinFact(deps.roomId, factId);
+        const ok = await deps.channelMemory.unpinFact(deps.roomId, factId);
         return JSON.stringify({ ok });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

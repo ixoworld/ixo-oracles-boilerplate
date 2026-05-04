@@ -948,24 +948,15 @@ Promise<ReactAgent<any>> => {
   }
 
   // Group-chat awareness: when MessagesService detects a group room it
-  // attaches a pre-built context block + member count to runnableConfig.
-  // We append the block to the system prompt and register channel-memory
-  // tools so the agent has full read/write access to room context.
+  // attaches a pre-built context block to runnableConfig.configurable.
+  // The roomId itself already lives on configurable.configs.matrix.roomId
+  // (in `matrix?.roomId` above) — no need to duplicate.
   const configurableExt = configurable as Record<string, unknown>;
   const groupChatContext =
     typeof configurableExt.groupChatContext === 'string'
       ? configurableExt.groupChatContext
       : undefined;
-  const groupChatRoomId =
-    typeof configurableExt.groupChatRoomId === 'string'
-      ? configurableExt.groupChatRoomId
-      : undefined;
-  const groupChatRoomMemberCount =
-    typeof configurableExt.groupChatRoomMemberCount === 'number'
-      ? configurableExt.groupChatRoomMemberCount
-      : undefined;
-  const isGroupRoom =
-    Boolean(groupChatContext) || (groupChatRoomMemberCount ?? 0) > 2;
+  const isGroupRoom = Boolean(groupChatContext);
 
   if (groupChatContext) {
     finalSystemPrompt += `\n\n---\n\n## GROUP CHAT CONTEXT\n\n${groupChatContext}\n`;
@@ -973,10 +964,10 @@ Promise<ReactAgent<any>> => {
 
   const channelMemoryService = ChannelMemoryService.getInstance();
   const channelMemoryTools =
-    isGroupRoom && groupChatRoomId && channelMemoryService
+    isGroupRoom && matrix?.roomId && channelMemoryService
       ? createChannelMemoryTools({
           channelMemory: channelMemoryService,
-          roomId: groupChatRoomId,
+          roomId: matrix.roomId,
           pinnedByDid: configurable.configs?.user?.did ?? '',
         })
       : [];

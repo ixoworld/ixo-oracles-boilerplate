@@ -6,7 +6,14 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import {
+  getMediaFromRoomByStorageKey,
+  uploadMediaToRoom,
+} from 'src/user-matrix-sqlite-sync-service/matrix-upload-utils';
 import * as crypto from 'node:crypto';
+import * as fs from 'node:fs';
+import * as fsp from 'node:fs/promises';
+import { File } from 'node:buffer';
 import * as path from 'node:path';
 import { type ENV } from '../types';
 import { ChannelMemoryRepo } from './channel-memory.repo';
@@ -29,73 +36,244 @@ const SESSION_INJECT_RECENT_CHUNKS = 8;
 const SESSION_INJECT_OLDEST_CHUNKS = 2;
 const SESSION_INJECT_LAST_MESSAGES = 15;
 
+/**
+ * Storage key used when uploading the per-room channel-memory DB to Matrix.
+ * Same key in every room — the room id implicitly disambiguates.
+ */
+const MATRIX_STORAGE_KEY = 'qiforge.channel_memory.v1';
+
+/** Debounce window between a write and the eventual upload to Matrix. */
+const SYNC_DEBOUNCE_MS = 60 * 1000;
+
 interface BufferEntry {
   messages: ObservedMessage[];
   idleTimer: NodeJS.Timeout | null;
 }
 
+interface RoomEntry {
+  repo: ChannelMemoryRepo;
+  dbPath: string;
+  /** Set true after any write; reset to false after a successful Matrix upload. */
+  dirty: boolean;
+  /** Pending upload timer, debounced after each write. */
+  syncTimer: NodeJS.Timeout | null;
+  /** In-flight upload promise — serializes overlapping syncs per room. */
+  uploadInFlight: Promise<void> | null;
+}
+
 /**
  * Channel memory pipeline.
  *
- * Owns:
- *   - In-memory rolling buffer of observed group messages (per room)
- *   - Append-only `channel_memory_chunks` SQLite table (via repo)
- *   - LLM-driven compaction (via summarizer)
- *   - Pinned facts CRUD
- *   - Helpers for session-start context injection
+ * One SQLite DB per Matrix room (under `${SQLITE_DATABASE_PATH}/channel_memory/`),
+ * each synced as encrypted media to its own Matrix room — same mechanism the
+ * user-DB sync service uses, just keyed per-room. On first access the service
+ * tries to download the latest DB from the room before opening locally; on
+ * dirty + shutdown it uploads.
  *
  * Compaction is triggered when:
  *   - Buffer reaches COMPACT_BUFFER_THRESHOLD, or
  *   - COMPACT_IDLE_MS elapses with no new messages in the buffer, or
  *   - just-in-time when the agent is about to be engaged (`compactJustInTime`).
  *
- * Lost buffer on restart is acceptable — Matrix retains the raw messages and
- * the next compaction will pick up where we left off.
+ * Buffer is in-memory only — losing it on restart is acceptable since Matrix
+ * retains the raw messages and the next compaction picks up where we left off.
  */
 @Injectable()
 export class ChannelMemoryService implements OnModuleInit, OnModuleDestroy {
   private static singleton: ChannelMemoryService | undefined;
 
-  private repo!: ChannelMemoryRepo;
   private readonly summarizer = new ChannelMemorySummarizer();
   private readonly buffer = new Map<string, BufferEntry>();
   /** Per-room compaction promise to serialize concurrent triggers. */
   private readonly compactionInFlight = new Map<string, Promise<void>>();
+  /** Open DBs keyed by roomId. */
+  private readonly rooms = new Map<string, RoomEntry>();
+  /** Locks getRoom() against concurrent open + matrix-download for the same room. */
+  private readonly opening = new Map<string, Promise<RoomEntry>>();
+
+  private rootDir!: string;
 
   constructor(private readonly config: ConfigService<ENV>) {}
 
-  /**
-   * Cross-cutting access — graph-layer code (createMainAgent, tools) needs
-   * the service without going through Nest DI. Set during onModuleInit.
-   */
   static getInstance(): ChannelMemoryService | undefined {
     return ChannelMemoryService.singleton;
   }
 
   onModuleInit(): void {
-    const dir = this.config.getOrThrow<string>('SQLITE_DATABASE_PATH');
-    const dbPath = path.join(dir, 'channel_memory.db');
-    this.repo = new ChannelMemoryRepo(dbPath);
+    const baseDir = this.config.getOrThrow<string>('SQLITE_DATABASE_PATH');
+    this.rootDir = path.join(baseDir, 'channel_memory');
+    fs.mkdirSync(this.rootDir, { recursive: true });
     ChannelMemoryService.singleton = this;
-    logger.log(`[ChannelMemory] DB ready at ${dbPath}`);
+    logger.log(`[ChannelMemory] DB root ready at ${this.rootDir}`);
   }
 
-  onModuleDestroy(): void {
+  async onModuleDestroy(): Promise<void> {
+    // Stop scheduled work first
     for (const entry of this.buffer.values()) {
       if (entry.idleTimer) clearTimeout(entry.idleTimer);
     }
     this.buffer.clear();
-    this.repo?.close();
+
+    // Drain any pending uploads, then close DBs
+    const flushes: Array<Promise<void>> = [];
+    for (const [roomId, room] of this.rooms) {
+      if (room.syncTimer) {
+        clearTimeout(room.syncTimer);
+        room.syncTimer = null;
+      }
+      if (room.dirty || room.uploadInFlight) {
+        flushes.push(this.syncToMatrix(roomId).catch(() => undefined));
+      }
+    }
+    await Promise.allSettled(flushes);
+
+    for (const room of this.rooms.values()) {
+      try {
+        room.repo.close();
+      } catch {
+        // ignore — best-effort shutdown
+      }
+    }
+    this.rooms.clear();
+
     if (ChannelMemoryService.singleton === this) {
       ChannelMemoryService.singleton = undefined;
     }
   }
 
+  // ── Per-room DB lifecycle ───────────────────────────────────────────────
+
+  private dbPathFor(roomId: string): string {
+    // Hash roomId so we get a filesystem-safe filename and avoid leaking
+    // raw Matrix room ids into the local FS layout.
+    const oracleDid = this.config.getOrThrow<string>('ORACLE_DID');
+    const hash = crypto
+      .createHash('sha256')
+      .update(`${roomId}|${oracleDid}`)
+      .digest('hex')
+      .slice(0, 24);
+    return path.join(this.rootDir, `${hash}.db`);
+  }
+
   /**
-   * Append a group-room message to the rolling buffer. Always non-blocking,
-   * always best-effort. Caller invokes this BEFORE gating so we capture
-   * messages the bot ignored too.
+   * Get (or open) the per-room repo. Lazily downloads the latest DB from the
+   * Matrix room before opening if no local file exists. Returns the repo
+   * once ready.
    */
+  private async getRoom(roomId: string): Promise<RoomEntry> {
+    const existing = this.rooms.get(roomId);
+    if (existing) return existing;
+    const opening = this.opening.get(roomId);
+    if (opening) return opening;
+
+    const promise = (async () => {
+      const dbPath = this.dbPathFor(roomId);
+
+      if (!fs.existsSync(dbPath)) {
+        await this.tryRestoreFromMatrix(roomId, dbPath);
+      }
+
+      const repo = new ChannelMemoryRepo(dbPath);
+      const entry: RoomEntry = {
+        repo,
+        dbPath,
+        dirty: false,
+        syncTimer: null,
+        uploadInFlight: null,
+      };
+      this.rooms.set(roomId, entry);
+      return entry;
+    })().finally(() => {
+      this.opening.delete(roomId);
+    });
+
+    this.opening.set(roomId, promise);
+    return promise;
+  }
+
+  private async tryRestoreFromMatrix(
+    roomId: string,
+    dbPath: string,
+  ): Promise<void> {
+    try {
+      const result = await getMediaFromRoomByStorageKey(
+        roomId,
+        MATRIX_STORAGE_KEY,
+      );
+      if (!result) {
+        logger.log(
+          `[ChannelMemory] No prior DB in Matrix for room=${roomId}; starting fresh`,
+        );
+        return;
+      }
+      await fsp.writeFile(dbPath, result.mediaBuffer);
+      logger.log(
+        `[ChannelMemory] Restored channel-memory DB for room=${roomId} (${result.mediaBuffer.length} bytes)`,
+      );
+    } catch (err) {
+      logger.warn(
+        `[ChannelMemory] Restore from Matrix failed for room=${roomId}; starting fresh. ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  private markDirty(roomId: string): void {
+    const room = this.rooms.get(roomId);
+    if (!room) return;
+    room.dirty = true;
+    if (room.syncTimer) clearTimeout(room.syncTimer);
+    room.syncTimer = setTimeout(() => {
+      this.syncToMatrix(roomId).catch((err) => {
+        logger.warn(
+          `[ChannelMemory] debounced sync failed for ${roomId}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
+    }, SYNC_DEBOUNCE_MS);
+  }
+
+  private async syncToMatrix(roomId: string): Promise<void> {
+    const room = this.rooms.get(roomId);
+    if (!room) return;
+
+    if (room.uploadInFlight) {
+      await room.uploadInFlight;
+      // If still dirty after the previous upload, fall through and re-upload.
+      if (!room.dirty) return;
+    }
+
+    if (!room.dirty) return;
+
+    const upload = (async () => {
+      // Take a snapshot copy to a temp file to avoid uploading a partially
+      // mutated DB. Better-sqlite3's WAL means in-place reads are fine, but
+      // a copy is cheap and rules out races with future writes.
+      const snapshotPath = `${room.dbPath}.snap-${Date.now()}`;
+      try {
+        await fsp.copyFile(room.dbPath, snapshotPath);
+        const buf = await fsp.readFile(snapshotPath);
+        const file = new File([buf], 'channel_memory.db', {
+          type: 'application/x-sqlite3',
+        });
+        await uploadMediaToRoom(roomId, file, MATRIX_STORAGE_KEY);
+        room.dirty = false;
+        logger.log(
+          `[ChannelMemory] Uploaded DB to room=${roomId} (${buf.length} bytes)`,
+        );
+      } finally {
+        await fsp.unlink(snapshotPath).catch(() => undefined);
+      }
+    })();
+
+    room.uploadInFlight = upload;
+    try {
+      await upload;
+    } finally {
+      room.uploadInFlight = null;
+    }
+  }
+
+  // ── Capture + compaction ────────────────────────────────────────────────
+
   observeMessage(roomId: string, message: ObservedMessage): void {
     let entry = this.buffer.get(roomId);
     if (!entry) {
@@ -104,7 +282,6 @@ export class ChannelMemoryService implements OnModuleInit, OnModuleDestroy {
     }
     entry.messages.push(message);
 
-    // Reset idle timer
     if (entry.idleTimer) clearTimeout(entry.idleTimer);
     entry.idleTimer = setTimeout(() => {
       this.compact(roomId).catch((err) =>
@@ -121,17 +298,10 @@ export class ChannelMemoryService implements OnModuleInit, OnModuleDestroy {
         ),
       );
     } else if (entry.messages.length >= BUFFER_HARD_CAP) {
-      // Defensive: should never happen because threshold fires first
       void this.compact(roomId);
     }
   }
 
-  /**
-   * Run a compaction synchronously with a timeout. Used right before the agent
-   * runs so the injected context reflects all unsummarized messages.
-   * Best-effort: timeout simply skips and returns; chunk gets generated later
-   * via the idle timer.
-   */
   async compactJustInTime(roomId: string): Promise<void> {
     const entry = this.buffer.get(roomId);
     if (!entry || entry.messages.length < COMPACT_JIT_MIN) return;
@@ -146,10 +316,6 @@ export class ChannelMemoryService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
-  /**
-   * Drain the buffer for a room and produce a summary chunk. Serialized per
-   * room — overlapping triggers wait on the in-flight promise.
-   */
   private async compact(roomId: string): Promise<void> {
     const inFlight = this.compactionInFlight.get(roomId);
     if (inFlight) return inFlight;
@@ -165,7 +331,6 @@ export class ChannelMemoryService implements OnModuleInit, OnModuleDestroy {
     const entry = this.buffer.get(roomId);
     if (!entry || entry.messages.length === 0) return;
 
-    // Snapshot the buffer atomically; new messages start a fresh entry
     const drained = entry.messages.slice();
     entry.messages.length = 0;
     if (entry.idleTimer) {
@@ -175,7 +340,6 @@ export class ChannelMemoryService implements OnModuleInit, OnModuleDestroy {
 
     const summary = await this.summarizer.summarize(drained);
     if (!summary) {
-      // Push messages back at the front so a later trigger retries
       entry.messages.unshift(...drained);
       logger.warn(
         `[ChannelMemory] summary unavailable; ${drained.length} msgs requeued for ${roomId}`,
@@ -199,9 +363,11 @@ export class ChannelMemoryService implements OnModuleInit, OnModuleDestroy {
     };
 
     try {
-      this.repo.insertChunk(chunk);
+      const room = await this.getRoom(roomId);
+      room.repo.insertChunk(chunk);
+      this.markDirty(roomId);
       logger.log(
-        `[ChannelMemory] room=${roomId} chunk=${chunk.id} msgs=${chunk.messageCount} totalChunks=${this.repo.countChunks(roomId)}`,
+        `[ChannelMemory] room=${roomId} chunk=${chunk.id} msgs=${chunk.messageCount} totalChunks=${room.repo.countChunks(roomId)}`,
       );
     } catch (err) {
       logger.error(
@@ -212,34 +378,42 @@ export class ChannelMemoryService implements OnModuleInit, OnModuleDestroy {
 
   // ── Read APIs (used by tools and session-start injection) ───────────────
 
-  recentChunks(
+  async recentChunks(
     roomId: string,
     limit = SESSION_INJECT_RECENT_CHUNKS,
-  ): ChannelMemoryChunk[] {
-    return this.repo.recentChunks(roomId, limit);
+  ): Promise<ChannelMemoryChunk[]> {
+    const room = await this.getRoom(roomId);
+    return room.repo.recentChunks(roomId, limit);
   }
 
-  oldestChunks(
+  async oldestChunks(
     roomId: string,
     limit = SESSION_INJECT_OLDEST_CHUNKS,
-  ): ChannelMemoryChunk[] {
-    return this.repo.oldestChunks(roomId, limit);
+  ): Promise<ChannelMemoryChunk[]> {
+    const room = await this.getRoom(roomId);
+    return room.repo.oldestChunks(roomId, limit);
   }
 
-  search(roomId: string, query: string, limit = 10): ChannelMemoryChunk[] {
-    return this.repo.searchChunks(roomId, query, limit);
+  async search(
+    roomId: string,
+    query: string,
+    limit = 10,
+  ): Promise<ChannelMemoryChunk[]> {
+    const room = await this.getRoom(roomId);
+    return room.repo.searchChunks(roomId, query, limit);
   }
 
-  listPinnedFacts(roomId: string): PinnedFact[] {
-    return this.repo.listPinnedFacts(roomId);
+  async listPinnedFacts(roomId: string): Promise<PinnedFact[]> {
+    const room = await this.getRoom(roomId);
+    return room.repo.listPinnedFacts(roomId);
   }
 
-  pinFact(args: {
+  async pinFact(args: {
     roomId: string;
     fact: string;
     pinnedByDid: string;
     sourceEventId?: string;
-  }): PinnedFact {
+  }): Promise<PinnedFact> {
     const fact: PinnedFact = {
       id: crypto.randomUUID(),
       roomId: args.roomId,
@@ -248,22 +422,24 @@ export class ChannelMemoryService implements OnModuleInit, OnModuleDestroy {
       sourceEventId: args.sourceEventId,
       createdAt: Date.now(),
     };
-    this.repo.insertPinnedFact(fact);
+    const room = await this.getRoom(args.roomId);
+    room.repo.insertPinnedFact(fact);
+    this.markDirty(args.roomId);
     return fact;
   }
 
-  unpinFact(roomId: string, factId: string): boolean {
-    return this.repo.deletePinnedFact(roomId, factId);
+  async unpinFact(roomId: string, factId: string): Promise<boolean> {
+    const room = await this.getRoom(roomId);
+    const ok = room.repo.deletePinnedFact(roomId, factId);
+    if (ok) this.markDirty(roomId);
+    return ok;
   }
 
-  getMembers(roomId: string): ChannelMember[] {
-    return this.repo.getMembers(roomId);
+  async getMembers(roomId: string): Promise<ChannelMember[]> {
+    const room = await this.getRoom(roomId);
+    return room.repo.getMembers(roomId);
   }
 
-  /**
-   * Refresh the cached member roster for a room from Matrix. Call on session
-   * start. Best-effort — failures are logged and the cached roster is reused.
-   */
   async refreshMembers(
     roomId: string,
     matrixManager: MatrixManager,
@@ -280,13 +456,20 @@ export class ChannelMemoryService implements OnModuleInit, OnModuleDestroy {
         );
         members.push({ matrixUserId: userId, displayName });
       }
-      this.repo.upsertMembers(roomId, members);
+      const room = await this.getRoom(roomId);
+      room.repo.upsertMembers(roomId, members);
+      this.markDirty(roomId);
       return members;
     } catch (err) {
       logger.warn(
         `[ChannelMemory] refreshMembers failed for ${roomId}: ${err instanceof Error ? err.message : String(err)}`,
       );
-      return this.repo.getMembers(roomId);
+      try {
+        const room = await this.getRoom(roomId);
+        return room.repo.getMembers(roomId);
+      } catch {
+        return [];
+      }
     }
   }
 
@@ -305,9 +488,9 @@ export class ChannelMemoryService implements OnModuleInit, OnModuleDestroy {
   ): Promise<string> {
     const [members, recent, oldest, facts, recentMsgs] = await Promise.all([
       this.refreshMembers(roomId, matrixManager),
-      Promise.resolve(this.recentChunks(roomId)),
-      Promise.resolve(this.oldestChunks(roomId)),
-      Promise.resolve(this.listPinnedFacts(roomId)),
+      this.recentChunks(roomId),
+      this.oldestChunks(roomId),
+      this.listPinnedFacts(roomId),
       matrixManager
         .getRecentRoomMessages(roomId, { limit: SESSION_INJECT_LAST_MESSAGES })
         .catch((err) => {
@@ -338,7 +521,6 @@ export class ChannelMemoryService implements OnModuleInit, OnModuleDestroy {
       sections.push(`## Pinned facts\n${lines}`);
     }
 
-    // Combine oldest + recent without duplicates, oldest first then recent
     const seen = new Set<string>();
     const ordered: ChannelMemoryChunk[] = [];
     for (const c of oldest) {
