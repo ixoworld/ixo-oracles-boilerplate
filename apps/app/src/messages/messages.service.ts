@@ -81,10 +81,21 @@ import {
 @Injectable()
 export class MessagesService implements OnModuleInit, OnModuleDestroy {
   private cleanUpMatrixListener: () => void;
+  private cleanUpJoinListener: (() => void) | undefined;
   private threadRootCache = new Map<string, string>(); // eventId → rootEventId
   private abortControllers = new Map<string, AbortController>(); // sessionId → AbortController
   private readonly oracleOpenIdTokenProvider: OpenIdTokenProvider;
   private readonly oracleMatrixBaseUrl: string;
+
+  /**
+   * Rooms we've already greeted in this process. Stops duplicate welcomes if
+   * matrix-bot-sdk fires `room.join` more than once for the same room.
+   * Lost on restart — that's fine: room.join only fires for fresh joins, not
+   * for already-joined rooms during initial sync.
+   */
+  private readonly welcomedRooms = new Set<string>();
+  /** Brief settle delay before sending the welcome — lets Olm sessions form. */
+  private static readonly WELCOME_DELAY_MS = 1500;
 
   /** Cached room-shape lookup so we don't hit Matrix API on every message. */
   private readonly roomTypeCache = new Map<
@@ -154,6 +165,10 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
 
     if (this.cleanUpMatrixListener) {
       this.cleanUpMatrixListener();
+    }
+    if (this.cleanUpJoinListener) {
+      this.cleanUpJoinListener();
+      this.cleanUpJoinListener = undefined;
     }
   }
 
@@ -790,10 +805,89 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
             });
           });
         Logger.log('Matrix message listener registered');
+
+        // Send a welcome message every time the bot is freshly added to a
+        // room. This bootstraps Olm + Megolm sessions BEFORE the user types,
+        // which fixes the common "first messages can't be decrypted" failure
+        // mode in fresh group rooms.
+        this.cleanUpJoinListener = this.matrixManager.onBotJoinedRoom(
+          (roomId) => {
+            this.handleBotJoinedRoom(roomId).catch((err) => {
+              Logger.warn(
+                `[Welcome] Handler failed for ${roomId}: ${err instanceof Error ? err.message : String(err)}`,
+              );
+            });
+          },
+        );
+        Logger.log('Matrix room.join welcome listener registered');
       })
       .catch((err) => {
         Logger.error('Failed to set up Matrix message listener:', err);
       });
+  }
+
+  /**
+   * Send a one-time greeting when the bot joins a room. The message itself is
+   * encrypted, which is what we actually want — sending forces the bot to:
+   *   1. Establish Olm 1:1 sessions with every current member,
+   *   2. Create a Megolm group session that includes those members,
+   *   3. Distribute the Megolm key via the Olm sessions.
+   *
+   * Once that one round-trip completes, the user's next message also rotates
+   * to a fresh Megolm session that includes the bot — so it actually decrypts.
+   *
+   * Idempotent within the process via `welcomedRooms`. matrix-bot-sdk's
+   * `room.join` only fires for fresh joins so this should not re-greet on
+   * restart, but the Set guards against double-fires within a session.
+   */
+  private async handleBotJoinedRoom(roomId: string): Promise<void> {
+    if (this.welcomedRooms.has(roomId)) {
+      Logger.log(
+        `[Welcome] Skipping ${roomId}: already greeted in this session`,
+      );
+      return;
+    }
+    this.welcomedRooms.add(roomId);
+
+    // Brief settle so the device list / Olm sessions can converge before
+    // we trigger an outgoing encrypt.
+    await new Promise<void>((resolve) =>
+      setTimeout(resolve, MessagesService.WELCOME_DELAY_MS),
+    );
+
+    // Tailor the message to room shape — DMs get a friendlier greeting,
+    // group rooms get the engagement rules up front so users know what
+    // to expect.
+    let isDirect = true;
+    try {
+      const info = await this.matrixManager.getRoomInfo(roomId);
+      isDirect = info.isDirect;
+    } catch (err) {
+      Logger.warn(
+        `[Welcome] getRoomInfo failed for ${roomId}, defaulting to DM tone: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
+    const oracleName =
+      this.config.get<string>('ORACLE_NAME', { infer: true }) ?? 'Oracle';
+    const message = isDirect
+      ? `Hi! I'm ${oracleName}. How can I help?`
+      : `${oracleName} here — I've joined this room. Mention me with @${oracleName} or reply to one of my messages whenever you'd like my help; I'll stay quiet otherwise.`;
+
+    try {
+      await this.matrixManager.sendMessage({
+        roomId,
+        message,
+        isOracleAdmin: true,
+        disablePrefix: true,
+      });
+      Logger.log(`[Welcome] Sent greeting to ${roomId} (isDirect=${isDirect})`);
+    } catch (err) {
+      // Don't unmark — re-trying could spam the room. User can reinvite.
+      Logger.warn(
+        `[Welcome] Failed to send greeting to ${roomId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
   public async listMessages(
     params: ListMessagesDto & {

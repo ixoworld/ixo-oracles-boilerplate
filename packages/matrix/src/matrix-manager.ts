@@ -512,6 +512,48 @@ export class MatrixManager {
     return loginResponse;
   }
 
+  /**
+   * Subscribe to "this bot joined a room" events. Fires once per fresh join
+   * (matrix-bot-sdk's `room.join` semantic — does NOT fire on already-joined
+   * rooms during initial sync after restart).
+   */
+  public onBotJoinedRoom(callback: (roomId: string) => void): () => void {
+    if (!this.mxClient) {
+      throw new Error('Simple client not initialized');
+    }
+    const fn = (roomId: string): void => {
+      try {
+        callback(roomId);
+      } catch (err) {
+        Logger.warn(
+          `[MatrixManager.onBotJoinedRoom] handler threw for ${roomId}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    };
+    // matrix-bot-sdk's MatrixClient emits 'room.join' with (roomId) when the
+    // bot transitions to joined. Cast through unknown to bridge the type
+    // mismatch between matrix-js-sdk and matrix-bot-sdk emitted-event types.
+    (
+      this.mxClient.mxClient as unknown as {
+        on(eventType: string, listener: (roomId: string) => void): void;
+        removeListener(
+          eventType: string,
+          listener: (roomId: string) => void,
+        ): void;
+      }
+    ).on('room.join', fn);
+    return () => {
+      (
+        this.mxClient?.mxClient as unknown as {
+          removeListener(
+            eventType: string,
+            listener: (roomId: string) => void,
+          ): void;
+        }
+      )?.removeListener('room.join', fn);
+    };
+  }
+
   public async getDisplayName(userId: string): Promise<string> {
     if (!this.mxClient) {
       throw new Error('Simple client not initialized');
