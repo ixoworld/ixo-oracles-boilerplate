@@ -167,7 +167,12 @@ async function hasBotSpokenInThread(
       (m) => m.sender === botMatrixUserId && m.threadId === threadId,
     );
     if (botWasActive) {
-      markBotThreadActive(activeBotThreads, roomId, threadId, activeBotThreadTtlMs);
+      markBotThreadActive(
+        activeBotThreads,
+        roomId,
+        threadId,
+        activeBotThreadTtlMs,
+      );
     }
     return botWasActive;
   } catch {

@@ -277,7 +277,10 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       const parentRelatesTo = parentEvent.content['m.relates_to'];
 
       // If the parent is itself a thread reply, its root IS the true root
-      if (parentRelatesTo?.rel_type === 'm.thread' && parentRelatesTo?.event_id) {
+      if (
+        parentRelatesTo?.rel_type === 'm.thread' &&
+        parentRelatesTo?.event_id
+      ) {
         const root = parentRelatesTo.event_id;
         pathToCache.forEach((id) => this.threadRootCache.set(id, root));
         return root;

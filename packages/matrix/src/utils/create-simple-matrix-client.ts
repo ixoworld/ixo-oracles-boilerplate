@@ -302,7 +302,6 @@ export class SimpleMatrixClient {
   ): void {
     this.mxClient.removeListener(event, callback);
   }
-
 }
 
 /**
