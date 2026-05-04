@@ -13,6 +13,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CallsModule } from './calls/calls.module';
+import { ChannelMemoryModule } from './channel-memory/channel-memory.module';
 import { type ENV, EnvSchema, getConfig, isRedisEnabled } from './config';
 import { MessagesModule } from './messages/messages.module';
 import { AuthHeaderMiddleware } from './middleware/auth-header.middleware';
@@ -58,6 +59,7 @@ import { WsModule } from './ws/ws.module';
     ]),
     WsModule,
     // ChromaDbModule.forRoot(),
+    ChannelMemoryModule,
     SessionsModule,
     MessagesModule,
     UcanModule,

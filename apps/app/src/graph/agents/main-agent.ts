@@ -69,8 +69,10 @@ const oracleConfig = {
     capabilities: oracleConfigRaw.prompt.capabilities || undefined,
   },
 };
+import { ChannelMemoryService } from '../../channel-memory/channel-memory.service';
 import { getProviderChatModel } from '../llm-provider';
 import { createMCPClient, createMCPClientAndGetTools } from '../mcp';
+import { createChannelMemoryTools } from '../nodes/tools-node/channel-memory-tools';
 import { createFileProcessingTool } from '../nodes/tools-node/file-processing-tool';
 import { createListRoomFilesTool } from '../nodes/tools-node/list-room-files-tool';
 import {
@@ -945,6 +947,31 @@ Promise<ReactAgent<any>> => {
     );
   }
 
+  // Group-chat awareness: when MessagesService detects a group room it
+  // attaches a pre-built context block to runnableConfig.configurable.
+  // The roomId itself already lives on configurable.configs.matrix.roomId
+  // (in `matrix?.roomId` above) — no need to duplicate.
+  const configurableExt = configurable as Record<string, unknown>;
+  const groupChatContext =
+    typeof configurableExt.groupChatContext === 'string'
+      ? configurableExt.groupChatContext
+      : undefined;
+  const isGroupRoom = Boolean(groupChatContext);
+
+  if (groupChatContext) {
+    finalSystemPrompt += `\n\n---\n\n## GROUP CHAT CONTEXT\n\n${groupChatContext}\n`;
+  }
+
+  const channelMemoryService = ChannelMemoryService.getInstance();
+  const channelMemoryTools =
+    isGroupRoom && matrix?.roomId && channelMemoryService
+      ? createChannelMemoryTools({
+          channelMemory: channelMemoryService,
+          roomId: matrix.roomId,
+          pinnedByDid: configurable.configs?.user?.did ?? '',
+        })
+      : [];
+
   // check db folder if not exists, create it
   const dbFolder = path.join(
     UserMatrixSqliteSyncService.checkpointsFolder,
@@ -1006,6 +1033,7 @@ Promise<ReactAgent<any>> => {
             createSetUserPreferencesTool(matrix.roomId),
           ]
         : []),
+      ...channelMemoryTools,
       ...(applySandboxOutputToBlockTool ? [applySandboxOutputToBlockTool] : []),
       ...(standaloneEditorTool ? [standaloneEditorTool] : []),
     ],
