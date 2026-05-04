@@ -63,6 +63,14 @@ import {
   startSSEHeartbeat,
 } from 'src/utils/sse.utils';
 import { TokenLimiter } from 'src/utils/token-limit-handler';
+import { ChannelMemoryService } from 'src/channel-memory/channel-memory.service';
+import { type ObservedMessage } from 'src/channel-memory/channel-memory.types';
+import {
+  isActiveBotThread,
+  markBotThreadActive,
+  shouldAgentRespond,
+  sweepExpiredBotThreads,
+} from './group-chat.guard';
 import { type ListMessagesDto } from './dto/list-messages.dto';
 import { type SendMessagePayload } from './dto/send-message.dto';
 import {
@@ -77,6 +85,21 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
   private abortControllers = new Map<string, AbortController>(); // sessionId → AbortController
   private readonly oracleOpenIdTokenProvider: OpenIdTokenProvider;
   private readonly oracleMatrixBaseUrl: string;
+
+  /** Cached room-shape lookup so we don't hit Matrix API on every message. */
+  private readonly roomTypeCache = new Map<
+    string,
+    { isDirect: boolean; memberCount: number; expiresAt: number }
+  >();
+  private static readonly ROOM_TYPE_CACHE_TTL_MS = 5 * 60 * 1000;
+
+  /**
+   * Active bot threads in group rooms. Key = `${roomId}:${threadId}`,
+   * value = expiresAt epoch ms. Updated when the bot responds in a thread,
+   * decayed on read. Cleared on restart.
+   */
+  private readonly activeBotThreads = new Map<string, number>();
+  private static readonly ACTIVE_THREAD_TTL_MS = 30 * 60 * 1000;
 
   /**
    * Per-thread debounce buffer for Matrix events.
@@ -104,6 +127,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     private readonly config: ConfigService<ENV>,
     private readonly checkpointStorageSyncService: UserMatrixSqliteSyncService,
     private readonly fileProcessingService: FileProcessingService,
+    private readonly channelMemoryService: ChannelMemoryService,
     @Optional() private readonly tasksService?: TasksService,
     @Optional() private readonly approvalService?: ApprovalService,
     @Optional() private readonly ucanService?: UcanService,
@@ -231,6 +255,39 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     'm.audio',
   ]);
 
+  /**
+   * Resolve a room's shape (DM vs group) with a 5-minute cache.
+   * Cache misses fetch from Matrix; failures fall back to a "treat as DM"
+   * default to preserve current behaviour for unknown rooms.
+   */
+  private async getCachedRoomInfo(
+    roomId: string,
+  ): Promise<{ isDirect: boolean; memberCount: number }> {
+    const now = Date.now();
+    const cached = this.roomTypeCache.get(roomId);
+    if (cached && cached.expiresAt > now) {
+      return { isDirect: cached.isDirect, memberCount: cached.memberCount };
+    }
+    try {
+      const info = await this.matrixManager.getRoomInfo(roomId);
+      this.roomTypeCache.set(roomId, {
+        isDirect: info.isDirect,
+        memberCount: info.memberCount,
+        expiresAt: now + MessagesService.ROOM_TYPE_CACHE_TTL_MS,
+      });
+      return { isDirect: info.isDirect, memberCount: info.memberCount };
+    } catch (err) {
+      Logger.warn(
+        `[MessagesService] getRoomInfo failed for ${roomId}: ${err instanceof Error ? err.message : String(err)}; defaulting to isDirect=true`,
+      );
+      return { isDirect: true, memberCount: 0 };
+    }
+  }
+
+  private invalidateRoomTypeCache(roomId: string): void {
+    this.roomTypeCache.delete(roomId);
+  }
+
   private async handleMessage(
     event: MessageEvent<MessageEventContent>,
     roomId: string,
@@ -301,6 +358,63 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         approvalService: !!this.approvalService,
         isText,
       });
+    }
+
+    // ── Group-chat gating + passive capture ────────────────────────
+    // Resolve room shape once and use it both for capture and gating.
+    const roomInfo = await this.getCachedRoomInfo(roomId);
+    const isGroup = !roomInfo.isDirect;
+
+    if (isGroup && isText) {
+      // Capture EVERY group-room text message into channel memory, even if
+      // the bot isn't going to respond. This is what gives the agent context
+      // about top-level chatter when it later does get engaged.
+      const body = 'body' in event.content ? String(event.content.body) : '';
+      if (body.length > 0) {
+        const displayName = await this.matrixManager
+          .getCachedDisplayName(event.sender, roomId)
+          .catch(() => event.sender);
+        const observed: ObservedMessage = {
+          eventId: event.eventId,
+          threadId,
+          senderDid: did,
+          senderMatrixUserId: event.sender,
+          senderDisplayName: displayName,
+          body,
+          timestamp: event.timestamp ?? Date.now(),
+        };
+        this.channelMemoryService.observeMessage(roomId, observed);
+      }
+    }
+
+    if (isGroup) {
+      let botMatrixUserId: string;
+      try {
+        botMatrixUserId = this.matrixManager.getBotMatrixUserId();
+      } catch (err) {
+        Logger.warn(
+          `[Matrix][handleMessage] Bot user id unavailable: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        return;
+      }
+      const decision = await shouldAgentRespond({
+        event,
+        roomId,
+        threadId,
+        matrixManager: this.matrixManager,
+        botMatrixUserId,
+        roomInfo,
+        activeBotThreads: this.activeBotThreads,
+      });
+      if (!decision.respond) {
+        Logger.log(
+          `[Matrix][handleMessage] Group room ${roomId}: silently ignoring eventId=${event.eventId} (reason=${decision.reason})`,
+        );
+        return;
+      }
+      Logger.log(
+        `[Matrix][handleMessage] Group room ${roomId}: responding to eventId=${event.eventId} (reason=${decision.reason})`,
+      );
     }
 
     Logger.log(
@@ -428,6 +542,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     const roomId = events[0].roomId;
     const did = normalizeDid(events[0].event.sender);
     const homeServer = events[0].event.sender.split(':')[1];
+    const lastEvent = events[events.length - 1].event;
 
     // Separate text and file events
     let textBody: string | undefined;
@@ -456,16 +571,41 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    // Build the message text — fall back to a description if only files were sent
-    const message =
+    // Resolve room type and speaker metadata for group-chat handling
+    const roomInfo = await this.getCachedRoomInfo(roomId);
+    const isGroup = !roomInfo.isDirect;
+
+    // Build the message text — for group rooms, prefix with display name so
+    // the agent (and the prompt prefix it sees in the HumanMessage) knows who
+    // is speaking. DMs keep their existing shape.
+    const rawText =
       textBody ??
       (attachments.length === 1
         ? `User shared a file: ${attachments[0].filename}`
         : `User shared ${attachments.length} file(s): ${attachments.map((a) => a.filename).join(', ')}`);
 
+    let speakerDisplayName: string | undefined;
+    let message = rawText;
+    if (isGroup) {
+      speakerDisplayName = await this.matrixManager
+        .getCachedDisplayName(lastEvent.sender, roomId)
+        .catch(() => lastEvent.sender);
+      message = `[${speakerDisplayName}]: ${rawText}`;
+    }
+
+    // JIT compaction so the system context block reflects all unsummarised
+    // messages, including the one we're responding to. Best-effort, capped.
+    if (isGroup) {
+      await this.channelMemoryService.compactJustInTime(roomId).catch((err) => {
+        Logger.warn(
+          `[Matrix][flushMatrixEvents] JIT compaction failed for ${roomId}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
+    }
+
     try {
       Logger.log(
-        `[Matrix][flushMatrixEvents] Sending message for threadId=${threadId} sessionId=${overRideSessionId ?? threadId} did=${did} attachments=${attachments.length}`,
+        `[Matrix][flushMatrixEvents] Sending message for threadId=${threadId} sessionId=${overRideSessionId ?? threadId} did=${did} attachments=${attachments.length} group=${isGroup}`,
       );
       const aiMessage = await this.sendMessage({
         clientType: 'matrix',
@@ -476,7 +616,19 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         homeServer,
         msgFromMatrixRoom: true,
         userMatrixOpenIdToken: '',
-
+        ...(isGroup && {
+          groupChat: {
+            roomId,
+            memberCount: roomInfo.memberCount,
+            speaker: {
+              did,
+              matrixUserId: lastEvent.sender,
+              displayName: speakerDisplayName ?? lastEvent.sender,
+              eventId: lastEvent.eventId,
+              threadId,
+            },
+          },
+        }),
         ...(attachments.length > 0 && { attachments }),
       });
       if (!aiMessage) {
@@ -493,8 +645,22 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         isOracleAdmin: true,
         disablePrefix: true,
       });
+
+      // Mark the thread as actively engaged so subsequent messages from any
+      // user in this thread (within 30 min) reach the bot without needing a
+      // re-mention. Lazy sweep of expired entries keeps the map bounded.
+      if (isGroup) {
+        markBotThreadActive(
+          this.activeBotThreads,
+          roomId,
+          threadId,
+          MessagesService.ACTIVE_THREAD_TTL_MS,
+        );
+        sweepExpiredBotThreads(this.activeBotThreads);
+      }
+
       Logger.log(
-        `[Matrix][flushMatrixEvents] Message sent to Matrix roomId=${roomId} threadId=${threadId} by Oracle`,
+        `[Matrix][flushMatrixEvents] Message sent to Matrix roomId=${roomId} threadId=${threadId} by Oracle (group=${isGroup}, threadActive=${isActiveBotThread(this.activeBotThreads, roomId, threadId)})`,
       );
     } catch (error) {
       Logger.error('Failed to send message', error);
@@ -664,6 +830,22 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       msgFromMatrixRoom?: boolean;
       overrideLangchainThreadId?: string;
       req?: Request;
+      /**
+       * Set when the message originates from a group Matrix room.
+       * Drives speaker attribution on HumanMessage and triggers
+       * channel-memory context injection into the system prompt.
+       */
+      groupChat?: {
+        roomId: string;
+        memberCount: number;
+        speaker: {
+          did: string;
+          matrixUserId: string;
+          displayName: string;
+          eventId: string;
+          threadId: string;
+        };
+      };
     },
   ): Promise<
     | undefined
@@ -739,12 +921,51 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
       // Build messages array: user text message + separate file messages
       const msgFromMatrixRoom = params.msgFromMatrixRoom ?? false;
       const timestamp = new Date().toISOString();
+      const groupSpeaker = params.groupChat?.speaker;
       const inputMessages: HumanMessage[] = [
         new HumanMessage({
           content: params.message,
-          additional_kwargs: { msgFromMatrixRoom, timestamp },
+          additional_kwargs: {
+            msgFromMatrixRoom,
+            timestamp,
+            ...(groupSpeaker && {
+              senderDid: groupSpeaker.did,
+              senderMatrixUserId: groupSpeaker.matrixUserId,
+              senderDisplayName: groupSpeaker.displayName,
+              matrixEventId: groupSpeaker.eventId,
+              matrixThreadId: groupSpeaker.threadId,
+              isGroupChat: true,
+            }),
+          },
         }),
       ];
+
+      // If we're in a group room, build a one-shot context block from channel
+      // memory + recent room messages and stash it on runnableConfig. The
+      // graph layer (createMainAgent) will append it to the system prompt and
+      // register channel-memory tools.
+      if (params.groupChat) {
+        try {
+          const contextBlock =
+            await this.channelMemoryService.buildSessionContext(
+              params.groupChat.roomId,
+              this.matrixManager,
+            );
+          (
+            runnableConfig.configurable as Record<string, unknown>
+          ).groupChatContext = contextBlock;
+          (
+            runnableConfig.configurable as Record<string, unknown>
+          ).groupChatRoomMemberCount = params.groupChat.memberCount;
+          (
+            runnableConfig.configurable as Record<string, unknown>
+          ).groupChatRoomId = params.groupChat.roomId;
+        } catch (err) {
+          Logger.warn(
+            `[MessagesService] Failed to build group-chat context: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
 
       if (hasAttachments) {
         Logger.log(
@@ -832,6 +1053,14 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
                 msgFromMatrixRoom,
                 timestamp: new Date().toISOString(),
                 attachment: meta,
+                ...(groupSpeaker && {
+                  senderDid: groupSpeaker.did,
+                  senderMatrixUserId: groupSpeaker.matrixUserId,
+                  senderDisplayName: groupSpeaker.displayName,
+                  matrixEventId: groupSpeaker.eventId,
+                  matrixThreadId: groupSpeaker.threadId,
+                  isGroupChat: true,
+                }),
               },
             }),
           );

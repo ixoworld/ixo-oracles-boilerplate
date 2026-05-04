@@ -69,8 +69,10 @@ const oracleConfig = {
     capabilities: oracleConfigRaw.prompt.capabilities || undefined,
   },
 };
+import { ChannelMemoryService } from '../../channel-memory/channel-memory.service';
 import { getProviderChatModel } from '../llm-provider';
 import { createMCPClient, createMCPClientAndGetTools } from '../mcp';
+import { createChannelMemoryTools } from '../nodes/tools-node/channel-memory-tools';
 import { createFileProcessingTool } from '../nodes/tools-node/file-processing-tool';
 import { createListRoomFilesTool } from '../nodes/tools-node/list-room-files-tool';
 import {
@@ -945,6 +947,40 @@ Promise<ReactAgent<any>> => {
     );
   }
 
+  // Group-chat awareness: when MessagesService detects a group room it
+  // attaches a pre-built context block + member count to runnableConfig.
+  // We append the block to the system prompt and register channel-memory
+  // tools so the agent has full read/write access to room context.
+  const configurableExt = configurable as Record<string, unknown>;
+  const groupChatContext =
+    typeof configurableExt.groupChatContext === 'string'
+      ? configurableExt.groupChatContext
+      : undefined;
+  const groupChatRoomId =
+    typeof configurableExt.groupChatRoomId === 'string'
+      ? configurableExt.groupChatRoomId
+      : undefined;
+  const groupChatRoomMemberCount =
+    typeof configurableExt.groupChatRoomMemberCount === 'number'
+      ? configurableExt.groupChatRoomMemberCount
+      : undefined;
+  const isGroupRoom =
+    Boolean(groupChatContext) || (groupChatRoomMemberCount ?? 0) > 2;
+
+  if (groupChatContext) {
+    finalSystemPrompt += `\n\n---\n\n## GROUP CHAT CONTEXT\n\n${groupChatContext}\n`;
+  }
+
+  const channelMemoryService = ChannelMemoryService.getInstance();
+  const channelMemoryTools =
+    isGroupRoom && groupChatRoomId && channelMemoryService
+      ? createChannelMemoryTools({
+          channelMemory: channelMemoryService,
+          roomId: groupChatRoomId,
+          pinnedByDid: configurable.configs?.user?.did ?? '',
+        })
+      : [];
+
   // check db folder if not exists, create it
   const dbFolder = path.join(
     UserMatrixSqliteSyncService.checkpointsFolder,
@@ -1006,6 +1042,7 @@ Promise<ReactAgent<any>> => {
             createSetUserPreferencesTool(matrix.roomId),
           ]
         : []),
+      ...channelMemoryTools,
       ...(applySandboxOutputToBlockTool ? [applySandboxOutputToBlockTool] : []),
       ...(standaloneEditorTool ? [standaloneEditorTool] : []),
     ],

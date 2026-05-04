@@ -521,6 +521,230 @@ export class MatrixManager {
   }
 
   /**
+   * Returns the bot's Matrix user ID (from MATRIX_ORACLE_ADMIN_USER_ID env var).
+   * Used to detect whether the bot has been @mentioned in a message.
+   */
+  public getBotMatrixUserId(): string {
+    const userId = process.env.MATRIX_ORACLE_ADMIN_USER_ID;
+    if (!userId) {
+      throw new Error('MATRIX_ORACLE_ADMIN_USER_ID is not set');
+    }
+    return userId;
+  }
+
+  /**
+   * Display name cache keyed by `${roomId}:${matrixUserId}`.
+   * Refreshed lazily; falls back to the local-part of the matrix user id
+   * when the profile request fails (e.g. federation hiccups).
+   */
+  private displayNameCache = new Map<
+    string,
+    { displayName: string; cachedAt: number }
+  >();
+  private static readonly DISPLAY_NAME_TTL_MS = 30 * 60 * 1000;
+
+  public async getCachedDisplayName(
+    matrixUserId: string,
+    roomId?: string,
+  ): Promise<string> {
+    const cacheKey = `${roomId ?? '*'}:${matrixUserId}`;
+    const cached = this.displayNameCache.get(cacheKey);
+    const now = Date.now();
+    if (cached && now - cached.cachedAt < MatrixManager.DISPLAY_NAME_TTL_MS) {
+      return cached.displayName;
+    }
+
+    let displayName =
+      matrixUserId.split(':')[0]?.replace(/^@/, '') ?? matrixUserId;
+    try {
+      const profile =
+        await this.mxClient?.mxClient.getUserProfile(matrixUserId);
+      if (profile?.displayname && typeof profile.displayname === 'string') {
+        displayName = profile.displayname;
+      }
+    } catch (err) {
+      Logger.warn(
+        `[MatrixManager.getCachedDisplayName] Failed to fetch profile for ${matrixUserId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
+    this.displayNameCache.set(cacheKey, { displayName, cachedAt: now });
+    return displayName;
+  }
+
+  public invalidateDisplayName(matrixUserId: string, roomId?: string): void {
+    if (roomId) {
+      this.displayNameCache.delete(`${roomId}:${matrixUserId}`);
+    } else {
+      // Clear all entries for this user across rooms
+      for (const key of this.displayNameCache.keys()) {
+        if (key.endsWith(`:${matrixUserId}`)) {
+          this.displayNameCache.delete(key);
+        }
+      }
+    }
+  }
+
+  /**
+   * Resolve a room's "shape" — DM (≤ 2 joined members) vs group.
+   * Used to decide whether the agent should mention-gate replies.
+   */
+  public async getRoomInfo(roomId: string): Promise<{
+    isDirect: boolean;
+    memberCount: number;
+    joinedMemberIds: string[];
+  }> {
+    if (!this.mxClient) {
+      throw new Error('Simple client not initialized');
+    }
+
+    let isDirect = false;
+    let joinedMemberIds: string[] = [];
+
+    // 1. Try the m.room.create state event — explicit signal
+    try {
+      const createEvent = (await this.mxClient.mxClient.doRequest(
+        'GET',
+        `/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/state/m.room.create/`,
+      )) as { is_direct?: boolean } | undefined;
+      if (createEvent?.is_direct === true) {
+        isDirect = true;
+      }
+    } catch {
+      // Some rooms may not expose this (or 403). Fall through to member-count heuristic.
+    }
+
+    // 2. Fetch joined members regardless — needed for member count anyway
+    try {
+      const joined = (await this.mxClient.mxClient.doRequest(
+        'GET',
+        `/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/joined_members`,
+      )) as { joined?: Record<string, unknown> } | undefined;
+      joinedMemberIds = Object.keys(joined?.joined ?? {});
+    } catch (err) {
+      Logger.warn(
+        `[MatrixManager.getRoomInfo] joined_members failed for ${roomId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
+    const memberCount = joinedMemberIds.length;
+    if (!isDirect && memberCount > 0 && memberCount <= 2) {
+      isDirect = true;
+    }
+
+    return { isDirect, memberCount, joinedMemberIds };
+  }
+
+  /**
+   * Fetch recent room messages, decrypting events transparently.
+   * Used for cross-thread context injection at group session start.
+   *
+   * Returns most recent first (Matrix `dir=b` semantics) with each entry
+   * already plain-text. Encrypted events that fail to decrypt are skipped.
+   */
+  public async getRecentRoomMessages(
+    roomId: string,
+    options: { limit?: number; from?: string } = {},
+  ): Promise<
+    Array<{
+      eventId: string;
+      sender: string;
+      body: string;
+      timestamp: number;
+      threadId?: string;
+      msgtype?: string;
+    }>
+  > {
+    if (!this.mxClient) {
+      throw new Error('Simple client not initialized');
+    }
+    const limit = Math.min(options.limit ?? 30, 200);
+    const crypto = this.mxClient.mxClient.crypto;
+
+    const qs: Record<string, string | number> = {
+      dir: 'b',
+      limit: Math.min(limit * 3, 200),
+    };
+    if (options.from) qs.from = options.from;
+
+    const response = (await this.mxClient.mxClient.doRequest(
+      'GET',
+      `/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/messages`,
+      qs,
+    )) as { chunk?: Array<Record<string, unknown>> };
+
+    const out: Array<{
+      eventId: string;
+      sender: string;
+      body: string;
+      timestamp: number;
+      threadId?: string;
+      msgtype?: string;
+    }> = [];
+
+    for (const raw of response.chunk ?? []) {
+      if (out.length >= limit) break;
+
+      const eventId = raw.event_id as string;
+      const sender = raw.sender as string;
+      const ts = (raw.origin_server_ts as number) ?? 0;
+      const eventType = raw.type as string;
+      let content: Record<string, unknown> | undefined;
+
+      if (eventType === 'm.room.encrypted') {
+        if (!crypto) continue;
+        try {
+          // Avoid a static import of EncryptedRoomEvent to keep this file
+          // free of new top-level deps; use a structural cast instead.
+          const decrypted = await (
+            crypto as unknown as {
+              decryptRoomEvent: (
+                ev: unknown,
+                roomId: string,
+              ) => Promise<{ content?: Record<string, unknown> }>;
+            }
+          ).decryptRoomEvent(raw, roomId);
+          content = decrypted.content;
+        } catch {
+          continue;
+        }
+      } else if (eventType === 'm.room.message') {
+        content = raw.content as Record<string, unknown>;
+      } else {
+        continue;
+      }
+
+      if (!content) continue;
+      if ('INTERNAL' in content) continue; // skip oracle bookkeeping events
+
+      const body = content.body;
+      if (typeof body !== 'string' || body.length === 0) continue;
+
+      const relates = (content['m.relates_to'] ?? {}) as {
+        rel_type?: string;
+        event_id?: string;
+        ['m.in_reply_to']?: { event_id?: string };
+      };
+      const threadId =
+        relates.rel_type === 'm.thread'
+          ? relates.event_id
+          : relates['m.in_reply_to']?.event_id;
+
+      out.push({
+        eventId,
+        sender,
+        body,
+        timestamp: ts,
+        threadId,
+        msgtype: content.msgtype as string | undefined,
+      });
+    }
+
+    // Caller wants chronological (oldest → newest)
+    return out.reverse();
+  }
+
+  /**
    * Join a room using matrix-bot-sdk
    */
   public async joinRoom(roomIdOrAlias: string): Promise<string> {
