@@ -497,9 +497,7 @@ export class ChannelMemoryService implements OnModuleInit, OnModuleDestroy {
           logger.warn(
             `[ChannelMemory] live recent fetch failed for ${roomId}: ${err instanceof Error ? err.message : String(err)}`,
           );
-          return [] as Awaited<
-            ReturnType<typeof matrixManager.getRecentRoomMessages>
-          >;
+          return { messages: [] };
         }),
     ]);
 
@@ -546,9 +544,9 @@ export class ChannelMemoryService implements OnModuleInit, OnModuleDestroy {
       sections.push(`## Channel memory\n${lines}`);
     }
 
-    if (recentMsgs.length > 0) {
+    if (recentMsgs.messages.length > 0) {
       const lines = await Promise.all(
-        recentMsgs.map(async (m) => {
+        recentMsgs.messages.map(async (m) => {
           const dn = await matrixManager
             .getCachedDisplayName(m.sender, roomId)
             .catch(() => m.sender);

@@ -32,6 +32,8 @@ export interface ShouldRespondInput {
   roomInfo: RoomTypeInfo;
   /** Active-thread map shared with the messages service. */
   activeBotThreads: Map<string, number>;
+  /** TTL to use when re-warming an active-thread entry found via history. */
+  activeBotThreadTtlMs: number;
 }
 
 export type ShouldRespondReason =
@@ -145,6 +147,35 @@ export function sweepExpiredBotThreads(
 }
 
 /**
+ * Returns true when the bot has previously sent a message in the given thread.
+ * Used as a fallback when the in-memory active-thread cache is cold (restart /
+ * TTL expiry). Re-warms the cache on hit so subsequent messages are free.
+ */
+async function hasBotSpokenInThread(
+  roomId: string,
+  threadId: string,
+  matrixManager: MatrixManager,
+  botMatrixUserId: string,
+  activeBotThreads: Map<string, number>,
+  activeBotThreadTtlMs: number,
+): Promise<boolean> {
+  try {
+    const { messages } = await matrixManager.getRecentRoomMessages(roomId, {
+      limit: 100,
+    });
+    const botWasActive = messages.some(
+      (m) => m.sender === botMatrixUserId && m.threadId === threadId,
+    );
+    if (botWasActive) {
+      markBotThreadActive(activeBotThreads, roomId, threadId, activeBotThreadTtlMs);
+    }
+    return botWasActive;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Resolve whether the agent should respond to this Matrix event.
  *
  * Order of precedence:
@@ -152,7 +183,8 @@ export function sweepExpiredBotThreads(
  *   2. Bot @mentioned → respond
  *   3. Direct reply to a bot message → respond
  *   4. Thread already in active-bot-thread map → respond
- *   5. Otherwise → ignore (still capture passively elsewhere)
+ *   5. Cache cold: check Matrix history for prior bot participation → respond
+ *   6. Otherwise → ignore (still capture passively elsewhere)
  */
 export async function shouldAgentRespond(
   input: ShouldRespondInput,
@@ -165,6 +197,7 @@ export async function shouldAgentRespond(
     botMatrixUserId,
     roomInfo,
     activeBotThreads,
+    activeBotThreadTtlMs,
   } = input;
 
   if (roomInfo.isDirect) {
@@ -182,6 +215,22 @@ export async function shouldAgentRespond(
   }
 
   if (isActiveBotThread(activeBotThreads, roomId, threadId)) {
+    return { respond: true, reason: 'active-thread' };
+  }
+
+  // Cache miss — fall back to Matrix history. Only worth checking for replies
+  // inside an existing thread (threadId differs from the event's own id).
+  if (
+    threadId !== event.eventId &&
+    (await hasBotSpokenInThread(
+      roomId,
+      threadId,
+      matrixManager,
+      botMatrixUserId,
+      activeBotThreads,
+      activeBotThreadTtlMs,
+    ))
+  ) {
     return { respond: true, reason: 'active-thread' };
   }
 

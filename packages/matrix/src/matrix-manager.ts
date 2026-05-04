@@ -1,5 +1,6 @@
 import { Logger } from '@ixo/logger';
 import {
+  EncryptedRoomEvent,
   type MatrixEvent,
   type MessageEvent,
   type MessageEventContent,
@@ -681,22 +682,26 @@ export class MatrixManager {
    * Fetch recent room messages, decrypting events transparently.
    * Used for cross-thread context injection at group session start.
    *
-   * Returns most recent first (Matrix `dir=b` semantics) with each entry
-   * already plain-text. Encrypted events that fail to decrypt are skipped.
+   * Returns messages in chronological order (oldest → newest).
+   * Encrypted events that fail to decrypt are skipped.
+   *
+   * `paginationToken` in the result is the opaque `end` token from the Matrix
+   * `/messages` response — pass it as `from` on the next call to page further back.
    */
   public async getRecentRoomMessages(
     roomId: string,
     options: { limit?: number; from?: string } = {},
-  ): Promise<
-    Array<{
+  ): Promise<{
+    messages: Array<{
       eventId: string;
       sender: string;
       body: string;
       timestamp: number;
       threadId?: string;
       msgtype?: string;
-    }>
-  > {
+    }>;
+    paginationToken?: string;
+  }> {
     if (!this.mxClient) {
       throw new Error('Simple client not initialized');
     }
@@ -707,13 +712,39 @@ export class MatrixManager {
       dir: 'b',
       limit: Math.min(limit * 3, 200),
     };
-    if (options.from) qs.from = options.from;
+
+    // `from` must be an opaque Matrix pagination token (e.g. the `end` field from
+    // a previous /messages response), NOT an event ID. When no token is provided we
+    // fall back to the stored sync token so Synapse can locate the timeline end.
+    if (options.from) {
+      qs.from = options.from;
+    } else {
+      const syncToken =
+        await this.mxClient.mxClient.storageProvider.getSyncToken();
+
+      Logger.info(
+        `[MatrixManager.getRecentRoomMessages] syncToken: ${syncToken} for room ${roomId}`,
+      );
+
+      if (syncToken) {
+        qs.from = syncToken;
+      }
+    }
+
+    Logger.info(
+      `[MatrixManager.getRecentRoomMessages] qs: ${JSON.stringify(qs)} for room ${roomId}`,
+    );
 
     const response = (await this.mxClient.mxClient.doRequest(
       'GET',
       `/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/messages`,
       qs,
-    )) as { chunk?: Array<Record<string, unknown>> };
+    )) as { chunk?: Array<Record<string, unknown>>; end?: string };
+
+    Logger.info(
+      `[MatrixManager.getRecentRoomMessages] response: for room ${roomId}`,
+      response,
+    );
 
     const out: Array<{
       eventId: string;
@@ -738,15 +769,11 @@ export class MatrixManager {
         try {
           // Avoid a static import of EncryptedRoomEvent to keep this file
           // free of new top-level deps; use a structural cast instead.
-          const decrypted = await (
-            crypto as unknown as {
-              decryptRoomEvent: (
-                ev: unknown,
-                roomId: string,
-              ) => Promise<{ content?: Record<string, unknown> }>;
-            }
-          ).decryptRoomEvent(raw, roomId);
-          content = decrypted.content;
+          const decrypted = await crypto.decryptRoomEvent(
+            new EncryptedRoomEvent(raw),
+            roomId,
+          );
+          content = decrypted.content as Record<string, unknown>;
         } catch {
           continue;
         }
@@ -782,8 +809,10 @@ export class MatrixManager {
       });
     }
 
-    // Caller wants chronological (oldest → newest)
-    return out.reverse();
+    return {
+      messages: out.reverse(),
+      paginationToken: response.end,
+    };
   }
 
   /**

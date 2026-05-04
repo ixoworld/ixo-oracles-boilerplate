@@ -180,14 +180,15 @@ export function createUnpinRoomFactTool(deps: ChannelMemoryToolDeps) {
 
 export function createGetRoomMessagesRangeTool(roomId: string) {
   return tool(
-    async ({ limit, beforeEventId, threadId }) => {
+    async ({ limit, paginationToken, threadId }) => {
       const cap = Math.min(Math.max(limit ?? 50, 1), 200);
       try {
         const matrixManager = MatrixManager.getInstance();
-        const messages = await matrixManager.getRecentRoomMessages(roomId, {
-          limit: cap,
-          from: beforeEventId,
-        });
+        const { messages, paginationToken: nextToken } =
+          await matrixManager.getRecentRoomMessages(roomId, {
+            limit: cap,
+            from: paginationToken,
+          });
         const filtered = threadId
           ? messages.filter((m) => m.threadId === threadId)
           : messages;
@@ -203,7 +204,11 @@ export function createGetRoomMessagesRangeTool(roomId: string) {
             threadId: m.threadId,
           })),
         );
-        return JSON.stringify({ messages: result }, null, 2);
+        return JSON.stringify(
+          { messages: result, nextPaginationToken: nextToken },
+          null,
+          2,
+        );
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         logger.error(`get_room_messages_range failed: ${msg}`);
@@ -213,7 +218,7 @@ export function createGetRoomMessagesRangeTool(roomId: string) {
     {
       name: 'get_room_messages_range',
       description:
-        'Fetch raw recent messages from the current Matrix room. Use when channel memory and search are not enough and you need verbatim text. Returns messages in chronological order (oldest first).',
+        'Fetch raw recent messages from the current Matrix room. Use when channel memory and search are not enough and you need verbatim text. Returns messages in chronological order (oldest first). Pass nextPaginationToken from a previous response as paginationToken to page further back in history.',
       schema: z.object({
         limit: z
           .number()
@@ -222,11 +227,11 @@ export function createGetRoomMessagesRangeTool(roomId: string) {
           .max(200)
           .optional()
           .describe('Max messages to return (default 50, max 200).'),
-        beforeEventId: z
+        paginationToken: z
           .string()
           .optional()
           .describe(
-            'Pagination token: fetch messages from before this event id.',
+            'Opaque pagination token from a previous call (nextPaginationToken). Do NOT pass Matrix event IDs here.',
           ),
         threadId: z
           .string()

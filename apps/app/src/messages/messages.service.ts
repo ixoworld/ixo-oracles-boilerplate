@@ -176,6 +176,8 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     event: MessageEvent<
       MessageEventContent & {
         'm.relates_to'?: {
+          rel_type?: string;
+          event_id?: string;
           'm.in_reply_to'?: {
             event_id: string;
           };
@@ -188,8 +190,19 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
     if (!eventId) {
       return undefined;
     }
-    const inReplyTo =
-      event.content['m.relates_to']?.['m.in_reply_to']?.event_id;
+
+    const relatesTo = event.content['m.relates_to'];
+
+    // Matrix thread replies carry rel_type="m.thread" with the true root in
+    // event_id. The m.in_reply_to field is a fallback pointing at the previous
+    // message (NOT the root), so we must NOT walk it for threaded messages.
+    if (relatesTo?.rel_type === 'm.thread' && relatesTo?.event_id) {
+      const root = relatesTo.event_id;
+      this.threadRootCache.set(eventId, root);
+      return root;
+    }
+
+    const inReplyTo = relatesTo?.['m.in_reply_to']?.event_id;
 
     if (!inReplyTo) {
       // This event IS the root
@@ -234,16 +247,43 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         return rootEventId;
       }
 
-      const parentEvent = await this.matrixManager.getEventById<{
-        'm.relates_to'?: {
-          'm.in_reply_to'?: {
-            event_id: string;
+      let parentEvent: Awaited<
+        ReturnType<
+          typeof this.matrixManager.getEventById<{
+            'm.relates_to'?: {
+              rel_type?: string;
+              event_id?: string;
+              'm.in_reply_to'?: { event_id: string };
+            };
+          }>
+        >
+      >;
+      try {
+        parentEvent = await this.matrixManager.getEventById<{
+          'm.relates_to'?: {
+            rel_type?: string;
+            event_id?: string;
+            'm.in_reply_to'?: { event_id: string };
           };
-        };
-      }>(roomId, currentEventId);
+        }>(roomId, currentEventId);
+      } catch {
+        // Event not found (404) — treat currentEventId as the root
+        pathToCache.forEach((id) =>
+          this.threadRootCache.set(id, currentEventId),
+        );
+        return currentEventId;
+      }
 
-      const parentInReplyTo =
-        parentEvent.content['m.relates_to']?.['m.in_reply_to']?.event_id;
+      const parentRelatesTo = parentEvent.content['m.relates_to'];
+
+      // If the parent is itself a thread reply, its root IS the true root
+      if (parentRelatesTo?.rel_type === 'm.thread' && parentRelatesTo?.event_id) {
+        const root = parentRelatesTo.event_id;
+        pathToCache.forEach((id) => this.threadRootCache.set(id, root));
+        return root;
+      }
+
+      const parentInReplyTo = parentRelatesTo?.['m.in_reply_to']?.event_id;
       if (!parentInReplyTo) {
         // Found the root!
 
@@ -420,6 +460,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
         botMatrixUserId,
         roomInfo,
         activeBotThreads: this.activeBotThreads,
+        activeBotThreadTtlMs: MessagesService.ACTIVE_THREAD_TTL_MS,
       });
       if (!decision.respond) {
         Logger.log(
@@ -469,7 +510,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
 
       try {
         Logger.log(
-          `[Matrix][handleMessage] Creating NEW session for did=${did} sessionId=${checkSessionId} homeServer=${userHomeServer} oracleHomeServer=${oracleHomeServer}`,
+          `[Matrix][handleMessage] Creating NEW session for did=${did} sessionId=${checkSessionId} homeServer=${userHomeServer} oracleHomeServer=${oracleHomeServer} roomId=${roomId}`,
         );
         await this.sessionManagerService.createSession(
           {
@@ -482,7 +523,7 @@ export class MessagesService implements OnModuleInit, OnModuleDestroy {
             userHomeServer,
             roomId, // Store the actual room (may be a task room, not main room)
           },
-          event.eventId,
+          checkSessionId,
         );
         Logger.log(
           `[Matrix][handleMessage] Session CREATED for did=${did} sessionId=${checkSessionId}`,

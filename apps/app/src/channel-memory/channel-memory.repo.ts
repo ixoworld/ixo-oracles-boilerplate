@@ -167,6 +167,11 @@ export class ChannelMemoryRepo {
     const trimmed = query.trim();
     if (!trimmed) return this.recentChunks(roomId, limit);
 
+    // Multi-word queries use OR so any matching word is a hit.
+    // Single-word queries are passed through unchanged (allows FTS5 prefix syntax).
+    const words = trimmed.split(/\s+/).filter(Boolean);
+    const ftsQuery = words.length > 1 ? words.join(' OR ') : trimmed;
+
     // Try FTS5 first; fall back to LIKE if the virtual table is missing.
     try {
       const rows = this.db
@@ -176,20 +181,26 @@ export class ChannelMemoryRepo {
              WHERE c.room_id = ? AND channel_memory_chunks_fts MATCH ?
              ORDER BY rank LIMIT ?`,
         )
-        .all(roomId, trimmed, limit) as Array<Record<string, unknown>>;
+        .all(roomId, ftsQuery, limit) as Array<Record<string, unknown>>;
       return rows.map(this.rowToChunk);
     } catch (err) {
       logger.debug(
         `[ChannelMemoryRepo] FTS query failed (${err instanceof Error ? err.message : String(err)}); falling back to LIKE`,
       );
-      const like = `%${trimmed.replace(/[%_]/g, (m) => `\\${m}`)}%`;
+      // LIKE fallback: require all words to appear (AND semantics, best-effort).
+      const likeConditions = words
+        .map(() => `summary LIKE ? ESCAPE '\\'`)
+        .join(' AND ');
+      const likeValues = words.map(
+        (w) => `%${w.replace(/[%_]/g, (c) => `\\${c}`)}%`,
+      );
       const rows = this.db
         .prepare(
           `SELECT * FROM channel_memory_chunks
-             WHERE room_id = ? AND summary LIKE ? ESCAPE '\\'
+             WHERE room_id = ? AND ${likeConditions}
              ORDER BY to_ts DESC LIMIT ?`,
         )
-        .all(roomId, like, limit) as Array<Record<string, unknown>>;
+        .all(roomId, ...likeValues, limit) as Array<Record<string, unknown>>;
       return rows.map(this.rowToChunk);
     }
   }
