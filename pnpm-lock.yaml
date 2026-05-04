@@ -83,7 +83,7 @@ importers:
         specifier: ^0.8.0
         version: 0.8.0(@composio/core@0.8.0(ws@8.18.2)(zod@4.3.6))(@langchain/core@1.1.42(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.215.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.0))(openai@6.34.0(ws@8.18.2)(zod@4.3.6))(ws@8.18.2))
       '@ixo/common':
-        specifier: ^1.1.39
+        specifier: ^1.1.4
         version: 1.1.39(@browserbasehq/sdk@2.6.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.56.1)(deepmerge@4.3.1)(dotenv@16.6.1)(openai@6.34.0(ws@8.18.2)(zod@4.3.6))(zod@4.3.6))(@ibm-cloud/watsonx-ai@1.7.3)(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.215.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.0))(@upstash/ratelimit@2.0.7(@upstash/redis@1.35.6))(@upstash/redis@1.35.6)(better-sqlite3@12.9.0)(chromadb@1.10.5(openai@6.34.0(ws@8.18.2)(zod@4.3.6)))(fast-xml-parser@4.5.3)(ibm-cloud-sdk-core@5.4.4)(ignore@7.0.5)(ioredis@5.8.2)(jsdom@28.1.0(@noble/hashes@1.8.0))(lodash@4.18.1)(neo4j-driver@5.28.2)(pg@8.16.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(ws@8.18.2)(zod-to-json-schema@3.25.2(zod@4.3.6))
       '@ixo/editor':
         specifier: 3.0.0-beta.11
@@ -16633,8 +16633,8 @@ snapshots:
   '@ixo/matrix@1.2.3(@langchain/core@1.1.42(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.215.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.0))(openai@6.34.0(ws@8.18.2)(zod@4.3.6))(ws@8.18.2))':
     dependencies:
       '@ixo/logger': 0.0.2
-      '@langchain/langgraph-checkpoint': 1.0.0(@langchain/core@1.1.42(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.215.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.0))(openai@6.34.0(ws@8.18.2)(zod@4.3.6))(ws@8.18.2))
-      dotenv: 17.2.3
+      '@langchain/langgraph-checkpoint': 1.0.1(@langchain/core@1.1.42(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.215.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.0))(openai@6.34.0(ws@8.18.2)(zod@4.3.6))(ws@8.18.2))
+      dotenv: 17.4.1
       marked: 16.4.2
       matrix-bot-sdk: '@ixo/matrix-bot-sdk@0.8.0-ixo.6'
       matrix-js-sdk: 37.13.0
