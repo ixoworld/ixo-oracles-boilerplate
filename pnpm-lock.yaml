@@ -107,8 +107,8 @@ importers:
         specifier: ^1.0.52
         version: 1.0.52(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.215.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.0))(openai@6.34.0(ws@8.18.2)(zod@4.3.6))(ws@8.18.2)
       '@ixo/ucan':
-        specifier: 1.2.2
-        version: 1.2.2(@cosmjs/crypto@0.33.1)(@cosmjs/encoding@0.33.1)(typescript@5.9.3)
+        specifier: 1.2.3
+        version: 1.2.3(@cosmjs/crypto@0.33.1)(@cosmjs/encoding@0.33.1)(typescript@5.9.3)
       '@langchain/community':
         specifier: ^1.1.27
         version: 1.1.27(8ec1bea159d308e660084c4e1aea3d0c)
@@ -3260,8 +3260,8 @@ packages:
   '@ixo/typescript-config@1.0.0':
     resolution: {integrity: sha512-reavFCnQlEY3efgDMBJoUbHJUIhlpFgf/LS0Q1Vqz+y/mbXymItF82unAzcmRFjb5fE+ANgYpj0k22njWs/tzg==}
 
-  '@ixo/ucan@1.2.2':
-    resolution: {integrity: sha512-ifVz7k6VCZD564OFaV4nTtMveBWgbJSNbYmuIo1my5cYVonG3UC494fgsW8md02POts8nwgBWdHk2MfWUXMhvw==}
+  '@ixo/ucan@1.2.3':
+    resolution: {integrity: sha512-JHAhNwvjJ1MqPsTWdgQoTVmZhpdS+CsRDmEj9cSL+AtEXdGXlCZPIwdVA/u5jgGZ4kuGJAzOC+29u7PK1MNmhA==}
     peerDependencies:
       '@cosmjs/crypto': '>=0.32.0'
       '@cosmjs/encoding': '>=0.32.0'
@@ -16523,7 +16523,7 @@ snapshots:
       '@dnd-kit/core': 6.3.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@ixo/matrix-crdt': 1.1.0(lib0@0.2.114)(matrix-js-sdk@37.13.0)(y-protocols@1.0.6(yjs@13.6.27))(yjs@13.6.27)
       '@ixo/surveys': 0.1.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@ixo/ucan': 1.2.2(@cosmjs/crypto@0.33.1)(@cosmjs/encoding@0.33.1)(typescript@5.9.3)
+      '@ixo/ucan': 1.2.3(@cosmjs/crypto@0.33.1)(@cosmjs/encoding@0.33.1)(typescript@5.9.3)
       '@mantine/core': 7.17.8(@mantine/hooks@7.17.8(react@18.3.1))(@types/react@18.3.27)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@mantine/hooks': 7.17.8(react@18.3.1)
       '@tabler/icons-react': 3.35.0(react@18.3.1)
@@ -16795,7 +16795,7 @@ snapshots:
 
   '@ixo/typescript-config@1.0.0': {}
 
-  '@ixo/ucan@1.2.2(@cosmjs/crypto@0.33.1)(@cosmjs/encoding@0.33.1)(typescript@5.9.3)':
+  '@ixo/ucan@1.2.3(@cosmjs/crypto@0.33.1)(@cosmjs/encoding@0.33.1)(typescript@5.9.3)':
     dependencies:
       '@ucanto/client': 9.0.2
       '@ucanto/core': 10.4.6
