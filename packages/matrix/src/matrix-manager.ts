@@ -741,11 +741,6 @@ export class MatrixManager {
       qs,
     )) as { chunk?: Array<Record<string, unknown>>; end?: string };
 
-    Logger.info(
-      `[MatrixManager.getRecentRoomMessages] response: for room ${roomId}`,
-      response,
-    );
-
     const out: Array<{
       eventId: string;
       sender: string;
